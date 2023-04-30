@@ -350,8 +350,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         **  Run datapump exports - creates files EXPORT_SCHEMA_{current_schema}.dmp and EXPORT_SCHEMA_{current_schema}.log
         */
         l_password:=generate_password();
-        --datapump_backup(pIncludeRows => '1', pEncryptPassword => l_password); -- encrypt exports that include table rows
-        --datapump_backup(pIncludeRows => '0'); -- metadata only export can be public
+        datapump_backup(pIncludeRows => '1', pEncryptPassword => l_password); -- encrypt exports that include table rows
+        datapump_backup(pIncludeRows => '0'); -- metadata only export
 
         /*
         ** Set up web service headers in order to use Github API
