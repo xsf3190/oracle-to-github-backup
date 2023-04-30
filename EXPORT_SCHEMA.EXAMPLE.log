@@ -1,16 +1,5 @@
 Starting "EXAMPLE"."EXPORT_SCHEMA_JOB":  
 Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
-.  estimated "EXAMPLE"."ASSET"                           1.420 MB
-.  estimated "EXAMPLE"."PERFORMANCE"                     619.8 KB
-.  estimated "EXAMPLE"."USER_LOGIN"                      169.5 KB
-.  estimated "EXAMPLE"."ARTICLE"                         85.41 KB
-.  estimated "EXAMPLE"."USAGE"                           43.02 KB
-.  estimated "EXAMPLE"."LOG"                             24.74 KB
-.  estimated "EXAMPLE"."ASSET_USED"                      20.01 KB
-.  estimated "EXAMPLE"."USERS"                           12.30 KB
-.  estimated "EXAMPLE"."ERR$_PERFORMANCE"                11.78 KB
-.  estimated "EXAMPLE"."TESTIMONIAL"                     7.214 KB
-.  estimated "EXAMPLE"."SCHEDULER$_PROGRAM_ARG"          4.683 KB
 Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
 Processing object type SCHEMA_EXPORT/USER
 Processing object type SCHEMA_EXPORT/SYSTEM_GRANT
@@ -34,18 +23,18 @@ Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
 Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCOBJ
 Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
 . . exported "EXAMPLE"."ASSET"                           254.8 KB   21448 rows
-. . exported "EXAMPLE"."PERFORMANCE"                     122.9 KB    3421 rows
-. . exported "EXAMPLE"."USER_LOGIN"                      34.61 KB    2813 rows
+. . exported "EXAMPLE"."PERFORMANCE"                     135.2 KB    3826 rows
+. . exported "EXAMPLE"."USER_LOGIN"                      34.65 KB    2815 rows
 . . exported "EXAMPLE"."ARTICLE"                         80.55 KB     292 rows
 . . exported "EXAMPLE"."USAGE"                           16.45 KB     360 rows
-. . exported "EXAMPLE"."LOG"                             8.625 KB      97 rows
 . . exported "EXAMPLE"."ASSET_USED"                      10.03 KB     268 rows
 . . exported "EXAMPLE"."USERS"                           7.070 KB      16 rows
 . . exported "EXAMPLE"."ERR$_PERFORMANCE"                6.328 KB       2 rows
+. . exported "EXAMPLE"."LOG"                             5.187 KB       1 rows
 . . exported "EXAMPLE"."TESTIMONIAL"                     5.414 KB       1 rows
-. . exported "EXAMPLE"."SCHEDULER$_PROGRAM_ARG"          5.445 KB       4 rows
+. . exported "EXAMPLE"."SCHEDULER$_PROGRAM_ARG"          5.476 KB       4 rows
 Master table "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully loaded/unloaded
 ******************************************************************************
 Dump file set for EXAMPLE.EXPORT_SCHEMA_JOB is:
   /u03/dbfs/BDE1649F626EB000E0532E14000A3C29/data/dpdump/EXAMPLE.dmp
-Job "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully completed at Sun Apr 30 10:38:00 2023 elapsed 0 00:00:42
+Job "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully completed at Sun Apr 30 11:50:06 2023 elapsed 0 00:00:29
