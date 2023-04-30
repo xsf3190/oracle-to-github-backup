@@ -234,12 +234,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 l_total_bytes:=l_total_bytes+p_backup(i).backup_size;
             END LOOP;
             l_body_html:=l_body_html || to_clob('
-                <table><caption>GITHUB BACKUP STATUS FOR SCHEMA - '||sys_context('userenv','current_schema') || ' ' || apex_string_util.to_display_filesize(l_total_bytes) || '</caption>
+                <table><caption>GITHUB BACKUP STATUS FOR SCHEMA: '||sys_context('userenv','current_schema') || ' TOTAL SIZE: ' || apex_string_util.to_display_filesize(l_total_bytes) || '</caption>
                     <thead>
                         <tr bgcolor="#d7d9f2">
                             <th scope="col">Object</th>
                             <th scope="col">Backed Up</th>
-                            <th scope="col">Bytes</th>
+                            <th scope="col">Size</th>
                             <th scope="col">Status</td>
                         </tr>
                     </thead>
@@ -258,7 +258,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                     '<tr  bgcolor="' || l_bgcolor || '">
                         <th scope="row">' || p_backup(i).object_type || '.' || p_backup(i).object_name || '</th>
                         <td>' || TO_CHAR(p_backup(i).backup_date,'dd.mm.yyyy hh24:mi:ss') || '</td>
-                        <td>' || p_backup(i).backup_size || '</td>
+                        <td>' || apex_string_util.to_display_filesize(p_backup(i).backup_size) || '</td>
                         <td>' || p_backup(i).message || '</td>
                     </tr>');
             END LOOP;
