@@ -350,8 +350,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         **  Run datapump exports - creates files EXPORT_SCHEMA_{current_schema}.dmp and EXPORT_SCHEMA_{current_schema}.log
         */
         l_password:=generate_password();
-        datapump_backup(pIncludeRows => '1', pEncryptPassword => l_password); -- encrypt exports that include table rows
-        datapump_backup(pIncludeRows => '0'); -- metadata only export can be public
+        --datapump_backup(pIncludeRows => '1', pEncryptPassword => l_password); -- encrypt exports that include table rows
+        --datapump_backup(pIncludeRows => '0'); -- metadata only export can be public
 
         /*
         ** Set up web service headers in order to use Github API
@@ -424,7 +424,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             l_ddl:=NULL;
             
             IF (l_backup(i).object_type='APEX_APPLICATION') THEN
-                l_files:=apex_export.get_application(p_application_id => SUBSTR(l_backup(i).object_name,1,INSTR(l_backup(i).object_name,'.')-1), p_with_date=>true);
+                l_files:=apex_export.get_application(p_application_id => l_backup(i).object_name, p_with_date=>true);
                 l_ddl:=l_files(1).contents;
             ELSIF (l_backup(i).object_type='APEX_STATIC_FILE') THEN
                 SELECT file_content INTO l_blob from APEX_APPLICATION_STATIC_FILES 
