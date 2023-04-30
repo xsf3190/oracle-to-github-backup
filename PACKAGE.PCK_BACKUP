@@ -141,10 +141,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')'); 
         dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_LIST', VALUE => '''STATISTICS'''); 
         
-        dbms_datapump.set_parameter(handle => h1, name => 'INCLUDE_METADATA', VALUE => 1); 
-        dbms_datapump.set_parameter(handle => h1, name => 'DATA_ACCESS_METHOD', VALUE => 'AUTOMATIC'); 
-        dbms_datapump.set_parameter(handle => h1, name => 'ESTIMATE', VALUE => 'BLOCKS'); 
-        dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => pIncludeRows);  
+        IF (pIncludeRows='0') THEN
+            dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => 0);
+        END IF;
+        --dbms_datapump.set_parameter(handle => h1, name => 'INCLUDE_METADATA', VALUE => 1); 
+        --dbms_datapump.set_parameter(handle => h1, name => 'DATA_ACCESS_METHOD', VALUE => 'AUTOMATIC'); 
+        --dbms_datapump.set_parameter(handle => h1, name => 'ESTIMATE', VALUE => 'BLOCKS'); 
+
         IF (pEncryptPassword IS NOT NULL) THEN 
             dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_MODE', VALUE => 'PASSWORD'); 
             dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => pEncryptPassword); 
