@@ -13,6 +13,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         object_name user_objects.object_name%type,
         github_sha  VARCHAR2(40),
         backup_date DATE,
+        backup_size NUMBER,
         message     VARCHAR2(100));
         
     TYPE tt_backup IS TABLE OF t_backup;
@@ -120,17 +121,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     */ 
     PROCEDURE datapump_backup(pIncludeRows IN VARCHAR2, pEncryptPassword IN VARCHAR2 DEFAULT NULL) IS
         h1 NUMBER;
-        s VARCHAR2(1000):=NULL;
-        errorvarchar VARCHAR2(100):= 'ERROR';
-        tryGetStatus NUMBER := 0;
-        success_with_info EXCEPTION;
-        PRAGMA EXCEPTION_INIT(success_with_info, -31627);
         l_schema VARCHAR2(30):=sys_context('userenv','current_schema');
         l_status varchar2(4000);
     BEGIN
         log('Starting datapump export job for Schema:'||l_schema || ' Include Rows:' || pIncludeRows || ' Encryption:' || CASE WHEN pEncryptPassword IS NULL THEN 'N' ELSE 'Y' END);
         h1 := dbms_datapump.OPEN (operation => 'EXPORT', job_mode => 'SCHEMA', job_name => 'EXPORT_SCHEMA_JOB', version => 'COMPATIBLE'); 
-        tryGetStatus := 1;
+
         dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION', VALUE => 'ALL'); 
         dbms_datapump.set_parallel(handle => h1, degree => 1); 
         dbms_datapump.add_file(handle => h1, filename => l_schema || CASE WHEN pIncludeRows = '0' THEN '.METADATA' END || '.dmp', 
@@ -144,9 +140,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         IF (pIncludeRows='0') THEN
             dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => 0);
         END IF;
-        --dbms_datapump.set_parameter(handle => h1, name => 'INCLUDE_METADATA', VALUE => 1); 
-        --dbms_datapump.set_parameter(handle => h1, name => 'DATA_ACCESS_METHOD', VALUE => 'AUTOMATIC'); 
-        --dbms_datapump.set_parameter(handle => h1, name => 'ESTIMATE', VALUE => 'BLOCKS'); 
 
         IF (pEncryptPassword IS NOT NULL) THEN 
             dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_MODE', VALUE => 'PASSWORD'); 
@@ -156,14 +149,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         dbms_datapump.start_job(handle => h1, skip_current => 0, abort_step => 0); 
         dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
         dbms_datapump.detach(handle => h1); 
-        errorvarchar := 'NO_ERROR'; 
-        log('Completed datapump export job');
+        log('Completed datapump export job. Final status:' || l_status);
+        
     EXCEPTION
         WHEN OTHERS THEN
             log_error(sqlcode,sqlerrm);
-            IF ((errorvarchar = 'ERROR')AND(tryGetStatus=1)) THEN 
-                DBMS_DATAPUMP.DETACH(h1);
-            END IF;
             RAISE;
     END;
     
@@ -176,6 +166,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         l_body CLOB;
         l_body_html CLOB;
         l_bgcolor VARCHAR2(7);
+        l_total_bytes NUMBER:=0;
     BEGIN
         IF (p_error IS NOT NULL) THEN
             l_subject:='OCI APPLICATION BACKUP FAILED';
@@ -239,24 +230,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         IF (p_error IS NOT NULL) THEN
             l_body_html:=l_body_html || to_clob(p_error);
         ELSE
+            FOR i IN 1..p_backup.COUNT LOOP
+                l_total_bytes:=l_total_bytes+p_backup(i).backup_size;
+            END LOOP;
             l_body_html:=l_body_html || to_clob('
-                <table><caption>GITHUB BACKUP STATUS FOR SCHEMA - '||sys_context('userenv','current_schema') || '</caption>
+                <table><caption>GITHUB BACKUP STATUS FOR SCHEMA - '||sys_context('userenv','current_schema') || ' ' || apex_string_util.to_display_filesize(l_total_bytes) || '</caption>
                     <thead>
                         <tr bgcolor="#d7d9f2">
                             <th scope="col">Object</th>
                             <th scope="col">Backed Up</th>
+                            <th scope="col">Bytes</th>
                             <th scope="col">Status</td>
                         </tr>
                     </thead>
                     <tbody>');
-            /*FOR C IN (SELECT CASE WHEN message<>'OK' THEN 'ff0000' WHEN MOD(rn,2)=0 THEN '#eeeeee' END bgcolor, object, updated_date, message 
-                        FROM 
-                        (
-                         SELECT ROW_NUMBER() OVER (ORDER BY object_type,object_name) rn, object_type|| '.' || object_name object, TO_CHAR(updated_date,'dd-mm-yyyy hh24:mi pm') updated_date, message 
-                           FROM github
-                        )
-                        ORDER BY 2
-                    )*/
+
             FOR i IN 1..p_backup.COUNT
             LOOP
                 IF (p_backup(i).message<>'OK') THEN
@@ -270,9 +258,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                     '<tr  bgcolor="' || l_bgcolor || '">
                         <th scope="row">' || p_backup(i).object_type || '.' || p_backup(i).object_name || '</th>
                         <td>' || TO_CHAR(p_backup(i).backup_date,'dd.mm.yyyy hh24:mi:ss') || '</td>
+                        <td>' || p_backup(i).backup_size || '</td>
                         <td>' || p_backup(i).message || '</td>
                     </tr>');
             END LOOP;
+            
             l_body_html:=l_body_html || to_clob('
                 </tbody>
                 </table>
@@ -350,7 +340,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         getGithubDetails(l_github_token, l_github_repos_owner, l_github_repos, l_email);
         
         /* 
-        **  Run datapump exports - creates files EXPORT_SCHEMA_{current_schema}.dmp and EXPORT_SCHEMA_{current_schema}.log
+        **  Run datapump exports: 
+        **  1) encrypted with table rows  
+        **  2) unencrypted metadata only
         */
         l_password:=generate_password();
         datapump_backup(pIncludeRows => '1', pEncryptPassword => l_password); -- encrypt exports that include table rows
@@ -386,7 +378,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         /*
         ** Build PLSQL collection of all objects to be exported and copied to Github
         */
-        SELECT o.object_type,o.object_name,g.sha,NULL,NULL
+        SELECT o.object_type,o.object_name,g.sha,NULL,NULL,NULL
           BULK COLLECT INTO l_backup
          FROM
             (
@@ -454,6 +446,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             ** Github enforces strict base64 encoding so we must remove carriage return and line feed characters 
             */
             l_content:=REPLACE(APEX_WEB_SERVICE.BLOB2CLOBBASE64(l_blob),chr(13)||chr(10));
+            
+            l_backup(i).backup_size:=DBMS_LOB.GETLENGTH(l_content);
             
             IF (DBMS_LOB.ISTEMPORARY(l_blob)=1) THEN
                 DBMS_LOB.FREETEMPORARY (l_blob);
