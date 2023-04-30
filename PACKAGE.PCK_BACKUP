@@ -1,0 +1,685 @@
+CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_BACKUP" is
+    --
+    PROCEDURE github_backup;
+    --
+    PROCEDURE getDumpFileInfo(pDatapumpFileName IN VARCHAR2);
+    --
+end;
+/
+CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
+
+    TYPE t_backup IS RECORD(
+        object_type user_objects.object_type%type,
+        object_name user_objects.object_name%type,
+        github_sha  VARCHAR2(40),
+        backup_date DATE,
+        message     VARCHAR2(100));
+        
+    TYPE tt_backup IS TABLE OF t_backup;
+    
+    /*
+    ** Logging procedures
+    */
+    PROCEDURE log(pMsg IN OUT NOCOPY CLOB) IS PRAGMA AUTONOMOUS_TRANSACTION;
+        k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
+        k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);
+    BEGIN
+        INSERT INTO log(procedure_name, message) VALUES (k_calling_package || '.' || k_calling_subprog, pMsg);
+        COMMIT;
+    END;
+    
+    PROCEDURE log(pMsg IN VARCHAR2) IS PRAGMA AUTONOMOUS_TRANSACTION;
+        k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
+        k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);    
+    BEGIN
+        INSERT INTO log(procedure_name, message) VALUES (k_calling_package || '.' || k_calling_subprog, pMsg);
+        COMMIT;
+    END;
+    
+    PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2) IS
+    BEGIN
+        log(pCode || '-' || pErrMsg || '-' || dbms_utility.format_error_stack||dbms_utility.format_error_backtrace);
+    END;    
+
+    /*
+    ** Uploads p_filename in directory p_dir to BLOB 
+    */
+    PROCEDURE file_to_blob (p_blob IN OUT NOCOPY BLOB, p_dir IN VARCHAR2, p_filename IN VARCHAR2) IS
+        l_bfile  bfile;
+        l_dest_offset   integer := 1;
+        l_src_offset    integer := 1;
+    BEGIN
+        l_bfile := bfilename(p_dir, p_filename);
+        dbms_lob.fileopen(l_bfile, dbms_lob.file_readonly);
+        dbms_lob.loadblobfromfile (
+            dest_lob      => p_blob,
+            src_bfile     => l_bfile,
+            amount        => dbms_lob.lobmaxsize,
+            dest_offset   => l_dest_offset,
+            src_offset    => l_src_offset);
+        dbms_lob.fileclose(l_bfile);
+    END;
+    
+    /*
+    ** Generate random 16 character password string. Used in order to create encrypted schema export dumpfile
+    */
+    FUNCTION generate_password(
+        no_of_digits             in number DEFAULT 5,
+        no_of_special_characters in number DEFAULT 3,
+        no_of_lower              in number DEFAULT 4,
+        no_of_upper              in number DEFAULT 4
+        ) return varchar2
+    IS
+        password VARCHAR2(4000);
+        digits   CONSTANT VARCHAR2(10) := '0123456789';
+        lower    CONSTANT VARCHAR2(26) := 'abcdefghijklmnopqrstuvwxyz';
+        upper    CONSTANT VARCHAR2(26) := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        special  CONSTANT VARCHAR2(32) := '!"£$%^&*()-_=+{}[]<>,.\|/?;:''@#';
+    BEGIN
+        SELECT LISTAGG(letter, NULL) WITHIN GROUP (ORDER BY DBMS_RANDOM.VALUE)
+        INTO   password
+        FROM   (
+        SELECT SUBSTR(
+                 digits,
+                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(digits) + 1)),
+                 1
+               ) AS letter
+        FROM   DUAL
+        CONNECT BY LEVEL <= no_of_digits
+        UNION ALL
+        SELECT SUBSTR(
+                 lower,
+                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(lower) + 1)),
+                 1
+               ) AS letter
+        FROM   DUAL
+        CONNECT BY LEVEL <= no_of_lower
+        UNION ALL
+        SELECT SUBSTR(
+                 upper,
+                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(upper) + 1)),
+                 1
+               ) AS letter
+        FROM   DUAL
+        CONNECT BY LEVEL <= no_of_upper
+        UNION ALL
+        SELECT SUBSTR(
+                 special,
+                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(special) + 1)),
+                 1
+               ) AS letter
+        FROM   DUAL
+        CONNECT BY LEVEL <= no_of_special_characters
+        );
+    
+        RETURN password;
+    END;
+    
+    /*
+    ** Generate schema datapump export
+    */ 
+    PROCEDURE datapump_backup(pIncludeRows IN VARCHAR2, pEncryptPassword IN VARCHAR2 DEFAULT NULL) IS
+        h1 NUMBER;
+        s VARCHAR2(1000):=NULL;
+        errorvarchar VARCHAR2(100):= 'ERROR';
+        tryGetStatus NUMBER := 0;
+        success_with_info EXCEPTION;
+        PRAGMA EXCEPTION_INIT(success_with_info, -31627);
+        l_schema VARCHAR2(30):=sys_context('userenv','current_schema');
+        l_status varchar2(4000);
+    BEGIN
+        log('Starting datapump export job for Schema:'||l_schema || ' Include Rows:' || pIncludeRows || ' Encryption:' || CASE WHEN pEncryptPassword IS NULL THEN 'N' ELSE 'Y' END);
+        h1 := dbms_datapump.OPEN (operation => 'EXPORT', job_mode => 'SCHEMA', job_name => 'EXPORT_SCHEMA_JOB', version => 'COMPATIBLE'); 
+        tryGetStatus := 1;
+        dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION', VALUE => 'ALL'); 
+        dbms_datapump.set_parallel(handle => h1, degree => 1); 
+        dbms_datapump.add_file(handle => h1, filename => l_schema || CASE WHEN pIncludeRows = '0' THEN '.METADATA' END || '.dmp', 
+            directory => 'DATA_PUMP_DIR', filesize => '50M',  filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_DUMP_FILE, reusefile => 1); 
+        dbms_datapump.add_file(handle => h1, filename => l_schema || CASE WHEN pIncludeRows = '0' THEN '.METADATA' END || '.log', 
+            directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
+        dbms_datapump.set_parameter(handle => h1, name => 'KEEP_MASTER', VALUE => 0); 
+        dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')'); 
+        dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_LIST', VALUE => '''STATISTICS'''); 
+        
+        dbms_datapump.set_parameter(handle => h1, name => 'INCLUDE_METADATA', VALUE => 1); 
+        dbms_datapump.set_parameter(handle => h1, name => 'DATA_ACCESS_METHOD', VALUE => 'AUTOMATIC'); 
+        dbms_datapump.set_parameter(handle => h1, name => 'ESTIMATE', VALUE => 'BLOCKS'); 
+        dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => pIncludeRows);  
+        IF (pEncryptPassword IS NOT NULL) THEN 
+            dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_MODE', VALUE => 'PASSWORD'); 
+            dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => pEncryptPassword); 
+        END IF;
+        
+        dbms_datapump.start_job(handle => h1, skip_current => 0, abort_step => 0); 
+        dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
+        dbms_datapump.detach(handle => h1); 
+        errorvarchar := 'NO_ERROR'; 
+        log('Completed datapump export job');
+    EXCEPTION
+        WHEN OTHERS THEN
+            log_error(sqlcode,sqlerrm);
+            IF ((errorvarchar = 'ERROR')AND(tryGetStatus=1)) THEN 
+                DBMS_DATAPUMP.DETACH(h1);
+            END IF;
+            RAISE;
+    END;
+    
+    /*
+    ** Send email to Admin user summarizing backup status
+    ** Email formatted as HTML so styling is primitive and included in-line
+    */
+    PROCEDURE sendmail(p_backup IN tt_backup, p_email IN VARCHAR2, p_password IN VARCHAR2, p_error IN VARCHAR2 DEFAULT NULL) IS
+        l_subject VARCHAR2(100):='OCI APPLICATION BACKUP OK';
+        l_body CLOB;
+        l_body_html CLOB;
+        l_bgcolor VARCHAR2(7);
+    BEGIN
+        IF (p_error IS NOT NULL) THEN
+            l_subject:='OCI APPLICATION BACKUP FAILED';
+        ELSE
+            FOR i IN 1..p_backup.COUNT
+            LOOP
+                IF (p_backup(i).message<>'OK') THEN
+                    l_subject:='OCI APPLICATION BACKUP FAILED';
+                    EXIT;
+                END IF;
+            END LOOP;
+        END IF;
+        
+        l_body:='To view the content of this message, please use an HTML enabled mail client.'||utl_tcp.crlf;
+        l_body_html:=to_clob('
+            <html>
+                <head>
+                    <style type="text/css">
+                        body {
+                            font-family:Georgia,sans-serif;
+                            font-size:1rem;
+                        }
+                        td,
+                        th {
+                            border: 1px solid rgb(190, 190, 190);
+                            padding: 0.8rem;
+                        }
+                        
+                        td {
+                            text-align: center;
+                        }
+                        
+                        tr:nth-child(even) {
+                            background-color: #eee;
+                        }
+                        
+                        th[scope="col"] {
+                            background-color: #696969;
+                            color: #fff;
+                        }
+                        
+                        th[scope="row"] {
+                            background-color: #d7d9f2;
+                        }
+                        
+                        caption {
+                            padding: 10px;
+                            caption-side: top;
+                        }
+                        
+                        table {
+                            border-collapse: collapse;
+                            border: 2px solid rgb(200, 200, 200);
+                            letter-spacing: 1px;
+                            font-family: sans-serif;
+                        }
+                    </style>
+                </head>
+                <body>
+        ');
+        IF (p_error IS NOT NULL) THEN
+            l_body_html:=l_body_html || to_clob(p_error);
+        ELSE
+            l_body_html:=l_body_html || to_clob('
+                <table><caption>GITHUB BACKUP STATUS FOR SCHEMA - '||sys_context('userenv','current_schema') || '</caption>
+                    <thead>
+                        <tr bgcolor="#d7d9f2">
+                            <th scope="col">Object</th>
+                            <th scope="col">Backed Up</th>
+                            <th scope="col">Status</td>
+                        </tr>
+                    </thead>
+                    <tbody>');
+            /*FOR C IN (SELECT CASE WHEN message<>'OK' THEN 'ff0000' WHEN MOD(rn,2)=0 THEN '#eeeeee' END bgcolor, object, updated_date, message 
+                        FROM 
+                        (
+                         SELECT ROW_NUMBER() OVER (ORDER BY object_type,object_name) rn, object_type|| '.' || object_name object, TO_CHAR(updated_date,'dd-mm-yyyy hh24:mi pm') updated_date, message 
+                           FROM github
+                        )
+                        ORDER BY 2
+                    )*/
+            FOR i IN 1..p_backup.COUNT
+            LOOP
+                IF (p_backup(i).message<>'OK') THEN
+                    l_bgcolor:='ff0000';
+                ELSIF (MOD(i,2)=0) THEN
+                    l_bgcolor:='#eeeeee';
+                ELSE
+                    l_bgcolor:=NULL;
+                END IF;
+                l_body_html:=l_body_html || to_clob(
+                    '<tr  bgcolor="' || l_bgcolor || '">
+                        <th scope="row">' || p_backup(i).object_type || '.' || p_backup(i).object_name || '</th>
+                        <td>' || TO_CHAR(p_backup(i).backup_date,'dd.mm.yyyy hh24:mi:ss') || '</td>
+                        <td>' || p_backup(i).message || '</td>
+                    </tr>');
+            END LOOP;
+            l_body_html:=l_body_html || to_clob('
+                </tbody>
+                </table>
+                <p>Password to decrypt on import:' || p_password || '<p>
+                </body>
+                </html>');
+        END IF;
+        apex_mail.send(p_to=>p_email, p_from=>p_email, p_body=>l_body, p_body_html=>l_body_html, p_subj=>l_subject);
+        apex_mail.push_queue(); 
+    END;
+    
+    /*
+    **  Github token and repository details are maintained in USERS table
+    **  Email address of Apex Admin user must match for this to work
+    */
+    PROCEDURE getGithubDetails(
+        p_github_token IN OUT users.github_token%type, 
+        p_github_repos_owner IN OUT users.github_repos_owner%type, 
+        p_github_repos IN OUT users.github_repos%type,
+        p_email IN OUT users.email%type)
+    IS
+    BEGIN
+        /* Get target github repository details through workspace admin user. Allow to fail horribly unless 1 row returned */
+        SELECT github_token, github_repos_owner, github_repos, u.email 
+          INTO p_github_token, p_github_repos_owner, p_github_repos, p_email
+          FROM users u, APEX_WORKSPACE_DEVELOPERS w 
+         WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
+           AND w.is_admin='Yes'
+           AND w.email=u.email;
+    
+        EXCEPTION
+            WHEN OTHERS THEN
+                log_error(sqlcode,sqlerrm);
+                RAISE;
+    END;
+    
+    /*
+    ** Generate and transfer to Github repository the following:
+    ** 1. Apex applications
+    ** 2. Apex static files
+    ** 3. Datapump export dump file including log
+    ** 4. DDL of TABLES and PACKAGES
+    */
+    PROCEDURE github_backup IS
+        l_github_token users.github_token%type;
+        l_github_repos_owner users.github_repos_owner%type; 
+        l_github_repos users.github_repos%type;
+        l_email users.email%type;
+        
+        l_password VARCHAR2(20);
+        
+        l_backup tt_backup; 
+
+        l_clob CLOB;
+        l_blob BLOB;
+        l_dest_offset NUMBER := 1;
+        l_src_offset  NUMBER := 1;
+        l_lang		  NUMBER := 0;
+        l_warning     VARCHAR2 (1000);
+        l_json JSON_OBJECT_T;
+        l_content CLOB;
+        l_ddl CLOB;
+        l_message VARCHAR2(500);
+        l_sha VARCHAR2(500);
+
+        l_files apex_t_export_files;
+        
+        l_datapump_start TIMESTAMP:=current_timestamp;
+        
+        l_github CLOB;
+    BEGIN
+        /*
+        ** Get target Github repository details as well as email address of Apex ADMIN user
+        */
+        getGithubDetails(l_github_token, l_github_repos_owner, l_github_repos, l_email);
+        
+        /* 
+        **  Run datapump exports - creates files EXPORT_SCHEMA_{current_schema}.dmp and EXPORT_SCHEMA_{current_schema}.log
+        */
+        l_password:=generate_password();
+        datapump_backup(pIncludeRows => '1', pEncryptPassword => l_password); -- encrypt exports that include table rows
+        datapump_backup(pIncludeRows => '0'); -- metadata only export can be public
+
+        /*
+        ** Set up web service headers in order to use Github API
+        */
+        apex_web_service.g_request_headers(1).name := 'Accept';
+        apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
+        apex_web_service.g_request_headers(2).name := 'Authorization';
+        apex_web_service.g_request_headers(2).value := 'Bearer ' || l_github_token;
+        apex_web_service.g_request_headers(3).name := 'User-Agent';
+        apex_web_service.g_request_headers(3).value := l_github_repos_owner;
+        
+        /*
+        ** Get existing details of any files previously copied to Github. We need the file name and SHA so that Github can update / insert as required
+        */
+        l_github := apex_web_service.make_rest_request(
+            p_url=>'https://api.github.com/repos/' || l_github_repos_owner || '/' || l_github_repos || '/contents/',
+            p_http_method=>'GET');
+        
+        /*
+        ** Ensure calls to DBMS_METADATA return nicely formatted code without storage and schema details
+        */
+        dbms_metadata.set_transform_param(dbms_metadata.session_transform,'PRETTY',true);
+        dbms_metadata.set_transform_param(dbms_metadata.session_transform,'SQLTERMINATOR',true);
+        dbms_metadata.set_transform_param(dbms_metadata.session_transform,'SEGMENT_ATTRIBUTES',false);
+        dbms_metadata.set_transform_param(dbms_metadata.session_transform,'STORAGE',false);
+        dbms_metadata.set_transform_param(dbms_metadata.session_transform,'TABLESPACE',false);
+        dbms_metadata.set_transform_param(dbms_metadata.session_transform,'EMIT_SCHEMA',false);
+        
+        /*
+        ** Build PLSQL collection of all objects to be exported and copied to Github
+        */
+        SELECT o.object_type,o.object_name,g.sha,NULL,NULL
+          BULK COLLECT INTO l_backup
+         FROM
+            (
+                SELECT object_type,object_name
+                FROM user_objects
+                WHERE generated='N'
+                AND object_type IN ('TABLE','PACKAGE')
+                UNION ALL 
+                
+                SELECT 'APEX_APPLICATION',TO_CHAR(application_id)
+                FROM apex_applications
+                WHERE owner=sys_context('userenv','current_schema') 
+                UNION ALL 
+                
+                SELECT 'APEX_STATIC_FILE',f.application_id || '.' || f.file_name
+                FROM apex_application_static_files f, apex_applications a
+                WHERE f.application_id=a.application_id
+                AND f.mime_type LIKE 'text%'
+                UNION ALL
+                
+                SELECT 'EXPORT_SCHEMA', object_name 
+                FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR') 
+                WHERE bytes>0 
+                AND last_modified > l_datapump_start              
+            ) o, 
+            (
+                SELECT SUBSTR(name,1,INSTR(name,'.')-1) object_type, SUBSTR(name,INSTR(name,'.')+1) object_name, sha 
+                  FROM JSON_TABLE(l_github FORMAT JSON, '$[*]' COLUMNS (name, sha))
+            ) g
+        WHERE o.object_type=g.object_type(+)
+          AND o.object_name=g.object_name(+)
+        ORDER BY DECODE(object_type,'TABLE',1,'PACKAGE',2,'APEX_APPLICATION',3,'APEX_STATIC_FILE',4,5),object_name;
+        
+        FOR i IN 1..l_backup.COUNT
+        LOOP
+            log('Backing up to github - '||l_backup(i).object_type||'.'||l_backup(i).object_name);
+            
+            l_ddl:=NULL;
+            
+            IF (l_backup(i).object_type='APEX_APPLICATION') THEN
+                l_files:=apex_export.get_application(p_application_id => SUBSTR(l_backup(i).object_name,1,INSTR(l_backup(i).object_name,'.')-1), p_with_date=>true);
+                l_ddl:=l_files(1).contents;
+            ELSIF (l_backup(i).object_type='APEX_STATIC_FILE') THEN
+                SELECT file_content INTO l_blob from APEX_APPLICATION_STATIC_FILES 
+                WHERE application_id=SUBSTR(l_backup(i).object_name,1,INSTR(l_backup(i).object_name,'.')-1) 
+                AND file_name=SUBSTR(l_backup(i).object_name,INSTR(l_backup(i).object_name,'.')+1);
+            ELSIF (l_backup(i).object_type='EXPORT_SCHEMA') THEN
+                DBMS_LOB.CREATETEMPORARY (l_blob, TRUE, dbms_lob.call);
+                file_to_blob(l_blob, 'DATA_PUMP_DIR',l_backup(i).object_name);
+            ELSE
+                l_ddl:=LTRIM(LTRIM(dbms_metadata.get_ddl(l_backup(i).object_type,l_backup(i).object_name),chr(13)||chr(10)));
+            END IF;
+
+            /* 
+            ** Github requires content to be uploaded in base64 so where necessary we first convert to blob in order to use APEX_WEB_SERVICE.BLOB2CLOBBASE64
+            */
+            IF (l_ddl IS NOT NULL) THEN
+                l_dest_offset:=1;
+                l_src_offset:=1;
+                DBMS_LOB.CREATETEMPORARY (l_blob, TRUE, dbms_lob.call);
+                DBMS_LOB.CONVERTTOBLOB(l_blob,l_ddl,DBMS_LOB.LOBMAXSIZE,l_dest_offset,l_src_offset,DBMS_LOB.DEFAULT_CSID,l_lang,l_warning);
+            END IF;
+ 
+            /* 
+            ** Github enforces strict base64 encoding so we must remove carriage return and line feed characters 
+            */
+            l_content:=REPLACE(APEX_WEB_SERVICE.BLOB2CLOBBASE64(l_blob),chr(13)||chr(10));
+            
+            IF (DBMS_LOB.ISTEMPORARY(l_blob)=1) THEN
+                DBMS_LOB.FREETEMPORARY (l_blob);
+            END IF;
+            
+            /*
+            **  Prepare JSON body for uploading with Github API. Sent with "sha" results in Github update, otherwise insert
+            */
+            IF (l_backup(i).github_sha IS NULL) THEN
+                l_json:=JSON_OBJECT_T.parse('{"message":"Committed from pck_backup"}');
+            ELSE
+                l_json:=JSON_OBJECT_T.parse('{"message":"Committed from pck_backup","sha":"' || l_backup(i).github_sha || '"}');
+            END IF;
+            l_json.put('content', l_content);
+
+            l_clob := apex_web_service.make_rest_request(
+                p_url=>'https://api.github.com/repos/' || l_github_repos_owner || '/' || l_github_repos || '/contents/' || l_backup(i).object_type || '.' || l_backup(i).object_name,
+                p_http_method=>'PUT',
+                p_body=>l_json.to_clob);
+            
+            /*
+            ** Github API response JSON includes "message" if any error
+            */
+            SELECT NVL(message,'OK'), current_date INTO l_backup(i).message, l_backup(i).backup_date 
+              FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS message VARCHAR2(500) PATH '$.message');
+            
+        END LOOP;
+        
+        /*
+        ** Send email to APEX Admin user with results of backup. Include encryption password.
+        */
+        sendmail(l_backup, l_email, l_password);
+        
+        --getDumpFileInfo(l_datapump_filename || '.dmp');
+        
+        /*
+        ** Delete export dump and log files from data_pump_dir
+        
+        FOR C IN (SELECT object_name FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR'))
+        LOOP
+            dbms_cloud.delete_file('DATA_PUMP_DIR',C.object_name); 
+        END LOOP;
+        */
+        
+        EXCEPTION
+            WHEN OTHERS THEN
+                log_error(sqlcode,sqlerrm);
+                IF (DBMS_LOB.ISTEMPORARY(l_blob)=1) THEN
+                    DBMS_LOB.FREETEMPORARY (l_blob);
+                END IF;
+                sendmail(l_backup, l_email, NULL, sqlcode || ': ' || sqlerrm);
+                RAISE;
+    END;
+
+    PROCEDURE getDumpFileInfo(pDatapumpFileName IN VARCHAR2) IS
+        ind        NUMBER;
+        fileType   NUMBER;
+        value      VARCHAR2(2048);
+        infoTab    KU$_DUMPFILE_INFO := KU$_DUMPFILE_INFO();
+    BEGIN
+      --
+      -- Get the information about the dump file into the infoTab.
+      --
+      BEGIN
+        DBMS_DATAPUMP.GET_DUMPFILE_INFO(pDatapumpFileName,'DATA_PUMP_DIR',infoTab,fileType);
+        log('---------------------------------------------');
+        log('Information for file: ' || pDatapumpFileName);
+     
+        --
+        -- Determine what type of file is being looked at.
+        --
+        CASE fileType
+          WHEN 1 THEN
+            log(pDatapumpFileName || ' is a Data Pump dump file');
+          WHEN 2 THEN
+            log(pDatapumpFileName || ' is an Original Export dump file');
+          WHEN 3 THEN
+            log(pDatapumpFileName || ' is an External Table dump file');
+          ELSE
+            log(pDatapumpFileName || ' is not a dump file');
+            log('---------------------------------------------');
+        END CASE;
+     
+      EXCEPTION
+        WHEN OTHERS THEN
+          log('---------------------------------------------');
+          log('Error retrieving information for file: ' || pDatapumpFileName);
+          log(SQLERRM);
+          log('---------------------------------------------');
+          fileType := 0;
+      END;
+     
+      --
+      -- If a valid file type was returned, then loop through the infoTab and 
+      -- display each item code and value returned.
+      --
+      IF fileType > 0
+      THEN
+        log('The information table has ' || 
+                              TO_CHAR(infoTab.COUNT) || ' entries');
+        log('---------------------------------------------');
+     
+        ind := infoTab.FIRST;
+        WHILE ind IS NOT NULL
+        LOOP
+          --
+          -- The following item codes return boolean values in the form
+          -- of a '1' or a '0'. Display them as 'Yes' or 'No'.
+          --
+          value := NVL(infoTab(ind).value, 'NULL');
+          IF infoTab(ind).item_code IN
+             (DBMS_DATAPUMP.KU$_DFHDR_MASTER_PRESENT,
+              DBMS_DATAPUMP.KU$_DFHDR_DIRPATH,
+              DBMS_DATAPUMP.KU$_DFHDR_METADATA_COMPRESSED,
+              DBMS_DATAPUMP.KU$_DFHDR_DATA_COMPRESSED,
+              DBMS_DATAPUMP.KU$_DFHDR_METADATA_ENCRYPTED,
+              DBMS_DATAPUMP.KU$_DFHDR_DATA_ENCRYPTED,
+              DBMS_DATAPUMP.KU$_DFHDR_COLUMNS_ENCRYPTED)
+          THEN
+            CASE value
+              WHEN '1' THEN value := 'Yes';
+              WHEN '0' THEN value := 'No';
+            END CASE;
+          END IF;
+     
+          --
+          -- Display each item code with an appropriate name followed by
+          -- its value.
+          --
+          CASE infoTab(ind).item_code
+            --
+            -- The following item codes have been available since Oracle
+            -- Database 10g, Release 10.2.
+            --
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_FILE_VERSION   THEN
+              log('Dump File Version:         ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_MASTER_PRESENT THEN
+              log('Master Table Present:      ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_GUID THEN
+              log('Job Guid:                  ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_FILE_NUMBER THEN
+              log('Dump File Number:          ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_CHARSET_ID  THEN
+              log('Character Set ID:          ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_CREATION_DATE THEN
+              log('Creation Date:             ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_FLAGS THEN
+              log('Internal Dump Flags:       ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_JOB_NAME THEN
+              log('Job Name:                  ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_PLATFORM THEN
+              log('Platform Name:             ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_INSTANCE THEN
+              log('Instance Name:             ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_LANGUAGE THEN
+              log('Language Name:             ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_BLOCKSIZE THEN
+              log('Dump File Block Size:      ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_DIRPATH THEN
+              log('Direct Path Mode:          ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_METADATA_COMPRESSED THEN
+              log('Metadata Compressed:       ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_DB_VERSION THEN
+              log('Database Version:          ' || value);
+     
+            --
+            -- The following item codes were introduced in Oracle Database 11g
+            -- Release 11.1
+            --
+    
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_MASTER_PIECE_COUNT THEN
+              log('Master Table Piece Count:  ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_MASTER_PIECE_NUMBER THEN
+              log('Master Table Piece Number: ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_DATA_COMPRESSED THEN
+              log('Table Data Compressed:     ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_METADATA_ENCRYPTED THEN
+              log('Metadata Encrypted:        ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_DATA_ENCRYPTED THEN
+              log('Table Data Encrypted:      ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_COLUMNS_ENCRYPTED THEN
+              log('TDE Columns Encrypted:     ' || value);
+     
+            --
+            -- For the DBMS_DATAPUMP.KU$_DFHDR_ENCRYPTION_MODE item code a
+            -- numeric value is returned. So examine that numeric value
+            -- and display an appropriate name value for it.
+            --
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCRYPTION_MODE THEN
+              CASE TO_NUMBER(value)
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCMODE_NONE THEN
+                  log('Encryption Mode:           None');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCMODE_PASSWORD THEN
+                  log('Encryption Mode:           Password');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCMODE_DUAL THEN
+                  log('Encryption Mode:           Dual');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCMODE_TRANS THEN
+                  log('Encryption Mode:           Transparent');
+              END CASE;
+     
+            --
+            -- The following item codes were introduced in Oracle Database 12c
+            -- Release 12.1
+            --
+     
+            --
+            -- For the DBMS_DATAPUMP.KU$_DFHDR_COMPRESSION_ALG item code a
+            -- numeric value is returned. So examine that numeric value and
+            -- display an appropriate name value for it.
+            --
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_COMPRESSION_ALG THEN
+              CASE TO_NUMBER(value)
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_NONE THEN
+                  log('Compression Algorithm:     None');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_BASIC THEN
+                  log('Compression Algorithm:     Basic');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_LOW THEN
+                  log('Compression Algorithm:     Low');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_MEDIUM THEN
+                  log('Compression Algorithm:     Medium');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_HIGH THEN
+                  log('Compression Algorithm:     High');
+              END CASE;
+            ELSE NULL;  -- Ignore other, unrecognized dump file attributes.
+          END CASE;
+          ind := infoTab.NEXT(ind);
+        END LOOP;
+      END IF;
+    END;
+
+end;
+/
