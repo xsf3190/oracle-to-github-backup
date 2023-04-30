@@ -28,7 +28,7 @@ prompt APPLICATION 100 - CMS application
 -- Application Export:
 --   Application:     100
 --   Name:            CMS application
---   Date and Time:   10:38 Sunday April 30, 2023
+--   Date and Time:   11:50 Sunday April 30, 2023
 --   Exported By:     EXAMPLE
 --   Flashback:       0
 --   Export Type:     Application Export
@@ -129,7 +129,7 @@ wwv_flow_imp.create_flow(
 ,p_substitution_string_01=>'APP_NAME'
 ,p_substitution_value_01=>'MRB'
 ,p_last_updated_by=>'EXAMPLE'
-,p_last_upd_yyyymmddhh24miss=>'20230430102554'
+,p_last_upd_yyyymmddhh24miss=>'20230430110719'
 ,p_file_prefix => nvl(wwv_flow_application_install.get_static_app_file_prefix,'')
 ,p_files_version=>357
 ,p_print_server_type=>'NATIVE'
@@ -20354,12 +20354,12 @@ wwv_flow_imp_page.create_page(
 ,p_autocomplete_on_off=>'OFF'
 ,p_javascript_file_urls=>wwv_flow_string.join(wwv_flow_t_varchar2(
 'https://widget.cloudinary.com/v2.0/global/all.js',
-'#APP_FILES#test100.js'))
+'#APP_FILES#app100.js'))
 ,p_css_file_urls=>'#APP_FILES#app100.css'
 ,p_page_template_options=>'#DEFAULT#:t-PageBody--noContentPadding'
 ,p_page_component_map=>'25'
 ,p_last_updated_by=>'EXAMPLE'
-,p_last_upd_yyyymmddhh24miss=>'20230425151325'
+,p_last_upd_yyyymmddhh24miss=>'20230430110719'
 );
 wwv_flow_imp_page.create_page_plug(
  p_id=>wwv_flow_imp.id(8330484766117839)
