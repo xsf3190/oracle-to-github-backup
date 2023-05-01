@@ -76,7 +76,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         digits   CONSTANT VARCHAR2(10) := '0123456789';
         lower    CONSTANT VARCHAR2(26) := 'abcdefghijklmnopqrstuvwxyz';
         upper    CONSTANT VARCHAR2(26) := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        special  CONSTANT VARCHAR2(32) := '!"£$%^&*()-_=+{}[]<>,.\|/?;:''@#';
+        special  CONSTANT VARCHAR2(30) := '!"£$%^*()-_=+{}[]<>,.\|/?;:@#';
     BEGIN
         SELECT LISTAGG(letter, NULL) WITHIN GROUP (ORDER BY DBMS_RANDOM.VALUE)
         INTO   password
