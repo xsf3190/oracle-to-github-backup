@@ -135,6 +135,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         dbms_datapump.add_file(handle => h1, filename => l_schema || CASE WHEN pIncludeRows = '0' THEN '.METADATA' END || '.log', 
             directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
         dbms_datapump.set_parameter(handle => h1, name => 'KEEP_MASTER', VALUE => 0); 
+        dbms_datapump.set_parameter(handle => h1, name => 'USER_METADATA', VALUE => 1); 
         dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')'); 
         dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_LIST', VALUE => '''STATISTICS'''); 
         
