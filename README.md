@@ -3,7 +3,7 @@ Backup Oracle schemas and Apex applications to Github
 
 Automatic backup of selected ORACLE object definitions and data to a designated GITHUB repository.
 
-Designed to backup applications and data built on the Oracle OCI platform, for example, using the "always free" offering.
+Designed to backup relatively small data sets built on the Oracle OCI platform, e.g. "always free".
 
 Individual file exports should not exceed Github recommendation of 50MB. 
 
