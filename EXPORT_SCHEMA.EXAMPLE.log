@@ -8,7 +8,6 @@ Processing object type SCHEMA_EXPORT/DEFAULT_ROLE
 Processing object type SCHEMA_EXPORT/TABLESPACE_QUOTA
 Processing object type SCHEMA_EXPORT/PASSWORD_HISTORY
 Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
-Processing object type SCHEMA_EXPORT/DB_LINK
 Processing object type SCHEMA_EXPORT/TYPE/TYPE_SPEC
 Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
 Processing object type SCHEMA_EXPORT/TABLE/TABLE
@@ -27,8 +26,8 @@ Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
 . . exported "EXAMPLE"."PERFORMANCE"                     141.1 KB    3962 rows
 . . exported "EXAMPLE"."USER_LOGIN"                      34.71 KB    2818 rows
 . . exported "EXAMPLE"."ARTICLE"                         86.64 KB     292 rows
+. . exported "EXAMPLE"."LOG"                             11.19 KB     235 rows
 . . exported "EXAMPLE"."USAGE"                           16.66 KB     368 rows
-. . exported "EXAMPLE"."LOG"                             10.60 KB     205 rows
 . . exported "EXAMPLE"."ASSET_USED"                      10.03 KB     268 rows
 . . exported "EXAMPLE"."USERS"                           7.070 KB      16 rows
 . . exported "EXAMPLE"."ERR$_PERFORMANCE"                6.328 KB       2 rows
@@ -39,4 +38,4 @@ Master table "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully loaded/unloaded
 ******************************************************************************
 Dump file set for EXAMPLE.EXPORT_SCHEMA_JOB is:
   /u03/dbfs/BDE1649F626EB000E0532E14000A3C29/data/dpdump/EXAMPLE.dmp
-Job "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully completed at Tue May 2 16:59:11 2023 elapsed 0 00:00:55
+Job "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully completed at Tue May 2 17:53:25 2023 elapsed 0 00:00:42
