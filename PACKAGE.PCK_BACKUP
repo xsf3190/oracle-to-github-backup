@@ -137,7 +137,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         dbms_datapump.set_parameter(handle => h1, name => 'KEEP_MASTER', VALUE => 0); 
         dbms_datapump.set_parameter(handle => h1, name => 'USER_METADATA', VALUE => 1); 
         dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')'); 
-        dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_LIST', VALUE => '''STATISTICS'''); 
+        --dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_LIST', VALUE => '''STATISTICS'''); 
+        dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'')'); 
         
         IF (pIncludeRows='0') THEN
             dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => 0);
@@ -339,6 +340,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         l_datapump_start TIMESTAMP:=current_timestamp;
         
         l_github CLOB;
+        
+        l_import_result CLOB;
     BEGIN
         /*
         ** Get target Github repository details as well as email address of Apex ADMIN user
@@ -502,6 +505,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             pGithub_repos=>l_github_repos,
             pPassword=>l_password
         );
+        
+        SELECT message 
+        INTO l_import_result
+        FROM 
+        (
+            SELECT max(id) OVER() max_id, id, message FROM log@restore_link
+        )
+        WHERE id=max_id;
+        
+        log(l_import_result);
         
         /*
         ** Delete export dump and log files from data_pump_dir
