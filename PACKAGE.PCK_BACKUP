@@ -490,7 +490,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         */
         sendmail(l_backup, l_email, l_password);
         
-        --getDumpFileInfo(l_datapump_filename || '.dmp');
+        /*
+        ** All dump files are now in Githib. Restore encrypted dump file in @RESTORE_LINK
+        */
+        log('starting restore in @RESTORE_LINK ADB');
+        
+        pck_restore.github_restore@RESTORE_LINK(
+            pGithub_dumpfile=>'EXPORT_SCHEMA.EXAMPLE.dmp', 
+            pGithub_token=>l_github_token, 
+            pGithub_repos_owner=>l_github_repos_owner, 
+            pGithub_repos=>l_github_repos,
+            pPassword=>l_password
+        );
         
         /*
         ** Delete export dump and log files from data_pump_dir
