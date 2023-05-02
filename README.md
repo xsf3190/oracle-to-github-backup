@@ -9,15 +9,15 @@ Individual file exports should not exceed Github recommendation of 50MB.
 
 ## Pre-requisites
 1. Obtain GITHUB Personal access token (classic) - https://github.com/settings/tokens
+2. Create DB LINK to target ADB database in order to automatically restore the backed up schema
 
 ## Use
 Generates and transfers the following objects to a designated Github repository:
-1. Two datapump exports of the current schema - one including table rows (encrypted) and one with metadata only (not encrypted)
+1. Datapump exports of the current schema - one including table rows (encrypted) and one with metadata only (not encrypted)
 2. Apex application export files including static javascript and css files
 3. DDL of TABLE and PACKAGE schema objects (for quick reference)
 
 ## Install
-
 1. IMPORT?
 1. GRANT READ,WRITE ON DIRECTORY DATA_PUMP_DIR TO "schema"
 2. GRANT EXECUTE ON DBMS_CLOUD TO "schema"
