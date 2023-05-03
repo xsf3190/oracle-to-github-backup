@@ -138,7 +138,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         dbms_datapump.set_parameter(handle => h1, name => 'USER_METADATA', VALUE => 1); 
         dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')'); 
         --dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_LIST', VALUE => '''STATISTICS'''); 
-        dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'')'); 
+        dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'',''PROCOBJ'',''JOB'')'); 
         
         IF (pIncludeRows='0') THEN
             dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => 0);
