@@ -28,7 +28,7 @@ prompt APPLICATION 100 - CMS application
 -- Application Export:
 --   Application:     100
 --   Name:            CMS application
---   Date and Time:   04:45 Wednesday May 3, 2023
+--   Date and Time:   20:02 Wednesday May 3, 2023
 --   Exported By:     EXAMPLE
 --   Flashback:       0
 --   Export Type:     Application Export
@@ -129,7 +129,7 @@ wwv_flow_imp.create_flow(
 ,p_substitution_string_01=>'APP_NAME'
 ,p_substitution_value_01=>'MRB'
 ,p_last_updated_by=>'EXAMPLE'
-,p_last_upd_yyyymmddhh24miss=>'20230430110719'
+,p_last_upd_yyyymmddhh24miss=>'20230503090212'
 ,p_file_prefix => nvl(wwv_flow_application_install.get_static_app_file_prefix,'')
 ,p_files_version=>357
 ,p_print_server_type=>'NATIVE'
@@ -249,6 +249,15 @@ wwv_flow_imp_shared.create_list_item(
 ,p_list_item_current_type=>'TARGET_PAGE'
 );
 wwv_flow_imp_shared.create_list_item(
+ p_id=>wwv_flow_imp.id(18408852958315020)
+,p_list_item_display_sequence=>40
+,p_list_item_link_text=>'Privacy Policy'
+,p_list_item_link_target=>'f?p=&APP_ID.:3:&SESSION.::&DEBUG.::::'
+,p_list_item_disp_cond_type=>'USER_IS_NOT_PUBLIC_USER'
+,p_parent_list_item_id=>wwv_flow_imp.id(10128312983907253)
+,p_list_item_current_type=>'TARGET_PAGE'
+);
+wwv_flow_imp_shared.create_list_item(
  p_id=>wwv_flow_imp.id(32389035791368754)
 ,p_list_item_display_sequence=>50
 ,p_list_item_link_text=>'Facebook'
@@ -282,6 +291,14 @@ wwv_flow_imp_shared.create_list_item(
 ,p_list_item_link_target=>'f?p=&APP_ID.:2:&SESSION.:APEX_AUTHENTICATION=Azure:&DEBUG.::::'
 ,p_list_item_icon=>'icon-azure'
 ,p_list_item_disp_cond_type=>'NEVER'
+,p_list_item_current_type=>'TARGET_PAGE'
+);
+wwv_flow_imp_shared.create_list_item(
+ p_id=>wwv_flow_imp.id(18407741700265627)
+,p_list_item_display_sequence=>90
+,p_list_item_link_text=>'Privacy Policy'
+,p_list_item_link_target=>'f?p=&APP_ID.:3:&SESSION.::&DEBUG.::::'
+,p_list_item_disp_cond_type=>'USER_IS_PUBLIC_USER'
 ,p_list_item_current_type=>'TARGET_PAGE'
 );
 end;
