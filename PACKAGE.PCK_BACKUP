@@ -136,9 +136,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
         dbms_datapump.set_parameter(handle => h1, name => 'KEEP_MASTER', VALUE => 0); 
         dbms_datapump.set_parameter(handle => h1, name => 'USER_METADATA', VALUE => 1); 
-        dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')'); 
-        --dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_LIST', VALUE => '''STATISTICS'''); 
-        dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'',''PROCOBJ'',''JOB'')'); 
+        dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')');
+        dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'',''PROCOBJ'',''JOB'',''SCHEDULER'')'); 
         
         IF (pIncludeRows='0') THEN
             dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => 0);
@@ -350,9 +349,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         
         /* 
         **  Run datapump exports: 
+        **  1) Clear files from data_pump_dir
         **  1) encrypted with table rows  
         **  2) unencrypted metadata only
         */
+
+        FOR C IN (SELECT object_name FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR'))
+        LOOP
+            dbms_cloud.delete_file('DATA_PUMP_DIR',C.object_name); 
+        END LOOP;
+        
         l_password:=generate_password();
         datapump_backup(pIncludeRows => '1', pEncryptPassword => l_password); -- encrypt exports that include table rows
         datapump_backup(pIncludeRows => '0'); -- metadata only export
@@ -515,16 +521,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         WHERE id=max_id;
         
         log(l_import_result);
-        
-        /*
-        ** Delete export dump and log files from data_pump_dir
-        
-        FOR C IN (SELECT object_name FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR'))
-        LOOP
-            dbms_cloud.delete_file('DATA_PUMP_DIR',C.object_name); 
-        END LOOP;
-        */
-        
+                
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm);
