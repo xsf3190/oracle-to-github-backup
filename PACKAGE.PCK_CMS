@@ -201,11 +201,9 @@ END;
         
         l_password:=generate_password();
         pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email, l_password);
-        
-        log('l_password:'||l_password);
     
         /*
-        **  Restore from Github into Restore database
+        **  Restore from Github into Restore database, where a workspace with same name as current schema must exist.
         */
         pck_restore.github_restore@RESTORE_LINK(
             pGithub_dumpfile=>'EXPORT_SCHEMA.' || sys_context('userenv','current_schema') || '.dmp', 
@@ -213,7 +211,8 @@ END;
             pGithub_token=>l_github_token, 
             pGithub_repos_owner=>l_github_repos_owner, 
             pGithub_repos=>l_github_repos,
-            pEmail=>l_email
+            pEmail=>l_email,
+            pWorkspace=>sys_context('userenv','current_schema')
         );
         
         EXCEPTION
