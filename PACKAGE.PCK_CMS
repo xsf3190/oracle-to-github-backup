@@ -117,7 +117,64 @@ END;
         END IF;
     END;
     
+    /*
+    ** Generate random 16 character password string. Used in order to create encrypted schema export dumpfile
+    */
+    FUNCTION generate_password(
+        no_of_digits             in number DEFAULT 5,
+        no_of_special_characters in number DEFAULT 3,
+        no_of_lower              in number DEFAULT 4,
+        no_of_upper              in number DEFAULT 4
+        ) return varchar2
+    IS
+        password VARCHAR2(4000);
+        digits   CONSTANT VARCHAR2(10) := '0123456789';
+        lower    CONSTANT VARCHAR2(26) := 'abcdefghijklmnopqrstuvwxyz';
+        upper    CONSTANT VARCHAR2(26) := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        special  CONSTANT VARCHAR2(30) := '!"£$%^*()-_=+{}[]<>,\|/?;:@#';
+    BEGIN
+        SELECT LISTAGG(letter, NULL) WITHIN GROUP (ORDER BY DBMS_RANDOM.VALUE)
+        INTO   password
+        FROM   (
+        SELECT SUBSTR(
+                 digits,
+                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(digits) + 1)),
+                 1
+               ) AS letter
+        FROM   DUAL
+        CONNECT BY LEVEL <= no_of_digits
+        UNION ALL
+        SELECT SUBSTR(
+                 lower,
+                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(lower) + 1)),
+                 1
+               ) AS letter
+        FROM   DUAL
+        CONNECT BY LEVEL <= no_of_lower
+        UNION ALL
+        SELECT SUBSTR(
+                 upper,
+                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(upper) + 1)),
+                 1
+               ) AS letter
+        FROM   DUAL
+        CONNECT BY LEVEL <= no_of_upper
+        UNION ALL
+        SELECT SUBSTR(
+                 special,
+                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(special) + 1)),
+                 1
+               ) AS letter
+        FROM   DUAL
+        CONNECT BY LEVEL <= no_of_special_characters
+        );
     
+        RETURN password;
+    END;    
+    
+    /*
+    **  Daily job run by dbms_scheduler
+    */
     PROCEDURE daily_job IS 
         l_github_token users.github_token%type; 
         l_github_repos_owner users.github_repos_owner%type;
@@ -133,6 +190,7 @@ END;
         **  Github token and repository details are maintained in USERS table
         **  Email address of Apex Admin user must match for this to work
         */
+       l_password:=generate_password();
         SELECT github_token, github_repos_owner, github_repos, u.email 
           INTO l_github_token, l_github_repos_owner, l_github_repos, l_email
           FROM users u, APEX_WORKSPACE_DEVELOPERS w 
@@ -140,7 +198,7 @@ END;
            AND w.is_admin='Yes'
            AND w.email=u.email;
            
-        l_password:=pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email);
+        pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email, l_password);
         
         log('l_password:'||l_password);
     
