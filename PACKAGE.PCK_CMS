@@ -181,6 +181,8 @@ END;
         l_github_repos users.github_repos%type;
         l_email users.email%type;
         l_password VARCHAR2(20);
+        l_github_filename VARCHAR2(100);
+        l_workspace VARCHAR2(30);
     BEGIN
         /* 1. Get Cloudinary usage for all subscribers */
         --getUsage;
@@ -203,17 +205,31 @@ END;
         pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email, l_password);
     
         /*
-        **  Restore from Github into Restore database, where a workspace with same name as current schema must exist.
+        **  3. Restore from Github into Restore database, where a workspace with same name as current schema must exist.
+        **     Using dynamic sql so that package compiles after being restored.
         */
-        pck_restore.github_restore@RESTORE_LINK(
-            pGithub_dumpfile=>'EXPORT_SCHEMA.' || sys_context('userenv','current_schema') || '.dmp', 
-            pPassword=>l_password,
-            pGithub_token=>l_github_token, 
-            pGithub_repos_owner=>l_github_repos_owner, 
-            pGithub_repos=>l_github_repos,
-            pEmail=>l_email,
-            pWorkspace=>sys_context('userenv','current_schema')
-        );
+        l_github_filename:='EXPORT_SCHEMA' || sys_context('userenv','current_schema') || '.dmp';
+        l_workspace:=sys_context('userenv','current_schema');
+        
+        EXECUTE IMMEDIATE q'{
+            BEGIN pck_restore.github_restore@RESTORE_LINK(
+                pGithub_dumpfile=>:B1, 
+                pPassword=>:B2,
+                pGithub_token=>:B3, 
+                pGithub_repos_owner=>:B4, 
+                pGithub_repos=>:B5,
+                pEmail=>:B6,
+                pWorkspace=>:B7); END;}' USING l_github_filename, l_password, l_github_token, l_github_repos_owner, l_github_repos, l_email, l_workspace;
+        
+        l_github_filename:='APEX_APPLICATION.100';
+        EXECUTE IMMEDIATE q'{
+            BEGIN pck_restore.github_restore2@RESTORE_LINK(
+                pGithub_appfile=>:B1, 
+                pGithub_token=>:B2, 
+                pGithub_repos_owner=>:B3, 
+                pGithub_repos=>:B4,
+                pEmail=>:B5,
+                pWorkspace=>:B6); END;}' USING l_github_filename, l_github_token, l_github_repos_owner, l_github_repos, l_email, l_workspace;                
         
         EXCEPTION
             WHEN OTHERS THEN
