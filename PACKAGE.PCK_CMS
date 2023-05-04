@@ -190,14 +190,16 @@ END;
         **  Github token and repository details are maintained in USERS table
         **  Email address of Apex Admin user must match for this to work
         */
-       l_password:=generate_password();
+       
+       
         SELECT github_token, github_repos_owner, github_repos, u.email 
           INTO l_github_token, l_github_repos_owner, l_github_repos, l_email
           FROM users u, APEX_WORKSPACE_DEVELOPERS w 
          WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
            AND w.is_admin='Yes'
            AND w.email=u.email;
-           
+        
+        l_password:=generate_password();
         pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email, l_password);
         
         log('l_password:'||l_password);
@@ -205,6 +207,14 @@ END;
         /*
         **  Restore from Github into Restore database
         */
+        pck_restore.github_restore@RESTORE_LINK(
+            pGithub_dumpfile=>'EXPORT_SCHEMA.' || sys_context('userenv','current_schema') || '.dmp', 
+            pPassword=>l_password,
+            pGithub_token=>l_github_token, 
+            pGithub_repos_owner=>l_github_repos_owner, 
+            pGithub_repos=>l_github_repos,
+            pEmail=>l_email
+        );
         
         EXCEPTION
             WHEN OTHERS THEN
