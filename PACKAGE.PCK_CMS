@@ -208,7 +208,7 @@ END;
         **  3. Restore from Github into Restore database, where a workspace with same name as current schema must exist.
         **     Using dynamic sql so that package compiles after being restored.
         */
-        l_github_filename:='EXPORT_SCHEMA' || sys_context('userenv','current_schema') || '.dmp';
+        l_github_filename:='EXPORT_SCHEMA.' || sys_context('userenv','current_schema') || '.dmp';
         l_workspace:=sys_context('userenv','current_schema');
         
         EXECUTE IMMEDIATE q'{
