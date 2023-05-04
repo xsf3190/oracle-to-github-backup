@@ -118,9 +118,40 @@ END;
     END;
     
     
-    PROCEDURE daily_job IS BEGIN
-        getUsage;
-        pck_backup.github_backup;
+    PROCEDURE daily_job IS 
+        l_github_token users.github_token%type; 
+        l_github_repos_owner users.github_repos_owner%type;
+        l_github_repos users.github_repos%type;
+        l_email users.email%type;
+        l_password VARCHAR2(20);
+    BEGIN
+        /* 1. Get Cloudinary usage for all subscribers */
+        --getUsage;
+        
+        /*
+        **  2. Backup to Github
+        **  Github token and repository details are maintained in USERS table
+        **  Email address of Apex Admin user must match for this to work
+        */
+        SELECT github_token, github_repos_owner, github_repos, u.email 
+          INTO l_github_token, l_github_repos_owner, l_github_repos, l_email
+          FROM users u, APEX_WORKSPACE_DEVELOPERS w 
+         WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
+           AND w.is_admin='Yes'
+           AND w.email=u.email;
+           
+        l_password:=pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email);
+        
+        log('l_password:'||l_password);
+    
+        /*
+        **  Restore from Github into Restore database
+        */
+        
+        EXCEPTION
+            WHEN OTHERS THEN
+                log_error(sqlcode,sqlerrm);
+                RAISE;
     END;
     
     PROCEDURE getCldDetails IS
