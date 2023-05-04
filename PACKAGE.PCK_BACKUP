@@ -1,6 +1,11 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_BACKUP" is
     --
-    PROCEDURE github_backup;
+    FUNCTION github_backup(
+        p_github_token IN users.github_token%type,
+        p_github_repos_owner IN users.github_repos_owner%type,
+        p_github_repos IN users.github_repos%type,
+        p_email IN users.email%type) 
+        RETURN VARCHAR2;
     --
     PROCEDURE getDumpFileInfo(pDatapumpFileName IN VARCHAR2);
     --
@@ -60,6 +65,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             dest_offset   => l_dest_offset,
             src_offset    => l_src_offset);
         dbms_lob.fileclose(l_bfile);
+        log('size:' || dbms_lob.getlength(p_blob));
     END;
     
     /*
@@ -76,7 +82,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         digits   CONSTANT VARCHAR2(10) := '0123456789';
         lower    CONSTANT VARCHAR2(26) := 'abcdefghijklmnopqrstuvwxyz';
         upper    CONSTANT VARCHAR2(26) := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        special  CONSTANT VARCHAR2(30) := '!"£$%^*()-_=+{}[]<>,.\|/?;:@#';
+        special  CONSTANT VARCHAR2(30) := '!"£$%^*()-_=+{}[]<>,\|/?;:@#';
     BEGIN
         SELECT LISTAGG(letter, NULL) WITHIN GROUP (ORDER BY DBMS_RANDOM.VALUE)
         INTO   password
@@ -120,12 +126,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     /*
     ** Generate schema datapump export
     */ 
-    PROCEDURE datapump_backup(pIncludeRows IN VARCHAR2, pEncryptPassword IN VARCHAR2 DEFAULT NULL) IS
+    FUNCTION datapump_backup(pIncludeRows IN VARCHAR2) RETURN VARCHAR2 IS
         h1 NUMBER;
         l_schema VARCHAR2(30):=sys_context('userenv','current_schema');
         l_status varchar2(4000);
+        l_password VARCHAR2(20):=NULL;
     BEGIN
-        log('Starting datapump export job for Schema:'||l_schema || ' Include Rows:' || pIncludeRows || ' Encryption:' || CASE WHEN pEncryptPassword IS NULL THEN 'N' ELSE 'Y' END);
+        log('Starting datapump export job for Schema:'||l_schema || ' Include Rows:' || pIncludeRows);
         h1 := dbms_datapump.OPEN (operation => 'EXPORT', job_mode => 'SCHEMA', job_name => 'EXPORT_SCHEMA_JOB', version => 'COMPATIBLE'); 
 
         dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION', VALUE => 'ALL'); 
@@ -141,17 +148,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         
         IF (pIncludeRows='0') THEN
             dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => 0);
-        END IF;
-
-        IF (pEncryptPassword IS NOT NULL) THEN 
+        ELSE
+            l_password:=generate_password();
             dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_MODE', VALUE => 'PASSWORD'); 
-            dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => pEncryptPassword); 
+            dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => l_password); 
         END IF;
         
         dbms_datapump.start_job(handle => h1, skip_current => 0, abort_step => 0); 
         dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
         dbms_datapump.detach(handle => h1); 
         log('Completed datapump export job. Final status:' || l_status);
+        
+        RETURN (l_password);
         
     EXCEPTION
         WHEN OTHERS THEN
@@ -164,24 +172,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     ** Email formatted as HTML so styling is primitive and included in-line
     */
     PROCEDURE sendmail(p_backup IN tt_backup, p_email IN VARCHAR2, p_password IN VARCHAR2, p_error IN VARCHAR2 DEFAULT NULL) IS
-        l_subject VARCHAR2(100):='OCI APPLICATION BACKUP OK';
+        l_subject VARCHAR2(100);
         l_body CLOB;
         l_body_html CLOB;
         l_bgcolor VARCHAR2(7);
         l_total_bytes NUMBER:=0;
         l_total_bytes_base64 NUMBER:=0;
     BEGIN
-        IF (p_error IS NOT NULL) THEN
-            l_subject:='OCI APPLICATION BACKUP FAILED';
-        ELSE
-            FOR i IN 1..p_backup.COUNT
-            LOOP
-                IF (p_backup(i).message<>'OK') THEN
-                    l_subject:='OCI APPLICATION BACKUP FAILED';
-                    EXIT;
-                END IF;
-            END LOOP;
-        END IF;
+        /* Be optimistic about backup status */
+        l_subject:='OCI APPLICATION BACKUP OK';
+        FOR i IN 1..p_backup.COUNT LOOP
+            l_total_bytes_base64:=l_total_bytes_base64+p_backup(i).backup_size_base64;
+            l_total_bytes:=l_total_bytes+p_backup(i).backup_size;
+            IF (p_backup(i).message<>'OK') THEN
+                l_subject:='OCI APPLICATION BACKUP FAILED';
+            END IF;
+        END LOOP;
         
         l_body:='To view the content of this message, please use an HTML enabled mail client.'||utl_tcp.crlf;
         l_body_html:=to_clob('
@@ -230,79 +236,54 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 </head>
                 <body>
         ');
-        IF (p_error IS NOT NULL) THEN
-            l_body_html:=l_body_html || to_clob(p_error);
-        ELSE
-            FOR i IN 1..p_backup.COUNT LOOP
-                l_total_bytes_base64:=l_total_bytes_base64+p_backup(i).backup_size_base64;
-                l_total_bytes:=l_total_bytes+p_backup(i).backup_size;
-            END LOOP;
-            l_body_html:=l_body_html || to_clob('
-                <table><caption>GITHUB BACKUP STATUS FOR SCHEMA: <strong>'||sys_context('userenv','current_schema') || '</strong> TOTAL SIZE: <strong>' || apex_string_util.to_display_filesize(l_total_bytes) || '</strong></caption>
-                    <thead>
-                        <tr bgcolor="#d7d9f2">
-                            <th scope="col">Object</th>
-                            <th scope="col">Backed Up</th>
-                            <th scope="col">Transfer Size</th>
-                            <th scope="col">Backup Size</th>
-                            <th scope="col">Status</td>
-                        </tr>
-                    </thead>
-                    <tbody>');
 
-            FOR i IN 1..p_backup.COUNT
-            LOOP
-                IF (p_backup(i).message<>'OK') THEN
-                    l_bgcolor:='ff0000';
-                ELSIF (MOD(i,2)=0) THEN
-                    l_bgcolor:='#eeeeee';
-                ELSE
-                    l_bgcolor:=NULL;
-                END IF;
-                l_body_html:=l_body_html || to_clob(
-                    '<tr  bgcolor="' || l_bgcolor || '">
-                        <th scope="row">' || p_backup(i).object_type || '.' || p_backup(i).object_name || '</th>
-                        <td>' || TO_CHAR(p_backup(i).backup_date AT TIME ZONE 'Europe/London','dd Mon yyyy hh24:mi:ss TZR') || '</td>
-                        <td>' || apex_string_util.to_display_filesize(p_backup(i).backup_size_base64) || '</td>
-                        <td>' || apex_string_util.to_display_filesize(p_backup(i).backup_size) || '</td>
-                        <td>' || p_backup(i).message || '</td>
-                    </tr>');
-            END LOOP;
-            
-            l_body_html:=l_body_html || to_clob('
-                </tbody>
-                </table>
-                <p>Password to decrypt on import:' || p_password || '<p>
-                </body>
-                </html>');
+
+        l_body_html:=l_body_html || to_clob('
+            <table><caption>GITHUB BACKUP STATUS FOR SCHEMA: <strong>'||sys_context('userenv','current_schema') || '</strong> TOTAL SIZE: <strong>' || apex_string_util.to_display_filesize(l_total_bytes) || '</strong></caption>
+                <thead>
+                    <tr bgcolor="#d7d9f2">
+                        <th scope="col">Object</th>
+                        <th scope="col">Backed Up</th>
+                        <th scope="col">Transfer Size</th>
+                        <th scope="col">Backup Size</th>
+                        <th scope="col">Status</td>
+                    </tr>
+                </thead>
+                <tbody>');
+
+        FOR i IN 1..p_backup.COUNT
+        LOOP
+            IF (p_backup(i).message<>'OK') THEN
+                l_bgcolor:='ff0000';
+            ELSIF (MOD(i,2)=0) THEN
+                l_bgcolor:='#eeeeee';
+            ELSE
+                l_bgcolor:=NULL;
+            END IF;
+            l_body_html:=l_body_html || to_clob(
+                '<tr  bgcolor="' || l_bgcolor || '">
+                    <th scope="row">' || p_backup(i).object_type || '.' || p_backup(i).object_name || '</th>
+                    <td>' || TO_CHAR(p_backup(i).backup_date AT TIME ZONE 'Europe/London','dd Mon yyyy hh24:mi:ss TZR') || '</td>
+                    <td>' || apex_string_util.to_display_filesize(p_backup(i).backup_size_base64) || '</td>
+                    <td>' || apex_string_util.to_display_filesize(p_backup(i).backup_size) || '</td>
+                    <td>' || p_backup(i).message || '</td>
+                </tr>');
+        END LOOP;
+        
+        l_body_html:=l_body_html || to_clob('</tbody></table>');
+        
+        /* This means there was an unrecoverable error - but some of the backup may have succeeded and would have been reported above */
+        IF (p_error IS NOT NULL) THEN
+            l_subject:='OCI APPLICATION BACKUP FAILED';
+            l_body_html:=l_body_html || to_clob('<p>UNRECOVERABLE ERROR: '|| p_error || '</p>');
         END IF;
+
+        l_body_html:=l_body_html || to_clob('<p>' || p_password || '<p>');
+        
+        l_body_html:=l_body_html || to_clob('</body></html>');
+        
         apex_mail.send(p_to=>p_email, p_from=>p_email, p_body=>l_body, p_body_html=>l_body_html, p_subj=>l_subject);
         apex_mail.push_queue(); 
-    END;
-    
-    /*
-    **  Github token and repository details are maintained in USERS table
-    **  Email address of Apex Admin user must match for this to work
-    */
-    PROCEDURE getGithubDetails(
-        p_github_token IN OUT users.github_token%type, 
-        p_github_repos_owner IN OUT users.github_repos_owner%type, 
-        p_github_repos IN OUT users.github_repos%type,
-        p_email IN OUT users.email%type)
-    IS
-    BEGIN
-        /* Get target github repository details through workspace admin user. Allow to fail horribly unless 1 row returned */
-        SELECT github_token, github_repos_owner, github_repos, u.email 
-          INTO p_github_token, p_github_repos_owner, p_github_repos, p_email
-          FROM users u, APEX_WORKSPACE_DEVELOPERS w 
-         WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
-           AND w.is_admin='Yes'
-           AND w.email=u.email;
-    
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm);
-                RAISE;
     END;
     
     /*
@@ -312,11 +293,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     ** 3. Datapump export dump file including log
     ** 4. DDL of TABLES and PACKAGES
     */
-    PROCEDURE github_backup IS
-        l_github_token users.github_token%type;
-        l_github_repos_owner users.github_repos_owner%type; 
-        l_github_repos users.github_repos%type;
-        l_email users.email%type;
+    FUNCTION github_backup(p_github_token IN users.github_token%type,
+        p_github_repos_owner IN users.github_repos_owner%type,
+        p_github_repos IN users.github_repos%type,
+        p_email IN users.email%type) 
+        RETURN VARCHAR2
+    IS
+        
         
         l_password VARCHAR2(20);
         
@@ -339,29 +322,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         l_datapump_start TIMESTAMP:=current_timestamp;
         
         l_github CLOB;
-        
-        l_import_result CLOB;
     BEGIN
-        /*
-        ** Get target Github repository details as well as email address of Apex ADMIN user
-        */
-        getGithubDetails(l_github_token, l_github_repos_owner, l_github_repos, l_email);
-        
         /* 
         **  Run datapump exports: 
-        **  1) Clear files from data_pump_dir
         **  1) encrypted with table rows  
         **  2) unencrypted metadata only
         */
-
-        FOR C IN (SELECT object_name FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR'))
-        LOOP
-            dbms_cloud.delete_file('DATA_PUMP_DIR',C.object_name); 
-        END LOOP;
         
-        l_password:=generate_password();
-        datapump_backup(pIncludeRows => '1', pEncryptPassword => l_password); -- encrypt exports that include table rows
-        datapump_backup(pIncludeRows => '0'); -- metadata only export
+        l_password:=datapump_backup(pIncludeRows => '0'); -- metadata only export
+        l_password:=datapump_backup(pIncludeRows => '1'); -- encrypt exports that include table rows
 
         /*
         ** Set up web service headers in order to use Github API
@@ -369,15 +338,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         apex_web_service.g_request_headers(1).name := 'Accept';
         apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
         apex_web_service.g_request_headers(2).name := 'Authorization';
-        apex_web_service.g_request_headers(2).value := 'Bearer ' || l_github_token;
+        apex_web_service.g_request_headers(2).value := 'Bearer ' || p_github_token;
         apex_web_service.g_request_headers(3).name := 'User-Agent';
-        apex_web_service.g_request_headers(3).value := l_github_repos_owner;
+        apex_web_service.g_request_headers(3).value := p_github_repos_owner;
         
         /*
         ** Get existing details of any files previously copied to Github. We need the file name and SHA so that Github can update / insert as required
         */
         l_github := apex_web_service.make_rest_request(
-            p_url=>'https://api.github.com/repos/' || l_github_repos_owner || '/' || l_github_repos || '/contents/',
+            p_url=>'https://api.github.com/repos/' || p_github_repos_owner || '/' || p_github_repos || '/contents/',
             p_http_method=>'GET');
         
         /*
@@ -414,7 +383,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 AND f.mime_type LIKE 'text%'
                 UNION ALL
                 
-                SELECT 'EXPORT_SCHEMA', object_name 
+                SELECT 'EXPORT_SCHEMA', object_name || '.' || bytes || CASE WHEN object_name = sys_context('userenv','current_schema') || '.dmp' THEN '.' || l_password END
                 FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR') 
                 WHERE bytes>0 
                 AND last_modified > l_datapump_start              
@@ -482,14 +451,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             l_json.put('content', l_content);
 
             l_clob := apex_web_service.make_rest_request(
-                p_url=>'https://api.github.com/repos/' || l_github_repos_owner || '/' || l_github_repos || '/contents/' || l_backup(i).object_type || '.' || l_backup(i).object_name,
+                p_url=>'https://api.github.com/repos/' || p_github_repos_owner || '/' || p_github_repos || '/contents/' || l_backup(i).object_type || '.' || l_backup(i).object_name,
                 p_http_method=>'PUT',
                 p_body=>l_json.to_clob);
             
             /*
             ** Github API response JSON includes "message" if any error
             */
-            SELECT NVL(message,'OK'), current_timestamp INTO l_backup(i).message, l_backup(i).backup_date 
+            SELECT NVL(message,'OK'), current_timestamp 
+              INTO l_backup(i).message, l_backup(i).backup_date 
               FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS message VARCHAR2(500) PATH '$.message');
             
         END LOOP;
@@ -497,30 +467,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         /*
         ** Send email to APEX Admin user with results of backup. Include encryption password.
         */
-        sendmail(l_backup, l_email, l_password);
+        sendmail(l_backup, p_email, l_password);
         
-        /*
-        ** All dump files are now in Githib. Restore encrypted dump file in @RESTORE_LINK
-        */
-        log('starting restore in @RESTORE_LINK ADB');
-        
-        pck_restore.github_restore@RESTORE_LINK(
-            pGithub_dumpfile=>'EXPORT_SCHEMA.EXAMPLE.dmp', 
-            pGithub_token=>l_github_token, 
-            pGithub_repos_owner=>l_github_repos_owner, 
-            pGithub_repos=>l_github_repos,
-            pPassword=>l_password
-        );
-        
-        SELECT message 
-        INTO l_import_result
-        FROM 
-        (
-            SELECT max(id) OVER() max_id, id, message FROM log@restore_link
-        )
-        WHERE id=max_id;
-        
-        log(l_import_result);
+        RETURN (l_password);
                 
         EXCEPTION
             WHEN OTHERS THEN
@@ -528,7 +477,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 IF (DBMS_LOB.ISTEMPORARY(l_blob)=1) THEN
                     DBMS_LOB.FREETEMPORARY (l_blob);
                 END IF;
-                sendmail(l_backup, l_email, NULL, sqlcode || ': ' || sqlerrm);
+                sendmail(l_backup, p_email, NULL, sqlcode || ': ' || sqlerrm);
                 RAISE;
     END;
 
