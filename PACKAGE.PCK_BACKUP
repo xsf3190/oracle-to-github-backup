@@ -1,11 +1,11 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_BACKUP" is
     --
-    FUNCTION github_backup(
+    PROCEDURE github_backup(
         p_github_token IN users.github_token%type,
         p_github_repos_owner IN users.github_repos_owner%type,
         p_github_repos IN users.github_repos%type,
-        p_email IN users.email%type) 
-        RETURN VARCHAR2;
+        p_email IN users.email%type,
+        p_password IN VARCHAR2);
     --
     PROCEDURE getDumpFileInfo(pDatapumpFileName IN VARCHAR2);
     --
@@ -69,68 +69,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     END;
     
     /*
-    ** Generate random 16 character password string. Used in order to create encrypted schema export dumpfile
-    */
-    FUNCTION generate_password(
-        no_of_digits             in number DEFAULT 5,
-        no_of_special_characters in number DEFAULT 3,
-        no_of_lower              in number DEFAULT 4,
-        no_of_upper              in number DEFAULT 4
-        ) return varchar2
-    IS
-        password VARCHAR2(4000);
-        digits   CONSTANT VARCHAR2(10) := '0123456789';
-        lower    CONSTANT VARCHAR2(26) := 'abcdefghijklmnopqrstuvwxyz';
-        upper    CONSTANT VARCHAR2(26) := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        special  CONSTANT VARCHAR2(30) := '!"£$%^*()-_=+{}[]<>,\|/?;:@#';
-    BEGIN
-        SELECT LISTAGG(letter, NULL) WITHIN GROUP (ORDER BY DBMS_RANDOM.VALUE)
-        INTO   password
-        FROM   (
-        SELECT SUBSTR(
-                 digits,
-                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(digits) + 1)),
-                 1
-               ) AS letter
-        FROM   DUAL
-        CONNECT BY LEVEL <= no_of_digits
-        UNION ALL
-        SELECT SUBSTR(
-                 lower,
-                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(lower) + 1)),
-                 1
-               ) AS letter
-        FROM   DUAL
-        CONNECT BY LEVEL <= no_of_lower
-        UNION ALL
-        SELECT SUBSTR(
-                 upper,
-                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(upper) + 1)),
-                 1
-               ) AS letter
-        FROM   DUAL
-        CONNECT BY LEVEL <= no_of_upper
-        UNION ALL
-        SELECT SUBSTR(
-                 special,
-                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(special) + 1)),
-                 1
-               ) AS letter
-        FROM   DUAL
-        CONNECT BY LEVEL <= no_of_special_characters
-        );
-    
-        RETURN password;
-    END;
-    
-    /*
     ** Generate schema datapump export
     */ 
-    FUNCTION datapump_backup(pIncludeRows IN VARCHAR2) RETURN VARCHAR2 IS
+    PROCEDURE datapump_backup(pIncludeRows IN VARCHAR2, pPassword IN VARCHAR2 DEFAULT NULL) IS
         h1 NUMBER;
         l_schema VARCHAR2(30):=sys_context('userenv','current_schema');
         l_status varchar2(4000);
-        l_password VARCHAR2(20):=NULL;
     BEGIN
         log('Starting datapump export job for Schema:'||l_schema || ' Include Rows:' || pIncludeRows);
         h1 := dbms_datapump.OPEN (operation => 'EXPORT', job_mode => 'SCHEMA', job_name => 'EXPORT_SCHEMA_JOB', version => 'COMPATIBLE'); 
@@ -149,17 +93,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         IF (pIncludeRows='0') THEN
             dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => 0);
         ELSE
-            l_password:=generate_password();
             dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_MODE', VALUE => 'PASSWORD'); 
-            dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => l_password); 
+            dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => pPassword); 
         END IF;
         
         dbms_datapump.start_job(handle => h1, skip_current => 0, abort_step => 0); 
         dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
         dbms_datapump.detach(handle => h1); 
         log('Completed datapump export job. Final status:' || l_status);
-        
-        RETURN (l_password);
         
     EXCEPTION
         WHEN OTHERS THEN
@@ -293,16 +234,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     ** 3. Datapump export dump file including log
     ** 4. DDL of TABLES and PACKAGES
     */
-    FUNCTION github_backup(p_github_token IN users.github_token%type,
+    PROCEDURE github_backup(
+        p_github_token IN users.github_token%type,
         p_github_repos_owner IN users.github_repos_owner%type,
         p_github_repos IN users.github_repos%type,
-        p_email IN users.email%type) 
-        RETURN VARCHAR2
-    IS
-        
-        
-        l_password VARCHAR2(20);
-        
+        p_email IN users.email%type,
+        p_password IN VARCHAR2)
+    IS  
         l_backup tt_backup; 
 
         l_clob CLOB;
@@ -329,8 +267,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         **  2) unencrypted metadata only
         */
         
-        l_password:=datapump_backup(pIncludeRows => '0'); -- metadata only export
-        l_password:=datapump_backup(pIncludeRows => '1'); -- encrypt exports that include table rows
+        datapump_backup(pIncludeRows => '0'); -- metadata only export
+        datapump_backup(pIncludeRows => '1', pPassword => p_password); -- encrypt exports that include table rows
 
         /*
         ** Set up web service headers in order to use Github API
@@ -383,7 +321,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 AND f.mime_type LIKE 'text%'
                 UNION ALL
                 
-                SELECT 'EXPORT_SCHEMA', object_name || '.' || bytes || CASE WHEN object_name = sys_context('userenv','current_schema') || '.dmp' THEN '.' || l_password END
+                SELECT 'EXPORT_SCHEMA', object_name
                 FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR') 
                 WHERE bytes>0 
                 AND last_modified > l_datapump_start              
@@ -467,9 +405,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         /*
         ** Send email to APEX Admin user with results of backup. Include encryption password.
         */
-        sendmail(l_backup, p_email, l_password);
-        
-        RETURN (l_password);
+        sendmail(l_backup, p_email, p_password);
                 
         EXCEPTION
             WHEN OTHERS THEN
