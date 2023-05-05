@@ -75,14 +75,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      ** CLOB and VARCHAR2 signatures for log procedure
      */
-     PROCEDURE test IS
-     l_clob CLOB;
-BEGIN
-    l_clob := apex_web_service.make_rest_request(p_url=>'https://res.cloudinary.com/mrbapex/q_auto,f_auto,w_364/pug-photo_bzmioh', p_http_method=>'HEAD');
-    for i in 1.. apex_web_service.g_headers.count loop
-        log(apex_web_service.g_headers(i).name || ':' || apex_web_service.g_headers(i).value);
-    end loop;
-END;
 
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB) IS PRAGMA AUTONOMOUS_TRANSACTION;
         k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
@@ -115,6 +107,39 @@ END;
             apex_json.write('sqlerrm', sqlerrm); 
             apex_json.close_object;
         END IF;
+    END;
+    
+    PROCEDURE test IS 
+        l_github_token users.github_token%type; 
+        l_github_repos_owner users.github_repos_owner%type;
+        l_github_repos users.github_repos%type;
+        l_email users.email%type;
+        l_password VARCHAR2(20);
+        l_github_filename VARCHAR2(100);
+        l_workspace VARCHAR2(100):=sys_context('userenv','current_schema');
+    BEGIN
+
+        SELECT github_token, github_repos_owner, github_repos, u.email 
+          INTO l_github_token, l_github_repos_owner, l_github_repos, l_email
+          FROM users u, APEX_WORKSPACE_DEVELOPERS w 
+         WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
+           AND w.is_admin='Yes'
+           AND w.email=u.email;
+        
+        l_github_filename:='APEX_APPLICATION.100';
+        EXECUTE IMMEDIATE q'{
+            BEGIN pck_restore.submit_import_apex@RESTORE_LINK(
+                pGithub_appfile=>:B1, 
+                pGithub_token=>:B2, 
+                pGithub_repos_owner=>:B3, 
+                pGithub_repos=>:B4,
+                pEmail=>:B5,
+                pWorkspace=>:B6); END;}' USING l_github_filename, l_github_token, l_github_repos_owner, l_github_repos, l_email, l_workspace;                
+        
+        EXCEPTION
+            WHEN OTHERS THEN
+                log_error(sqlcode,sqlerrm);
+                RAISE;
     END;
     
     /*
@@ -185,7 +210,7 @@ END;
         l_workspace VARCHAR2(30);
     BEGIN
         /* 1. Get Cloudinary usage for all subscribers */
-        --getUsage;
+        getUsage;
         
         /*
         **  2. Backup to Github
@@ -223,7 +248,7 @@ END;
         
         l_github_filename:='APEX_APPLICATION.100';
         EXECUTE IMMEDIATE q'{
-            BEGIN pck_restore.github_restore2@RESTORE_LINK(
+            BEGIN pck_restore.submit_import_apex@RESTORE_LINK(
                 pGithub_appfile=>:B1, 
                 pGithub_token=>:B2, 
                 pGithub_repos_owner=>:B3, 
