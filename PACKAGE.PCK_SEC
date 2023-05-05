@@ -14,20 +14,21 @@ END PCK_SEC;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
   
+    /*
+    ** This procedure is called in the Post-authentication of Social Sign-in processing.
+    ** Create new entry or update entry in USERS table for the authenticated user
+    */
     PROCEDURE insert_user_login(p_auth_provider IN VARCHAR2, p_email IN VARCHAR2, p_name IN VARCHAR2) IS
         l_user_id users.id%type;
         l_user_name users.name%type;
-        l_cld_api_key users.cld_api_key%type;
-        l_cld_cloud_name users.cld_cloud_name%type;
-        l_restful_url VARCHAR2(200);
         l_client_tz users.client_tz%type;
         l_client_tz_session users.client_tz%type:=apex_util.get_session_state('APP_CLIENT_TZ');
     BEGIN
         INSERT INTO user_login(auth_provider,email,name) VALUES (p_auth_provider, p_email, p_name);
         
         BEGIN
-            SELECT id, name, cld_api_key, cld_cloud_name, client_tz 
-              INTO l_user_id, l_user_name, l_cld_api_key, l_cld_cloud_name, l_client_tz
+            SELECT id, name
+              INTO l_user_id, l_user_name
               FROM users WHERE email=p_email;
             
             UPDATE users SET name=p_name, client_tz=l_client_tz_session, last_login_date=current_timestamp, last_login_provider=p_auth_provider WHERE id=l_user_id;
@@ -36,20 +37,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             THEN
                 INSERT INTO users(email, name, client_tz, last_login_date, last_login_provider) 
                 VALUES (p_email, p_name, l_client_tz_session, current_timestamp, p_auth_provider) 
-                RETURNING id INTO l_user_id;
-                
-                l_user_name:=p_name;
+                RETURNING id, name INTO l_user_id, l_user_name;
         END;
         apex_util.set_session_state('APP_USER_ID',l_user_id);
         apex_util.set_session_state('APP_USER_NAME',l_user_name);
-        IF (l_cld_api_key IS NULL) THEN
-            SELECT cld_api_key, cld_cloud_name INTO l_cld_api_key, l_cld_cloud_name FROM users WHERE hosting_user_ind='Y';
-        END IF;
-        apex_util.set_session_state('APP_CLD_API_KEY',l_cld_api_key);
-        apex_util.set_session_state('APP_CLD_CLOUD_NAME',l_cld_cloud_name);
-        
-        SELECT apex_util.host_url('SCRIPT') || pattern INTO l_restful_url FROM user_ords_schemas WHERE parsing_schema=SYS_CONTEXT('USERENV','CURRENT_SCHEMA') AND type='BASE_PATH';
-        apex_util.set_session_state('APP_RESTFUL_URL',l_restful_url);
         
         COMMIT;
     END;    
