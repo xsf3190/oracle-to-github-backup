@@ -28,7 +28,7 @@ prompt APPLICATION 100 - CMS application
 -- Application Export:
 --   Application:     100
 --   Name:            CMS application
---   Date and Time:   20:01 Thursday May 4, 2023
+--   Date and Time:   18:00 Friday May 5, 2023
 --   Exported By:     EXAMPLE
 --   Flashback:       0
 --   Export Type:     Application Export
@@ -40,7 +40,7 @@ prompt APPLICATION 100 - CMS application
 --       Meta Tags:                2
 --     Shared Components:
 --       Logic:
---         Items:                  7
+--         Items:                  3
 --       Navigation:
 --         Lists:                  2
 --         Breadcrumbs:            1
@@ -129,7 +129,7 @@ wwv_flow_imp.create_flow(
 ,p_substitution_string_01=>'APP_NAME'
 ,p_substitution_value_01=>'MRB'
 ,p_last_updated_by=>'EXAMPLE'
-,p_last_upd_yyyymmddhh24miss=>'20230503090212'
+,p_last_upd_yyyymmddhh24miss=>'20230505080722'
 ,p_file_prefix => nvl(wwv_flow_application_install.get_static_app_file_prefix,'')
 ,p_files_version=>357
 ,p_print_server_type=>'NATIVE'
@@ -1385,51 +1385,11 @@ begin
 null;
 end;
 /
-prompt --application/shared_components/logic/application_items/app_cld_api_key
-begin
-wwv_flow_imp_shared.create_flow_item(
- p_id=>wwv_flow_imp.id(36082512811351691)
-,p_name=>'APP_CLD_API_KEY'
-,p_protection_level=>'I'
-,p_escape_on_http_output=>'N'
-);
-end;
-/
-prompt --application/shared_components/logic/application_items/app_cld_cloud_name
-begin
-wwv_flow_imp_shared.create_flow_item(
- p_id=>wwv_flow_imp.id(36082761129353236)
-,p_name=>'APP_CLD_CLOUD_NAME'
-,p_protection_level=>'I'
-,p_escape_on_http_output=>'N'
-);
-end;
-/
 prompt --application/shared_components/logic/application_items/app_client_tz
 begin
 wwv_flow_imp_shared.create_flow_item(
  p_id=>wwv_flow_imp.id(34178541192991816)
 ,p_name=>'APP_CLIENT_TZ'
-,p_protection_level=>'I'
-,p_escape_on_http_output=>'N'
-);
-end;
-/
-prompt --application/shared_components/logic/application_items/app_innerwidth
-begin
-wwv_flow_imp_shared.create_flow_item(
- p_id=>wwv_flow_imp.id(11160144059933814)
-,p_name=>'APP_INNERWIDTH'
-,p_protection_level=>'I'
-,p_escape_on_http_output=>'N'
-);
-end;
-/
-prompt --application/shared_components/logic/application_items/app_restful_url
-begin
-wwv_flow_imp_shared.create_flow_item(
- p_id=>wwv_flow_imp.id(36348710823629340)
-,p_name=>'APP_RESTFUL_URL'
 ,p_protection_level=>'I'
 ,p_escape_on_http_output=>'N'
 );
