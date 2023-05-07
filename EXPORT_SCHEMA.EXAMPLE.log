@@ -1,12 +1,6 @@
 Starting "EXAMPLE"."EXPORT_SCHEMA_JOB":  
 Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
 Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
-Processing object type SCHEMA_EXPORT/USER
-Processing object type SCHEMA_EXPORT/SYSTEM_GRANT
-Processing object type SCHEMA_EXPORT/ROLE_GRANT
-Processing object type SCHEMA_EXPORT/DEFAULT_ROLE
-Processing object type SCHEMA_EXPORT/TABLESPACE_QUOTA
-Processing object type SCHEMA_EXPORT/PASSWORD_HISTORY
 Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
 Processing object type SCHEMA_EXPORT/TYPE/TYPE_SPEC
 Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
@@ -22,13 +16,13 @@ Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
 Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
 Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
 . . exported "EXAMPLE"."ASSET"                           254.8 KB   21448 rows
-. . exported "EXAMPLE"."PERFORMANCE"                     170.1 KB    5088 rows
-. . exported "EXAMPLE"."USER_LOGIN"                      34.84 KB    2834 rows
-. . exported "EXAMPLE"."LOG"                             25.21 KB     686 rows
+. . exported "EXAMPLE"."PERFORMANCE"                     181.0 KB    5499 rows
+. . exported "EXAMPLE"."USER_LOGIN"                      34.82 KB    2835 rows
+. . exported "EXAMPLE"."LOG"                             27.97 KB     747 rows
 . . exported "EXAMPLE"."ARTICLE"                         89.85 KB     292 rows
-. . exported "EXAMPLE"."USAGE"                           17.07 KB     384 rows
+. . exported "EXAMPLE"."USAGE"                           17.21 KB     388 rows
 . . exported "EXAMPLE"."ASSET_USED"                      10.03 KB     268 rows
-. . exported "EXAMPLE"."USERS"                           7.078 KB      16 rows
+. . exported "EXAMPLE"."USERS"                           7.070 KB      16 rows
 . . exported "EXAMPLE"."ERR$_PERFORMANCE"                6.328 KB       2 rows
 . . exported "EXAMPLE"."TESTIMONIAL"                     5.414 KB       1 rows
 . . exported "EXAMPLE"."BLOB2FILE"                       11.71 KB       1 rows
@@ -36,4 +30,4 @@ Master table "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully loaded/unloaded
 ******************************************************************************
 Dump file set for EXAMPLE.EXPORT_SCHEMA_JOB is:
   /u03/dbfs/BDE1649F626EB000E0532E14000A3C29/data/dpdump/EXAMPLE.dmp
-Job "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully completed at Sat May 6 20:01:40 2023 elapsed 0 00:00:34
+Job "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully completed at Sun May 7 11:34:55 2023 elapsed 0 00:00:37
