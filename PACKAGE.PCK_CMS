@@ -228,6 +228,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         
         l_password:=generate_password();
         pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email, l_password);
+        return;
     
         /*
         **  3. Restore from Github into Restore database, where a workspace with same name as current schema must exist.
