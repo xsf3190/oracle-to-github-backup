@@ -5,7 +5,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_BACKUP" is
         p_github_repos_owner IN users.github_repos_owner%type,
         p_github_repos IN users.github_repos%type,
         p_email IN users.email%type,
-        p_password IN VARCHAR2);
+        p_password IN VARCHAR2,
+        p_restore_files IN OUT VARCHAR2);
     --
     PROCEDURE getDumpFileInfo(pDatapumpFileName IN VARCHAR2);
     --
@@ -16,6 +17,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     TYPE t_backup IS RECORD(
         object_type         user_objects.object_type%type,
         object_name         user_objects.object_name%type,
+        auto_restore        NUMBER,
         github_sha          VARCHAR2(40),
         backup_date         TIMESTAMP WITH TIME ZONE,
         backup_size         NUMBER,
@@ -241,7 +243,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         p_github_repos_owner IN users.github_repos_owner%type,
         p_github_repos IN users.github_repos%type,
         p_email IN users.email%type,
-        p_password IN VARCHAR2)
+        p_password IN VARCHAR2,
+        p_restore_files IN OUT VARCHAR2)
     IS  
         l_backup tt_backup; 
 
@@ -264,7 +267,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         l_github CLOB;
     BEGIN
         /* 
-        **  Run datapump exports: 
+        **  Run datapump exports for the current schema: 
         **  1) encrypted with table rows  
         **  2) unencrypted metadata only
         */
@@ -302,44 +305,44 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         /*
         ** Build PLSQL collection of all objects to be exported and copied to Github
         */
-        SELECT o.object_type,o.object_name,g.sha,NULL,NULL,NULL,NULL
+        SELECT o.object_type,o.object_name,o.auto_restore,g.sha,NULL,NULL,NULL,NULL
           BULK COLLECT INTO l_backup
          FROM
             (
-                SELECT object_type,object_name
+                SELECT object_type,object_name, 0 auto_restore
                 FROM user_objects
                 WHERE generated='N'
                 AND object_type IN ('TABLE','PACKAGE')
                 UNION ALL 
                 
-                SELECT 'APEX_APPLICATION',TO_CHAR(application_id)
+                SELECT 'APEX_APPLICATION',TO_CHAR(application_id), 1
                 FROM apex_applications
                 WHERE owner=sys_context('userenv','current_schema') 
                 UNION ALL 
                 
-                SELECT 'APEX_STATIC_FILE',f.application_id || '.' || f.file_name
+                SELECT 'APEX_STATIC_FILE',f.application_id || '.' || f.file_name, 0
                 FROM apex_application_static_files f, apex_applications a
                 WHERE f.application_id=a.application_id
                 AND f.mime_type LIKE 'text%'
                 UNION ALL
                 
-                SELECT 'ORDS','METADATA' 
+                SELECT 'ORDS','METADATA', 0
                 FROM dual
                 UNION ALL
                 
-                SELECT 'EXPORT_SCHEMA', object_name
+                SELECT 'EXPORT_SCHEMA', object_name, CASE WHEN INSTR(object_name,sys_context('userenv','current_schema') || '.dmp')>0 THEN 1 ELSE 0 END
                 FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR') 
                 WHERE bytes>0 
                 AND last_modified > l_datapump_start
                 UNION ALL
                 
-                SELECT 'GRANT','OBJECT_GRANT'
+                SELECT 'GRANT','OBJECT_GRANT', 1
                 FROM user_tab_privs
                 WHERE grantee=sys_context('userenv','current_schema') 
                 AND ROWNUM=1
                 UNION ALL
                 
-                SELECT 'GRANT','SYSTEM_GRANT'
+                SELECT 'GRANT','SYSTEM_GRANT', 1
                 FROM user_tab_privs
                 WHERE grantee=sys_context('userenv','current_schema') 
                 AND ROWNUM=1
@@ -351,7 +354,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             ) g
         WHERE o.object_type=g.object_type(+)
           AND o.object_name=g.object_name(+)
-        ORDER BY DECODE(object_type,'TABLE',1,'PACKAGE',2,'APEX_APPLICATION',3,'APEX_STATIC_FILE',4,5),object_name;
+        ORDER BY DECODE(object_type,'EXPORT_SCHEMA',1,'GRANT',2,'APEX_APPLICATION',3,4),object_name;
         
         FOR i IN 1..l_backup.COUNT
         LOOP
@@ -429,6 +432,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         ** Send email to APEX Admin user with results of backup. Include encryption password.
         */
         sendmail(l_backup, p_email, p_password);
+        
+        /*
+        **  Send back to calling procedure list of Github files to be restored
+        */
+        FOR i IN 1..l_backup.COUNT LOOP
+            IF (l_backup(i).auto_restore=1) THEN
+                p_restore_files:=p_restore_files || l_backup(i).object_type || '.' || l_backup(i).object_name || ':';
+            END IF;
+        END LOOP;
+        p_restore_files:=RTRIM(p_restore_files,':');
                 
         EXCEPTION
             WHEN OTHERS THEN
