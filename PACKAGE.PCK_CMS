@@ -207,55 +207,48 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_email users.email%type;
         l_password VARCHAR2(20);
         l_github_filename VARCHAR2(100);
-        l_workspace VARCHAR2(30);
+        l_workspace_name apex_workspace_developers.workspace_name%type;
+        l_restore_files VARCHAR2(4000);
     BEGIN
-        /* 1. Get Cloudinary usage for all subscribers */
+        /*
+        ** 1. Get Cloudinary usage for all subscribers 
+        */
         getUsage;
         
         /*
         **  2. Backup to Github
-        **  Github token and repository details are maintained in USERS table
-        **  Email address of Apex Admin user must match for this to work
+        **     Github token and repository details are maintained in USERS table
+        **     Email address of Apex Admin user must match for this to work
+        **     Complex password auto-generated to encrypt schema export dump file
         */
        
-       
-        SELECT github_token, github_repos_owner, github_repos, u.email 
-          INTO l_github_token, l_github_repos_owner, l_github_repos, l_email
-          FROM users u, APEX_WORKSPACE_DEVELOPERS w 
+        SELECT github_token, github_repos_owner, github_repos, u.email, w.workspace_name 
+          INTO l_github_token, l_github_repos_owner, l_github_repos, l_email, l_workspace_name
+          FROM users u, apex_workspace_developers w 
          WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
            AND w.is_admin='Yes'
            AND w.email=u.email;
         
         l_password:=generate_password();
-        pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email, l_password);
-        return;
+        pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email, l_password, l_restore_files);
     
         /*
         **  3. Restore from Github into Restore database, where a workspace with same name as current schema must exist.
-        **     Using dynamic sql so that package compiles after being restored.
+        **     We use dynamic sql for this so that this package compiles after being restored - nb: DB LINKs are not included in any schema export
+        **     To avoid ORA-02074 we submit job on restore database remotely using database link
+        **     "l_restore_files" is separated list of github file names to be restored
         */
-        l_github_filename:='EXPORT_SCHEMA.' || sys_context('userenv','current_schema') || '.dmp';
-        l_workspace:=sys_context('userenv','current_schema');
         
+        log('About to submit job on restore server to import Github backup files - ' || l_restore_files);
         EXECUTE IMMEDIATE q'{
-            BEGIN pck_restore.github_restore@RESTORE_LINK(
-                pGithub_dumpfile=>:B1, 
-                pPassword=>:B2,
-                pGithub_token=>:B3, 
-                pGithub_repos_owner=>:B4, 
-                pGithub_repos=>:B5,
-                pEmail=>:B6,
-                pWorkspace=>:B7); END;}' USING l_github_filename, l_password, l_github_token, l_github_repos_owner, l_github_repos, l_email, l_workspace;
-        
-        l_github_filename:='APEX_APPLICATION.100';
-        EXECUTE IMMEDIATE q'{
-            BEGIN pck_restore.submit_import_apex@RESTORE_LINK(
-                pGithub_appfile=>:B1, 
+            BEGIN pck_restore.submit_job@RESTORE_LINK(
+                pGithub_files=>:B1, 
                 pGithub_token=>:B2, 
                 pGithub_repos_owner=>:B3, 
                 pGithub_repos=>:B4,
-                pEmail=>:B5,
-                pWorkspace=>:B6); END;}' USING l_github_filename, l_github_token, l_github_repos_owner, l_github_repos, l_email, l_workspace;                
+                pPassword=>:B5,
+                pEmail=>:B6,
+                pWorkspace=>:B7); END;}' USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email, l_workspace_name;
         
         EXCEPTION
             WHEN OTHERS THEN
