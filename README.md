@@ -1,21 +1,24 @@
 # oracle-to-github-backup
-Backup Oracle schemas and Apex applications to Github
+Automatic backup of selected ORACLE objects to a designated GITHUB repository.
 
-Automatic backup of selected ORACLE object definitions and data to a designated GITHUB repository.
+Designed to backup relatively small data sets built on the Oracle OCI platform, e.g. "Always Free".
 
-Designed to backup relatively small data sets built on the Oracle OCI platform, e.g. "always free".
+Optional restore from Github into a target database identified by DB LINK.
 
 Individual file exports should not exceed Github recommendation of 50MB. 
 
 ## Pre-requisites
 1. Obtain GITHUB Personal access token (classic) - https://github.com/settings/tokens
-2. Create DB LINK to target ADB database in order to automatically restore the backed up schema
+2. For automated restore create DB LINK to a target ADB database
 
 ## Use
-Generates and transfers the following objects to a designated Github repository:
-1. Datapump exports of the current schema - one including table rows (encrypted) and one with metadata only (not encrypted)
-2. Apex application export files including static javascript and css files
-3. DDL of TABLE and PACKAGE schema objects (for quick reference)
+Generates and transfers the following objects to a Github repository:
+1. Datapump export encrypted of the current schema including table rows
+2. Datapump export unencrypted of the current schema with metadata only
+3. Object and System Grants
+4. Apex application export files including static javascript and css files
+5. ORDS metadata
+6. DDL of TABLE and PACKAGE schema objects (for quick reference)
 
 ## Install
 1. IMPORT?
