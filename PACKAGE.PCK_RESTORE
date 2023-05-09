@@ -1,0 +1,576 @@
+CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_RESTORE" IS
+    --
+    PROCEDURE submit_job(pGithub_files IN VARCHAR2, pGithub_token IN VARCHAR2, pGithub_repos_owner IN VARCHAR2, pGithub_repos IN VARCHAR2, pPassword IN VARCHAR2, pEmail IN VARCHAR2, pWorkspace IN VARCHAR2);
+    --
+    PROCEDURE start_import(pGithub_files IN VARCHAR2, pGithub_token IN VARCHAR2, pGithub_repos_owner IN VARCHAR2, pGithub_repos IN VARCHAR2, pPassword IN VARCHAR2, pEmail IN VARCHAR2, pWorkspace IN VARCHAR2);
+    --
+END;
+CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
+
+    /*
+    **  Logging procedures
+    */
+    PROCEDURE log(pMsg IN OUT NOCOPY CLOB) IS PRAGMA AUTONOMOUS_TRANSACTION;
+        k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
+        k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);
+    BEGIN
+        INSERT INTO log(procedure_name, message) VALUES (k_calling_package || '.' || k_calling_subprog, pMsg);
+        COMMIT;
+    END;
+    
+    PROCEDURE log(pMsg IN VARCHAR2) IS PRAGMA AUTONOMOUS_TRANSACTION;
+        k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
+        k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);    
+    BEGIN
+        INSERT INTO log(procedure_name, message) VALUES (k_calling_package || '.' || k_calling_subprog, pMsg);
+        COMMIT;
+    END;
+    
+    PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2) IS
+    BEGIN
+        log(pCode || '-' || pErrMsg || '-' || dbms_utility.format_error_stack||dbms_utility.format_error_backtrace);
+    END;
+    
+    /*
+    **  Called from primary database this procedure submits job to execute imports of all Github files listed in parameter "pGithub_files"
+    */
+    PROCEDURE submit_job(pGithub_files IN VARCHAR2, pGithub_token IN VARCHAR2, pGithub_repos_owner IN VARCHAR2, pGithub_repos IN VARCHAR2, pPassword IN VARCHAR2, pEmail IN VARCHAR2, pWorkspace IN VARCHAR2) IS
+        l_job_name user_scheduler_jobs.job_name%type:=dbms_scheduler.generate_job_name(prefix=>'import_apex');
+    BEGIN
+        dbms_scheduler.create_job(
+            job_name => l_job_name,
+            job_type => 'STORED_PROCEDURE',
+            job_action => 'PCK_RESTORE.start_import',
+            number_of_arguments => 7);
+            
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 1,
+            argument_value => pGithub_files);
+            
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 2,
+            argument_value => pGithub_token);
+            
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 3,
+            argument_value => pGithub_repos_owner);
+            
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 4,
+            argument_value => pGithub_repos);
+            
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 5,
+            argument_value => pPassword);
+            
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 6,
+            argument_value => pEmail);
+            
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 7,
+            argument_value => pWorkspace);  
+            
+        dbms_scheduler.enable(l_job_name);
+    END;
+
+    /*
+    ** Import Apex application export file
+    */
+    PROCEDURE import_apex(pGithub_appfile IN VARCHAR2, pWorkspace IN VARCHAR2, pBlob IN OUT NOCOPY BLOB) IS
+        l_clob CLOB;
+        l_source apex_t_export_files;
+    BEGIN
+        log('Starting import of '||pGithub_appfile);
+        l_clob := apex_util.blob_to_clob(p_blob => pBlob );
+
+        /* Import (replacing) the Apex application */
+        l_source := apex_t_export_files (
+                    apex_t_export_file (
+                         name     => SUBSTR(pGithub_appfile,INSTR(pGithub_appfile,'.')+1) || '.sql',
+                         contents => l_clob));
+                         
+        apex_util.set_workspace(pWorkspace);
+        apex_application_install.install(p_source => l_source, p_overwrite_existing => TRUE );
+
+        EXCEPTION
+            WHEN OTHERS THEN 
+                log_error(sqlcode,sqlerrm);
+                RAISE;
+    END;
+    
+    /*
+    ** Get details about the dumpfile to be imported
+    */
+    FUNCTION getDumpFileInfo(pDumpfile IN VARCHAR2) RETURN BOOLEAN IS
+        ind        NUMBER;
+        fileType   NUMBER;
+        value      VARCHAR2(2048);
+        infoTab    KU$_DUMPFILE_INFO := KU$_DUMPFILE_INFO();
+        /*
+        ** Return value from function indicates if dumpfile is encrypted.
+        */
+        l_encrypted BOOLEAN:=FALSE;
+    BEGIN
+      --
+      -- Get the information about the dump file into the infoTab.
+      --
+        DBMS_DATAPUMP.GET_DUMPFILE_INFO(pDumpfile,'DATA_PUMP_DIR',infoTab,fileType);
+        log('Information for file downloaded from Github: ' || pDumpfile);
+     
+        --
+        -- Determine what type of file is being looked at.
+        --
+        CASE fileType
+          WHEN 1 THEN
+            log(pDumpfile || ' is a Data Pump dump file');
+          WHEN 2 THEN
+            log(pDumpfile || ' is an Original Export dump file');
+          WHEN 3 THEN
+            log(pDumpfile || ' is an External Table dump file');
+          ELSE
+            log(pDumpfile || ' is not a dump file');
+        END CASE;
+
+        IF (fileType<>1) THEN
+            RAISE_APPLICATION_ERROR(-20001,pDumpfile || ' is not a Data Pump dumpfile. Aborting Import.');
+        END IF;
+        
+        --
+        -- Loop through the infoTab and display each item code and value returned.
+        --
+     
+        ind := infoTab.FIRST;
+        WHILE ind IS NOT NULL
+        LOOP
+          --
+          -- The following item codes return boolean values in the form
+          -- of a '1' or a '0'. Display them as 'Yes' or 'No'.
+          --
+          value := NVL(infoTab(ind).value, 'NULL');
+          IF infoTab(ind).item_code IN
+             (DBMS_DATAPUMP.KU$_DFHDR_MASTER_PRESENT,
+              DBMS_DATAPUMP.KU$_DFHDR_DIRPATH,
+              DBMS_DATAPUMP.KU$_DFHDR_METADATA_COMPRESSED,
+              DBMS_DATAPUMP.KU$_DFHDR_DATA_COMPRESSED,
+              DBMS_DATAPUMP.KU$_DFHDR_METADATA_ENCRYPTED,
+              DBMS_DATAPUMP.KU$_DFHDR_DATA_ENCRYPTED,
+              DBMS_DATAPUMP.KU$_DFHDR_COLUMNS_ENCRYPTED)
+          THEN
+            CASE value
+              WHEN '1' THEN value := 'Yes';
+              WHEN '0' THEN value := 'No';
+            END CASE;
+          END IF;
+     
+          --
+          -- Display each item code with an appropriate name followed by
+          -- its value.
+          --
+          CASE infoTab(ind).item_code
+            --
+            -- The following item codes have been available since Oracle
+            -- Database 10g, Release 10.2.
+            --
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_FILE_VERSION   THEN
+              log('Dump File Version:         ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_MASTER_PRESENT THEN
+              log('Master Table Present:      ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_GUID THEN
+              log('Job Guid:                  ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_FILE_NUMBER THEN
+              log('Dump File Number:          ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_CHARSET_ID  THEN
+              log('Character Set ID:          ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_CREATION_DATE THEN
+              log('Creation Date:             ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_FLAGS THEN
+              log('Internal Dump Flags:       ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_JOB_NAME THEN
+              log('Job Name:                  ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_PLATFORM THEN
+              log('Platform Name:             ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_INSTANCE THEN
+              log('Instance Name:             ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_LANGUAGE THEN
+              log('Language Name:             ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_BLOCKSIZE THEN
+              log('Dump File Block Size:      ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_DIRPATH THEN
+              log('Direct Path Mode:          ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_METADATA_COMPRESSED THEN
+              log('Metadata Compressed:       ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_DB_VERSION THEN
+              log('Database Version:          ' || value);
+     
+            --
+            -- The following item codes were introduced in Oracle Database 11g
+            -- Release 11.1
+            --
+    
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_MASTER_PIECE_COUNT THEN
+              log('Master Table Piece Count:  ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_MASTER_PIECE_NUMBER THEN
+              log('Master Table Piece Number: ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_DATA_COMPRESSED THEN
+              log('Table Data Compressed:     ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_METADATA_ENCRYPTED THEN
+              log('Metadata Encrypted:        ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_DATA_ENCRYPTED THEN
+              log('Table Data Encrypted:      ' || value);
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_COLUMNS_ENCRYPTED THEN
+              log('TDE Columns Encrypted:     ' || value);
+            --
+            -- For the DBMS_DATAPUMP.KU$_DFHDR_ENCRYPTION_MODE item code a
+            -- numeric value is returned. So examine that numeric value
+            -- and display an appropriate name value for it.
+            --
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCRYPTION_MODE THEN
+              CASE TO_NUMBER(value)
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCMODE_NONE THEN
+                  log('Encryption Mode:           None');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCMODE_PASSWORD THEN
+                  log('Encryption Mode:           Password');
+                  l_encrypted:=TRUE;
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCMODE_DUAL THEN
+                  log('Encryption Mode:           Dual');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCMODE_TRANS THEN
+                  log('Encryption Mode:           Transparent');
+              END CASE;
+            --
+            -- For the DBMS_DATAPUMP.KU$_DFHDR_COMPRESSION_ALG item code a
+            -- numeric value is returned. So examine that numeric value and
+            -- display an appropriate name value for it.
+            --
+            WHEN DBMS_DATAPUMP.KU$_DFHDR_COMPRESSION_ALG THEN
+              CASE TO_NUMBER(value)
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_NONE THEN
+                  log('Compression Algorithm:     None');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_BASIC THEN
+                  log('Compression Algorithm:     Basic');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_LOW THEN
+                  log('Compression Algorithm:     Low');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_MEDIUM THEN
+                  log('Compression Algorithm:     Medium');
+                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_HIGH THEN
+                  log('Compression Algorithm:     High');
+              END CASE;
+            ELSE NULL;  -- Ignore other, unrecognized dump file attributes.
+          END CASE;
+          ind := infoTab.NEXT(ind);
+        END LOOP;
+        
+        RETURN(l_encrypted);
+      
+        EXCEPTION
+            WHEN OTHERS THEN
+              log_error(SQLCODE, SQLERRM);
+              RAISE;
+    END;    
+    
+    /*
+    ** Restore schema export dump file
+    */
+    PROCEDURE import_schema(pGithub_dumpfile IN VARCHAR2, pPassword IN VARCHAR2, pBlob IN OUT NOCOPY BLOB) IS
+        l_dump_filename VARCHAR2(40):=SUBSTR(pGithub_dumpfile,INSTR(pGithub_dumpfile,'.')+1);
+        l_schema VARCHAR2(30):=SUBSTR(l_dump_filename,1,INSTR(l_dump_filename,'.')-1);
+        
+        l_file_handle UTL_FILE.FILE_TYPE;
+        l_amount PLS_INTEGER:=32767;
+        l_offset PLS_INTEGER := 1;
+        l_binary_buffer RAW(32767);
+        l_encrypted BOOLEAN;
+        h1 NUMBER;
+        l_status VARCHAR2(50);
+        
+        e_user_not_exists EXCEPTION;
+        PRAGMA EXCEPTION_INIT (e_user_not_exists, -1918);  
+        l_bfile  bfile;
+        l_dest_offset integer := 1;
+        l_src_offset integer := 1;
+        l_bfile_csid integer:=0;
+        l_lang_context integer:=0;
+        l_warning integer:=0;
+        l_clob CLOB;        
+    BEGIN
+        /*
+        ** Copy contents of file to directory in order to run import
+        */
+        l_file_handle := UTL_FILE.FOPEN('DATA_PUMP_DIR', l_dump_filename, 'wb', 1024);
+        WHILE l_offset < dbms_lob.getlength(pBlob)
+        LOOP
+            DBMS_LOB.READ(pBlob, l_amount, l_offset, l_binary_buffer);
+            UTL_FILE.PUT_RAW(l_file_handle,l_binary_buffer);
+            l_offset := l_offset + l_amount;
+        END LOOP;
+        UTL_FILE.FFLUSH(l_file_handle);
+        UTL_FILE.FCLOSE(l_file_handle);
+        
+        /*
+        ** Check that downloaded file is a data pump dumpfile and is encrypted if password was specified
+        */
+        l_encrypted:=getDumpFileInfo(l_dump_filename);
+        
+        IF (l_encrypted AND pPassword IS NULL) THEN
+            RAISE_APPLICATION_ERROR(-20001,pGithub_dumpfile || ' is an encrypted dump file. The password must be supplied.');
+        END IF;
+        
+        /*
+        **  Drop and Create schema with no authentication.
+        */
+        BEGIN
+            EXECUTE IMMEDIATE 'DROP USER ' || l_schema || ' CASCADE';
+            EXCEPTION WHEN e_user_not_exists THEN NULL;
+        END;
+        
+        /*
+        ** Create no authentication schema
+        */
+        EXECUTE IMMEDIATE 'CREATE USER ' || l_schema || ' QUOTA UNLIMITED ON DATA';
+        
+        h1 := dbms_datapump.open(operation => 'IMPORT', job_mode => 'SCHEMA', job_name => 'SCHEMA_IMPORT', version => 'LATEST');
+        dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')'); 
+        dbms_datapump.add_file(handle => h1, filename => l_dump_filename, directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_DUMP_FILE); 
+        dbms_datapump.add_file(handle => h1, filename => l_schema || '.log', directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
+        IF (pPassword IS NOT NULL) THEN
+            dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => pPassword); 
+        END IF;
+        dbms_datapump.start_job(handle => h1); 
+        dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
+        dbms_datapump.detach(handle => h1);
+        log('Import job ended with status: ' || l_status);
+        
+        /*
+        ** Upload import log file into log table
+        */
+        INSERT INTO log(message, procedure_name) VALUES (empty_clob(),'IMPORT_SCHEMA.'||l_schema||'.log') RETURN message INTO l_clob;
+        l_bfile := bfilename('DATA_PUMP_DIR', l_schema || '.log');
+        dbms_lob.fileopen(l_bfile, dbms_lob.file_readonly);
+        dbms_lob.loadclobfromfile (
+            dest_lob      => l_clob,
+            src_bfile     => l_bfile,
+            amount        => dbms_lob.lobmaxsize,
+            dest_offset   => l_dest_offset,
+            src_offset    => l_src_offset,
+            bfile_csid    => l_bfile_csid,
+            lang_context  => l_lang_context,
+            warning       => l_warning
+            );
+        dbms_lob.fileclose(l_bfile);
+        COMMIT;
+        
+        EXCEPTION
+            WHEN OTHERS THEN 
+                UTL_FILE.FCLOSE_ALL;
+                log_error(sqlcode,sqlerrm);
+                RAISE;
+    END;
+    
+    /*
+    ** Execute GRANT commands
+    */
+    PROCEDURE exec_grants(pBlob IN OUT NOCOPY BLOB) IS
+        l_clob CLOB;
+        l_grants apex_t_varchar2;
+        l_grant VARCHAR2(4000);
+    BEGIN        
+        l_clob := apex_util.blob_to_clob(p_blob => pBlob );
+
+        l_grants:=apex_string.split(l_clob,';');
+        FOR i IN 1..l_grants.COUNT LOOP
+            l_grant:=REPLACE(l_grants(i),chr(10)||chr(32)||chr(32));
+            IF (l_grant IS NOT NULL) THEN
+                log('About to ' || l_grant);
+                EXECUTE IMMEDIATE l_grant;
+            END IF;
+        END LOOP;
+        
+        EXCEPTION
+            WHEN OTHERS THEN 
+                log_error(sqlcode,sqlerrm);
+                RAISE;
+    END;
+    
+    PROCEDURE github_backup(pGithub_repos_owner IN VARCHAR2, pGithub_repos IN VARCHAR2)  IS
+        l_github CLOB;
+        l_blob BLOB;
+        l_clob CLOB;
+        l_dest_offset NUMBER := 1;
+        l_src_offset NUMBER := 1;
+        l_lang NUMBER := 0;
+        l_warning VARCHAR2 (1000);
+        l_json JSON_OBJECT_T;
+        l_content CLOB;
+        l_message VARCHAR2(500);
+    BEGIN
+        /*
+        ** Get existing details of any files previously copied to Github. We need the file name and SHA so that Github can maintain its history trail
+        */
+        l_github := apex_web_service.make_rest_request(
+            p_url=>'https://api.github.com/repos/' || pGithub_repos_owner || '/' || pGithub_repos || '/contents/',
+            p_http_method=>'GET');
+        
+        /*
+        ** Get most recent import log file inserted into log table plus the code of this package
+        */
+        
+        dbms_metadata.set_transform_param(dbms_metadata.session_transform,'EMIT_SCHEMA',false);
+        
+        FOR C IN (  
+                    SELECT o.name, o.content, g.sha
+                    FROM
+                    (
+                        SELECT procedure_name as name,message as content FROM
+                        (
+                            SELECT id, procedure_name, message, MAX(id) OVER (PARTITION BY procedure_name) max_id
+                            FROM log
+                            WHERE procedure_name LIKE 'IMPORT_SCHEMA%'
+                        )
+                        WHERE id=max_id
+                        UNION ALL
+                    
+                        SELECT 'PACKAGE.PCK_RESTORE',LTRIM(LTRIM(dbms_metadata.get_ddl('PACKAGE','PCK_RESTORE'),chr(13)||chr(10))) 
+                        FROM dual
+                    ) o, 
+                    (
+                        SELECT name, sha 
+                        FROM JSON_TABLE(l_github FORMAT JSON, '$[*]' COLUMNS (name, sha))
+                    ) g
+                    WHERE o.name=g.name(+)
+                )
+        LOOP
+            l_dest_offset:=1;
+            l_src_offset:=1;
+            DBMS_LOB.CREATETEMPORARY (l_blob, TRUE, dbms_lob.call);
+            DBMS_LOB.CONVERTTOBLOB(l_blob,C.content,DBMS_LOB.LOBMAXSIZE,l_dest_offset,l_src_offset,DBMS_LOB.DEFAULT_CSID,l_lang,l_warning);
+            
+            l_content:=REPLACE(APEX_WEB_SERVICE.BLOB2CLOBBASE64(l_blob),chr(13)||chr(10));
+            DBMS_LOB.FREETEMPORARY (l_blob);
+            
+            /*
+            **  Prepare JSON body for uploading to Github
+            */
+            IF (C.sha IS NULL) THEN
+                l_json:=JSON_OBJECT_T.parse('{"message":"Committed by ' || sys_context('userenv','db_name') || '"}');
+            ELSE
+                l_json:=JSON_OBJECT_T.parse('{"message":"Committed by ' || sys_context('userenv','db_name') || '","sha":"' || C.sha || '"}');
+            END IF;
+            l_json.put('content', l_content);
+
+            l_clob := apex_web_service.make_rest_request(
+                p_url=>'https://api.github.com/repos/' || pGithub_repos_owner || '/' || pGithub_repos || '/contents/' || C.name,
+                p_http_method=>'PUT',
+                p_body=>l_json.to_clob);
+            
+            /*
+            ** Github API response JSON includes "message" if any error
+            */
+            SELECT NVL(message,C.name || ' - backup to Github - OK')
+              INTO l_message
+              FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS message VARCHAR2(500) PATH '$.message');
+            log(l_message);
+              
+        END LOOP;
+
+    END;
+    
+    /*
+    **  Main import procedure called by submitted job
+    */
+    PROCEDURE start_import(pGithub_files IN VARCHAR2, pGithub_token IN VARCHAR2, pGithub_repos_owner IN VARCHAR2, pGithub_repos IN VARCHAR2, pPassword IN VARCHAR2, pEmail IN VARCHAR2, pWorkspace IN VARCHAR2) IS
+        l_github_files apex_t_varchar2;
+        l_clob CLOB;
+        l_git_url VARCHAR2(200);
+        l_base64 CLOB;
+        l_blob BLOB;
+        l_workspace_id apex_workspaces.workspace_id%type;
+        l_body_html LONG;
+        
+        PROCEDURE sendmail(pSubject IN VARCHAR2) IS
+        BEGIN
+            apex_util.set_security_group_id(p_security_group_id => l_workspace_id);    
+            apex_mail.send(p_to=>pEmail, p_from=>pEmail, p_body=>null, p_body_html=>l_body_html, p_subj=>pSubject);
+            apex_mail.push_queue();
+        END;
+        
+    BEGIN
+        log('Starting import of ' || pGithub_files );
+        log('pGithub_token:' || pGithub_token);
+        log('pGithub_repos_owner:' || pGithub_repos_owner);
+        log('pGithub_repos:' || pGithub_repos);
+        log('pEmail:' || pEmail);
+        log('pWorkspace:' || pWorkspace);
+        
+        apex_web_service.g_request_headers(1).name := 'Accept';
+        apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
+        apex_web_service.g_request_headers(2).name := 'Authorization';
+        apex_web_service.g_request_headers(2).value := 'Bearer ' || pGithub_token;
+        apex_web_service.g_request_headers(3).name := 'User-Agent';
+        apex_web_service.g_request_headers(3).value := pGithub_repos_owner;  
+        
+        /*
+        **  Workspace id needed for sending email
+        */
+        SELECT workspace_id INTO l_workspace_id FROM apex_workspaces WHERE workspace=pWorkspace;
+        
+        l_github_files:=apex_string.split(pGithub_files,':');
+        
+        FOR i IN 1..l_github_files.COUNT 
+        LOOP
+            /* 
+            ** 1. get url to download file from github 
+            ** 2. download the base64 encoded file and decode to blob
+            */
+            l_clob := apex_web_service.make_rest_request(
+                p_url=>'https://api.github.com/repos/' || pGithub_repos_owner || '/' || pGithub_repos || '/contents/' || l_github_files(i),
+                p_http_method=>'GET');
+    
+            SELECT git_url
+              INTO  l_git_url
+              FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS (git_url));   
+            
+            l_clob := apex_web_service.make_rest_request(p_url=>l_git_url,p_http_method=>'GET');
+                
+            SELECT content INTO l_base64
+              FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS (content CLOB PATH '$.content'));
+            
+            l_blob := apex_web_service.clobbase642blob(l_base64);
+
+            /*
+            **  Process each downloaded file
+            */
+            IF (l_github_files(i) LIKE 'EXPORT_SCHEMA.%') THEN
+                import_schema(l_github_files(i), pPassword, l_blob);
+            ELSIF (l_github_files(i) LIKE 'APEX_APPLICATION.%') THEN
+                import_apex(l_github_files(i), pWorkspace, l_blob);  
+            ELSIF (l_github_files(i) LIKE 'GRANT.%') THEN
+                exec_grants(l_blob);                  
+            END IF;
+            l_body_html:=l_body_html || '<p>' || i || '. ' || l_github_files(i) || ' - successfully imported</p>';
+        END LOOP;
+        
+        /*
+        **  Send email
+        */
+        sendmail(sys_context('userenv','db_name') || ' - IMPORTED SUCCESSFULLY FROM GITHUB');
+        
+        /*
+        ** Backup code of this package and import log file to Github
+        */
+        github_backup(pGithub_repos_owner, pGithub_repos);
+        
+        EXCEPTION
+            WHEN OTHERS THEN 
+                l_body_html:=l_body_html || '<p>Error ' || sqlcode || ',' || sqlerrm || '</p>';
+                sendmail(sys_context('userenv','db_name') || ' - IMPORT FAILED');
+                RAISE;
+    END;    
+    
+END;
