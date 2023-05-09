@@ -408,9 +408,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             **  Prepare JSON body for uploading with Github API. Sent with "sha" results in Github update, otherwise insert
             */
             IF (l_backup(i).github_sha IS NULL) THEN
-                l_json:=JSON_OBJECT_T.parse('{"message":"Committed from pck_backup"}');
+                l_json:=JSON_OBJECT_T.parse('{"message":"Committed by ' || sys_context('userenv','db_name') || '"}');
             ELSE
-                l_json:=JSON_OBJECT_T.parse('{"message":"Committed from pck_backup","sha":"' || l_backup(i).github_sha || '"}');
+                l_json:=JSON_OBJECT_T.parse('{"message":"Committed by ' || sys_context('userenv','db_name') || '","sha":"' || l_backup(i).github_sha || '"}');
             END IF;
             l_json.put('content', l_content);
 
