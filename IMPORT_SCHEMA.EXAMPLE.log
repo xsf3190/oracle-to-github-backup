@@ -1,0 +1,33 @@
+Master table "ADMIN"."SCHEMA_IMPORT" successfully loaded/unloaded
+Starting "ADMIN"."SCHEMA_IMPORT":  
+Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
+Processing object type SCHEMA_EXPORT/TYPE/TYPE_SPEC
+Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
+Processing object type SCHEMA_EXPORT/TABLE/TABLE
+Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
+. . imported "EXAMPLE"."ASSET"                           254.8 KB   21448 rows
+. . imported "EXAMPLE"."PERFORMANCE"                     189.0 KB    5797 rows
+. . imported "EXAMPLE"."USER_LOGIN"                      34.88 KB    2839 rows
+. . imported "EXAMPLE"."LOG"                             30.85 KB     867 rows
+. . imported "EXAMPLE"."ARTICLE"                         89.32 KB     292 rows
+. . imported "EXAMPLE"."USAGE"                           17.22 KB     392 rows
+. . imported "EXAMPLE"."ASSET_USED"                      10.03 KB     268 rows
+. . imported "EXAMPLE"."USERS"                           7.078 KB      16 rows
+. . imported "EXAMPLE"."ERR$_PERFORMANCE"                6.328 KB       2 rows
+. . imported "EXAMPLE"."TESTIMONIAL"                     5.414 KB       1 rows
+. . imported "EXAMPLE"."BLOB2FILE"                       11.71 KB       1 rows
+Processing object type SCHEMA_EXPORT/TABLE/COMMENT
+Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
+Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
+Processing object type SCHEMA_EXPORT/FUNCTION/FUNCTION
+Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
+Processing object type SCHEMA_EXPORT/FUNCTION/ALTER_FUNCTION
+Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
+Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
+Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
+Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
+Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
+ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_CMS_CONTENT" created with compilation warnings
+ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_CMS" created with compilation warnings
+ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_BACKUP" created with compilation warnings
+Job "ADMIN"."SCHEMA_IMPORT" completed with 3 error(s) at Tue May 9 06:26:54 2023 elapsed 0 00:00:20
