@@ -342,6 +342,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         IF (pPassword IS NOT NULL) THEN
             dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => pPassword); 
         END IF;
+        dbms_datapump.set_parameter(handle => h1, name => 'LOGTIME', VALUE => 'ALL'); 
         dbms_datapump.start_job(handle => h1); 
         dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
         dbms_datapump.detach(handle => h1);
