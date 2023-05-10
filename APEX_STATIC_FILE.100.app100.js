@@ -726,7 +726,7 @@ const replaceImg = async () => {
             // load the audio file which will trigger performance observer
             // observer code triggers custom event "observed" for audio and video media
             lightbox_audio.src=media.src
-                .replace(/\/w_\d+\/fl_waveform/, "")
+                .replace(/,w_\d+\/fl_waveform/, "")
                 .replace(/.png/,"");
             lightbox_audio.style.display = "block";
             lightbox_img.style.display = "block";
