@@ -1,33 +1,33 @@
-Master table "ADMIN"."SCHEMA_IMPORT" successfully loaded/unloaded
-Starting "ADMIN"."SCHEMA_IMPORT":  
-Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
-Processing object type SCHEMA_EXPORT/TYPE/TYPE_SPEC
-Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
-Processing object type SCHEMA_EXPORT/TABLE/TABLE
-Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
-. . imported "EXAMPLE"."ASSET"                           254.8 KB   21443 rows
-. . imported "EXAMPLE"."PERFORMANCE"                     203.5 KB    6239 rows
-. . imported "EXAMPLE"."LOG"                             31.79 KB     908 rows
-. . imported "EXAMPLE"."USER_LOGIN"                      34.90 KB    2840 rows
-. . imported "EXAMPLE"."ARTICLE"                         93.85 KB     292 rows
-. . imported "EXAMPLE"."USAGE"                           17.35 KB     396 rows
-. . imported "EXAMPLE"."ASSET_USED"                      10.03 KB     268 rows
-. . imported "EXAMPLE"."USERS"                           7.109 KB      16 rows
-. . imported "EXAMPLE"."ERR$_PERFORMANCE"                6.328 KB       2 rows
-. . imported "EXAMPLE"."TESTIMONIAL"                     5.414 KB       1 rows
-. . imported "EXAMPLE"."BLOB2FILE"                       11.71 KB       1 rows
-Processing object type SCHEMA_EXPORT/TABLE/COMMENT
-Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
-Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
-Processing object type SCHEMA_EXPORT/FUNCTION/FUNCTION
-Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
-Processing object type SCHEMA_EXPORT/FUNCTION/ALTER_FUNCTION
-Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
-Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
-Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
-Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
-Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
-ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_CMS_CONTENT" created with compilation warnings
-ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_CMS" created with compilation warnings
-ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_BACKUP" created with compilation warnings
-Job "ADMIN"."SCHEMA_IMPORT" completed with 3 error(s) at Tue May 9 20:02:36 2023 elapsed 0 00:00:20
+10-MAY-23 05:53:39.693: Master table "ADMIN"."SCHEMA_IMPORT" successfully loaded/unloaded
+10-MAY-23 05:53:41.581: Starting "ADMIN"."SCHEMA_IMPORT":  
+10-MAY-23 05:53:41.643: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
+10-MAY-23 05:53:42.054: Processing object type SCHEMA_EXPORT/TYPE/TYPE_SPEC
+10-MAY-23 05:53:42.300: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
+10-MAY-23 05:53:42.416: Processing object type SCHEMA_EXPORT/TABLE/TABLE
+10-MAY-23 05:53:46.579: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
+10-MAY-23 05:53:48.068: . . imported "EXAMPLE"."ASSET"                           254.8 KB   21443 rows
+10-MAY-23 05:53:48.582: . . imported "EXAMPLE"."PERFORMANCE"                     203.5 KB    6239 rows
+10-MAY-23 05:53:48.911: . . imported "EXAMPLE"."LOG"                             31.79 KB     908 rows
+10-MAY-23 05:53:49.172: . . imported "EXAMPLE"."USER_LOGIN"                      34.90 KB    2840 rows
+10-MAY-23 05:53:49.754: . . imported "EXAMPLE"."ARTICLE"                         93.85 KB     292 rows
+10-MAY-23 05:53:50.167: . . imported "EXAMPLE"."USAGE"                           17.35 KB     396 rows
+10-MAY-23 05:53:50.512: . . imported "EXAMPLE"."ASSET_USED"                      10.03 KB     268 rows
+10-MAY-23 05:53:50.805: . . imported "EXAMPLE"."USERS"                           7.109 KB      16 rows
+10-MAY-23 05:53:51.246: . . imported "EXAMPLE"."ERR$_PERFORMANCE"                6.328 KB       2 rows
+10-MAY-23 05:53:51.475: . . imported "EXAMPLE"."TESTIMONIAL"                     5.414 KB       1 rows
+10-MAY-23 05:53:51.765: . . imported "EXAMPLE"."BLOB2FILE"                       11.71 KB       1 rows
+10-MAY-23 05:53:51.788: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
+10-MAY-23 05:53:51.900: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
+10-MAY-23 05:53:52.274: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
+10-MAY-23 05:53:52.453: Processing object type SCHEMA_EXPORT/FUNCTION/FUNCTION
+10-MAY-23 05:53:52.544: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
+10-MAY-23 05:53:52.686: Processing object type SCHEMA_EXPORT/FUNCTION/ALTER_FUNCTION
+10-MAY-23 05:53:52.775: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
+10-MAY-23 05:53:53.409: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
+10-MAY-23 05:53:53.892: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
+10-MAY-23 05:53:54.324: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
+10-MAY-23 05:53:54.691: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
+10-MAY-23 05:53:54.861: ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_CMS_CONTENT" created with compilation warnings
+10-MAY-23 05:53:54.861: ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_CMS" created with compilation warnings
+10-MAY-23 05:53:54.861: ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_BACKUP" created with compilation warnings
+10-MAY-23 05:53:54.896: Job "ADMIN"."SCHEMA_IMPORT" completed with 3 error(s) at Wed May 10 05:53:54 2023 elapsed 0 00:00:19
