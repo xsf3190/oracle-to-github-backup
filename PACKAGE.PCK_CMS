@@ -1058,7 +1058,7 @@ PROCEDURE getThumbnails IS
         l_rowid ROWID:=CHARTOROWID(l_asset_dbid);
         l_cld_cloud_name asset.cld_cloud_name%type;
         l_public_id asset.public_id%type;
-        l_job_name user_scheduler_jobs.job_name%type;
+        l_job_name user_scheduler_jobs.job_name%type:=dbms_scheduler.generate_job_name(prefix=>'deleteAsset');
     BEGIN
         DELETE asset WHERE ROWID=l_rowid RETURNING cld_cloud_name, public_id INTO l_cld_cloud_name, l_public_id;
         
@@ -1068,7 +1068,6 @@ PROCEDURE getThumbnails IS
         
         -- submit job to delete Cloudinary asset in background
         
-        l_job_name:='J_DELETEASSET_' || REPLACE(l_public_id,'-','_');
         dbms_scheduler.create_job (
             job_name => l_job_name,
             program_name => 'P_DELETEASSETCLD',
