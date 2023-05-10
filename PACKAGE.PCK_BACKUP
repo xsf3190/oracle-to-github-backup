@@ -1,10 +1,10 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_BACKUP" is
     --
     PROCEDURE github_backup(
-        p_github_token IN users.github_token%type,
-        p_github_repos_owner IN users.github_repos_owner%type,
-        p_github_repos IN users.github_repos%type,
-        p_email IN users.email%type,
+        p_github_token IN VARCHAR2,
+        p_github_repos_owner IN VARCHAR2,
+        p_github_repos IN VARCHAR2,
+        p_email IN VARCHAR2,
         p_password IN VARCHAR2,
         p_restore_files IN OUT VARCHAR2);
     --
@@ -82,13 +82,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         h1 := dbms_datapump.OPEN (operation => 'EXPORT', job_mode => 'SCHEMA', job_name => 'EXPORT_SCHEMA_JOB', version => 'COMPATIBLE'); 
 
         dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION', VALUE => 'ALL'); 
+        dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION_ALGORITHM', VALUE => 'MEDIUM'); 
         dbms_datapump.set_parallel(handle => h1, degree => 1); 
         dbms_datapump.add_file(handle => h1, filename => l_schema || CASE WHEN pIncludeRows = '0' THEN '.METADATA' END || '.dmp', 
             directory => 'DATA_PUMP_DIR', filesize => '50M',  filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_DUMP_FILE, reusefile => 1); 
         dbms_datapump.add_file(handle => h1, filename => l_schema || CASE WHEN pIncludeRows = '0' THEN '.METADATA' END || '.log', 
             directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
         dbms_datapump.set_parameter(handle => h1, name => 'KEEP_MASTER', VALUE => 0); 
-        --dbms_datapump.set_parameter(handle => h1, name => 'USER_METADATA', VALUE => 1); 
+        dbms_datapump.set_parameter(handle => h1, name => 'LOGTIME', VALUE => 'ALL'); 
+        
         dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')');
         dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'',''PROCOBJ'',''JOB'',''SCHEDULER'')'); 
         
@@ -239,10 +241,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     ** 4. DDL of TABLES and PACKAGES
     */
     PROCEDURE github_backup(
-        p_github_token IN users.github_token%type,
-        p_github_repos_owner IN users.github_repos_owner%type,
-        p_github_repos IN users.github_repos%type,
-        p_email IN users.email%type,
+        p_github_token IN VARCHAR2,
+        p_github_repos_owner IN VARCHAR2,
+        p_github_repos IN VARCHAR2,
+        p_email IN VARCHAR2,
         p_password IN VARCHAR2,
         p_restore_files IN OUT VARCHAR2)
     IS  
