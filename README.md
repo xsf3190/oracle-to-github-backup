@@ -38,28 +38,30 @@ DECLARE
   l_github_repos VARCHAR2(40);
   l_email VARCHAR2(40);
   l_password VARCHAR2(20);
-  l_github_filename VARCHAR2(100);
   l_workspace_name apex_workspace_developers.workspace_name%type;
   l_restore_files LONG;                
 BEGIN 
   pck_backup.github_backup(
-        p_github_token => l_github_token,           /* GITHUB Personal access token */
-        p_github_repos_owner => l_github_repos_owner,     /* GITHUB repository owner */
-        p_github_repos => l_github_repos,         /* GITHUB repository path */
-        p_email => l_email,      /* Email address to receive status message */
-        p_password => 'l_password,        /* password for encrypting schema export dump file */
-        p_restore_files => l_restore_files /* IN OUT parameter returns colon-separated list of GITHUB files to restore */
+        p_github_token => l_github_token,
+        p_github_repos_owner => l_github_repos_owner,
+        p_github_repos => l_github_repos,
+        p_email => l_email,
+        p_password => l_password,
+        p_restore_files => l_restore_files
   );
-  /* Run restore */
+  /* Run restore option */
   EXECUTE IMMEDIATE q'{
-            BEGIN pck_restore.submit_job@RESTORE_LINK(
-                pGithub_files=>:B1, 
-                pGithub_token=>:B2, 
-                pGithub_repos_owner=>:B3, 
-                pGithub_repos=>:B4,
-                pPassword=>:B5,
-                pEmail=>:B6,
-                pWorkspace=>:B7); END;}' 
-          USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email, l_workspace_name;
+        BEGIN pck_restore.submit_job@RESTORE_LINK(
+            pGithub_files=>:B1, 
+            pGithub_token=>:B2, 
+            pGithub_repos_owner=>:B3, 
+            pGithub_repos=>:B4,
+            pPassword=>:B5,
+            pEmail=>:B6,
+            pWorkspace=>:B7); 
+        END;}' 
+        USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email, l_workspace_name;
 END;
 ```
+
+Actions and any errors logged in table LOG
