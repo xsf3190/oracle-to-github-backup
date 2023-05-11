@@ -264,14 +264,16 @@ nav button {
 }
 
 .card .dropdown .dropdown-items {
-  display: none;
-  position: absolute;
-  right: 0;
-  background-color: white;
-  color: var(--color-button);
+    display: none;
+    position: absolute;
+    right: 0;
+    background-color: white;
+    color: var(--color-button);
     margin: 0;
     padding: 0;
     list-style-type: none;
+    border-left: var(--color-button) solid 1px;
+    border-radius: 1em;
 }
 
 .card .dropdown:hover .dropdown-items {
