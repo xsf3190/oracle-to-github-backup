@@ -303,6 +303,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         dbms_metadata.set_transform_param(dbms_metadata.session_transform,'STORAGE',false);
         dbms_metadata.set_transform_param(dbms_metadata.session_transform,'TABLESPACE',false);
         dbms_metadata.set_transform_param(dbms_metadata.session_transform,'EMIT_SCHEMA',false);
+        dbms_metadata.set_transform_param(dbms_metadata.session_transform,'COLLATION_CLAUSE','NEVER');
         
         /*
         ** Build PLSQL collection of all objects to be exported and copied to Github
@@ -380,6 +381,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 l_ddl:=LTRIM(LTRIM(dbms_metadata.get_granted_ddl(l_backup(i).object_name,sys_context('userenv','current_schema')),chr(13)||chr(10)));
             ELSE
                 l_ddl:=LTRIM(LTRIM(dbms_metadata.get_ddl(l_backup(i).object_type,l_backup(i).object_name),chr(13)||chr(10)));
+                IF (l_backup(i).object_type='TABLE') THEN
+                    FOR C IN (SELECT null FROM user_tab_comments WHERE table_name=l_backup(i).object_name AND comments IS NOT NULL) LOOP
+                        l_ddl:=l_ddl || dbms_metadata.get_dependent_ddl('COMMENT',l_backup(i).object_name);
+                    END LOOP;
+                END IF;
             END IF;
 
             /* 
