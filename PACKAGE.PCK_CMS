@@ -31,6 +31,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getContent;
     --
+    PROCEDURE getContentHTML;
+    --
     PROCEDURE getPerformance(pDbid IN ROWID DEFAULT NULL);
     --
     PROCEDURE getThumbnails;
@@ -634,13 +636,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Construct Home page HTML of qualifying blog articles
      **
-     **  Unauthenticated user
+     **  Unauthenticated user (i.e. HOME page)
      **    - articles where PUBLIC=Y
      **
      **  Authenticated user -
      **    - articles where PUBLIC=Y
-     **    - granted access either directly or through membership
-     **    - first card is for creatung a new article
+     **    - first card is for creatng a new article
      **    - create menu and buttons to manage article
      */
     FUNCTION getArticles RETURN CLOB IS
@@ -654,7 +655,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             '<div>
                 <nav>
                   <button type="button" class="add-card">NEW CONTENT</button>
-                  <button type="button" class="open-test">TEST FLUID STYLES</button>
                 </nav>
                 <ul class="cards" role="list">');
             
@@ -705,7 +705,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                           <button type="button" class="fa fa-caret-down"></button>
                           <ul class="dropdown-items">
                             <li><button type="button" class="fa fa-cloud-upload upload-media">Upload</button></li>
-                            <li><button type="button" class="fa fa-edit edit-text">Edit</button></li>' ||
+                            <li><button type="button" class="fa fa-edit edit-text">Edit</button></li>
+                            <li><button type="button" class="fa fa-newspaper-o preview">Preview</button></li>' ||
                             CASE 
                               WHEN C.is_public='Y' THEN 
                                 '<li><button type="button" class="fa fa-share2 unpublish">Unpublish</button></li>'
@@ -747,14 +748,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <button type="button" class="confirm">CONFIRM</button>
                 </div>
             </dialog>
-            <dialog class="publish">
+            <dialog class="preview">
                 <div>
                     <button type="button" class="close">&times;</button>
-                    <h2>Publish article on Internet</h2>
-                    <p>Click on CONFIRM button to publish article</p>
-                    <button type="button" class="publish">CONFIRM</button>
+                    <div class="content"></div>
                 </div>
-            </dialog>
+            </dialog>            
             ');
 
         RETURN (l_clob || l_vc);
@@ -935,7 +934,7 @@ PROCEDURE getThumbnails IS
     END;
     
     /*
-     **  Get the selected article's content. Called from both public Home page (page 1) and authenticated page (page 2)
+     **  Get the selected article's content for Rich Text Editor (format is markdown).
      **
      */    
     PROCEDURE getContent IS
@@ -954,6 +953,27 @@ PROCEDURE getThumbnails IS
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm, pAjax=>TRUE);
     END;
+    
+    /*
+     **  Get the selected article's content in HTML format
+     **
+     */    
+    PROCEDURE getContentHTML IS
+        l_article_id article.id%type:=apex_application.g_x01;
+    BEGIN
+        FOR C IN (SELECT body_html FROM article WHERE id=l_article_id) 
+        LOOP
+            apex_json.open_object; 
+            apex_json.write('success', TRUE); 
+            apex_json.write('content', C.body_html); 
+            apex_json.close_object;
+        END LOOP;
+        
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN NULL;
+            WHEN OTHERS THEN
+                log_error(sqlcode,sqlerrm, pAjax=>TRUE);
+    END;    
 
     /*
      **  Procedure called by the autoSave feature of CK5Editor
