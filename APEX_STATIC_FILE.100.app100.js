@@ -8,7 +8,8 @@ const alertBox = document.querySelector("dialog.alert"),
       alertBoxClose = alertBox.querySelector("button"),
       confirmBox = document.querySelector("dialog.confirm"),
       confirmBoxClose = confirmBox.querySelector("button.close"),
-      confirmBoxConfirm = confirmBox.querySelector("button.confirm");
+      confirmBoxConfirm = confirmBox.querySelector("button.confirm"),
+      previewBox = document.querySelector("dialog.preview");
 
 const checkPerformance = () => {
     if (performance === undefined) {
@@ -114,6 +115,9 @@ const perfObserver = (list) => {
     });
 }
 
+/* 
+ ** CALLS AJAX PROCESS RETURNING DATA
+ */
 const execProcess = (processName, input, options) => {
     return new Promise( resolve => {
         const result = apex.server.process( processName, input, options);
@@ -258,7 +262,7 @@ const add_card = document.querySelector(".add-card");
 add_card.addEventListener('click',  e => {
     // check that there isn't already a new card - i.e. the 2nd card with data-id="0" meaning that no content has yet been added to it
     if (document.querySelector(".cards").children[1].dataset.id === "0") {
-        alert("already got new card - add content to this one before adding another");
+        alertBoxOpen("Forgive the mild reproof...","You already added a new card - add content to that one before adding another");
     } else {
         let first_card = document.querySelector(".card:first-child");
         let clone = first_card.cloneNode(true);
@@ -325,10 +329,19 @@ const edit_text = (articleId,button) => {
 }
 
 /* 
+ ** GET CONTENT FOR PREVIEW DIALOG 
+ */
+const preview = (articleId,button) => {
+    execProcess( "getContentHTML", {x01: articleId}, {loadingIndicator:button}).then( (data) => {
+        previewBox.querySelector(".content").innerHTML = data.content;
+        previewBox.showModal();
+    });
+}
+
+/* 
  ** SAVE ARTICE AND CLOSE EDITOR
  */
-const close_editor = document.querySelector("#close-editor");
-close_editor.addEventListener('click',  e => {
+const save_and_exit = () => {
     execProcess( "saveArticle", {x01: gArticleId}).then( (data) => {
         // depending on whether any content was saved
         // exchange <br> and <h4> with <button> and <p>
@@ -369,7 +382,7 @@ close_editor.addEventListener('click',  e => {
         li.querySelector(".updated-date").textContent = data.updated;
         apex.theme.closeRegion("editor");      
     });
-});
+};
 
 /*
  ** OPEN GALLERY FOR SELECTED ARTICLE
@@ -465,6 +478,8 @@ const cardHandler = (e) => {
         publish_article(articleId, e.srcElement);  
     } else if (e.target.matches(".unpublish")) {
         unpublish_article(articleId, e.srcElement);                  
+    } else if (e.target.matches(".preview")) {
+        preview(articleId, e.srcElement);                  
     }
 }
 
