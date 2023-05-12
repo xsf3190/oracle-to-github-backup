@@ -329,7 +329,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 AND f.mime_type LIKE 'text%'
                 UNION ALL
                 
-                SELECT 'ORDS','METADATA', 0
+                SELECT 'ORDS_METADATA',sys_context('userenv','current_schema'), 0
                 FROM dual
                 UNION ALL
                 
@@ -357,7 +357,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             ) g
         WHERE o.object_type=g.object_type(+)
           AND o.object_name=g.object_name(+)
-        ORDER BY DECODE(object_type,'EXPORT_SCHEMA',1,'GRANT',2,'APEX_APPLICATION',3,4),object_name;
+        ORDER BY DECODE(object_type,'GRANT',1,'EXPORT_SCHEMA',2,'APEX_APPLICATION',3,4),object_name;
         
         FOR i IN 1..l_backup.COUNT
         LOOP
@@ -372,7 +372,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 SELECT file_content INTO l_blob from APEX_APPLICATION_STATIC_FILES 
                 WHERE application_id=SUBSTR(l_backup(i).object_name,1,INSTR(l_backup(i).object_name,'.')-1) 
                 AND file_name=SUBSTR(l_backup(i).object_name,INSTR(l_backup(i).object_name,'.')+1);
-            ELSIF (l_backup(i).object_type='ORDS') THEN
+            ELSIF (l_backup(i).object_type='ORDS_METADATA') THEN
                 SELECT ords_metadata.ords_export.export_schema() INTO l_ddl FROM dual;
             ELSIF (l_backup(i).object_type='EXPORT_SCHEMA') THEN
                 DBMS_LOB.CREATETEMPORARY (l_blob, TRUE, dbms_lob.call);
@@ -383,7 +383,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 l_ddl:=LTRIM(LTRIM(dbms_metadata.get_ddl(l_backup(i).object_type,l_backup(i).object_name),chr(13)||chr(10)));
                 IF (l_backup(i).object_type='TABLE') THEN
                     FOR C IN (SELECT null FROM user_tab_comments WHERE table_name=l_backup(i).object_name AND comments IS NOT NULL) LOOP
-                        l_ddl:=l_ddl || dbms_metadata.get_dependent_ddl('COMMENT',l_backup(i).object_name);
+                        l_ddl:=l_ddl || LTRIM(LTRIM(dbms_metadata.get_dependent_ddl('COMMENT',l_backup(i).object_name),chr(13)||chr(10)));
                     END LOOP;
                 END IF;
             END IF;
