@@ -96,6 +96,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     
     PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2) IS
     BEGIN
+        ROLLBACK;
         log(pCode || '-' || pErrMsg || '-' || dbms_utility.format_error_stack||dbms_utility.format_error_backtrace);
     END;
 
@@ -112,32 +113,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     PROCEDURE test IS 
-        l_github_token users.github_token%type; 
-        l_github_repos_owner users.github_repos_owner%type;
-        l_github_repos users.github_repos%type;
-        l_email users.email%type;
-        l_password VARCHAR2(20);
-        l_github_filename VARCHAR2(100);
-        l_workspace VARCHAR2(100):=sys_context('userenv','current_schema');
+        l_restore_files varchar2(1000):='GRANT.OBJECT_GRANT:GRANT.SYSTEM_GRANT';
+        l_password varchar2(20):='z/38CW23Bh_]Ak1x';
+        n pls_integer;
     BEGIN
-
-        SELECT github_token, github_repos_owner, github_repos, u.email 
-          INTO l_github_token, l_github_repos_owner, l_github_repos, l_email
-          FROM users u, APEX_WORKSPACE_DEVELOPERS w 
-         WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
-           AND w.is_admin='Yes'
-           AND w.email=u.email;
-        
-        l_github_filename:='APEX_APPLICATION.100';
-        EXECUTE IMMEDIATE q'{
-            BEGIN pck_restore.submit_import_apex@RESTORE_LINK(
-                pGithub_appfile=>:B1, 
-                pGithub_token=>:B2, 
-                pGithub_repos_owner=>:B3, 
-                pGithub_repos=>:B4,
-                pEmail=>:B5,
-                pWorkspace=>:B6); END;}' USING l_github_filename, l_github_token, l_github_repos_owner, l_github_repos, l_email, l_workspace;                
-        
+        /*
+        FOR C IN (SELECT github_token, github_repos_owner, github_repos, u.email, w.workspace_name 
+              FROM users u, apex_workspace_developers w 
+             WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
+               AND w.is_admin='Yes'
+               AND w.email=u.email) 
+        LOOP
+            EXECUTE IMMEDIATE q'{
+                BEGIN pck_restore.submit_job@RESTORE_LINK(
+                    pGithub_files=>:B1, 
+                    pGithub_token=>:B2, 
+                    pGithub_repos_owner=>:B3, 
+                    pGithub_repos=>:B4,
+                    pPassword=>:B5,
+                    pEmail=>:B6,
+                    pWorkspace=>:B7); END;}' 
+                USING l_restore_files, C.github_token, C.github_repos_owner, C.github_repos, l_password, C.email, C.workspace_name;
+        END LOOP;
+        */
+        insert into user_login(auth_provider,email,name) values ('a','b','c');
+        select 1/0 into n from dual;
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm);
@@ -733,14 +733,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;
         app(l_clob, l_vc,' </ul></div>');
         app(l_clob, l_vc, '
-            <dialog class="alert">
-                <div>
-                    <button type="button" class="close">&times;</button>
-                    <h2></h2>
-                    <p></p>
-                </div>
-            </dialog>
-            <dialog class="confirm">
+            <dialog class="popup">
                 <div>
                     <button type="button" class="close">&times;</button>
                     <h2></h2>
