@@ -1,44 +1,45 @@
 # oracle-to-github-backup
-Automatic backup of selected ORACLE objects to a designated GITHUB repository.
+Automatic backup of selected objects from ORACLE OCI ADB to a designated GITHUB repository.
 
-Designed to backup relatively small data sets built on the Oracle OCI platform, e.g. "Always Free".
+Creates files on GITHUB including encrypted schema export dump files, object and system grants, Apex application exports, ORDS metadata, TABLE and PACKAGE definitions.
 
-Optional restore from Github into a target database identified by DB LINK.
+Optional restore from Github into a target ADB identified by DB LINK.
 
 Individual file exports should not exceed Github recommendation of 50MB. 
 
 ## Pre-requisites
 1. Obtain GITHUB Personal access token (classic) - https://github.com/settings/tokens
-2. For automated restore create DB LINK to a target ADB database
+2. For automated restore from GITHUB create DB LINK to a target ADB database
 
 ## Use
-Generates and transfers the following objects as files to a Github repository:
-1. Datapump export encrypted of the current schema including table rows
-2. Datapump export unencrypted of the current schema with metadata only
-3. Object and System Grants
-4. Apex application export files including static javascript and css files
-5. ORDS metadata
-6. DDL of TABLE and PACKAGE schema objects (for quick reference)
+Make Oracle data and definitions available for sharing or general collaboration through private or public GITHUB repositories.
+
+Implement an automated backup / restore cycle between 2 ADB instances to provision a complete recovery or testing environment.
+
+This repository contains all exports generated for daily backup / restore between ADBs "hl7offzwezq2cal-db202103270929" and "hl7offzwezq2cal-restoretestdb1"
 
 ## Install
-1. GRANT READ,WRITE ON DIRECTORY DATA_PUMP_DIR TO "schema"
-2. GRANT EXECUTE ON DBMS_CLOUD TO "schema"
-3. Download contents of TABLE.LOG and PACKAGE.PCK_BACKUP and create in "schema"
+1. GRANT READ,WRITE ON DIRECTORY DATA_PUMP_DIR TO "schema-to-backup"
+2. GRANT EXECUTE ON DBMS_CLOUD TO "schema-to-backup"
+3. Download contents of TABLE.LOG and PACKAGE.PCK_BACKUP and create in "schema-to-backup"
 
 For restore option:
 1. download contents of TABLE.LOG and PACKAGE.PCK_RESTORE and create in ADMIN schema in target ADB
-2. create credential for ADMIN user in "schema"
-3. create db link to ADMIN user in "schema"
+2. create credential for target ADB ADMIN user in "schema-to-backup"
+3. create db link to target ADB ADMIN user in "schema-to-backup"
 
 ## Run
 ```
+/*
+** Run a one-off export to this repository, sending status to specified email address
+*/
 DECLARE
-  l_github_token VARCHAR2(40); 
-  l_github_repos_owner VARCHAR2(40);
-  l_github_repos VARCHAR2(40);
-  l_email VARCHAR2(40);
-  l_password VARCHAR2(20);
-  l_workspace_name apex_workspace_developers.workspace_name%type;
+  l_github_token       VARCHAR2(40):='************'; 
+  l_github_repos_owner VARCHAR2(40):='xsf3190';
+  l_github_repos       VARCHAR2(40):='oracle-to-github-backup';
+  l_email              VARCHAR2(40):='mark.russellbrown@gmail.com';
+  l_password           VARCHAR2(20):='****************';
+  l_workspace_name     VARCHAR2(40):='EXAMPLE';
   l_restore_files LONG;                
 BEGIN 
   pck_backup.github_backup(
@@ -49,9 +50,11 @@ BEGIN
         p_password => l_password,
         p_restore_files => l_restore_files
   );
-  /* Run restore option */
+  /* 
+  ** Run restore on target ADB 
+  */
   EXECUTE IMMEDIATE q'{
-        BEGIN pck_restore.submit_job@RESTORE_LINK(
+        BEGIN pck_restore.submit_job@RESTORE_LINK(  /* RESTORE_LINK directs to ADMIN user in target ADB */
             pGithub_files=>:B1, 
             pGithub_token=>:B2, 
             pGithub_repos_owner=>:B3, 
@@ -63,5 +66,14 @@ BEGIN
         USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email, l_workspace_name;
 END;
 ```
+Typically, you would call the above code through a scheduled dbms_scheduler job, passing parameters from an application table.
 
-Actions and any errors logged in table LOG
+Files PACKAGE.PCK_BACKUP and PACKAGE.PCK_RESTORE show a complete implementation details.
+
+Adapt these packages to suit specific requirements - in particular the selection of which objects to export / import.
+
+Export and import activities are logged in table LOG along with any errors.
+
+Files EXPORT_SCHEMA.EXAMPLE.log and IMPORT_SCHEMA.EXAMPLE.log are the data pump log files from the last daily run in my OCI Always Free tenancy.
+
+GITHUB commit messages include the ADB database name that issued the upload to the repository.
