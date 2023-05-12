@@ -16,4 +16,4 @@ CREATE TABLE "ARTICLE"
   USING INDEX  ENABLE
    ) 
  LOB ("BODY") STORE AS SECUREFILE "LOB_BODY"(ENABLE STORAGE IN ROW CHUNK 8192
-  NOCACHE LOGGING  NOCOMPRESS  KEEP_DUPLICATES ) ;
+  NOCACHE LOGGING  NOCOMPRESS  KEEP_DUPLICATES ) ;COMMENT ON TABLE "ARTICLE"  IS 'Editted text in both markdown and html format. Owns any number of digital assets (ASSET table) uploaded to the Cloudinary account of the authenticated user. ';
