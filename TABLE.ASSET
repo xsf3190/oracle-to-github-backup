@@ -18,5 +18,4 @@ CREATE TABLE "ASSET"
   CREATE INDEX "PK_ASSET" ON "ASSET" ("CLD_CLOUD_NAME", "RESOURCE_TYPE", "PUBLIC_ID") 
   ;
 ALTER TABLE "ASSET" ADD CONSTRAINT "PK_ASSET" PRIMARY KEY ("CLD_CLOUD_NAME", "RESOURCE_TYPE", "PUBLIC_ID")
-  USING INDEX "PK_ASSET"  ENABLE;
-   COMMENT ON TABLE "ASSET"  IS 'Assets contain the metadata of uploaded digital media  (photos, videos, etc).';
+  USING INDEX "PK_ASSET"  ENABLE;COMMENT ON TABLE "ASSET"  IS 'Assets contain the metadata of digital media (photos, videos, audio files) uploaded to the Cloudinary account of the authenticated user.';
