@@ -9,14 +9,19 @@ Individual file exports should not exceed Github recommendation of 50MB.
 
 ## Pre-requisites
 1. Obtain GITHUB Personal access token (classic) - https://github.com/settings/tokens
-2. For automated restore from GITHUB create DB LINK to a target ADB database
+2. Configure OCI email if you want automated status emails - https://blogs.oracle.com/apex/post/sending-email-from-your-oracle-apex-app-on-autonomous-database
+3. For automated restore from GITHUB create DB LINK to a target ADB database
 
 ## Use
 Make Oracle data and definitions available for sharing or general collaboration through private or public GITHUB repositories.
 
 Implement an automated backup / restore cycle between 2 ADB instances to provision a complete recovery or testing environment.
 
-This repository contains all exports generated for daily backup / restore between ADBs "hl7offzwezq2cal-db202103270929" and "hl7offzwezq2cal-restoretestdb1"
+This repository contains all current exports generated for daily backup / restore between these 2 ADBs in my ORACLE OCI Always Free tenacy:
+1. hl7offzwezq2cal-db202103270929
+2. hl7offzwezq2cal-restoretestdb1
+
+These names are included in each GITHUB commit message. Note that the last update is based on when the exported file content last changed.
 
 ## Install
 1. GRANT READ,WRITE ON DIRECTORY DATA_PUMP_DIR TO "schema-to-backup"
@@ -31,15 +36,15 @@ For restore option:
 ## Run
 ```
 /*
-** Run a one-off export to this repository, sending status to specified email address
+** Run a one-off export to GITHUB repository, sending status to specified email address
 */
 DECLARE
-  l_github_token       VARCHAR2(40):='************'; 
-  l_github_repos_owner VARCHAR2(40):='xsf3190';
-  l_github_repos       VARCHAR2(40):='oracle-to-github-backup';
-  l_email              VARCHAR2(40):='mark.russellbrown@gmail.com';
-  l_password           VARCHAR2(20):='****************';
-  l_workspace_name     VARCHAR2(40):='EXAMPLE';
+  l_github_token       VARCHAR2(40):='YOUR TOKEN'; 
+  l_github_repos_owner VARCHAR2(40):='YOUR GITHUB ACCOUNT NAME';
+  l_github_repos       VARCHAR2(40):='YOUR GITHUB REPOSITORY';
+  l_email              VARCHAR2(40):='YOUR EMAIL ADDRESS';  
+  l_password           VARCHAR2(20):='COMPLEX PASSWORD';
+  l_workspace_name     VARCHAR2(40):='YOUR TARGET ADB WORKSPACE';
   l_restore_files LONG;                
 BEGIN 
   pck_backup.github_backup(
@@ -68,12 +73,12 @@ END;
 ```
 Typically, you would call the above code through a scheduled dbms_scheduler job, passing parameters from an application table.
 
-Files PACKAGE.PCK_BACKUP and PACKAGE.PCK_RESTORE show a complete implementation details.
+PACKAGE.PCK_BACKUP and PACKAGE.PCK_RESTORE show current implementation for this repository.
 
 Adapt these packages to suit specific requirements - in particular the selection of which objects to export / import.
 
-Export and import activities are logged in table LOG along with any errors.
+Export and import activities are logged in table LOG on both ADB instances along with any errors.
 
-Files EXPORT_SCHEMA.EXAMPLE.log and IMPORT_SCHEMA.EXAMPLE.log are the data pump log files from the last daily run in my OCI Always Free tenancy.
+Files EXPORT_SCHEMA.EXAMPLE.log and IMPORT_SCHEMA.EXAMPLE.log are the data pump log files from the last daily run.
 
 GITHUB commit messages include the ADB database name that issued the upload to the repository.
