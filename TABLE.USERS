@@ -21,5 +21,4 @@ CREATE TABLE "USERS"
   USING INDEX  ENABLE, 
 	 CONSTRAINT "EMAIL_UNQ" UNIQUE ("EMAIL")
   USING INDEX  ENABLE
-   ) ;
-   COMMENT ON TABLE "USERS"  IS 'Log in accounts created in this application that enable secure access to user-defined content.';
+   ) ;COMMENT ON TABLE "USERS"  IS 'Log in accounts created through Social Sign-in (Facebook, Google) enabling secure access to user-created content.';
