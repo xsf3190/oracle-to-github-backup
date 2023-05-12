@@ -18,6 +18,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_CONTENT" as
         APEX_JSON.free_output;
     END;
 
+    /*
+    ** Generic procedure called through OAUTH2 authentication. pCurrentUser is the Client ID of the user - match this with our USERS table over email.
+    */
     PROCEDURE getContent(pCurrentUser IN VARCHAR2, pBodyText IN CLOB, pStatus OUT INTEGER, pMessage OUT VARCHAR2) IS
         TYPE t_sql IS TABLE OF LONG INDEX BY VARCHAR2(20);
         l_sqls t_sql := t_sql(
