@@ -11,4 +11,4 @@ CREATE TABLE "PERFORMANCE"
 	"CAPTURE_DATE" TIMESTAMP (6) WITH TIME ZONE, 
 	 CONSTRAINT "FK_ASSET_PERFORMANCE" FOREIGN KEY ("CLD_CLOUD_NAME", "RESOURCE_TYPE", "PUBLIC_ID")
 	  REFERENCES "ASSET" ("CLD_CLOUD_NAME", "RESOURCE_TYPE", "PUBLIC_ID") ON DELETE CASCADE ENABLE
-   ) ;
+   ) ;COMMENT ON TABLE "PERFORMANCE"  IS 'Registers network performance details of viewed digital assets (captured through Performance Observer). Includes transfer size, duration, servers involved in transfer.';
