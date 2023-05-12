@@ -16,7 +16,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
   
     /*
     ** This procedure is called in the Post-authentication of Social Sign-in processing.
-    ** Create new entry or update entry in USERS table for the authenticated user
+    ** First-time authenticated users are inserted into the USERS table
     */
     PROCEDURE insert_user_login(p_auth_provider IN VARCHAR2, p_email IN VARCHAR2, p_name IN VARCHAR2) IS
         l_user_id users.id%type;
@@ -55,7 +55,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         insert_user_login('Google', apex_json.get_varchar2('email'), apex_json.get_varchar2('name'));
     END; 
 
-    /* Linked-In API has separate entry points for profile name and email address */
+    /* 
+    ** Linked-In API has separate entry points for profile name and email addres.
+    ** Support very rude. API is bollocks. Gave up on Linkedin but keep the code just in case.
+    */
     PROCEDURE post_auth_linkedin IS
         l_name users.name%type;
         l_email users.email%type;
@@ -95,15 +98,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         insert_user_login('Linkedin', l_email, l_name);        
     END;   
 
+    /*
+    **  Gave up on Azure too - can't remember why though.
+    */
     PROCEDURE post_auth_azure IS
     BEGIN
         insert_user_login('Azure', apex_json.get_varchar2('userPrincipalName'), apex_json.get_varchar2('givenName') || ' ' || apex_json.get_varchar2('surname'));
     END; 
 
+    /*
+    ** Respond to user clicking "Sign Out" button
+    */
     PROCEDURE signout IS
-        l_logout_url varchar2(200):=apex_util.host_url('APEX_PATH')||V('LOGOUT_URL');
     BEGIN
-        apex_util.redirect_url(l_logout_url);
+        apex_session.delete_session;
+        apex_authentication.logout(apex_application.g_flow_id, apex_custom_auth.get_session_id);
     END;
 
 END PCK_SEC;
