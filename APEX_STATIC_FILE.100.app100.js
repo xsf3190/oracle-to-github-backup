@@ -4,12 +4,9 @@ let gArticleId,
     gCloudName,
     perfObj = {images: []};
 
-const alertBox = document.querySelector("dialog.alert"),
-      alertBoxClose = alertBox.querySelector("button"),
-      confirmBox = document.querySelector("dialog.confirm"),
-      confirmBoxClose = confirmBox.querySelector("button.close"),
-      confirmBoxConfirm = confirmBox.querySelector("button.confirm"),
-      previewBox = document.querySelector("dialog.preview");
+const popup = document.querySelector("dialog.popup"),
+      popupClose = popup.querySelector("button.close"),
+      popupConfirm = popup.querySelector("button.confirm");
 
 const checkPerformance = () => {
     if (performance === undefined) {
@@ -125,32 +122,25 @@ const execProcess = (processName, input, options) => {
             if (data.success) {
                 resolve(data);
             } else {
-                if (!alertBox.open) {
-                    alertBoxOpen("FAILURE IN ORACLE SERVER PROCESS", data.sqlerrm);
-                }
+                popupOpen("FAILURE IN ORACLE SERVER PROCESS", data.sqlerrm);
             }
         });
         result.fail(function( jqXHR ) {
-            if (!alertBox.open) {
-                alertBoxOpen("FAILURE CALLING AJAX PROCESS "+processName, jqXHR.responseText);
-            }            
+            popupOpen("FAILURE CALLING AJAX PROCESS "+processName, jqXHR.responseText);
         });
     });
 }
 
-const alertBoxOpen = (heading, text) => {
+const popupOpen = (heading, text) => {
     const parser = new DOMParser();
-    alertBox.querySelector("h2").textContent = heading;
-    alertBox.querySelector("p").textContent = parser.parseFromString('<!doctype html><body>' + text,"text/html").body.textContent;
-    alertBox.showModal();
+    popup.querySelector("h2").textContent = heading;
+    popup.querySelector("p").textContent = parser.parseFromString('<!doctype html><body>' + text,"text/html").body.textContent;
+    popupConfirm.style.display = "none";
+    popup.showModal();
 }
 
-alertBoxClose.addEventListener("click",  () => {
-    alertBox.close();
-});
-
-confirmBoxClose.addEventListener("click",  () => {
-    confirmBox.close();
+popupClose.addEventListener("click",  () => {
+    popup.close();
 });
 
 const saveData = async ( data ) => {
@@ -262,7 +252,7 @@ const add_card = document.querySelector(".add-card");
 add_card.addEventListener('click',  e => {
     // check that there isn't already a new card - i.e. the 2nd card with data-id="0" meaning that no content has yet been added to it
     if (document.querySelector(".cards").children[1].dataset.id === "0") {
-        alertBoxOpen("Forgive the mild reproof...","You already added a new card - add content to that one before adding another");
+        popupOpen("Forgive the mild reproof...","You already added a new card - add content to that one before adding another");
     } else {
         let first_card = document.querySelector(".card:first-child");
         let clone = first_card.cloneNode(true);
@@ -415,14 +405,15 @@ const delete_article = (articleId) => {
     let li = document.querySelector("[data-id='" + articleId + "']"),
         title = li.querySelector(".title");
     if (title) {
-        confirmBox.querySelector("h2").textContent = title.textContent;
+        popup.querySelector("h2").textContent = title.textContent;
     } else {
-        confirmBox.querySelector("h2").textContent = "<NO TITLE>";
+        popup.querySelector("h2").textContent = "<NO TITLE>";
     }
     
-    confirmBox.querySelector("p").textContent = "Are you sure you want to delete this card?";
-    confirmBox.querySelector("button.confirm").dataset.id = articleId;
-    confirmBox.showModal();
+    popup.querySelector("p").textContent = "Are you sure you want to delete this card?";
+    popupConfirm.style.display = "block";
+    popupConfirm.dataset.id = articleId;
+    popup.showModal();
 }
 
 /*
@@ -447,14 +438,14 @@ const unpublish_article = (articleId, button) => {
     });
 }
 
-confirmBoxConfirm.addEventListener("click",  (e) => {
+popupConfirm.addEventListener("click",  (e) => {
     const articleId = e.target.dataset.id;
     execProcess( "deleteArticle", {x01: articleId},{loadingIndicator: e.target}).then( () => {
         let li = document.querySelector("[data-id='" + articleId + "']");
         li.replaceChildren();
         li.remove();
         e.target.dataset.id = "";
-        confirmBox.close();
+        popup.close();
     });
 });
 
