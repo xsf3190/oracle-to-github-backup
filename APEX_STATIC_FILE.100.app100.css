@@ -130,18 +130,17 @@ dialog {
     border: none !important;
     border-radius: 0.7em;
     box-shadow: 0 0 #0000, 0 0 #0000, 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    inline-size: 35vw;
 }
 
 dialog > div {
     display: grid;
     gap: 2em;
     place-items: center;
-    text-align: center;
 }
 
-dialog.alert {
+dialog.popup {
     color: var(--color-secondary);
+    text-align: center;
 }
 
 dialog h2 {
@@ -155,11 +154,6 @@ dialog p {
 dialog button.close {
     place-self: start end;
     border-radius: 50%;
-}
-
-dialog button.confirm {
-    border-radius: 0.25em;
-    padding: 0.5em;
 }
 
 button {
