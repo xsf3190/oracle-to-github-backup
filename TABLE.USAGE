@@ -23,4 +23,4 @@ CREATE TABLE "USAGE"
   USING INDEX  ENABLE, 
 	 CONSTRAINT "FK_USERS_USAGE" FOREIGN KEY ("USER_ID")
 	  REFERENCES "USERS" ("ID") ENABLE
-   ) ;
+   ) ;COMMENT ON TABLE "USAGE"  IS 'Registers Cloudinary account usage details captured on daily basis.';
