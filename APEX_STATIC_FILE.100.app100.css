@@ -141,6 +141,12 @@ dialog > div {
 dialog.popup {
     color: var(--color-secondary);
     text-align: center;
+    inline-size: 25ch;
+}
+
+dialog.preview {
+    color: currentColor;
+    inline-size: 75ch;
 }
 
 dialog h2 {
