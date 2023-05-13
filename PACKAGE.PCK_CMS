@@ -412,7 +412,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     /*
-     **  nb: apex 22 apex_escape.strip_html makes redundant CTX_DDL.CREATE_POLICY ('strip_html', 'CTXSYS.AUTO_FILTER') 
+     **  Respond to user clicking "Save & Exit" in Rich Text Editor.
+     **  Parse text and extract title and excerpt for the artile.
+     **  Convert markdown to html and save in article row.
      */
     PROCEDURE saveArticle 
     IS
@@ -496,7 +498,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END IF;
         END LOOP;
         
-        UPDATE article SET title=l_title, title_more=l_title_more, excerpt=l_excerpt, excerpt_more=l_excerpt_more, body_html=l_body_html WHERE id=l_article_id RETURNING word_count, updated_date INTO l_word_count, l_updated_date;
+        UPDATE article SET title=l_title, title_more=l_title_more, excerpt=l_excerpt, excerpt_more=l_excerpt_more, body_html=l_body_html 
+         WHERE id=l_article_id 
+         RETURNING word_count, updated_date INTO l_word_count, l_updated_date;
 
         IF (l_word_count>0 AND l_excerpt IS NOT NULL) THEN
             l_excerpt_words:=' ' || l_word_count || ' word' || CASE WHEN l_word_count>1 THEN 's' END;
@@ -514,84 +518,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-     
-     
-    PROCEDURE extractUsedImages(pArticleId IN OUT NOCOPY NUMBER, pBody IN OUT NOCOPY CLOB, pBodyLen IN OUT NOCOPY NUMBER) 
-    IS
-        offset number := 1;
-        l_img_src varchar2(250);
-        l_cld_cloud_name asset.cld_cloud_name%type;
-        l_resource_type asset.resource_type%type;
-        l_public_id asset.public_id%type;
-        p1 PLS_INTEGER;
-        p2 PLS_INTEGER;
-        p3 PLS_INTEGER;
-        p4 PLS_INTEGER;
-        
-        TYPE t_asset_used IS RECORD(
-            cld_cloud_name  asset.cld_cloud_name%type,
-            resource_type   asset.resource_type%type,
-            public_id       asset.public_id%type);
-        
-        TYPE tt_asset_used IS TABLE OF t_asset_used;
-        l_asset_used tt_asset_used:=tt_asset_used();
-    BEGIN
-        WHILE ( offset < pBodyLen )
-        LOOP
-            p1:=dbms_lob.instr(pBody, '<img', offset, 1);
-            IF (p1=0) THEN
-                EXIT;
-            END IF;
-            
-            p1:=p1+10;  -- start of src attribute value
-            p2:=dbms_lob.instr(pBody, '"', p1, 1);
-            
-            l_img_src:=dbms_lob.substr(pBody, p2-p1, p1);
-            
-            offset := p2;
-            
-            /*  Extract ASSET primary key fields from cloudinary url 
-            **  https://res.cloudinary.com/{cloud_name}/{resource_type}/upload/transform_paramas/{public_id}
-            */
-            p1:=INSTR(l_img_src,'/',1,3);
-            p2:=INSTR(l_img_src,'/',1,4);
-            p3:=INSTR(l_img_src,'/',1,5);
-            p4:=INSTR(l_img_src,'/',-1);
-            
-            l_cld_cloud_name:=SUBSTR(l_img_src,p1+1,p2-p1-1);
-            l_resource_type:=SUBSTR(l_img_src,p2+1,p3-p2-1);
-            l_public_id:=SUBSTR(l_img_src,p4+1);
-            
-            l_asset_used.EXTEND();
-            l_asset_used(l_asset_used.COUNT).cld_cloud_name:=l_cld_cloud_name;
-            l_asset_used(l_asset_used.COUNT).resource_type:=l_resource_type;
-            l_asset_used(l_asset_used.COUNT).public_id:=l_public_id;
-        END LOOP;
-        
-        DELETE asset_used WHERE article_id=pArticleId AND usage_ind='D';
-        
-        IF (l_asset_used.COUNT>0) THEN
-            FORALL i IN l_asset_used.FIRST .. l_asset_used.LAST
-            INSERT INTO asset_used(article_id, cld_cloud_name, resource_type, public_id, usage_ind) 
-            VALUES (pArticleId, l_asset_used(i).cld_cloud_name, l_asset_used(i).resource_type, l_asset_used(i).public_id, 'D');
-        END IF;
-    END;
-    
-    /*
-     **  Build clob by concatenating into a VARCHAR until needs to be CLOB appended.
-     **  For performnce only.
-     */
-    PROCEDURE app(pClob in out nocopy clob, pVc in out nocopy varchar2, pApp varchar2) is
-    BEGIN
-      pVc := pVc || pApp;
-      exception when VALUE_ERROR then
-          if pClob is null then
-            pClob := pVc;
-          else
-            dbms_lob.writeappend(pClob, length(pVc), pVc);
-          end if;
-          pVc := pApp;
-    END;  
     
     /*
      **  Copy selected article returning new article ID
@@ -646,12 +572,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */
     FUNCTION getArticles RETURN CLOB IS
         l_clob CLOB;
-        l_vc VARCHAR2(32000);
         l_app_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
         l_app_user_name users.email%type:=apex_util.get_session_state('APP_USER_NAME');
-        nb PLS_INTEGER:=0;
     BEGIN
-        app(l_clob, l_vc, 
+        l_clob:=TO_CLOB(
             '<div>
                 <nav>
                   <button type="button" class="add-card">NEW CONTENT</button>
@@ -693,11 +617,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                AND art.id=ids.id
                AND cov.article_id(+)=art.id
              UNION ALL
-             SELECT 0, null, null, null, null,null,null,null,0,0,null,null,null,l_app_user_name,systimestamp from dual
+             SELECT -1, null, null, null, null,null,null,null,0,0,null,null,null,l_app_user_name,systimestamp from dual
              ORDER BY updated_date DESC) 
         LOOP
-            nb:=nb+1;
-            app(l_clob, l_vc, 
+            l_clob:=l_clob || TO_CLOB(
                 '<li class="card" tabindex="0" data-id="' || C.id || '">
                     <div class="button-container">
                         <button type="button" class="fa fa-play show-gallery"' || CASE WHEN C.first_asset=0 THEN ' disabled' END || '>' || C.first_asset || '/' || C.nb_assets || '</button>
@@ -731,9 +654,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <footer>' || C.name || ', <span class="updated-date">' || fmtUpdatedDate(C.updated_date)  || '</span></footer>
                 </li>');
         END LOOP;
-        app(l_clob, l_vc,' </ul></div>');
-        app(l_clob, l_vc, '
-            <dialog class="popup">
+        l_clob:=l_clob || TO_CLOB('</ul></div>');
+        l_clob:=l_clob || TO_CLOB(
+            '<dialog class="popup">
                 <div>
                     <button type="button" class="close">&times;</button>
                     <h2></h2>
@@ -749,7 +672,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             </dialog>            
             ');
 
-        RETURN (l_clob || l_vc);
+        RETURN (l_clob);
 
         EXCEPTION
             WHEN OTHERS THEN
