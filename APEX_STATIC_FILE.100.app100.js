@@ -6,7 +6,9 @@ let gArticleId,
 
 const popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
-      popupConfirm = popup.querySelector("button.confirm");
+      popupConfirm = popup.querySelector("button.confirm"),
+      preview = document.querySelector("dialog.preview"),
+      previewClose = preview.querySelector("button.close");
 
 const checkPerformance = () => {
     if (performance === undefined) {
@@ -258,6 +260,8 @@ add_card.addEventListener('click',  e => {
         let clone = first_card.cloneNode(true);
         first_card.style.display = "grid";
         first_card.insertAdjacentElement('beforebegin',clone);
+        first_card.dataset.id = "0";
+        first_card.querySelector(".fa-id-card").textContent = "0";
     }
 });
 
@@ -321,12 +325,16 @@ const edit_text = (articleId,button) => {
 /* 
  ** GET CONTENT FOR PREVIEW DIALOG 
  */
-const preview = (articleId,button) => {
+const preview_article = (articleId,button) => {
     execProcess( "getContentHTML", {x01: articleId}, {loadingIndicator:button}).then( (data) => {
-        previewBox.querySelector(".content").innerHTML = data.content;
-        previewBox.showModal();
+        preview.querySelector(".content").innerHTML = data.content;
+        preview.showModal();
     });
 }
+
+previewClose.addEventListener("click",  () => {
+    preview.close();
+});
 
 /* 
  ** SAVE ARTICE AND CLOSE EDITOR
@@ -399,9 +407,37 @@ const show_gallery = (articleId) => {
 };
 
 /*
- ** DELETE ARTICLE. REQUIRES CONFIRMATION IN CLICK HANDLER
+**  REMOVE CARD FROM DOM
+*/
+const remove_card = (articleId) => {
+    console.log("remove_card",articleId)
+    let li = document.querySelector("[data-id='" + articleId + "']");
+    console.log("li",li)
+    li.replaceChildren();
+    li.remove();
+}
+
+popupConfirm.addEventListener("click",  (e) => {
+    const articleId = e.target.dataset.id,
+          process = e.target.dataset.process;
+    execProcess( process, {x01: articleId},{loadingIndicator: e.target}).then( () => {
+        if (process === "deleteArticle") {
+            remove_card(articleId);
+            e.target.dataset.id = "";
+        }
+        popup.close();
+    });
+});
+
+/*
+ ** DELETE ARTICLE. REQUIRES CONFIRMATION IN CLICK HANDLER IF CONTAINS CONTENT
  */
 const delete_article = (articleId) => {
+    console.log("articleId",articleId)
+    if (articleId === "0") {
+        remove_card(articleId);
+        return;
+    }
     let li = document.querySelector("[data-id='" + articleId + "']"),
         title = li.querySelector(".title");
     if (title) {
@@ -413,6 +449,7 @@ const delete_article = (articleId) => {
     popup.querySelector("p").textContent = "Are you sure you want to delete this card?";
     popupConfirm.style.display = "block";
     popupConfirm.dataset.id = articleId;
+    popupConfirm.dataset.process = "deleteArticle";
     popup.showModal();
 }
 
@@ -438,17 +475,6 @@ const unpublish_article = (articleId, button) => {
     });
 }
 
-popupConfirm.addEventListener("click",  (e) => {
-    const articleId = e.target.dataset.id;
-    execProcess( "deleteArticle", {x01: articleId},{loadingIndicator: e.target}).then( () => {
-        let li = document.querySelector("[data-id='" + articleId + "']");
-        li.replaceChildren();
-        li.remove();
-        e.target.dataset.id = "";
-        popup.close();
-    });
-});
-
 const cardHandler = (e) => {
     const card = e.srcElement.closest(".card");
     if (!card) return;
@@ -470,7 +496,7 @@ const cardHandler = (e) => {
     } else if (e.target.matches(".unpublish")) {
         unpublish_article(articleId, e.srcElement);                  
     } else if (e.target.matches(".preview")) {
-        preview(articleId, e.srcElement);                  
+        preview_article(articleId, e.srcElement);                  
     }
 }
 
