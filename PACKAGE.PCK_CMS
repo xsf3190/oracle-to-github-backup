@@ -113,11 +113,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     PROCEDURE test IS 
-        l_restore_files varchar2(1000):='GRANT.OBJECT_GRANT:GRANT.SYSTEM_GRANT';
-        l_password varchar2(20):='z/38CW23Bh_]Ak1x';
+        l_restore_files varchar2(1000):='GRANT.OBJECT_GRANT:GRANT.SYSTEM_GRANT:EXPORT_SCHEMA.EXAMPLE.dmp:APEX_APPLICATION.100';
+        l_password varchar2(20):='Jgj4{3f*HC6P9>4q';
         n pls_integer;
     BEGIN
-        /*
+        
         FOR C IN (SELECT github_token, github_repos_owner, github_repos, u.email, w.workspace_name 
               FROM users u, apex_workspace_developers w 
              WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
@@ -132,12 +132,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     pGithub_repos=>:B4,
                     pPassword=>:B5,
                     pEmail=>:B6,
-                    pWorkspace=>:B7); END;}' 
-                USING l_restore_files, C.github_token, C.github_repos_owner, C.github_repos, l_password, C.email, C.workspace_name;
+                    pWorkspace=>:B7,
+                    pSchema=>:B8); END;}' 
+                USING l_restore_files, C.github_token, C.github_repos_owner, C.github_repos, l_password, C.email, C.workspace_name, sys_context('userenv','current_schema');
         END LOOP;
-        */
-        insert into user_login(auth_provider,email,name) values ('a','b','c');
-        select 1/0 into n from dual;
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm);
@@ -250,7 +249,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pGithub_repos=>:B4,
                 pPassword=>:B5,
                 pEmail=>:B6,
-                pWorkspace=>:B7); END;}' USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email, l_workspace_name;
+                pWorkspace=>:B7,
+                pSchema=>:B8); END;}' USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email, l_workspace_name,sys_context('userenv','current_schema');
         
         EXCEPTION
             WHEN OTHERS THEN
