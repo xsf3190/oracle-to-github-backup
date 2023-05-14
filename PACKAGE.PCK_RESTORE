@@ -1,8 +1,24 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_RESTORE" IS
     --
-    PROCEDURE submit_job(pGithub_files IN VARCHAR2, pGithub_token IN VARCHAR2, pGithub_repos_owner IN VARCHAR2, pGithub_repos IN VARCHAR2, pPassword IN VARCHAR2, pEmail IN VARCHAR2, pWorkspace IN VARCHAR2);
+    PROCEDURE submit_job(
+        pGithub_files IN VARCHAR2, 
+        pGithub_token IN VARCHAR2, 
+        pGithub_repos_owner IN VARCHAR2, 
+        pGithub_repos IN VARCHAR2, 
+        pPassword IN VARCHAR2, 
+        pEmail IN VARCHAR2, 
+        pWorkspace IN VARCHAR2,
+        pSchema IN VARCHAR2);
     --
-    PROCEDURE start_import(pGithub_files IN VARCHAR2, pGithub_token IN VARCHAR2, pGithub_repos_owner IN VARCHAR2, pGithub_repos IN VARCHAR2, pPassword IN VARCHAR2, pEmail IN VARCHAR2, pWorkspace IN VARCHAR2);
+    PROCEDURE start_import(
+        pGithub_files IN VARCHAR2, 
+        pGithub_token IN VARCHAR2, 
+        pGithub_repos_owner IN VARCHAR2, 
+        pGithub_repos IN VARCHAR2, 
+        pPassword IN VARCHAR2, 
+        pEmail IN VARCHAR2, 
+        pWorkspace IN VARCHAR2,
+        pSchema IN VARCHAR2);
     --
 END;
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
@@ -34,14 +50,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
     /*
     **  Called from primary database this procedure submits job to execute imports of all Github files listed in parameter "pGithub_files"
     */
-    PROCEDURE submit_job(pGithub_files IN VARCHAR2, pGithub_token IN VARCHAR2, pGithub_repos_owner IN VARCHAR2, pGithub_repos IN VARCHAR2, pPassword IN VARCHAR2, pEmail IN VARCHAR2, pWorkspace IN VARCHAR2) IS
+    PROCEDURE submit_job(
+        pGithub_files IN VARCHAR2, 
+        pGithub_token IN VARCHAR2, 
+        pGithub_repos_owner IN VARCHAR2, 
+        pGithub_repos IN VARCHAR2, 
+        pPassword IN VARCHAR2, 
+        pEmail IN VARCHAR2, 
+        pWorkspace IN VARCHAR2,
+        pSchema IN VARCHAR2) 
+    IS
         l_job_name user_scheduler_jobs.job_name%type:=dbms_scheduler.generate_job_name(prefix=>'import_apex');
     BEGIN
         dbms_scheduler.create_job(
             job_name => l_job_name,
             job_type => 'STORED_PROCEDURE',
             job_action => 'PCK_RESTORE.start_import',
-            number_of_arguments => 7);
+            number_of_arguments => 8);
             
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
@@ -77,6 +102,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
             job_name => l_job_name,
             argument_position => 7,
             argument_value => pWorkspace);  
+
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 8,
+            argument_value => pSchema);  
             
         dbms_scheduler.enable(l_job_name);
     END;
@@ -278,9 +308,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
     /*
     ** Restore schema export dump file
     */
-    PROCEDURE import_schema(pGithub_dumpfile IN VARCHAR2, pPassword IN VARCHAR2, pBlob IN OUT NOCOPY BLOB) IS
+    PROCEDURE import_schema(pGithub_dumpfile IN VARCHAR2, pSchema IN VARCHAR2, pPassword IN VARCHAR2, pBlob IN OUT NOCOPY BLOB) IS
         l_dump_filename VARCHAR2(40):=SUBSTR(pGithub_dumpfile,INSTR(pGithub_dumpfile,'.')+1);
-        l_schema VARCHAR2(30):=SUBSTR(l_dump_filename,1,INSTR(l_dump_filename,'.')-1);
         
         l_file_handle UTL_FILE.FILE_TYPE;
         l_amount PLS_INTEGER:=32767;
@@ -290,8 +319,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         h1 NUMBER;
         l_status VARCHAR2(50);
         
-        e_user_not_exists EXCEPTION;
-        PRAGMA EXCEPTION_INIT (e_user_not_exists, -1918);  
+
         l_bfile  bfile;
         l_dest_offset integer := 1;
         l_src_offset integer := 1;
@@ -322,23 +350,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
             RAISE_APPLICATION_ERROR(-20001,pGithub_dumpfile || ' is an encrypted dump file. The password must be supplied.');
         END IF;
         
-        /*
-        **  Drop and Create schema with no authentication.
-        */
-        BEGIN
-            EXECUTE IMMEDIATE 'DROP USER ' || l_schema || ' CASCADE';
-            EXCEPTION WHEN e_user_not_exists THEN NULL;
-        END;
-        
-        /*
-        ** Create no authentication schema
-        */
-        EXECUTE IMMEDIATE 'CREATE USER ' || l_schema || ' QUOTA UNLIMITED ON DATA';
-        
         h1 := dbms_datapump.open(operation => 'IMPORT', job_mode => 'SCHEMA', job_name => 'SCHEMA_IMPORT', version => 'LATEST');
-        dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')'); 
+        dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || pSchema || ''')'); 
         dbms_datapump.add_file(handle => h1, filename => l_dump_filename, directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_DUMP_FILE); 
-        dbms_datapump.add_file(handle => h1, filename => l_schema || '.log', directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
+        dbms_datapump.add_file(handle => h1, filename => pSchema || '.log', directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
         IF (pPassword IS NOT NULL) THEN
             dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => pPassword); 
         END IF;
@@ -351,8 +366,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         /*
         ** Upload import log file into log table
         */
-        INSERT INTO log(message, procedure_name) VALUES (empty_clob(),'IMPORT_SCHEMA.'||l_schema||'.log') RETURN message INTO l_clob;
-        l_bfile := bfilename('DATA_PUMP_DIR', l_schema || '.log');
+        INSERT INTO log(message, procedure_name) VALUES (empty_clob(),'IMPORT_SCHEMA.'||pSchema||'.log') RETURN message INTO l_clob;
+        l_bfile := bfilename('DATA_PUMP_DIR', pSchema || '.log');
         dbms_lob.fileopen(l_bfile, dbms_lob.file_readonly);
         dbms_lob.loadclobfromfile (
             dest_lob      => l_clob,
@@ -485,7 +500,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
     /*
     **  Main import procedure called by submitted job
     */
-    PROCEDURE start_import(pGithub_files IN VARCHAR2, pGithub_token IN VARCHAR2, pGithub_repos_owner IN VARCHAR2, pGithub_repos IN VARCHAR2, pPassword IN VARCHAR2, pEmail IN VARCHAR2, pWorkspace IN VARCHAR2) IS
+    PROCEDURE start_import(
+        pGithub_files IN VARCHAR2, 
+        pGithub_token IN VARCHAR2, 
+        pGithub_repos_owner IN VARCHAR2, 
+        pGithub_repos IN VARCHAR2, 
+        pPassword IN VARCHAR2, 
+        pEmail IN VARCHAR2, 
+        pWorkspace IN VARCHAR2,
+        pSchema IN VARCHAR2) 
+    IS
+        e_user_not_exists EXCEPTION;
+        PRAGMA EXCEPTION_INIT (e_user_not_exists, -1918);  
+        
         l_github_files apex_t_varchar2;
         l_clob CLOB;
         l_git_url VARCHAR2(200);
@@ -502,7 +529,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         END;
         
     BEGIN
-        log('Starting import of ' || pGithub_files );
+        log('Starting import of schema ' || pSchema );
         log('pGithub_token:' || pGithub_token);
         log('pGithub_repos_owner:' || pGithub_repos_owner);
         log('pGithub_repos:' || pGithub_repos);
@@ -520,6 +547,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         **  Workspace id needed for sending email
         */
         SELECT workspace_id INTO l_workspace_id FROM apex_workspaces WHERE workspace=pWorkspace;
+        
+        /*
+        **  Drop and Create schema with no authentication.
+        */
+        BEGIN
+            EXECUTE IMMEDIATE 'DROP USER ' || pSchema || ' CASCADE';
+            EXCEPTION WHEN e_user_not_exists THEN NULL;
+        END;
+        
+        EXECUTE IMMEDIATE 'CREATE USER ' || pSchema || ' QUOTA UNLIMITED ON DATA';
         
         l_github_files:=apex_string.split(pGithub_files,':');
         
@@ -548,7 +585,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
             **  Process each downloaded file
             */
             IF (l_github_files(i) LIKE 'EXPORT_SCHEMA.%') THEN
-                import_schema(l_github_files(i), pPassword, l_blob);
+                import_schema(l_github_files(i), pSchema, pPassword, l_blob);
             ELSIF (l_github_files(i) LIKE 'APEX_APPLICATION.%') THEN
                 import_apex(l_github_files(i), pWorkspace, l_blob);  
             ELSIF (l_github_files(i) LIKE 'GRANT.%') THEN
