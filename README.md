@@ -17,11 +17,13 @@ Make Oracle data and definitions available for sharing or general collaboration 
 
 Implement an automated backup / restore cycle between 2 ADB instances to provision a complete recovery or testing environment.
 
-This repository contains all current exports generated for daily backup / restore between these 2 ADBs in my ORACLE OCI Always Free tenacy:
+This repository contains files generated for a daily backup / restore of a schema called EXAMPLE between 2 ADBs in my ORACLE OCI Always Free tenancy:
 1. hl7offzwezq2cal-db202103270929
 2. hl7offzwezq2cal-restoretestdb1
 
-These names are included in each GITHUB commit message. Note that the last update is based on when the exported file content last changed.
+These names are included in each GITHUB commit message. 
+
+In each backup, all files are regenerated and sent to GITHUB - the last update time shows when the file content last changed. 
 
 ## Install
 1. GRANT READ,WRITE ON DIRECTORY DATA_PUMP_DIR TO "schema-to-backup"
@@ -56,8 +58,9 @@ BEGIN
         p_restore_files => l_restore_files
   );
   /* 
-  ** Run restore on target ADB 
+  ** Uncomment to run restore on target ADB 
   */
+  /*
   EXECUTE IMMEDIATE q'{
         BEGIN pck_restore.submit_job@RESTORE_LINK(  /* RESTORE_LINK directs to ADMIN user in target ADB */
             pGithub_files=>:B1, 
@@ -66,19 +69,19 @@ BEGIN
             pGithub_repos=>:B4,
             pPassword=>:B5,
             pEmail=>:B6,
-            pWorkspace=>:B7); 
+            pWorkspace=>:B7,
+            pSchema=>:B8); 
         END;}' 
-        USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email, l_workspace_name;
+        USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email, l_workspace_name, sys_context('userenv','current_schema');
+  */
 END;
 ```
-Typically, you would call the above code through a scheduled dbms_scheduler job, passing parameters from an application table.
+Typically, you would call the backup procedure through a scheduled dbms_scheduler job, passing parameters from an application table.
 
-PACKAGE.PCK_BACKUP and PACKAGE.PCK_RESTORE show current implementation for this repository.
+Adapt package PACKAGE.PCK_BACKUP to suit specific requirements - in particular the selection of which objects to export.
 
-Adapt these packages to suit specific requirements - in particular the selection of which objects to export / import.
+Export and import activities are logged in table LOG on both of the ADB instances along with any errors.
 
-Export and import activities are logged in table LOG on both ADB instances along with any errors.
-
-Files EXPORT_SCHEMA.EXAMPLE.log and IMPORT_SCHEMA.EXAMPLE.log are the data pump log files from the last daily run.
+Data pump log files from the last run are also stored in the repository - i.e. EXPORT_SCHEMA.EXAMPLE.log and IMPORT_SCHEMA.EXAMPLE.log
 
 GITHUB commit messages include the ADB database name that issued the upload to the repository.
