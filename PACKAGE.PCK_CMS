@@ -485,7 +485,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                    WHERE id=l_article_id) 
         LOOP
             l_body_html := APEX_MARKDOWN.TO_HTML (p_markdown => C.body, p_embedded_html_mode => APEX_MARKDOWN.c_embedded_html_preserve); -- escapes special characters while preserving embedded html
+            apex_escape.set_html_escaping_mode('E');
             l_plain_text:=dbms_lob.substr(utl_i18n.unescape_reference(APEX_ESCAPE.STRIPHTML(l_body_html)),title_len+excerpt_len+20,1); -- strip html to plain text, removing any XSS embedded in <script></noscript>
+            log(l_plain_text);
             IF (l_plain_text IS NULL) THEN
                 EXIT;
             END IF;
@@ -667,10 +669,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             <dialog class="preview">
                 <div>
                     <button type="button" class="close">&times;</button>
-                    <div class="content"></div>
+                    <div class="content ck-content"></div>
                 </div>
             </dialog>            
             ');
+            
+        log(l_clob);
 
         RETURN (l_clob);
 
