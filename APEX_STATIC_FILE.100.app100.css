@@ -10,7 +10,7 @@
 
  
   /* Property values used to calculate clamp */
-  --created:  21/3/2023, 8:41
+  --created:  21/3/2023, 8:41;
   --rootFontSize:  16;
   --minFontSize:  1;
   --minWidthPx:  360;
@@ -358,6 +358,11 @@ nav button {
 .ck-content li {
     font-size: var(--step--1);
     line-height: 1.4;
+}
+
+button.save-and-exit {
+    background-color: var(--color-button) !important;
+    color: var(--color-light-glare) !important;
 }
 
 /* *************** */
