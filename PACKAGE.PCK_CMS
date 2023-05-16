@@ -114,7 +114,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     
     PROCEDURE test IS 
         l_restore_files varchar2(1000):='GRANT.OBJECT_GRANT:GRANT.SYSTEM_GRANT:EXPORT_SCHEMA.EXAMPLE.dmp:APEX_APPLICATION.100';
-        l_password varchar2(20):='Jgj4{3f*HC6P9>4q';
+        l_password varchar2(20):='0R:BkuAn;0525*Qi';
         n pls_integer;
     BEGIN
         
@@ -487,7 +487,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_body_html := APEX_MARKDOWN.TO_HTML (p_markdown => C.body, p_embedded_html_mode => APEX_MARKDOWN.c_embedded_html_preserve); -- escapes special characters while preserving embedded html
             apex_escape.set_html_escaping_mode('E');
             l_plain_text:=dbms_lob.substr(utl_i18n.unescape_reference(APEX_ESCAPE.STRIPHTML(l_body_html)),title_len+excerpt_len+20,1); -- strip html to plain text, removing any XSS embedded in <script></noscript>
-            log(l_plain_text);
+            l_plain_text:=APEX_ESCAPE.STRIPHTML(l_plain_text);
             IF (l_plain_text IS NULL) THEN
                 EXIT;
             END IF;
