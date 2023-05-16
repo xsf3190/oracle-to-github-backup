@@ -60,14 +60,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         pWorkspace IN VARCHAR2,
         pSchema IN VARCHAR2) 
     IS
-        l_job_name user_scheduler_jobs.job_name%type:=dbms_scheduler.generate_job_name(prefix=>'import_apex');
+        l_job_name user_scheduler_jobs.job_name%type:=dbms_scheduler.generate_job_name(prefix=>'RESTORE');
     BEGIN
         dbms_scheduler.create_job(
             job_name => l_job_name,
             job_type => 'STORED_PROCEDURE',
             job_action => 'PCK_RESTORE.start_import',
+            --auto_drop => FALSE,
             number_of_arguments => 8);
             
+        /*
+        dbms_scheduler.set_attribute(
+            name => l_job_name,
+            attribute => 'RESTARTABLE',
+            value => TRUE);
+        */
+        
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
             argument_position => 1,
@@ -326,7 +334,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         l_bfile_csid integer:=0;
         l_lang_context integer:=0;
         l_warning integer:=0;
-        l_clob CLOB;        
+        l_clob CLOB;   
+        l_blob BLOB;
     BEGIN
         /*
         ** Copy contents of file to directory in order to run import
@@ -366,6 +375,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         /*
         ** Upload import log file into log table
         */
+        /*
         INSERT INTO log(message, procedure_name) VALUES (empty_clob(),'IMPORT_SCHEMA.'||pSchema||'.log') RETURN message INTO l_clob;
         l_bfile := bfilename('DATA_PUMP_DIR', pSchema || '.log');
         dbms_lob.fileopen(l_bfile, dbms_lob.file_readonly);
@@ -380,6 +390,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
             warning       => l_warning
             );
         dbms_lob.fileclose(l_bfile);
+        */
+        
+        l_blob:=TO_BLOB(BFILENAME('DATA_PUMP_DIR',pSchema||'.log'));
+        l_clob:=apex_util.blob_to_clob(l_blob);
+        log(l_clob);
+        
         COMMIT;
         
         EXCEPTION
@@ -600,13 +616,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         sendmail(sys_context('userenv','db_name') || ' - IMPORTED SUCCESSFULLY FROM GITHUB');
         
         /*
-        ** Backup code of this package and import log file to Github
+        ** Backup the code of this package and the import log file to Github
         */
         github_backup(pGithub_repos_owner, pGithub_repos);
         
         EXCEPTION
             WHEN OTHERS THEN 
-                l_body_html:=l_body_html || '<p>Error ' || sqlcode || ',' || sqlerrm || '</p>';
+                l_body_html:=l_body_html || '<p>Error occured in RESTORE job - ' || sqlcode || ',' || sqlerrm || '</p>';
                 sendmail(sys_context('userenv','db_name') || ' - IMPORT FAILED');
                 RAISE;
     END;    
