@@ -1,4 +1,4 @@
-CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_RESTORE" IS
+CREATE OR REPLACE EDITIONABLE PACKAGE "ADMIN"."PCK_RESTORE" IS
     --
     PROCEDURE submit_job(
         pGithub_files IN VARCHAR2, 
@@ -21,7 +21,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_RESTORE" IS
         pSchema IN VARCHAR2);
     --
 END;
-CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
+CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
 
     /*
     **  Logging procedures
@@ -316,8 +316,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
     /*
     ** Restore schema export dump file
     */
-    PROCEDURE import_schema(pGithub_dumpfile IN VARCHAR2, pSchema IN VARCHAR2, pPassword IN VARCHAR2, pBlob IN OUT NOCOPY BLOB) IS
+    PROCEDURE import_schema(pGithub_dumpfile IN VARCHAR2, pSchema IN VARCHAR2, pPassword IN VARCHAR2, pBlob IN OUT NOCOPY BLOB, pGithub_repos_owner IN VARCHAR2, pGithub_repos IN VARCHAR2) IS
         l_dump_filename VARCHAR2(40):=SUBSTR(pGithub_dumpfile,INSTR(pGithub_dumpfile,'.')+1);
+        l_log_filename VARCHAR2(40):=pSchema || '.log';
         
         l_file_handle UTL_FILE.FILE_TYPE;
         l_amount PLS_INTEGER:=32767;
@@ -326,19 +327,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         l_encrypted BOOLEAN;
         h1 NUMBER;
         l_status VARCHAR2(50);
-        
 
-        l_bfile  bfile;
-        l_dest_offset integer := 1;
-        l_src_offset integer := 1;
-        l_bfile_csid integer:=0;
-        l_lang_context integer:=0;
-        l_warning integer:=0;
-        l_clob CLOB;   
-        l_blob BLOB;
+        
+        l_github CLOB;
+        
+        TYPE tt_blob IS RECORD(
+            name VARCHAR2(40),
+            content BLOB);
+        TYPE t_blob IS TABLE OF tt_blob;
+        l_blob t_blob:=t_blob();
+        l_clob CLOB;
+        l_content CLOB;
+        l_json JSON_OBJECT_T;
+        l_db_name v$pdbs.name%type:=sys_context('userenv','db_name');
+        l_db_name2 VARCHAR2(50):=SUBSTR(l_db_name,INSTR(l_db_name,'_')+1);
+        l_message VARCHAR2(500);
+        this_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
     BEGIN
         /*
-        ** Copy contents of file to directory in order to run import
+        ** Copy contents of schema dump file to directory in order to run import
         */
         l_file_handle := UTL_FILE.FOPEN('DATA_PUMP_DIR', l_dump_filename, 'wb', 1024);
         WHILE l_offset < dbms_lob.getlength(pBlob)
@@ -362,7 +369,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         h1 := dbms_datapump.open(operation => 'IMPORT', job_mode => 'SCHEMA', job_name => 'SCHEMA_IMPORT', version => 'LATEST');
         dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || pSchema || ''')'); 
         dbms_datapump.add_file(handle => h1, filename => l_dump_filename, directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_DUMP_FILE); 
-        dbms_datapump.add_file(handle => h1, filename => pSchema || '.log', directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
+        dbms_datapump.add_file(handle => h1, filename => l_log_filename, directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
         IF (pPassword IS NOT NULL) THEN
             dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => pPassword); 
         END IF;
@@ -371,32 +378,46 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
         dbms_datapump.detach(handle => h1);
         log('Import job ended with status: ' || l_status);
-        
+
         /*
-        ** Upload import log file into log table
+        ** Get existing details of any files previously copied to Github. We need the file name and SHA so that Github can maintain its history trail
         */
+        l_github := apex_web_service.make_rest_request(
+            p_url=>'https://api.github.com/repos/' || pGithub_repos_owner || '/' || pGithub_repos || '/contents/',
+            p_http_method=>'GET');
+            
         /*
-        INSERT INTO log(message, procedure_name) VALUES (empty_clob(),'IMPORT_SCHEMA.'||pSchema||'.log') RETURN message INTO l_clob;
-        l_bfile := bfilename('DATA_PUMP_DIR', pSchema || '.log');
-        dbms_lob.fileopen(l_bfile, dbms_lob.file_readonly);
-        dbms_lob.loadclobfromfile (
-            dest_lob      => l_clob,
-            src_bfile     => l_bfile,
-            amount        => dbms_lob.lobmaxsize,
-            dest_offset   => l_dest_offset,
-            src_offset    => l_src_offset,
-            bfile_csid    => l_bfile_csid,
-            lang_context  => l_lang_context,
-            warning       => l_warning
-            );
-        dbms_lob.fileclose(l_bfile);
+        ** Send import log file to Github
         */
+        l_blob.extend;
+        l_blob(1).name:='IMPORT_SCHEMA.' || l_log_filename; 
+        l_blob(1).content:=TO_BLOB(BFILENAME('DATA_PUMP_DIR',l_log_filename));
         
-        l_blob:=TO_BLOB(BFILENAME('DATA_PUMP_DIR',pSchema||'.log'));
-        l_clob:=apex_util.blob_to_clob(l_blob);
-        log(l_clob);
+        l_blob.extend;
+        l_blob(2).name:='PACKAGE.' || utl_call_stack.subprogram(2)(1); 
+        l_clob:=LTRIM(LTRIM(dbms_metadata.get_ddl('PACKAGE',utl_call_stack.subprogram(2)(1)),chr(13)||chr(10)));
+        l_blob(2).content:=apex_util.clob_to_blob(l_clob);
         
-        COMMIT;
+        FOR i IN 1..l_blob.COUNT LOOP
+            l_json:=JSON_OBJECT_T.parse('{"message":"Commit by ' || l_db_name2 || '"}');
+            FOR C IN (SELECT sha 
+                        FROM JSON_TABLE(l_github FORMAT JSON, '$[*]' COLUMNS (name, sha))
+                       WHERE name=l_blob(i).name) 
+            LOOP
+                l_json.put('sha',C.sha);
+            END LOOP;
+            l_content:=REPLACE(APEX_WEB_SERVICE.BLOB2CLOBBASE64(l_blob(i).content),chr(13)||chr(10));
+            l_json.put('content', l_content);
+
+            l_clob := apex_web_service.make_rest_request(
+                p_url=>'https://api.github.com/repos/' || pGithub_repos_owner || '/' || pGithub_repos || '/contents/' || l_blob(i).name,
+                p_http_method=>'PUT',
+                p_body=>l_json.to_clob);
+                
+            SELECT NVL(message,l_blob(i).name || ' - backup to Github - OK')
+              INTO l_message
+              FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS message VARCHAR2(500) PATH '$.message');
+        END LOOP;
         
         EXCEPTION
             WHEN OTHERS THEN 
@@ -601,7 +622,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
             **  Process each downloaded file
             */
             IF (l_github_files(i) LIKE 'EXPORT_SCHEMA.%') THEN
-                import_schema(l_github_files(i), pSchema, pPassword, l_blob);
+                import_schema(l_github_files(i), pSchema, pPassword, l_blob, pGithub_repos_owner, pGithub_repos);
             ELSIF (l_github_files(i) LIKE 'APEX_APPLICATION.%') THEN
                 import_apex(l_github_files(i), pWorkspace, l_blob);  
             ELSIF (l_github_files(i) LIKE 'GRANT.%') THEN
@@ -618,7 +639,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_RESTORE" IS
         /*
         ** Backup the code of this package and the import log file to Github
         */
-        github_backup(pGithub_repos_owner, pGithub_repos);
+        --github_backup(pGithub_repos_owner, pGithub_repos);
         
         EXCEPTION
             WHEN OTHERS THEN 
