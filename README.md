@@ -1,7 +1,7 @@
 # oracle-to-github-backup
 Automatic backup of selected objects from ORACLE OCI ADB to a designated GITHUB repository.
 
-Creates files on GITHUB including encrypted schema export dump files, object and system grants, Apex application exports, ORDS metadata, TABLE and PACKAGE definitions.
+Creates files on GITHUB including encrypted schema export dump files, Apex application exports, ORDS metadata, TABLE and PACKAGE definitions.
 
 Optional restore from Github into a target ADB identified by DB LINK.
 
@@ -9,21 +9,21 @@ Individual file exports should not exceed Github recommendation of 50MB.
 
 ## Pre-requisites
 1. Obtain GITHUB Personal access token (classic) - https://github.com/settings/tokens
-2. Configure OCI email if you want automated status emails - https://blogs.oracle.com/apex/post/sending-email-from-your-oracle-apex-app-on-autonomous-database
+2. For automated status emails configure OCI email - https://blogs.oracle.com/apex/post/sending-email-from-your-oracle-apex-app-on-autonomous-database
 3. For automated restore from GITHUB create DB LINK to a target ADB database
 
 ## Use
-Make Oracle data and definitions available for sharing or general collaboration through private or public GITHUB repositories.
+Make Oracle data and definitions available for sharing through private or public GITHUB repositories.
 
 Implement an automated backup / restore cycle between 2 ADB instances to provision a complete recovery or testing environment.
 
-This repository contains files generated for a daily backup / restore of a schema called EXAMPLE between 2 ADBs in my ORACLE OCI Always Free tenancy:
+This repository contains files generated for a daily backup / restore of a schema called EXAMPLE between 2 ADBs in an ORACLE OCI "Always Free" tenancy:
 1. hl7offzwezq2cal-db202103270929
 2. hl7offzwezq2cal-restoretestdb1
 
-These names are included in each GITHUB commit message. 
+The configurable part of the ADB names are included in each GITHUB commit message. 
 
-In each backup, all files are regenerated and sent to GITHUB - the last update time shows when the file content last changed. 
+All files are regenerated daily and sent to GITHUB - the last update time shows when the file content was last changed. 
 
 ## Install
 1. GRANT READ,WRITE ON DIRECTORY DATA_PUMP_DIR TO "schema-to-backup"
