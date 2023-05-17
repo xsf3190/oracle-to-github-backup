@@ -57,7 +57,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
     /* 
     ** Linked-In API has separate entry points for profile name and email addres.
-    ** Support very rude. API is bollocks. Gave up on Linkedin but keep the code just in case.
+    ** Support very rude. API is bollocks. Gave up on Linkedin but keep the code just in case
     */
     PROCEDURE post_auth_linkedin IS
         l_name users.name%type;
