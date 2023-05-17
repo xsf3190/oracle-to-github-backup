@@ -58,11 +58,12 @@ BEGIN
         p_restore_files => l_restore_files
   );
   /* 
-  ** Uncomment to run restore on target ADB 
+  ** Uncomment to restore selected GITHUB files to a target ADB.
+  ** Requires DBLINK in "schema-to-backup" to ADMIN user in target ADB.
   */
   /*
   EXECUTE IMMEDIATE q'{
-        BEGIN pck_restore.submit_job@RESTORE_LINK(  /* RESTORE_LINK directs to ADMIN user in target ADB */
+        BEGIN pck_restore.submit_job@RESTORE_LINK(
             pGithub_files=>:B1, 
             pGithub_token=>:B2, 
             pGithub_repos_owner=>:B3, 
@@ -82,6 +83,4 @@ Adapt package PACKAGE.PCK_BACKUP to suit specific requirements - in particular t
 
 Export and import activities are logged in table LOG on both of the ADB instances along with any errors.
 
-Data pump log files from the last run are also stored in the repository - i.e. EXPORT_SCHEMA.EXAMPLE.log and IMPORT_SCHEMA.EXAMPLE.log
-
-GITHUB commit messages include the ADB database name that issued the upload to the repository.
+Data pump log files of the last run are also stored in the repository
