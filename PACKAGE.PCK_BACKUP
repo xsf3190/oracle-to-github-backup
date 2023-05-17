@@ -283,7 +283,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         dbms_metadata.set_transform_param(dbms_metadata.session_transform,'STORAGE',false);
         dbms_metadata.set_transform_param(dbms_metadata.session_transform,'TABLESPACE',false);
         dbms_metadata.set_transform_param(dbms_metadata.session_transform,'EMIT_SCHEMA',false);
-        dbms_metadata.set_transform_param(dbms_metadata.session_transform,'COLLATION_CLAUSE','NEVER');
+        --dbms_metadata.set_transform_param(dbms_metadata.session_transform,'COLLATION_CLAUSE','NEVER');
         
         /*
         ** Build PLSQL collection of all objects to be exported and copied to Github
