@@ -33,6 +33,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getContentHTML;
     --
+    FUNCTION getHomepage RETURN CLOB;
+    --
     PROCEDURE getPerformance(pDbid IN ROWID DEFAULT NULL);
     --
     PROCEDURE getThumbnails;
@@ -522,7 +524,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     /*
-     **  Copy selected article returning new article ID
+     **  Copy selected article returning new article ID. Code is dead for now because don't know how to "copy" media 
      */
     PROCEDURE copyArticle IS
         l_article_id article.id%type:=apex_application.g_x01;
@@ -675,6 +677,35 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             ');
             
         log(l_clob);
+
+        RETURN (l_clob);
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                log_error(sqlcode,sqlerrm);
+                RAISE;
+    END;
+  
+    /*
+    ** Build HTML for public home page
+    */
+    FUNCTION getHomepage RETURN CLOB IS
+        l_clob CLOB;
+    BEGIN
+        l_clob:=TO_CLOB(
+        '<div class="homepage-container">
+            <img src="https://res.cloudinary.com/mrbapex/q_auto,f_auto,w_809/homepage_pwi9uq">
+            <div>
+                <h2>HEADING</h2>
+                <p>Lorra lorra paragraph.</p>
+                <p>Ever wondered what to buy someone for a Christmas or birthday gift? 
+For something unique and personal you could offer a beautiful painting in acrylics of a favoured pet or relative.
+Just use the form below to upload your best photos of the subject so we can then talk about the personality you want captured as well as delivery date, portrait dimensions and price. As a guide, none of the paintings shown on the sebsite cost more than 150 pounds.
+Once we''re agreed, pay a 50% deposit using the form below and we''ll start painting.
+We''ll email you a scanned photo of the completed painting for your approval before sending it by Royal Mail rolled in a strengthened cardboard tube together with an invoice for the balance.</p>
+            </div>
+         </div>
+        ');
 
         RETURN (l_clob);
 
