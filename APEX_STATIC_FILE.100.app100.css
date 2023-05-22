@@ -179,10 +179,25 @@ button {
     gap: 0.5em;
 }
 
-.homepage-container {
+.homepage {
     display: grid;
-    grid-template-columns: repeat(auto-fit,minmax(20rem,1fr));
+    grid-template-columns: repeat(auto-fit,minmax(25rem,1fr));
     gap: 1rem;
+    font-family: Georgia, sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.4;
+}
+
+.homepage p:first-child::first-letter {
+    initial-letter: 3;
+}
+
+.homepage span:first-child{
+    font-style: italic;
+}
+
+.homepage .text > * + * {
+    margin-top: var(--space-m);
 }
 
 #main nav button:hover {
