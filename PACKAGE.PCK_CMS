@@ -693,17 +693,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_clob CLOB;
     BEGIN
         l_clob:=TO_CLOB(
-        '<div class="homepage-container">
-            <img src="https://res.cloudinary.com/mrbapex/q_auto,f_auto,w_809/homepage_pwi9uq">
-            <div>
-                <h2>HEADING</h2>
-                <p>Lorra lorra paragraph.</p>
-                <p>Ever wondered what to buy someone for a Christmas or birthday gift? 
-For something unique and personal you could offer a beautiful painting in acrylics of a favoured pet or relative.
-Just use the form below to upload your best photos of the subject so we can then talk about the personality you want captured as well as delivery date, portrait dimensions and price. As a guide, none of the paintings shown on the sebsite cost more than 150 pounds.
-Once we''re agreed, pay a 50% deposit using the form below and we''ll start painting.
-We''ll email you a scanned photo of the completed painting for your approval before sending it by Royal Mail rolled in a strengthened cardboard tube together with an invoice for the balance.</p>
+        '<div class="homepage">
+            <img src="https://res.cloudinary.com/mrbapex/q_auto,f_auto,w_797/homepage_au7lmo">
+            <div class="text">
+                <p>This website is built using the <span>Always Free</span> services provided by Oracle and Cloudinary.
+                Users upload their images, videos and audio files to Cloudinary - metadata like url and dimensions are uploaded to Oracle, where users can edit text and arrange their media into articles for publication 
+                on this page.</p>
+                <p>User authentication is provided by Facebook and Google. The application and data is backed up (encrypted) every day to a Github repository and automatically restored to a second database that comes, also free, with the Oracle tenancy.</p>
+                <p>Why don''t I use Wordpress? I did, at first, but the constant invasion of advertisements was driving me mad, so I decided to develop what I suppose is a lightweight CMS and help friends and family build their own ad-free, zero cost websites.</p>
+                <p>The rest of this page is a collection of articles mostly about building fluid, responsive Apex applications avoiding CSS media queries, page items and pixels.</p>
             </div>
+         </div>
+         <div>
+         <h2>ARTICLES</h2>
+         <p>The first article isn''t actually built using this application. It''s a <a href="https://codepen.io/xsf3190/full/WNgddVz">codepen</a> describing Fluid Typography which drives the layout of this application. </p>
          </div>
         ');
 
