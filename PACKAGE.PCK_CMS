@@ -1,5 +1,4 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
-    procedure test;
     --
     datetime_format VARCHAR2(30):='dd Mon yyyy hh24:mi:ss';
     --
@@ -48,6 +47,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB);
     --
     PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2);
+    --
+    PROCEDURE manual_restore(pPassword IN VARCHAR2);
     --
     PROCEDURE publishArticle;
     --
@@ -114,10 +115,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END IF;
     END;
     
-    PROCEDURE test IS 
+    /*
+    ** Run restore process manually. Need to specify the last data pump export schema encryption password.
+    */
+    PROCEDURE manual_restore(pPassword IN VARCHAR2)  IS 
         l_restore_files varchar2(1000):='GRANT.OBJECT_GRANT:GRANT.SYSTEM_GRANT:EXPORT_SCHEMA.EXAMPLE.dmp:APEX_APPLICATION.100';
-        l_password varchar2(20):='0R:BkuAn;0525*Qi';
-        n pls_integer;
     BEGIN
         
         FOR C IN (SELECT github_token, github_repos_owner, github_repos, u.email, w.workspace_name 
@@ -136,7 +138,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     pEmail=>:B6,
                     pWorkspace=>:B7,
                     pSchema=>:B8); END;}' 
-                USING l_restore_files, C.github_token, C.github_repos_owner, C.github_repos, l_password, C.email, C.workspace_name, sys_context('userenv','current_schema');
+                USING l_restore_files, C.github_token, C.github_repos_owner, C.github_repos, pPassword, C.email, C.workspace_name, sys_context('userenv','current_schema');
         END LOOP;
 
         EXCEPTION
@@ -694,18 +696,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_clob:=TO_CLOB(
         '<div class="homepage">
-            <img src="https://res.cloudinary.com/mrbapex/q_auto,f_auto,w_797/homepage_au7lmo">
+            <img src="https://res.cloudinary.com/mrbapex/q_auto,f_auto,w_797/homepage_au7lmo" alt="Architecture of always free lightweight CMS application">
             <div class="text">
                 <p>This website is built using the <span>Always Free</span> services provided by Oracle and Cloudinary.
-                Users upload their images, videos and audio files to Cloudinary - metadata like url and dimensions are uploaded to Oracle, where users can edit text and arrange their media into articles for publication 
-                on this page.</p>
-                <p>User authentication is provided by Facebook and Google. The application and data is backed up (encrypted) every day to a Github repository and automatically restored to a second database that comes, also free, with the Oracle tenancy.</p>
-                <p>Why don''t I use Wordpress? I did, at first, but the constant invasion of advertisements was driving me mad, so I decided to develop what I suppose is a lightweight CMS and help friends and family build their own ad-free, zero cost websites.</p>
-                <p>The rest of this page is a collection of articles mostly about building fluid, responsive Apex applications avoiding CSS media queries, page items and pixels.</p>
+                Authenticated users upload their images, videos and audio files to Cloudinary. The relevant metadata is uploaded to Oracle, where users can edit text and arrange their media into articles for publication.</p>
+                <p>User authentication is through Facebook and Google; user content is REST enabled and accessible through OAUTH2. The application and data are backed up daily to a Github repository and automatically restored to a second Always Free database.</p>
+                <p>Why not use Wordpress for something so simple? I did try, but the constant invasion of advertisements was so frustrating that I thought to develop this lightweight CMS to help others build their own ad-free, zero cost websites.</p>
+                <p>Each user has their own private Cloudinary account while the Oracle database centrally manages all the asset metadata and articles. An Always Free Cloudinary account comfortably hosts about 10,000 regularly downloaded assets.</p>
+                <p>Of course, there are limits - the Always Free Oracle database effectively offers 14GB of storage - but </p>
             </div>
          </div>
          <div>
-         <h2>ARTICLES</h2>
+         <h2>PUBLISHED ARTICLES</h2>
          <p>The first article isn''t actually built using this application. It''s a <a href="https://codepen.io/xsf3190/full/WNgddVz">codepen</a> describing Fluid Typography which drives the layout of this application. </p>
          </div>
         ');
