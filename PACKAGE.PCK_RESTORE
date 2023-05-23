@@ -512,6 +512,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         
         EXECUTE IMMEDIATE 'CREATE USER ' || pSchema || ' QUOTA UNLIMITED ON DATA';
         
+        /*
+        **  Empty DATA_PUMP_DIR in vague hope it resolves intermittent error ORA-17676: Failed to mount '' with error:'Directory is not empty' when granting directory rights to new user
+        */
+        FOR C IN (SELECT object_name FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR')) LOOP
+            DBMS_CLOUD.DELETE_FILE(directory_name=>'DATA_PUMP_DIR',file_name=>C.object_name);
+        END LOOP;
+        
         l_github_files:=apex_string.split(pGithub_files,':');
         
         FOR i IN 1..l_github_files.COUNT 
