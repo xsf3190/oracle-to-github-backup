@@ -316,9 +316,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
     /*
     ** Restore schema export dump file
     */
-    PROCEDURE import_schema(pGithub_dumpfile IN VARCHAR2, pSchema IN VARCHAR2, pPassword IN VARCHAR2, pBlob IN OUT NOCOPY BLOB, pGithub_repos_owner IN VARCHAR2, pGithub_repos IN VARCHAR2) IS
+    PROCEDURE import_schema(pGithub_dumpfile IN VARCHAR2, pSchema IN VARCHAR2, pNewSchema IN VARCHAR2, pPassword IN VARCHAR2, pBlob IN OUT NOCOPY BLOB, pGithub_repos_owner IN VARCHAR2, pGithub_repos IN VARCHAR2) IS
         l_dump_filename VARCHAR2(40):=SUBSTR(pGithub_dumpfile,INSTR(pGithub_dumpfile,'.')+1);
-        l_log_filename VARCHAR2(40):=pSchema || '.log';
+        l_log_filename VARCHAR2(40):=COALESCE(pSchema,pNewSchema) || '.log';
         
         l_file_handle UTL_FILE.FILE_TYPE;
         l_amount PLS_INTEGER:=32767;
@@ -342,7 +342,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         l_db_name v$pdbs.name%type:=sys_context('userenv','db_name');
         l_db_name2 VARCHAR2(50):=SUBSTR(l_db_name,INSTR(l_db_name,'_')+1);
         l_message VARCHAR2(500);
-        this_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
+        
+        this_package CONSTANT varchar2(128) := utl_call_stack.subprogram(2)(1);
     BEGIN
         /*
         ** Copy contents of schema dump file to directory in order to run import
@@ -367,57 +368,68 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         END IF;
         
         h1 := dbms_datapump.open(operation => 'IMPORT', job_mode => 'SCHEMA', job_name => 'SCHEMA_IMPORT', version => 'LATEST');
-        dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || pSchema || ''')'); 
+        dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', value => 'IN(''' || pSchema || ''')'); 
         dbms_datapump.add_file(handle => h1, filename => l_dump_filename, directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_DUMP_FILE); 
         dbms_datapump.add_file(handle => h1, filename => l_log_filename, directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
+        
         IF (pPassword IS NOT NULL) THEN
-            dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => pPassword); 
+            dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', value => pPassword); 
         END IF;
-        dbms_datapump.set_parameter(handle => h1, name => 'LOGTIME', VALUE => 'ALL'); 
+        
+        IF (pNewSchema IS NOT NULL) THEN
+            dbms_datapump.metadata_remap(handle => h1, name => 'REMAP_SCHEMA', old_value  => pSchema, value => pNewSchema);
+        END IF;
+        
+        dbms_datapump.set_parameter(handle => h1, name => 'LOGTIME', value => 'ALL'); 
         dbms_datapump.start_job(handle => h1); 
         dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
         dbms_datapump.detach(handle => h1);
         log('Import job ended with status: ' || l_status);
 
         /*
-        ** Get existing details of any files previously copied to Github. We need the file name and SHA so that Github can maintain its history trail
+        ** Send log and code to GITHUB for first import only
         */
-        l_github := apex_web_service.make_rest_request(
-            p_url=>'https://api.github.com/repos/' || pGithub_repos_owner || '/' || pGithub_repos || '/contents/',
-            p_http_method=>'GET');
-            
-        /*
-        ** Send import log file to Github
-        */
-        l_blob.extend;
-        l_blob(1).name:='IMPORT_SCHEMA.' || l_log_filename; 
-        l_blob(1).content:=TO_BLOB(BFILENAME('DATA_PUMP_DIR',l_log_filename));
-        
-        l_blob.extend;
-        l_blob(2).name:='PACKAGE.' || this_package; 
-        l_clob:=LTRIM(LTRIM(dbms_metadata.get_ddl('PACKAGE',this_package),chr(13)||chr(10)));
-        l_blob(2).content:=apex_util.clob_to_blob(l_clob);
-        
-        FOR i IN 1..l_blob.COUNT LOOP
-            l_json:=JSON_OBJECT_T.parse('{"message":"Commit by ' || l_db_name2 || '"}');
-            FOR C IN (SELECT sha 
-                        FROM JSON_TABLE(l_github FORMAT JSON, '$[*]' COLUMNS (name, sha))
-                       WHERE name=l_blob(i).name) 
-            LOOP
-                l_json.put('sha',C.sha);
-            END LOOP;
-            l_content:=REPLACE(APEX_WEB_SERVICE.BLOB2CLOBBASE64(l_blob(i).content),chr(13)||chr(10));
-            l_json.put('content', l_content);
-
-            l_clob := apex_web_service.make_rest_request(
-                p_url=>'https://api.github.com/repos/' || pGithub_repos_owner || '/' || pGithub_repos || '/contents/' || l_blob(i).name,
-                p_http_method=>'PUT',
-                p_body=>l_json.to_clob);
+        IF (pNewSchema IS NULL) THEN
+            /*
+            ** Get existing details of any files previously copied to Github. We need the file name and SHA so that Github can maintain its history trail
+            */
+            l_github := apex_web_service.make_rest_request(
+                p_url=>'https://api.github.com/repos/' || pGithub_repos_owner || '/' || pGithub_repos || '/contents/',
+                p_http_method=>'GET');
                 
-            SELECT NVL(message,l_blob(i).name || ' - backup to Github - OK')
-              INTO l_message
-              FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS message VARCHAR2(500) PATH '$.message');
-        END LOOP;
+            /*
+            ** Send import log file to Github
+            */
+            l_blob.extend;
+            l_blob(1).name:='IMPORT_SCHEMA.' || l_log_filename; 
+            l_blob(1).content:=TO_BLOB(BFILENAME('DATA_PUMP_DIR',l_log_filename));
+            
+            l_blob.extend;
+            l_blob(2).name:='PACKAGE.' || this_package; 
+            l_clob:=LTRIM(LTRIM(dbms_metadata.get_ddl('PACKAGE',this_package),chr(13)||chr(10)));
+            l_blob(2).content:=apex_util.clob_to_blob(l_clob);
+            
+            FOR i IN 1..l_blob.COUNT LOOP
+                l_json:=JSON_OBJECT_T.parse('{"message":"Commit by ' || l_db_name2 || '"}');
+                FOR C IN (SELECT sha 
+                            FROM JSON_TABLE(l_github FORMAT JSON, '$[*]' COLUMNS (name, sha))
+                           WHERE name=l_blob(i).name) 
+                LOOP
+                    l_json.put('sha',C.sha);
+                END LOOP;
+                l_content:=REPLACE(APEX_WEB_SERVICE.BLOB2CLOBBASE64(l_blob(i).content),chr(13)||chr(10));
+                l_json.put('content', l_content);
+    
+                l_clob := apex_web_service.make_rest_request(
+                    p_url=>'https://api.github.com/repos/' || pGithub_repos_owner || '/' || pGithub_repos || '/contents/' || l_blob(i).name,
+                    p_http_method=>'PUT',
+                    p_body=>l_json.to_clob);
+                    
+                SELECT NVL(message,l_blob(i).name || ' - backup to Github - OK')
+                  INTO l_message
+                  FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS message VARCHAR2(500) PATH '$.message');
+            END LOOP;
+        END IF;
         
         EXCEPTION
             WHEN OTHERS THEN 
@@ -475,6 +487,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         l_workspace_id apex_workspaces.workspace_id%type;
         l_body_html LONG;
         
+        MAX_KEEP CONSTANT INTEGER:=5;
+        
         PROCEDURE sendmail(pSubject IN VARCHAR2) IS
         BEGIN
             apex_util.set_security_group_id(p_security_group_id => l_workspace_id);    
@@ -513,6 +527,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         EXECUTE IMMEDIATE 'CREATE USER ' || pSchema || ' QUOTA UNLIMITED ON DATA';
         
         /*
+        ** Keep MAX_KEEP schemas named pSchema || '_' || TO_CHAR(sysdate,'YYMMDD')
+        */
+        FOR C IN (SELECT username FROM (SELECT username, ROW_NUMBER() OVER (ORDER BY username DESC) rn FROM dba_users WHERE REGEXP_LIKE(username,'^EXAMPLE_(\d{6})$') ) WHERE rn>MAX_KEEP ) LOOP
+            EXECUTE IMMEDIATE 'DROP USER ' || C.username || ' CASCADE';
+        END LOOP;
+        
+        /*
         **  Empty DATA_PUMP_DIR in vague hope it resolves intermittent error ORA-17676: Failed to mount '' with error:'Directory is not empty' when granting directory rights to new user
         */
         FOR C IN (SELECT object_name FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR')) LOOP
@@ -546,7 +567,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
             **  Process each downloaded file
             */
             IF (l_github_files(i) LIKE 'EXPORT_SCHEMA.%') THEN
-                import_schema(l_github_files(i), pSchema, pPassword, l_blob, pGithub_repos_owner, pGithub_repos);
+                import_schema(pGithub_dumpfile=>l_github_files(i), pSchema=>pSchema, pNewSchema=>NULL, pPassword=>pPassword, pBlob=>l_blob, pGithub_repos_owner=>pGithub_repos_owner, pGithub_repos=>pGithub_repos);
+                import_schema(pGithub_dumpfile=>l_github_files(i), pSchema=>pSchema, pNewSchema=>pSchema || '_' || TO_CHAR(sysdate,'YYMMDD'), pPassword=>pPassword, pBlob=>l_blob, pGithub_repos_owner=>pGithub_repos_owner, pGithub_repos=>pGithub_repos);
             ELSIF (l_github_files(i) LIKE 'APEX_APPLICATION.%') THEN
                 import_apex(l_github_files(i), pWorkspace, l_blob);  
             ELSIF (l_github_files(i) LIKE 'GRANT.%') THEN
