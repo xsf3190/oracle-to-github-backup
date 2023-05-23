@@ -384,6 +384,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         END IF;
         
         IF (pNewSchema IS NOT NULL) THEN
+            dbms_datapump.metadata_transform(handle => h1, name => 'OID', value  => 0);
             dbms_datapump.metadata_remap(handle => h1, name => 'REMAP_SCHEMA', old_value  => pSchema, value => pNewSchema);
         END IF;
         
@@ -547,10 +548,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         /*
         ** Keep MAX_KEEP schemas named pSchema || '_' || TO_CHAR(sysdate,'YYMMDD')
         */
-        FOR C IN (SELECT username FROM (SELECT username, ROW_NUMBER() OVER (ORDER BY username DESC) rn FROM dba_users WHERE REGEXP_LIKE(username,'^' || pSchema || '_(\d{6})$') ) WHERE rn>MAX_KEEP ) LOOP
+        FOR C IN (SELECT username FROM 
+                    (
+                        SELECT username, ROW_NUMBER() OVER (ORDER BY username DESC) rn FROM dba_users WHERE REGEXP_LIKE(username,'^' || pSchema || '_(\d{6})$') 
+                    ) 
+                    WHERE rn>MAX_KEEP 
+                    UNION 
+                    SELECT username FROM dba_users WHERE username IN (pSchema,l_new_schema)
+                ) 
+        LOOP
             exec_ddl('DROP USER ' || C.username || ' CASCADE');
         END LOOP;
-        exec_ddl('DROP USER ' || pSchema || ' CASCADE');
         
         /*
         **  Create new schemas with no authentication.
