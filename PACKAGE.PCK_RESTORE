@@ -342,29 +342,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         l_db_name v$pdbs.name%type:=sys_context('userenv','db_name');
         l_db_name2 VARCHAR2(50):=SUBSTR(l_db_name,INSTR(l_db_name,'_')+1);
         l_message VARCHAR2(500);
+        l_log_blob BLOB;
+        l_log_clob CLOB;
         
         this_package CONSTANT varchar2(128) := utl_call_stack.subprogram(2)(1);
     BEGIN
         /*
         ** Copy contents of schema dump file to directory in order to run import
         */
-        l_file_handle := UTL_FILE.FOPEN('DATA_PUMP_DIR', l_dump_filename, 'wb', 1024);
-        WHILE l_offset < dbms_lob.getlength(pBlob)
-        LOOP
-            DBMS_LOB.READ(pBlob, l_amount, l_offset, l_binary_buffer);
-            UTL_FILE.PUT_RAW(l_file_handle,l_binary_buffer);
-            l_offset := l_offset + l_amount;
-        END LOOP;
-        UTL_FILE.FFLUSH(l_file_handle);
-        UTL_FILE.FCLOSE(l_file_handle);
-        
-        /*
-        ** Check that downloaded file is a data pump dumpfile and is encrypted if password was specified
-        */
-        l_encrypted:=getDumpFileInfo(l_dump_filename);
-        
-        IF (l_encrypted AND pPassword IS NULL) THEN
-            RAISE_APPLICATION_ERROR(-20001,pGithub_dumpfile || ' is an encrypted dump file. The password must be supplied.');
+        IF (pNewSchema IS NULL) THEN
+            log('Starting import of schema '||pSchema);
+            l_log_filename:=pSchema || '.log';
+            l_file_handle := UTL_FILE.FOPEN('DATA_PUMP_DIR', l_dump_filename, 'wb', 1024);
+            WHILE l_offset < dbms_lob.getlength(pBlob)
+            LOOP
+                DBMS_LOB.READ(pBlob, l_amount, l_offset, l_binary_buffer);
+                UTL_FILE.PUT_RAW(l_file_handle,l_binary_buffer);
+                l_offset := l_offset + l_amount;
+            END LOOP;
+            UTL_FILE.FFLUSH(l_file_handle);
+            UTL_FILE.FCLOSE(l_file_handle);
+            /*
+            ** Check that downloaded file is a data pump dumpfile and is encrypted if password was specified
+            */
+            l_encrypted:=getDumpFileInfo(l_dump_filename);
+            IF (l_encrypted AND pPassword IS NULL) THEN
+                RAISE_APPLICATION_ERROR(-20001,pGithub_dumpfile || ' is an encrypted dump file. The password must be supplied.');
+            END IF;
+        ELSE
+            log('Starting import of schema '||pSchema || ' into ' || pNewSchema);
+            l_log_filename:=pNewSchema || '.log';
         END IF;
         
         h1 := dbms_datapump.open(operation => 'IMPORT', job_mode => 'SCHEMA', job_name => 'SCHEMA_IMPORT', version => 'LATEST');
@@ -385,6 +392,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
         dbms_datapump.detach(handle => h1);
         log('Import job ended with status: ' || l_status);
+        
+        /*
+        ** Copy generated dump log file into the LOG table
+        */
+        l_log_blob:=TO_BLOB(BFILENAME('DATA_PUMP_DIR',l_log_filename));
+        l_log_clob:=apex_util.blob_to_clob(l_log_blob);
+        log(l_log_clob);
 
         /*
         ** Send log and code to GITHUB for first import only
@@ -439,6 +453,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
     END;
     
     /*
+    ** Generic procedure to EXECUTE IMMEDIATE
+    */
+    PROCEDURE exec_ddl(pCommand IN VARCHAR2) IS
+    BEGIN
+        EXECUTE IMMEDIATE pCommand;
+        log(pCommand  || ' - OK');
+        EXCEPTION
+            WHEN OTHERS THEN 
+                log(pCommand  || ' - FAIL');
+                RAISE;
+    END;
+    
+    /*
     ** Execute GRANT commands
     */
     PROCEDURE exec_grants(pBlob IN OUT NOCOPY BLOB) IS
@@ -452,8 +479,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         FOR i IN 1..l_grants.COUNT LOOP
             l_grant:=REPLACE(l_grants(i),chr(10)||chr(32)||chr(32));
             IF (l_grant IS NOT NULL) THEN
-                log('About to ' || l_grant);
-                EXECUTE IMMEDIATE l_grant;
+                exec_ddl(l_grant);
             END IF;
         END LOOP;
         
@@ -487,6 +513,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         l_workspace_id apex_workspaces.workspace_id%type;
         l_body_html LONG;
         
+        l_new_schema dba_users.username%type:=pSchema || '_' || TO_CHAR(sysdate,'YYMMDD');
+        
         MAX_KEEP CONSTANT INTEGER:=5;
         
         PROCEDURE sendmail(pSubject IN VARCHAR2) IS
@@ -517,21 +545,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         SELECT workspace_id INTO l_workspace_id FROM apex_workspaces WHERE workspace=pWorkspace;
         
         /*
-        **  Drop and Create schema with no authentication.
-        */
-        BEGIN
-            EXECUTE IMMEDIATE 'DROP USER ' || pSchema || ' CASCADE';
-            EXCEPTION WHEN e_user_not_exists THEN NULL;
-        END;
-        
-        EXECUTE IMMEDIATE 'CREATE USER ' || pSchema || ' QUOTA UNLIMITED ON DATA';
-        
-        /*
         ** Keep MAX_KEEP schemas named pSchema || '_' || TO_CHAR(sysdate,'YYMMDD')
         */
-        FOR C IN (SELECT username FROM (SELECT username, ROW_NUMBER() OVER (ORDER BY username DESC) rn FROM dba_users WHERE REGEXP_LIKE(username,'^EXAMPLE_(\d{6})$') ) WHERE rn>MAX_KEEP ) LOOP
-            EXECUTE IMMEDIATE 'DROP USER ' || C.username || ' CASCADE';
+        FOR C IN (SELECT username FROM (SELECT username, ROW_NUMBER() OVER (ORDER BY username DESC) rn FROM dba_users WHERE REGEXP_LIKE(username,'^' || pSchema || '_(\d{6})$') ) WHERE rn>MAX_KEEP ) LOOP
+            exec_ddl('DROP USER ' || C.username || ' CASCADE');
         END LOOP;
+        exec_ddl('DROP USER ' || pSchema || ' CASCADE');
+        
+        /*
+        **  Create new schemas with no authentication.
+        */
+        exec_ddl('CREATE USER ' || pSchema || ' QUOTA UNLIMITED ON DATA');
+        exec_ddl('CREATE USER ' || l_new_schema || ' QUOTA UNLIMITED ON DATA');
         
         /*
         **  Empty DATA_PUMP_DIR in vague hope it resolves intermittent error ORA-17676: Failed to mount '' with error:'Directory is not empty' when granting directory rights to new user
@@ -568,7 +593,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
             */
             IF (l_github_files(i) LIKE 'EXPORT_SCHEMA.%') THEN
                 import_schema(pGithub_dumpfile=>l_github_files(i), pSchema=>pSchema, pNewSchema=>NULL, pPassword=>pPassword, pBlob=>l_blob, pGithub_repos_owner=>pGithub_repos_owner, pGithub_repos=>pGithub_repos);
-                import_schema(pGithub_dumpfile=>l_github_files(i), pSchema=>pSchema, pNewSchema=>pSchema || '_' || TO_CHAR(sysdate,'YYMMDD'), pPassword=>pPassword, pBlob=>l_blob, pGithub_repos_owner=>pGithub_repos_owner, pGithub_repos=>pGithub_repos);
+                import_schema(pGithub_dumpfile=>l_github_files(i), pSchema=>pSchema, pNewSchema=>l_new_schema, pPassword=>pPassword, pBlob=>l_blob, pGithub_repos_owner=>pGithub_repos_owner, pGithub_repos=>pGithub_repos);
             ELSIF (l_github_files(i) LIKE 'APEX_APPLICATION.%') THEN
                 import_apex(l_github_files(i), pWorkspace, l_blob);  
             ELSIF (l_github_files(i) LIKE 'GRANT.%') THEN
