@@ -696,14 +696,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_clob:=TO_CLOB(
         '<div class="homepage">
-            <img src="https://res.cloudinary.com/mrbapex/q_auto,f_auto,w_797/homepage_au7lmo" alt="Architecture of always free lightweight CMS application">
+            <div class="image-container">
+                <img src="https://res.cloudinary.com/mrbapex/q_auto,f_auto,w_491/homepage_roc9wg" alt="Architecture of always free lightweight CMS application">
+            </div>
             <div class="text">
-                <p>This website is built using the <span>Always Free</span> services provided by Oracle and Cloudinary.
-                Authenticated users upload their images, videos and audio files to Cloudinary. The relevant metadata is uploaded to Oracle, where users can edit text and arrange their media into articles for publication.</p>
-                <p>User authentication is through Facebook and Google; user content is REST enabled and accessible through OAUTH2. The application and data are backed up daily to a Github repository and automatically restored to a second Always Free database.</p>
-                <p>Why not use Wordpress for something so simple? I did try, but the constant invasion of advertisements was so frustrating that I thought to develop this lightweight CMS to help others build their own ad-free, zero cost websites.</p>
-                <p>Each user has their own private Cloudinary account while the Oracle database centrally manages all the asset metadata and articles. An Always Free Cloudinary account comfortably hosts about 10,000 regularly downloaded assets.</p>
-                <p>Of course, there are limits - the Always Free Oracle database effectively offers 14GB of storage - but </p>
+                <p>This is a lightweight Content Management System (CMS) built using <span>Always Free</span> services provided by Oracle and Cloudinary.
+                Once authenticated through their Facebook or Google accounts, users can upload media to their Cloudinary account and create content for publication either on this page or their own websites using the secure REST APIs.</p>
+                <p>All data is backed up daily to a Github repository and automatically restored to a recovery database that keeps the last 30 days of content.</p>
+                <p>Wordpress and others offer similar free services but you have to accept the intrusive advertisements which pay for those services; when the ads start obscuring the content, it''s time to pay or go elsewhere.</p>
+                <p>Oracle and Cloudinary always free services are both ad-free and extremely generous. The Oracle database offers 20GB storage - enough to comfortably store 1 million media assets plus &frac14; million 1000-word articles.</p>
+                <p>Users will typically upload their media to 
+                their own private Cloudinary account, which is similarly generous. Cloudinary has specialized mechanisms for delivering optimal quality media at lowest bandwidth cost through its fast CDN network. Media download performance 
+                is captured automatically by the application and uploaded to the database, enabling detailed analysis of media download metrics.</p>
+                <p></p>
             </div>
          </div>
          <div>
