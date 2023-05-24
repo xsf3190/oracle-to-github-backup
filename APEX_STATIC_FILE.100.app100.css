@@ -181,11 +181,17 @@ button {
 
 .homepage {
     display: grid;
-    grid-template-columns: repeat(auto-fit,minmax(25rem,1fr));
+    grid-template-columns: repeat(auto-fit,minmax(20rem,1fr));
     gap: 1rem;
     font-family: Georgia, sans-serif;
     font-size: var(--step-0);
     line-height: 1.4;
+}
+
+.homepage .image-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .homepage p:first-child::first-letter {
