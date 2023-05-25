@@ -130,6 +130,8 @@ dialog {
     border: none !important;
     border-radius: 0.7em;
     box-shadow: 0 0 #0000, 0 0 #0000, 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    inline-size: 50vw;
+    font-size: var(--step-0);
 }
 
 dialog > div {
@@ -141,16 +143,18 @@ dialog > div {
 dialog.popup {
     color: var(--color-secondary);
     text-align: center;
-    inline-size: 25ch;
 }
 
 dialog.preview {
     color: currentColor;
-    inline-size: 75ch;
+    inline-size: 75vw;
 }
 
 dialog h2 {
     line-height: 1.2;
+  text-decoration: slateblue solid underline;
+  text-underline-position: under;
+}
 }
 
 dialog p {
@@ -181,7 +185,7 @@ button {
 
 .homepage {
     display: grid;
-    grid-template-columns: repeat(auto-fit,minmax(20rem,1fr));
+    grid-template-columns: repeat(auto-fit,minmax(min(100%,21rem),1fr));
     gap: 1rem;
     font-family: Georgia, sans-serif;
     font-size: var(--step-0);
@@ -191,11 +195,11 @@ button {
 .homepage .image-container {
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
 }
 
 .homepage p:first-child::first-letter {
-    initial-letter: 3;
+    initial-letter: 2;
 }
 
 .homepage span:first-child{
@@ -204,6 +208,14 @@ button {
 
 .homepage .text > * + * {
     margin-top: var(--space-m);
+}
+
+.homepage + h2 {
+    font-size: var(--step-4);
+    line-height: 5;
+    text-align: center;
+    text-decoration: slateblue solid underline;
+    text-underline-position: under;
 }
 
 #main nav button:hover {
@@ -220,18 +232,6 @@ nav button {
   display: flex;
   justify-content: space-between;
 }
-
-/*
-[region-id="main"] {
-    font-size: var(--step-0);
-}
-
-[region-id="main"] h2, [region-id="main"] p {
-  margin-block-start: 0;
-  margin-block-end: 0;
-  font-size: var(--step-0);
-}
-*/
 
 .cards {
   display: grid;
