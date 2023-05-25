@@ -11,6 +11,7 @@ const popup = document.querySelector("dialog.popup"),
       previewClose = preview.querySelector("button.close");
 
 const checkPerformance = () => {
+    console.log("starting checkPerformance");
     if (performance === undefined) {
         console.log("Performance API NOT supported");
         return false;
@@ -39,7 +40,8 @@ window.addEventListener("DOMContentLoaded", (event) => {
     /*
     **  Set click event handler on containing elements of cards and gallery
     */
-    cards = document.querySelector("[region-id='main'] .cards");
+    //cards = document.querySelector("[region-id='main'] .cards");
+    cards = document.querySelector(".cards");
     gallery = document.querySelector("#gallery .gallery");
     confirm = document.querySelector("dialog.confirm");
     
@@ -251,19 +253,21 @@ const makeSuccess = (el) => {
  ** ADD NEW CARD
  */
 const add_card = document.querySelector(".add-card");
-add_card.addEventListener('click',  e => {
-    // check that there isn't already a new card - i.e. the 2nd card with data-id="0" meaning that no content has yet been added to it
-    if (document.querySelector(".cards").children[1].dataset.id === "0") {
-        popupOpen("Forgive the mild reproof...","You already added a new card - add content to that one before adding another");
-    } else {
-        let first_card = document.querySelector(".card:first-child");
-        let clone = first_card.cloneNode(true);
-        first_card.style.display = "grid";
-        first_card.insertAdjacentElement('beforebegin',clone);
-        first_card.dataset.id = "0";
-        first_card.querySelector(".fa-id-card").textContent = "0";
-    }
-});
+if (add_card) {
+    add_card.addEventListener('click',  e => {
+        // check that there isn't already a new card - i.e. the 2nd card with data-id="0" meaning that no content has yet been added to it
+        if (document.querySelector(".cards").children[1].dataset.id === "0") {
+            popupOpen("Forgive the mild reproof...","You already added a new card - add content to that one before adding another");
+        } else {
+            let first_card = document.querySelector(".card:first-child");
+            let clone = first_card.cloneNode(true);
+            first_card.style.display = "grid";
+            first_card.insertAdjacentElement('beforebegin',clone);
+            first_card.dataset.id = "0";
+            first_card.querySelector(".fa-id-card").textContent = "0";
+        }
+    });
+}
 
 /* 
  ** COPY CARD
@@ -698,8 +702,10 @@ const getData = (media) => {
             button.dataset.url = media.src.replace(/,w_\d+/,  ",w_" + widths[index]);
         }
     });
-    lightbox_confirm_delete.style.visibility = "hidden";
-    lightbox_deleted_ok.style.visibility = "hidden";
+    if (lightbox_confirm_delete) {
+        lightbox_confirm_delete.style.visibility = "hidden";
+        lightbox_deleted_ok.style.visibility = "hidden";
+    }
 };
 
 /*
@@ -915,70 +921,78 @@ lightbox.querySelectorAll("textarea").forEach((input) => {
 /*
  **  Create click event handler for the "UPDATE" button
  */
-lightbox_update.addEventListener("click", (e) => {
-    execProcess( "updateAsset", {x01: selectedElement.parentElement.dataset.id, x02: lightbox_alt_text.value, x03: lightbox_description.value}).then( (data) => {
-        if (selectedElement.alt !== lightbox_alt_text.value) {
-            makeSuccess(lightbox_alt_text);
-            selectedElement.alt = lightbox_alt_text.value;
-        }
-        if (selectedElement.dataset.description !== lightbox_description.value) {
-            makeSuccess(lightbox_description);
-            selectedElement.dataset.description = lightbox_description.value;           
-        }
+if (lightbox_update) {
+    lightbox_update.addEventListener("click", (e) => {
+        execProcess( "updateAsset", {x01: selectedElement.parentElement.dataset.id, x02: lightbox_alt_text.value, x03: lightbox_description.value}).then( (data) => {
+            if (selectedElement.alt !== lightbox_alt_text.value) {
+                makeSuccess(lightbox_alt_text);
+                selectedElement.alt = lightbox_alt_text.value;
+            }
+            if (selectedElement.dataset.description !== lightbox_description.value) {
+                makeSuccess(lightbox_description);
+                selectedElement.dataset.description = lightbox_description.value;           
+            }
+        });
     });
-});
+}
 
 /*
  **  Create click event handler for the "DELETE" button
  **  - set currently displayed media to blur
  */
-lightbox_delete.addEventListener("click", (e) => {
-    lightbox_confirm_delete.style.visibility = "visible";
-});
+if (lightbox_delete) {
+    lightbox_delete.addEventListener("click", (e) => {
+        lightbox_confirm_delete.style.visibility = "visible";
+    });
+}
 
-lightbox_confirm_ok.addEventListener("click", (e) => {
-    if (lightbox_figure.classList.contains("deleted")) {
-        return;
-    }
-    execProcess( "deleteAsset", {x01: selectedElement.parentElement.dataset.id}).then( (data) => {
-        selectedElement.removeEventListener("click",showLightbox);
-        lightbox_figure.classList.add("deleted");
-        selectedElement.parentElement.classList.add("deleted");
-        lightbox_confirm_delete.style.visibility = "hidden";
-        lightbox_deleted_ok.style.visibility = "visible";
+if (lightbox_confirm_ok) {
+    lightbox_confirm_ok.addEventListener("click", (e) => {
+        if (lightbox_figure.classList.contains("deleted")) {
+            return;
+        }
+        execProcess( "deleteAsset", {x01: selectedElement.parentElement.dataset.id}).then( (data) => {
+            selectedElement.removeEventListener("click",showLightbox);
+            lightbox_figure.classList.add("deleted");
+            selectedElement.parentElement.classList.add("deleted");
+            lightbox_confirm_delete.style.visibility = "hidden";
+            lightbox_deleted_ok.style.visibility = "visible";
 
-        let title=document.querySelector("#ui-id-3"),
-            nb = Number(title.textContent.split("/").pop()) - 1;
-        
-        title.textContent = "x/" + nb;
-        
-        lightbox_form.querySelectorAll("button").forEach((btn) => {
-            btn.disabled = true;
-        });
-
-        /* update card gallery count */
-        let card = cards.querySelector("[data-id='" + gArticleId + "']");
-
-        if (nb === 0) {
-            lightbox_nav.querySelectorAll("button").forEach((btn) => {
+            let title=document.querySelector("#ui-id-3"),
+                nb = Number(title.textContent.split("/").pop()) - 1;
+            
+            title.textContent = "x/" + nb;
+            
+            lightbox_form.querySelectorAll("button").forEach((btn) => {
                 btn.disabled = true;
             });
-            let img = card.querySelector("img");
-            let nomedia = document.createElement("button");
-            nomedia.textContent = "UPLOAD MEDIA";
-            nomedia.classList.add("no-media","upload-media");
-            img.replaceWith(nomedia);
-            card.querySelector(".show-gallery").disabled = true;
-            card.querySelector(".show-gallery").textContent = "0/0"
-        } else {
-            card.querySelector(".show-gallery").textContent = "1/" + nb;
-        }
-    });
-});
 
-lightbox_confirm_nok.addEventListener("click", (e) => {
-    lightbox_confirm_delete.style.visibility = "hidden";
-});
+            /* update card gallery count */
+            let card = cards.querySelector("[data-id='" + gArticleId + "']");
+
+            if (nb === 0) {
+                lightbox_nav.querySelectorAll("button").forEach((btn) => {
+                    btn.disabled = true;
+                });
+                let img = card.querySelector("img");
+                let nomedia = document.createElement("button");
+                nomedia.textContent = "UPLOAD MEDIA";
+                nomedia.classList.add("no-media","upload-media");
+                img.replaceWith(nomedia);
+                card.querySelector(".show-gallery").disabled = true;
+                card.querySelector(".show-gallery").textContent = "0/0"
+            } else {
+                card.querySelector(".show-gallery").textContent = "1/" + nb;
+            }
+        });
+    });
+}
+
+if (lightbox_confirm_nok) {
+    lightbox_confirm_nok.addEventListener("click", (e) => {
+        lightbox_confirm_delete.style.visibility = "hidden";
+    });
+}
 
 lightbox.addEventListener("touchstart", (e) => {
   lightbox_touchstartX = e.changedTouches[0].screenX;
