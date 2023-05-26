@@ -381,7 +381,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     IS
         l_timezone users.client_tz%type:=NVL(pTimeZone, apex_util.get_session_state('APP_CLIENT_TZ'));
     BEGIN
-        RETURN ( TO_CHAR(pTimestamp AT TIME ZONE l_timezone, datetime_format) );
+        IF (apex_authentication.is_authenticated) THEN
+            RETURN ( TO_CHAR(pTimestamp AT TIME ZONE l_timezone, datetime_format) );
+        ELSE
+            RETURN ( TO_CHAR(pTimestamp, 'dd Mon yyyy'));
+        END IF;
     END;
     
     FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER) RETURN VARCHAR2 IS
@@ -585,7 +589,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_app_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
         l_app_user_name users.email%type:=apex_util.get_session_state('APP_USER_NAME');
     BEGIN
-        IF (l_app_user_id IS NOT NULL) THEN
+        IF (apex_authentication.is_authenticated) THEN
             l_clob:=TO_CLOB(
             '<nav>
                 <button type="button" class="add-card">NEW CONTENT</button>
@@ -636,7 +640,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 '<li class="card" tabindex="0" data-id="' || C.id || '">
                     <div class="button-container">
                         <button type="button" class="fa fa-play show-gallery"' || CASE WHEN C.first_asset=0 THEN ' disabled' END || '>' || C.first_asset || '/' || C.nb_assets || '</button>' ||
-                        CASE WHEN l_app_user_id IS NOT NULL THEN
+                        CASE WHEN apex_authentication.is_authenticated THEN
                         '<div class="dropdown">
                           <button type="button" class="fa fa-caret-down"></button>
                           <ul class="dropdown-items">
@@ -662,7 +666,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     CASE WHEN COALESCE(C.title,C.excerpt) IS NULL 
                         THEN '<br>
                               <button type="button" class="no-media edit-text">CREATE TEXT</button>'
-                        ELSE '<h4 class="title edit-text">' || C.title || '</h4>
+                        ELSE '<h4 class="title ' || CASE WHEN apex_authentication.is_authenticated THEN 'edit-text' ELSE 'preview' END || '">' || C.title || '</h4>
                               <p class="excerpt">' || C.excerpt || '<span class="word-count">' || C.word_count || '</span></p>'
                     END || '   
                     <footer>' || C.name || ', <span class="updated-date">' || fmtUpdatedDate(C.updated_date)  || '</span></footer>
@@ -680,8 +684,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             </dialog>
             <dialog class="preview">
                 <div>
-                    <button type="button" class="close">&times;</button>
+                    <div></div> <!-- empty div for preview grid -->
                     <div class="content ck-content"></div>
+                    <button type="button" class="close">&times;</button>
                 </div>
             </dialog>            
             ');
@@ -959,7 +964,14 @@ PROCEDURE getThumbnails IS
     PROCEDURE getPerformance(pDbid IN ROWID) IS
         l_dbid ROWID:=apex_application.g_x01;
         l_content CLOB;
+        l_ip_address performance.ip_address%type;
     BEGIN
+        IF (apex_authentication.is_authenticated) THEN
+            l_ip_address:=NULL;
+        ELSE
+            l_ip_address:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
+        END IF;
+        
         /* 1 list item per performance row in descending order capture_date */
         l_content:=to_clob('<ol>');
         FOR C IN (SELECT p.capture_date, url, transfersize, duration, window_innerwidth, servertiming
@@ -968,6 +980,7 @@ PROCEDURE getThumbnails IS
                      AND a.cld_cloud_name=p.cld_cloud_name
                      AND a.resource_type=p.resource_type
                      AND a.public_id=p.public_id
+                     AND p.ip_address = NVL(l_ip_address, p.ip_address)
                     ORDER BY p.capture_date DESC )
         LOOP
             l_content:=l_content || to_clob(
