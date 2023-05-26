@@ -130,11 +130,10 @@ dialog {
     border: none !important;
     border-radius: 0.7em;
     box-shadow: 0 0 #0000, 0 0 #0000, 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    inline-size: 50vw;
     font-size: var(--step-0);
 }
 
-dialog > div {
+dialog.popup > div {
     display: grid;
     gap: 2em;
     place-items: center;
@@ -143,18 +142,23 @@ dialog > div {
 dialog.popup {
     color: var(--color-secondary);
     text-align: center;
+    inline-size: 50vw;
 }
 
 dialog.preview {
     color: currentColor;
-    inline-size: 75vw;
+    inline-size: 100vw;
+}
+
+dialog.preview > div {
+  display: grid;
+  grid-template-columns: minmax(1rem, 1fr) minmax(auto, 60ch) minmax(1rem, 1fr);
 }
 
 dialog h2 {
     line-height: 1.2;
-  text-decoration: slateblue solid underline;
-  text-underline-position: under;
-}
+    text-decoration: slateblue solid underline;
+    text-underline-position: under;
 }
 
 dialog p {
@@ -390,11 +394,15 @@ nav button {
 .ck-content code {
     font-size: var(--step--1);
     line-height: 1.4;
+    
 }
 
 .ck-content pre code {
     font-size: 115%;
-    white-space: pre-wrap;
+    /*white-space: pre-wrap;*/
+    overflow-x: auto;
+    display: block;
+    padding-bottom: var(--space-s);
 }
 
 button.save-and-exit {
