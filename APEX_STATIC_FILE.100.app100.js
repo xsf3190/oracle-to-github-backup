@@ -83,6 +83,10 @@ window.addEventListener("DOMContentLoaded", (event) => {
         const observer = new PerformanceObserver(perfObserver);
         observer.observe({ type: "resource", buffered: true });
     }
+    
+    execProcess( "setClientTZ", {x01: Intl.DateTimeFormat().resolvedOptions().timeZone}).then( () => {
+        console.log("Client Time Zone set for APP_PAGE_ID",apex.env.APP_PAGE_ID);
+    });
 });
 
 const perfObserver = (list) => {
