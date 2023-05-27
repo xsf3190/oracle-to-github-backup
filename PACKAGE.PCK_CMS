@@ -38,7 +38,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     FUNCTION getLightbox RETURN CLOB;
     --
-    PROCEDURE getPerformance(pDbid IN ROWID DEFAULT NULL);
+    PROCEDURE getPerformance;
+    --
+    --PROCEDURE getPerformance(pDbid IN ROWID DEFAULT NULL);
     --
     PROCEDURE getThumbnails;
     --
@@ -749,6 +751,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 <button type="button" class="thumbs-minus fa fa-minus"></button>
                 <button type="button" class="thumbs-plus fa fa-plus"></button>
             </div>
+            <button type="button" class="list-performance">PERFORMANCE</button>
         </nav>
         <div class="gallery-container" role="region" aria-label="gallery" tabindex="0">
             <ul class="gallery">
@@ -948,20 +951,79 @@ PROCEDURE getThumbnails IS
           GROUP BY cld_cloud_name, resource_type, public_id, url, transfersize, duration, window_innerwidth, epoch, l_user_id
         LOG ERRORS INTO ERR$_PERFORMANCE;
         
-        IF (l_dbid IS NOT NULL) THEN
-            getPerformance(l_dbid);
-        ELSE
-            APEX_JSON.open_object; 
-            APEX_JSON.write('success', TRUE);
-            APEX_JSON.close_object; 
-        END IF;
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.close_object; 
         
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-    END;   
+    END;
     
-    PROCEDURE getPerformance(pDbid IN ROWID) IS
+    /*
+    ** Write HTML table of media download performance for the article
+    */
+    PROCEDURE getPerformance IS
+        l_article_id asset.article_id%type:=apex_application.g_x01;
+        l_content CLOB;
+        l_ip_address performance.ip_address%type;
+    BEGIN
+        IF (apex_authentication.is_authenticated) THEN
+            l_ip_address:=NULL;
+        ELSE
+            l_ip_address:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
+        END IF;
+        
+        /* 1 list item per performance row in descending order capture_date */
+        l_content:=to_clob(
+            '<table>
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>IP ADDRESS</th>
+                        <th>TIME</th>
+                        <th>URL</th>
+                        <th>TRANSFER SIZE</th>
+                        <th>DURATION (ms)</th>
+                        <th>SERVER TIMING</th>
+                    </tr>
+                </thead>
+                <tbody>
+            ');
+        FOR C IN (SELECT  COUNT(*) OVER (PARTITION BY a.cld_cloud_name, a.resource_type, a.public_id) nb_rows, 
+                          ROW_NUMBER() OVER (PARTITION BY a.display_order,a.cld_cloud_name, a.resource_type, a.public_id ORDER BY p.capture_date DESC) rn, 
+                          a.cld_cloud_name, a.resource_type, a.public_id, a.format, a.width, p.capture_date, p.url, p.transfersize, p.duration, p.window_innerwidth, p.ip_address, p.servertiming
+                    FROM asset a, performance p
+                   WHERE a.article_id=9879
+                     AND a.cld_cloud_name=p.cld_cloud_name
+                     AND a.resource_type=p.resource_type
+                     AND a.public_id=p.public_id
+                     AND p.ip_address = NVL(l_ip_address, p.ip_address) )
+        LOOP
+            l_content:=l_content || to_clob(
+                '<tr>
+                    <td' || CASE WHEN C.rn=1 THEN ' rowspan="' || C.nb_rows || '"><img src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '"> ' END || '</td>
+                    <td>' || fmtUpdatedDate(C.capture_date) || '</td>
+                    <td>' || C.url || '</td>
+                    <td>' || apex_string_util.to_display_filesize(C.transfersize) ||'</td>
+                    <td>' || C.duration ||'</td>
+                    <td>' || C.servertiming || '</td>
+                </tr>');
+        END LOOP;
+        
+        l_content:=l_content || to_clob('</tbody></table>');
+        
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.write('content', l_content);
+        APEX_JSON.close_object;          
+        
+        EXCEPTION
+            WHEN OTHERS THEN
+                log_error(sqlcode,sqlerrm,pAjax=>TRUE);        
+    END;    
+    
+    PROCEDURE getPerformancex(pDbid IN ROWID) IS
         l_dbid ROWID:=apex_application.g_x01;
         l_content CLOB;
         l_ip_address performance.ip_address%type;
