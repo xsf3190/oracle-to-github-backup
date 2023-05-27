@@ -3,4 +3,5 @@ CREATE TABLE "USER_LOGIN"
 	"EMAIL" VARCHAR2(100), 
 	"NAME" VARCHAR2(200), 
 	"LOGIN_DATE" TIMESTAMP (6) WITH TIME ZONE DEFAULT current_timestamp
-   ) ;COMMENT ON TABLE "USER_LOGIN"  IS 'Registers each log in through Social Sign-in (Facebook, Google).';
+   ) ;
+COMMENT ON TABLE "USER_LOGIN"  IS 'Registers each log in through Social Sign-in (Facebook, Google).';
