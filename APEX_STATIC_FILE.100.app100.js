@@ -566,6 +566,17 @@ const setGalleryWidth = (sizing,thumbs_minus,thumbs_plus) => {
     thumbs_plus.disabled = width === max_gallery_width ? true : false;
 };
 
+/*
+ **  LIST PERFORMANCE METRICS
+ */
+const list_performance = document.querySelector(".list-performance");
+const gallery_container = document.querySelector(".gallery-container");
+list_performance.addEventListener("click", () => {
+    execProcess("getPerformance", {x01:gArticleId}).then((data) => {
+        gallery_container.replaceChildren();
+        gallery_container.insertAdjacentHTML('afterbegin',data.content);
+    });
+});
 
 /* ************************************************* 
  **
@@ -673,12 +684,14 @@ const getData = (media) => {
     lightbox_filename.textContent = filename.substring(0,suffix) + ellipsis + media.dataset.format;
     lightbox_uploaded.textContent = media.dataset.uploaded + ", " + formatBytes(media.dataset.uploadedSize);
 
+    /*
     if (!document.fullscreenElement) {
         execProcess("getPerformance", {x01:selectedElement.parentElement.dataset.id}).then((data) => {
             lightbox_performance.replaceChildren();
             lightbox_performance.insertAdjacentHTML('afterbegin',data.content);
         });
     }
+    */
 
     document.querySelector("#ui-id-3").textContent = counter();
 
