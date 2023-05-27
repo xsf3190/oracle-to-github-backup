@@ -21,6 +21,7 @@ Individual file exports should not exceed GITHUB recommendation of 50MB.
 ## Use
 1. Make Oracle data and definitions available for review / sharing through private or public GITHUB repositories.
 2. Implement an automated backup / restore cycle between 2 ADB instances to provision a point-in-time recovery or testing environment.
+3. Scripted migrations between different platforms.
 
 All file commits to this repository are issued by a daily Oracle process using the GITHUB API.
 
