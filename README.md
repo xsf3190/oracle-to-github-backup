@@ -15,13 +15,14 @@ Individual file exports should not exceed GITHUB recommendation of 50MB.
 
 ## Pre-requisites
 1. Obtain GITHUB Personal access token (classic) - https://github.com/settings/tokens
-2. For automatic emails configure OCI email - https://blogs.oracle.com/apex/post/sending-email-from-your-oracle-apex-app-on-autonomous-database
-3. For automatic restore from GITHUB create DB LINK to a target ADB database
+2. Configure email for OCI tenancy - https://blogs.oracle.com/apex/post/sending-email-from-your-oracle-apex-app-on-autonomous-database
+3. Create DB LINK to target ADB database for automatic restore
 
 ## Use
 1. Make Oracle data and definitions available for review / sharing through private or public GITHUB repositories.
-2. Implement an automated backup / restore cycle between 2 ADB instances to provision a point-in-time recovery or testing environment.
-3. Scripted migrations between different platforms.
+2. Implement an automated backup / restore cycle between 2 ADB instances to enable fine-grained point-in-time recovery.
+3. Deploy a testing environment for different Oracle / Apex software versions.
+4. Run fully scripted migrations between different platforms (caveat: ORDS metadata).
 
 All file commits to this repository are issued by a daily Oracle process using the GITHUB API.
 
