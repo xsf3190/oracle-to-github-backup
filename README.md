@@ -5,7 +5,11 @@ Creates files in GITHUB generated and transferred by running an Oracle procedure
 
 Current implementation includes schema export dump and log files, Apex application exports, ORDS metadata, object and system grants, TABLE and PACKAGE definitions.
 
-Restores from GITHUB into a target ADB identified by DB LINK, keeping last 30 imported schemas.
+Schema export dump files containing row data are encrypted with a generated random password.
+
+The restore procedure imports grants, schema and Apex applications from GITHUB into a target ADB identified by DB LINK, keeping the last 30 imported schemas.
+
+Note that ORDS metadata exports must be manually imported since these are SQLPlus scripts. ADB does not support running external scripts from PLSQL.
 
 Individual file exports should not exceed GITHUB recommendation of 50MB. 
 
