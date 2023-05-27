@@ -18,7 +18,7 @@ Individual file exports should not exceed GITHUB recommendation of 50MB.
 1. Make Oracle data and definitions available for review / sharing through private or public GITHUB repositories.
 2. Implement an automated backup / restore cycle between 2 ADB instances to provision a point-in-time recovery or testing environment.
 
-This is not a conventional repository as all file commits are issued by a daily Oracle process using the GITHUB API.
+All file commits to this repository are issued by a daily Oracle process using the GITHUB API.
 
 Originally created to provide a backup solution for subscribers to OCI "Always Free". 
 
@@ -34,6 +34,8 @@ For restore:
 1. download contents of TABLE.LOG and PACKAGE.PCK_RESTORE and create in ADMIN schema in target ADB
 2. create credential for target ADB ADMIN user in "schema-to-backup"
 3. create db link to target ADB ADMIN user in "schema-to-backup"
+
+Adapt the packages to suit any specific requirements.
 
 ## Run
 ```
