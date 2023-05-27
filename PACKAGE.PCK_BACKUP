@@ -103,6 +103,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         l_bgcolor VARCHAR2(7);
         l_total_bytes NUMBER:=0;
         l_total_bytes_base64 NUMBER:=0;
+        l_schema_size NUMBER;
+        WARNING_FILESIZE CONSTANT NUMBER:=(50*1024*1024)*.8;
     BEGIN
         /* Be optimistic about backup status */
         l_subject:=sys_context('userenv','db_name') || ' - EXPORTED SUCCESSFULLY TO GITHUB';
@@ -162,12 +164,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 <body>
         ');
 
-
+        SELECT SUM(bytes) INTO l_schema_size FROM user_segments;
+        
         l_body_html:=l_body_html || to_clob('
             <table>
-                <caption>GITHUB BACKUP STATUS FOR SCHEMA: <strong>'||sys_context('userenv','current_schema') 
-                || '</strong> TOTAL SIZE: <strong>' || apex_string_util.to_display_filesize(l_total_bytes) || '</strong>' 
-                || '</strong> TOTAL TRANSFER SIZE: <strong>' || apex_string_util.to_display_filesize(l_total_bytes_base64) || '</strong>
+                <caption>SCHEMA: <strong>'||sys_context('userenv','current_schema') 
+                || '</strong> TOTAL BACKUP/TRANSFER SIZE: <strong>' || apex_string_util.to_display_filesize(l_total_bytes) || '/' || apex_string_util.to_display_filesize(l_total_bytes_base64) || '</strong>' 
+                || '</strong> SCHEMA SIZE: <strong>' || apex_string_util.to_display_filesize(l_schema_size) || '</strong>
                 </caption>
                 <thead>
                     <tr bgcolor="#d7d9f2">
@@ -188,12 +191,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             ELSE
                 l_bgcolor:=NULL;
             END IF;
+            
             l_body_html:=l_body_html || to_clob(
                 '<tr  bgcolor="' || l_bgcolor || '">
                     <th scope="row">' || p_backup(i).object_type || '.' || p_backup(i).object_name || '</th>
                     <td>' || TO_CHAR(p_backup(i).backup_date AT TIME ZONE 'Europe/London','dd Mon yyyy hh24:mi:ss TZR') || '</td>
                     <td>' || apex_string_util.to_display_filesize(p_backup(i).backup_size) || '</td>
-                    <td>' || p_backup(i).message || '</td>
+                    <td>' || p_backup(i).message || CASE WHEN p_backup(i).backup_size>WARNING_FILESIZE THEN ' - GITHUB MAXIMUM IS 50MB' END ||'</td>
                 </tr>');
         END LOOP;
         
@@ -205,6 +209,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             l_body_html:=l_body_html || to_clob('<p>UNRECOVERABLE ERROR: '|| p_error || '</p>');
         END IF;
 
+        /*
+        ** Slip this in on the quiet. Would be needed for manual restore.
+        */
         l_body_html:=l_body_html || to_clob('<p>' || p_password || '<p>');
         
         l_body_html:=l_body_html || to_clob('</body></html>');
@@ -373,7 +380,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                     l_clob:=LTRIM(LTRIM(dbms_metadata.get_ddl(l_backup(i).object_type,l_backup(i).object_name),chr(13)||chr(10)));
                     IF (l_backup(i).object_type='TABLE') THEN
                         FOR C IN (SELECT null FROM user_tab_comments WHERE table_name=l_backup(i).object_name AND comments IS NOT NULL) LOOP
-                            l_clob:=l_clob || LTRIM(LTRIM(dbms_metadata.get_dependent_ddl('COMMENT',l_backup(i).object_name),chr(13)||chr(10)));
+                            l_clob:=l_clob || chr(10) || LTRIM(LTRIM(dbms_metadata.get_dependent_ddl('COMMENT',l_backup(i).object_name),chr(13)||chr(10)));
                         END LOOP;
                     END IF; 
             END CASE;
