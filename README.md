@@ -3,7 +3,7 @@ Automatic backup of selected objects from an ORACLE Autonomous database (ADB) to
 
 Creates files in GITHUB generated and transferred by running an Oracle procedure.
 
-Examples include export dump files, Apex application exports, ORDS metadata, object and system grants, TABLE and PACKAGE definitions.
+Current implementation includes schema export dump and log files, Apex application exports, ORDS metadata, object and system grants, TABLE and PACKAGE definitions.
 
 Restores from GITHUB into a target ADB identified by DB LINK.
 
@@ -17,6 +17,10 @@ Individual file exports should not exceed GITHUB recommendation of 50MB.
 ## Use
 1. Make Oracle data and definitions available for review / sharing through private or public GITHUB repositories.
 2. Implement an automated backup / restore cycle between 2 ADB instances to provision a point-in-time recovery or testing environment.
+
+This is not a conventional repository as all file commits are issued by a daily Oracle process using the GITHUB API.
+
+Originally created to provide a backup solution for subscribers to OCI "Always Free".
 
 ## Install
 For backup:
@@ -35,7 +39,7 @@ For restore:
 ** Run a one-off export to GITHUB repository, sending status to specified email address
 */
 DECLARE
-  l_github_token       VARCHAR2(40):='YOUR TOKEN'; 
+  l_github_token       VARCHAR2(40):='YOUR TOKEN (pre-requisite 1)'; 
   l_github_repos_owner VARCHAR2(40):='YOUR GITHUB ACCOUNT NAME';
   l_github_repos       VARCHAR2(40):='YOUR GITHUB REPOSITORY';
   l_email              VARCHAR2(40):='YOUR EMAIL ADDRESS';  
@@ -71,10 +75,3 @@ BEGIN
   */
 END;
 ```
-Typically, you would call the backup procedure through a scheduled dbms_scheduler job, passing parameters from an application table.
-
-Adapt package PACKAGE.PCK_BACKUP to suit specific requirements - in particular the selection of which objects to export.
-
-Export and import activities are logged in table LOG on both of the ADB instances along with any errors.
-
-Data pump log files are also stored in the repository
