@@ -5,7 +5,7 @@ Creates files in GITHUB generated and transferred by running an Oracle procedure
 
 Current implementation includes schema export dump and log files, Apex application exports, ORDS metadata, object and system grants, TABLE and PACKAGE definitions.
 
-Restores from GITHUB into a target ADB identified by DB LINK.
+Restores from GITHUB into a target ADB identified by DB LINK, keeping last 30 imported schemas.
 
 Individual file exports should not exceed GITHUB recommendation of 50MB. 
 
@@ -20,7 +20,9 @@ Individual file exports should not exceed GITHUB recommendation of 50MB.
 
 This is not a conventional repository as all file commits are issued by a daily Oracle process using the GITHUB API.
 
-Originally created to provide a backup solution for subscribers to OCI "Always Free".
+Originally created to provide a backup solution for subscribers to OCI "Always Free". 
+
+Should be used for modestly sized schemas (<100MB) although the export employs advanced compression reducing the size of uploaded dump files by an order of magnitude.
 
 ## Install
 For backup:
