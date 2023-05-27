@@ -1,36 +1,30 @@
 # oracle-to-github-backup
-Automatic backup of selected objects from ORACLE OCI ADB to a designated GITHUB repository.
+Automatic backup of selected objects from an ORACLE Autonomous database (ADB) to a designated GITHUB repository.
 
-Creates files on GITHUB including encrypted schema export dump files, Apex application exports, ORDS metadata, TABLE and PACKAGE definitions.
+Creates files in GITHUB generated and transferred by running an Oracle procedure.
 
-Optional restore from Github into a target ADB identified by DB LINK.
+Examples include export dump files, Apex application exports, ORDS metadata, object and system grants, TABLE and PACKAGE definitions.
 
-Individual file exports should not exceed Github recommendation of 50MB. 
+Restores from GITHUB into a target ADB identified by DB LINK.
+
+Individual file exports should not exceed GITHUB recommendation of 50MB. 
 
 ## Pre-requisites
 1. Obtain GITHUB Personal access token (classic) - https://github.com/settings/tokens
-2. For automated status emails configure OCI email - https://blogs.oracle.com/apex/post/sending-email-from-your-oracle-apex-app-on-autonomous-database
-3. For automated restore from GITHUB create DB LINK to a target ADB database
+2. For automatic emails configure OCI email - https://blogs.oracle.com/apex/post/sending-email-from-your-oracle-apex-app-on-autonomous-database
+3. For automatic restore from GITHUB create DB LINK to a target ADB database
 
 ## Use
-Make Oracle data and definitions available for sharing through private or public GITHUB repositories.
-
-Implement an automated backup / restore cycle between 2 ADB instances to provision a complete recovery or testing environment.
-
-This repository contains files generated for a daily backup / restore of a schema called EXAMPLE between 2 ADBs in an ORACLE OCI "Always Free" tenancy:
-1. hl7offzwezq2cal-db202103270929
-2. hl7offzwezq2cal-restoretestdb1
-
-The configurable part of the ADB names are included in each GITHUB commit message. 
-
-All files are regenerated daily and sent to GITHUB - the last update time shows when the file content was last changed. 
+1. Make Oracle data and definitions available for review / sharing through private or public GITHUB repositories.
+2. Implement an automated backup / restore cycle between 2 ADB instances to provision a point-in-time recovery or testing environment.
 
 ## Install
+For backup:
 1. GRANT READ,WRITE ON DIRECTORY DATA_PUMP_DIR TO "schema-to-backup"
 2. GRANT EXECUTE ON DBMS_CLOUD TO "schema-to-backup"
 3. Download contents of TABLE.LOG and PACKAGE.PCK_BACKUP and create in "schema-to-backup"
 
-For restore option:
+For restore:
 1. download contents of TABLE.LOG and PACKAGE.PCK_RESTORE and create in ADMIN schema in target ADB
 2. create credential for target ADB ADMIN user in "schema-to-backup"
 3. create db link to target ADB ADMIN user in "schema-to-backup"
@@ -58,7 +52,7 @@ BEGIN
         p_restore_files => l_restore_files
   );
   /* 
-  ** Uncomment to restore selected GITHUB files to a target ADB.
+  ** Uncomment to restore selected GITHUB files to a target ADB
   ** Requires DBLINK in "schema-to-backup" to ADMIN user in target ADB.
   */
   /*
@@ -83,4 +77,4 @@ Adapt package PACKAGE.PCK_BACKUP to suit specific requirements - in particular t
 
 Export and import activities are logged in table LOG on both of the ADB instances along with any errors.
 
-Data pump log files of the last run are also stored in the repository
+Data pump log files are also stored in the repository
