@@ -7,4 +7,5 @@ CREATE TABLE "TESTIMONIAL"
 	"TEXT" VARCHAR2(500), 
 	 CONSTRAINT "PK_testimonial" PRIMARY KEY ("ID")
   USING INDEX  ENABLE
-   ) ;COMMENT ON TABLE "TESTIMONIAL"  IS 'Customer testimonials are written appraisals of a provided product or service';
+   ) ;
+COMMENT ON TABLE "TESTIMONIAL"  IS 'Customer testimonials are written appraisals of a provided product or service';
