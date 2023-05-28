@@ -718,10 +718,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 
                 <p>Daily backups to a Github repository are automatically restored to a recovery database keeping the last 30 days of content.</p>
                 
-                <p>Each <span>Always Free</span> Autonomus database (ADB) can comfortably store over 1 million media URLs plus &frac14; million 1000-word articles created by any number of users.</p>
+                <p>Each <span>Always Free</span> Autonomous database (ADB) can comfortably store over 1 million media URLs plus &frac14; million 1000-word articles created by any number of users.</p>
                 
-                <p>Cloudinary delivers high quality media at lowest bandwidth cost through its fast CDN network. Media download performance 
-                is captured automatically by the application and uploaded to the database, enabling detailed analysis of download metrics.</p>
+                <p>Cloudinary delivers high quality media at low bandwidth cost through its fast CDN network.</p>
+                
+                <p>Media download performance on each client device 
+                is captured automatically and uploaded to the database, enabling detailed analysis of download metrics at a macro level.</p>
                 <p></p>
             </div>
          </div>
@@ -754,8 +756,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             <button type="button" class="list-performance">PERFORMANCE</button>
         </nav>
         <div class="gallery-container" role="region" aria-label="gallery" tabindex="0">
-            <ul class="gallery">
-            </ul>
+            <ul></ul>
         </div>
         ');
         RETURN (l_clob);
@@ -931,12 +932,10 @@ PROCEDURE getThumbnails IS
     END;  
     
     /*
-     **  Upload Performance data for images in the article
+     **  Upload Performance data from entries accumulated by Javascript Performance API
      */       
     PROCEDURE uploadPerformance IS
         l_performance clob:=apex_application.g_clob_01;
-        l_article_id asset.article_id%type:=apex_application.g_x01;
-        l_dbid ROWID:=apex_application.g_x02;
         l_servertiming performance.servertiming%type;
         l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
         l_ip_address performance.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
@@ -967,6 +966,7 @@ PROCEDURE getThumbnails IS
         l_article_id asset.article_id%type:=apex_application.g_x01;
         l_content CLOB;
         l_ip_address performance.ip_address%type;
+        n PLS_INTEGER:=0;
     BEGIN
         IF (apex_authentication.is_authenticated) THEN
             l_ip_address:=NULL;
@@ -974,41 +974,50 @@ PROCEDURE getThumbnails IS
             l_ip_address:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
         END IF;
         
-        /* 1 list item per performance row in descending order capture_date */
-        l_content:=to_clob(
-            '<table>
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th>IP ADDRESS</th>
-                        <th>TIME</th>
-                        <th>URL</th>
-                        <th>TRANSFER SIZE</th>
-                        <th>DURATION (ms)</th>
-                        <th>SERVER TIMING</th>
-                    </tr>
-                </thead>
-                <tbody>
-            ');
+        /* 
+        */
         FOR C IN (SELECT  COUNT(*) OVER (PARTITION BY a.cld_cloud_name, a.resource_type, a.public_id) nb_rows, 
                           ROW_NUMBER() OVER (PARTITION BY a.display_order,a.cld_cloud_name, a.resource_type, a.public_id ORDER BY p.capture_date DESC) rn, 
                           a.cld_cloud_name, a.resource_type, a.public_id, a.format, a.width, p.capture_date, p.url, p.transfersize, p.duration, p.window_innerwidth, p.ip_address, p.servertiming
                     FROM asset a, performance p
-                   WHERE a.article_id=9879
+                   WHERE a.article_id=l_article_id
                      AND a.cld_cloud_name=p.cld_cloud_name
                      AND a.resource_type=p.resource_type
                      AND a.public_id=p.public_id
-                     AND p.ip_address = NVL(l_ip_address, p.ip_address) )
+                     AND p.ip_address = NVL(l_ip_address, p.ip_address)
+                   ORDER BY a.display_order)
         LOOP
+            IF (n=0) THEN
+                n:=n+1;
+                l_content:=to_clob(
+                '<table>
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>TIME<br>IP ADDRESS</th>
+                            <th class="align-left">' || SUBSTR(C.url,1,INSTR(C.url,'/',1,4))|| '</th>
+                            <th>TRANSFER SIZE<br>DURATION</th>
+                            <th>SERVER TIMING</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                ');
+            END IF;
             l_content:=l_content || to_clob(
-                '<tr>
-                    <td' || CASE WHEN C.rn=1 THEN ' rowspan="' || C.nb_rows || '"><img src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '"> ' END || '</td>
-                    <td>' || fmtUpdatedDate(C.capture_date) || '</td>
-                    <td>' || C.url || '</td>
-                    <td>' || apex_string_util.to_display_filesize(C.transfersize) ||'</td>
-                    <td>' || C.duration ||'</td>
-                    <td>' || C.servertiming || '</td>
-                </tr>');
+            '<tr>');
+                
+            IF (C.rn=1) THEN 
+                l_content:=l_content || to_clob(
+                '<td rowspan="' || C.nb_rows || '"><img src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '"></td>');
+            END IF;
+            
+            l_content:=l_content || to_clob('
+                <td class="align-center">' || fmtUpdatedDate(C.capture_date) || '<br>' || C.ip_address|| '</td>
+                <td>' || SUBSTR(C.url,INSTR(C.url,'/',1,4)+1) || '</td>
+                <td class="align-center">' || apex_string_util.to_display_filesize(C.transfersize) || '<br>' || C.duration || ' ms</td>
+                <td>' || REPLACE(C.servertiming,'|','<br>') || '</td>
+            </tr>');
+                
         END LOOP;
         
         l_content:=l_content || to_clob('</tbody></table>');
