@@ -1,10 +1,13 @@
 let gArticleId,
-    cards,
-    gallery,
+    //cards,
+    //gallery,
     gCloudName,
     perfObj = {images: []};
 
-const popup = document.querySelector("dialog.popup"),
+const cards = document.querySelector(".cards"),
+      gallery = document.querySelector("#gallery .gallery-container"),
+      galleryList = gallery.querySelector("ul"),
+      popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
       popupConfirm = popup.querySelector("button.confirm"),
       preview = document.querySelector("dialog.preview"),
@@ -37,47 +40,40 @@ const checkPerformance = () => {
 
 window.addEventListener("DOMContentLoaded", (event) => {
     console.log("DOM fully loaded and parsed");
+    console.log("APP_USER",apex.env.APP_USER);
     /*
     **  Set click event handler on containing elements of cards and gallery
     */
     //cards = document.querySelector("[region-id='main'] .cards");
-    cards = document.querySelector(".cards");
-    gallery = document.querySelector("#gallery .gallery");
-    confirm = document.querySelector("dialog.confirm");
+    
+    
+    //confirm = document.querySelector("dialog.confirm");
     
     if (navigator.maxTouchPoints > 1) {
         cards.addEventListener("touchstart",cardHandler);
-        gallery.addEventListener("touchstart",showLightbox);
+        galleryList.addEventListener("touchstart",showLightbox);
     } else {
         cards.addEventListener("click",cardHandler);
-        gallery.addEventListener("click",showLightbox);
+        galleryList.addEventListener("click",showLightbox);
     }
-
-    const thumbs_minus = document.querySelector("#gallery .thumbs-minus");
-    const thumbs_plus = document.querySelector("#gallery .thumbs-plus");
-
-    thumbs_minus.addEventListener("click", () => {
-        setGalleryWidth("down",thumbs_minus,thumbs_plus);
-    });
-    thumbs_plus.addEventListener("click", () => {
-        setGalleryWidth("up",thumbs_minus,thumbs_plus);
-    });
     
-    new Sortable(gallery, {
-        animation: 150,
-        ghostClass: 'drag-in-progress',
-        store: {
-            set: async function (sortable) {
-                execProcess("reorderAssets",{x01: sortable.toArray().join(":")}).then( (data) => {
-                    if (data.url) {
-                        const li = document.querySelector("[data-id='" + data.articleId + "']");
-                        li.querySelector("img").src = data.url;
-                        li.querySelector(".updated-date").textContent = data.updated;
-                    }
-                });
+    if (apex.env.APP_USER!=="nobody") {
+        new Sortable(galleryList, {
+            animation: 150,
+            ghostClass: 'drag-in-progress',
+            store: {
+                set: async function (sortable) {
+                    execProcess("reorderAssets",{x01: sortable.toArray().join(":")}).then( (data) => {
+                        if (data.url) {
+                            const li = document.querySelector("[data-id='" + data.articleId + "']");
+                            li.querySelector("img").src = data.url;
+                            li.querySelector(".updated-date").textContent = data.updated;
+                        }
+                    });
+                }
             }
-        }
-    });
+        });
+}
 
     if (checkPerformance()) {
         const observer = new PerformanceObserver(perfObserver);
@@ -93,7 +89,7 @@ const perfObserver = (list) => {
     list.getEntries().forEach((entry) => {
         /* Only interested in actual network image/video/audio transfers */
         if (entry.transferSize > 0 && (entry.initiatorType === "img" || entry.initiatorType === "video" || entry.initiatorType === "audio")) {
-
+            //console.log(entry);
             const duration = Math.round(entry.duration * 1) / 1;
             const parts = entry.name.split("/");
             let public_id = parts.pop();
@@ -110,11 +106,11 @@ const perfObserver = (list) => {
                  "url": entry.name, "transfersize": entry.transferSize, "duration": duration, 
                  "window_innerwidth": window.innerWidth, "servertiming": entry.serverTiming});
 
-            if (entry.initiatorType === "video" || entry.initiatorType === "audio") {
-                lightbox_audio.dispatchEvent(new CustomEvent("observed", {
-                    detail: { name: public_id }
-                }));
-            }
+            //if (entry.initiatorType === "video" || entry.initiatorType === "audio") {
+            //    lightbox_audio.dispatchEvent(new CustomEvent("observed", {
+            //        detail: { name: public_id }
+            //    }));
+            //}
         };
         
     });
@@ -395,9 +391,10 @@ const save_and_exit = () => {
  */
 const show_gallery = (articleId) => {
     execProcess( "getThumbnails", {x01: articleId}).then( (data) => {
-        gallery.replaceChildren();
-        gallery.insertAdjacentHTML('afterbegin',data.content);
         apex.theme.openRegion("gallery");
+        console.log("galleryList",galleryList)
+        galleryList.replaceChildren();
+        galleryList.insertAdjacentHTML('afterbegin',data.content);
         gArticleId = articleId;
 
         const title = document.querySelector("[data-id='" + articleId + "'] .title");
@@ -408,9 +405,9 @@ const show_gallery = (articleId) => {
         }  
 
         // simulate click if single gallery image
-        if (gallery.childElementCount === 1) {
-            gallery.querySelector("img").click();
-        }
+        //if (gallery.childElementCount === 1) {
+        //    gallery.querySelector("img").click();
+        //}
     });
 };
 
@@ -418,9 +415,7 @@ const show_gallery = (articleId) => {
 **  REMOVE CARD FROM DOM
 */
 const remove_card = (articleId) => {
-    console.log("remove_card",articleId)
     let li = document.querySelector("[data-id='" + articleId + "']");
-    console.log("li",li)
     li.replaceChildren();
     li.remove();
 }
@@ -520,8 +515,17 @@ const cardHandler = (e) => {
 const galleryWidth = Number(getComputedStyle(document.documentElement).getPropertyValue("--gallery-width").match(/(\d+)/)[1]);
 const min_gallery_width = galleryWidth * .5,
       max_gallery_width = galleryWidth * 1.5;
-
 const blur = getComputedStyle(document.documentElement).getPropertyValue("--blur");
+
+const thumbs_minus = document.querySelector("#gallery .thumbs-minus");
+const thumbs_plus = document.querySelector("#gallery .thumbs-plus");
+
+thumbs_minus.addEventListener("click", () => {
+    setGalleryWidth("down",thumbs_minus,thumbs_plus);
+});
+thumbs_plus.addEventListener("click", () => {
+    setGalleryWidth("up",thumbs_minus,thumbs_plus);
+});
 
 /*
  *  Global variables that are set throughout the code to support GALLERY and LIGHTBOX components
@@ -536,15 +540,13 @@ let selectedElement,
 const showLightbox = (e) => {
     if (e.srcElement.tagName === "IMG" && !e.srcElement.parentElement.classList.contains("deleted")) {
         selectedElement = e.srcElement;
-        apex.theme.openRegion("lightbox");
-        execProcess("uploadPerformance",{x01: gArticleId, p_clob_01: JSON.stringify(perfObj)}).then( () => {
-            perfObj.images.length = 0;
-            lightbox_next.focus();
-            replaceImg();
-            if (!lightbox_img.requestFullscreen) {
-                lightbox_fullscreen.disabled = true;
-            }
-        });
+        apex.theme.openRegion("lightbox");        
+        perfObj.images.length = 0;
+        lightbox_next.focus();
+        replaceImg();
+        if (!lightbox_img.requestFullscreen) {
+            lightbox_fullscreen.disabled = true;
+        }
     }
 }
 
@@ -570,11 +572,13 @@ const setGalleryWidth = (sizing,thumbs_minus,thumbs_plus) => {
  **  LIST PERFORMANCE METRICS
  */
 const list_performance = document.querySelector(".list-performance");
-const gallery_container = document.querySelector(".gallery-container");
 list_performance.addEventListener("click", () => {
-    execProcess("getPerformance", {x01:gArticleId}).then((data) => {
-        gallery_container.replaceChildren();
-        gallery_container.insertAdjacentHTML('afterbegin',data.content);
+    execProcess("uploadPerformance",{p_clob_01: JSON.stringify(perfObj)}).then( () => {
+        perfObj.images.length = 0;
+        execProcess("getPerformance", {x01:gArticleId}).then((data) => {
+            preview.querySelector(".content").innerHTML = data.content;
+            preview.showModal();
+        });
     });
 });
 
@@ -794,22 +798,6 @@ const replaceImg = async () => {
     lastTag = tagName;
 };
 
-const uploadPerformance = () => {
-    execProcess("uploadPerformance",{x01: gArticleId, x02: selectedElement.parentElement.dataset.id, p_clob_01: JSON.stringify(perfObj)}).then( (data) => {
-        perfObj.images.length = 0;
-        lightbox_performance.replaceChildren();
-        lightbox_performance.insertAdjacentHTML('afterbegin',data.content);
-    });
-}
-
-lightbox_video.addEventListener("observed", (e) => {
-    uploadPerformance();
-})
-
-lightbox_audio.addEventListener("observed", (e) => {
-    uploadPerformance();    
-})
-
 lightbox_next.addEventListener("click", (e) => {
     let process = true;
     while (process) {
@@ -874,7 +862,6 @@ lightbox_img.addEventListener("fullscreenchange", (e) => {
     } else {
         window.removeEventListener("keydown", enableKeydown);
         lightbox_fullscreen.focus();
-        uploadPerformance();
     }
 });
 
