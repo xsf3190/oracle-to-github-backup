@@ -61,6 +61,7 @@
     --color-pale: hsl(var(--hue) var(--saturation) calc(var(--lightness) + 35%));
 
     --gallery-width: 10rem;
+    --preview-width: 60ch;
     --blur: blur(5px);
 }
 
@@ -152,7 +153,7 @@ dialog.preview {
 
 dialog.preview > div {
   display: grid;
-  grid-template-columns: minmax(1rem, 1fr) minmax(auto, 60ch) minmax(1rem, 1fr);
+  grid-template-columns: minmax(1rem, 1fr) minmax(auto, var(--preview-width)) minmax(1rem, 1fr);
 }
 
 dialog h2 {
@@ -372,7 +373,7 @@ nav button {
   box-shadow: 0 0 0 4px var(--color-button-focus);
 }
 
-/* Override CKEditor styles */
+/* Override CKEditor default styles */
 .ck-content > * + * {
     margin-top: var(--space-s);
 }
@@ -408,6 +409,31 @@ nav button {
 button.save-and-exit {
     background-color: var(--color-button) !important;
     color: var(--color-light-glare) !important;
+}
+
+.ck-content table {
+    table-layout: fixed;
+    width: 100%;
+    white-space: nowrap;
+    overflow-x: auto;
+    border-collapse: collapse;
+}
+
+.ck-content tr:nth-of-type(1) {
+    background-color: var(--color-dark);
+    color: var(--color-light-glare);
+}
+
+.ck-content td {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-top: var(--space-s);
+    padding-bottom: var(--space-s);
+}
+
+.ck-content tr {
+    border-bottom: 1px solid var(--color-pale);
 }
 
 /* *************** */
