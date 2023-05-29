@@ -519,8 +519,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         
         l_new_schema dba_users.username%type:=pSchema || '_' || TO_CHAR(sysdate,'YYMMDD');
         
-        MAX_KEEP CONSTANT INTEGER:=5;
-        
         PROCEDURE sendmail(pSubject IN VARCHAR2) IS
         BEGIN
             apex_util.set_security_group_id(p_security_group_id => l_workspace_id);    
@@ -549,16 +547,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         SELECT workspace_id INTO l_workspace_id FROM apex_workspaces WHERE workspace=pWorkspace;
         
         /*
-        ** Keep MAX_KEEP schemas named pSchema || '_' || TO_CHAR(sysdate,'YYMMDD')
+        ** Always drop primary schema and this day's schema in case exists from previous failed run
         */
-        FOR C IN (SELECT username FROM 
-                    (
-                        SELECT username, ROW_NUMBER() OVER (ORDER BY username DESC) rn FROM dba_users WHERE REGEXP_LIKE(username,'^' || pSchema || '_(\d{6})$') 
-                    ) 
-                    WHERE rn>MAX_KEEP 
-                    UNION 
-                    SELECT username FROM dba_users WHERE username IN (pSchema,l_new_schema)
-                ) 
+        FOR C IN (SELECT username FROM dba_users WHERE username IN (pSchema,l_new_schema)) 
         LOOP
             exec_ddl('DROP USER ' || C.username || ' CASCADE');
         END LOOP;
