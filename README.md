@@ -7,7 +7,7 @@ Current implementation includes schema export dump and log files, Apex applicati
 
 Schema export dump files containing row data are encrypted with a generated random password.
 
-The restore procedure imports grants, schema and Apex applications from GITHUB into a target ADB identified by DB LINK, keeping the last 30 imported schemas.
+The restore procedure imports grants, schema and Apex applications from GITHUB into a target ADB identified by DB LINK.
 
 Note that ORDS metadata exports must be manually imported since these are SQLPlus scripts. ADB does not support running external scripts from PLSQL.
 
@@ -21,7 +21,7 @@ Individual file exports should not exceed GITHUB recommendation of 50MB.
 ## Use
 1. Make Oracle data and definitions available for review / sharing through private or public GITHUB repositories.
 2. Implement an automated backup / restore cycle between 2 ADB instances to enable fine-grained point-in-time recovery.
-3. Deploy a testing environment for different Oracle / Apex software versions.
+3. Deploy environment to test new Oracle / Apex software versions.
 4. Run fully scripted migrations between different platforms (caveat: ORDS metadata).
 
 All file commits to this repository are issued by a daily Oracle process using the GITHUB API.
