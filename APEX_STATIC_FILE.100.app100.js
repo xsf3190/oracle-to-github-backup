@@ -11,7 +11,9 @@ const cards = document.querySelector(".cards"),
       popupClose = popup.querySelector("button.close"),
       popupConfirm = popup.querySelector("button.confirm"),
       preview = document.querySelector("dialog.preview"),
-      previewClose = preview.querySelector("button.close");
+      previewClose = preview.querySelector("button.close")
+      perftable = document.querySelector("dialog.perftable"),
+      perftableClose = perftable.querySelector("button.close");
 
 const checkPerformance = () => {
     console.log("starting checkPerformance");
@@ -576,10 +578,14 @@ list_performance.addEventListener("click", () => {
     execProcess("uploadPerformance",{p_clob_01: JSON.stringify(perfObj)}).then( () => {
         perfObj.images.length = 0;
         execProcess("getPerformance", {x01:gArticleId}).then((data) => {
-            preview.querySelector(".content").innerHTML = data.content;
-            preview.showModal();
+            perftable.querySelector(".content").innerHTML = data.content;
+            perftable.showModal();
         });
     });
+});
+
+perftable.addEventListener("click",  () => {
+    perftable.close();
 });
 
 /* ************************************************* 
