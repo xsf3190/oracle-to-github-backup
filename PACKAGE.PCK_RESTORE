@@ -118,6 +118,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
             
         dbms_scheduler.enable(l_job_name);
     END;
+    
+    /*
+    ** Generic procedure to EXECUTE IMMEDIATE
+    */
+    PROCEDURE exec_ddl(pCommand IN VARCHAR2) IS
+    BEGIN
+        EXECUTE IMMEDIATE pCommand;
+        log(pCommand  || ' - OK');
+        EXCEPTION
+            WHEN OTHERS THEN 
+                log(pCommand  || ' - FAIL');
+                RAISE;
+    END;    
 
     /*
     ** Import Apex application export file
@@ -126,7 +139,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         l_clob CLOB;
         l_source apex_t_export_files;
     BEGIN
-        log('Starting import of '||pGithub_appfile);
+        log('Starting import of '|| pGithub_appfile);
         l_clob := apex_util.blob_to_clob(p_blob => pBlob );
 
         /* Import (replacing) the Apex application */
@@ -137,6 +150,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
                          
         apex_util.set_workspace(pWorkspace);
         apex_application_install.install(p_source => l_source, p_overwrite_existing => TRUE );
+        
+        log('Import of ' || pGithub_appfile || ' completed successfully.');
 
         EXCEPTION
             WHEN OTHERS THEN 
@@ -374,6 +389,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
             l_log_filename:=pNewSchema || '.log';
         END IF;
         
+        /*
+        **  Drop master import table - normally it's dropped automatically after successful import but if exists starting new import job raises ORA-31626
+        */
+        FOR C IN ( SELECT o.object_type, object_name 
+                     FROM dba_objects o, dba_datapump_jobs j 
+                    WHERE o.owner=j.owner_name 
+                      AND o.object_name=j.job_name ) 
+        LOOP
+            IF (C.object_type='TABLE') THEN
+                exec_ddl('DROP TABLE ' || C.object_name || ' PURGE');
+            END IF;
+        END LOOP;
+        
         h1 := dbms_datapump.open(operation => 'IMPORT', job_mode => 'SCHEMA', job_name => 'SCHEMA_IMPORT', version => 'LATEST');
         dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', value => 'IN(''' || pSchema || ''')'); 
         dbms_datapump.add_file(handle => h1, filename => l_dump_filename, directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_DUMP_FILE); 
@@ -389,10 +417,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         END IF;
         
         dbms_datapump.set_parameter(handle => h1, name => 'LOGTIME', value => 'ALL'); 
+        dbms_datapump.set_parameter(handle => h1, name => 'KEEP_MASTER', VALUE => 0); 
+        
         dbms_datapump.start_job(handle => h1); 
         dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
         dbms_datapump.detach(handle => h1);
         log('Import job ended with status: ' || l_status);
+        
+        /*
+        ** Give it 5 seconds to complete writing out the log file and hopefully drop the master table
+        */
+        dbms_session.sleep(5);
         
         /*
         ** Copy generated dump log file into the LOG table
@@ -450,19 +485,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
             WHEN OTHERS THEN 
                 UTL_FILE.FCLOSE_ALL;
                 log_error(sqlcode,sqlerrm);
-                RAISE;
-    END;
-    
-    /*
-    ** Generic procedure to EXECUTE IMMEDIATE
-    */
-    PROCEDURE exec_ddl(pCommand IN VARCHAR2) IS
-    BEGIN
-        EXECUTE IMMEDIATE pCommand;
-        log(pCommand  || ' - OK');
-        EXCEPTION
-            WHEN OTHERS THEN 
-                log(pCommand  || ' - FAIL');
                 RAISE;
     END;
     
@@ -595,7 +617,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
             */
             IF (l_github_files(i) LIKE 'EXPORT_SCHEMA.%') THEN
                 import_schema(pGithub_dumpfile=>l_github_files(i), pSchema=>pSchema, pNewSchema=>NULL, pPassword=>pPassword, pBlob=>l_blob, pGithub_repos_owner=>pGithub_repos_owner, pGithub_repos=>pGithub_repos);
+                l_body_html:=l_body_html || '<p>Schema ' || pSchema || ' - successfully imported</p>';
                 import_schema(pGithub_dumpfile=>l_github_files(i), pSchema=>pSchema, pNewSchema=>l_new_schema, pPassword=>pPassword, pBlob=>l_blob, pGithub_repos_owner=>pGithub_repos_owner, pGithub_repos=>pGithub_repos);
+                l_body_html:=l_body_html || '<p>Schema ' || l_new_schema || ' - successfully imported</p>';
             ELSIF (l_github_files(i) LIKE 'APEX_APPLICATION.%') THEN
                 import_apex(l_github_files(i), pWorkspace, l_blob);  
             ELSIF (l_github_files(i) LIKE 'GRANT.%') THEN
@@ -603,6 +627,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
                 exec_grants(pBlob => l_blob, pSchema => pSchema, pNewSchema=>l_new_schema);    
             END IF;
             l_body_html:=l_body_html || '<p>' || i || '. ' || l_github_files(i) || ' - successfully imported</p>';
+        END LOOP;
+        
+        /*
+        ** Report total size of PDB
+        */
+        FOR C IN (SELECT total_size FROM v$pdbs ) LOOP
+            l_body_html:=l_body_html || '<p>TOTAL SIZE OF DATABASE <strong>' || apex_string_util.to_display_filesize(C.total_size) || '</strong></p>';
         END LOOP;
         
         /*
