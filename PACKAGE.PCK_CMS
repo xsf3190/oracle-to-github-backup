@@ -1,7 +1,5 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
-    datetime_format VARCHAR2(30):='dd Mon yyyy hh24:mi:ss';
-    --
     PROCEDURE copyArticle;
     --
     PROCEDURE daily_job;
@@ -379,12 +377,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Format timestamp according to user's current time zone
      */
-    FUNCTION fmtUpdatedDate(pTimestamp IN article.updated_date%type, pTimeZone IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2
+    FUNCTION fmtUpdatedDate(pTimestamp IN article.updated_date%type) RETURN VARCHAR2
     IS
-        l_timezone users.client_tz%type:=NVL(pTimeZone, apex_util.get_session_state('APP_CLIENT_TZ'));
+        l_timezone users.client_tz%type:=apex_util.get_session_state('APP_CLIENT_TZ');
     BEGIN
-        IF (apex_authentication.is_authenticated) THEN
-            RETURN ( TO_CHAR(pTimestamp AT TIME ZONE l_timezone, datetime_format) );
+        IF (l_timezone IS NOT NULL) THEN
+            RETURN ( TO_CHAR(pTimestamp AT TIME ZONE l_timezone, 'dd Mon yyyy hh24:mi:ss TZD') );
         ELSE
             RETURN ( TO_CHAR(pTimestamp, 'dd Mon yyyy'));
         END IF;
@@ -690,7 +688,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <div class="content ck-content"></div>
                     <button type="button" class="close">&times;</button>
                 </div>
-            </dialog>            
+            </dialog>
+            <dialog class="perftable">
+                <div>
+                    <button type="button" class="close">&times;</button>
+                    <div class="content"></div>
+                </div>
+            </dialog>   
             ');
 
         RETURN (l_clob);
@@ -714,16 +718,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             </div>
             <div class="text">
                 <p>A lightweight Content Management System (CMS) built using <span>Always Free</span> ad-free services provided by Oracle and Cloudinary.
-                Authenticated by Facebook or Google, users can securely upload media to their Cloudinary account and create content for publication.</p>
+                Authenticated by Facebook or Google, users securely upload media to their Cloudinary account and create content for publication.</p>
                 
-                <p>Daily backups to a Github repository are automatically restored to a recovery database keeping the last 30 days of content.</p>
+                <p>Daily backups to a Github repository are automatically restored to a recovery database.</p>
                 
-                <p>Each <span>Always Free</span> Autonomous database (ADB) can comfortably store over 1 million media URLs plus &frac14; million 1000-word articles created by any number of users.</p>
+                <p>An <span>Always Free</span> Autonomous database (ADB) can store hundreds of thousands of media URLs and articles.</p>
                 
-                <p>Cloudinary delivers high quality media at low bandwidth cost through its fast CDN network.</p>
+                <p>Equally generous, an <span>Always Free</span> Cloudinary account can store and deliver thousands of images, videos and audio files
+                at low bandwidth cost through its fast CDN network and dynamic sizing mechanisms.</p>
                 
-                <p>Media download performance on each client device 
-                is captured automatically and uploaded to the database, enabling detailed analysis of download metrics at a macro level.</p>
+                <p>Media download performance on all client devices is automatically captured and uploaded to the database.</p>
                 <p></p>
             </div>
          </div>
@@ -967,6 +971,7 @@ PROCEDURE getThumbnails IS
         l_content CLOB;
         l_ip_address performance.ip_address%type;
         n PLS_INTEGER:=0;
+        l_timezone users.client_tz%type:=apex_util.get_session_state('APP_CLIENT_TZ');
     BEGIN
         IF (apex_authentication.is_authenticated) THEN
             l_ip_address:=NULL;
@@ -995,7 +1000,7 @@ PROCEDURE getThumbnails IS
                         <tr>
                             <th></th>
                             <th>TIME<br>IP ADDRESS</th>
-                            <th class="align-left">' || SUBSTR(C.url,1,INSTR(C.url,'/',1,4))|| '</th>
+                            <th class="align-left">URL<br>' || SUBSTR(C.url,1,INSTR(C.url,'/',1,4))|| '</th>
                             <th>TRANSFER SIZE<br>DURATION</th>
                             <th>SERVER TIMING</th>
                         </tr>
@@ -1003,8 +1008,12 @@ PROCEDURE getThumbnails IS
                     <tbody>
                 ');
             END IF;
-            l_content:=l_content || to_clob(
-            '<tr>');
+            
+            IF (C.nb_rows=C.rn) THEN
+                l_content:=l_content || to_clob('<tr class="last-tr">');
+            ELSE
+                l_content:=l_content || to_clob('<tr>');
+            END IF;
                 
             IF (C.rn=1) THEN 
                 l_content:=l_content || to_clob(
