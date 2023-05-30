@@ -146,7 +146,12 @@ dialog.popup {
     inline-size: 50vw;
 }
 
-dialog.preview {
+dialog.perftable > div {
+    display: grid;
+    gap: 1rem;
+}
+
+dialog.preview, dialog.perftable {
     color: currentColor;
     inline-size: 100vw;
 }
@@ -406,7 +411,7 @@ nav button {
     padding-bottom: var(--space-s);
 }
 
-button.save-and-exit {
+.ck-toolbar button.save-and-exit {
     background-color: var(--color-button) !important;
     color: var(--color-light-glare) !important;
 }
@@ -478,7 +483,7 @@ button.save-and-exit {
 /* ************************* */
 /* PERFORMANCE TABLE STYLES  */
 /* ************************* */
-.gallery-container table {
+.perftable table {
     table-layout: fixed;
     width: 100%;
     white-space: nowrap;
@@ -487,46 +492,53 @@ button.save-and-exit {
     font-size: var(--step--2);
 }
 
-.gallery-container th {
+.perftable th {
     background-color: var(--color-dark);
     color: var(--color-light-glare);
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
 }
-.gallery-container th:nth-of-type(1) {
+.perftable th:nth-of-type(1) {
     width: 15%;
 }
-.gallery-container th:nth-of-type(2) {
+.perftable th:nth-of-type(2) {
     width: 15%;
 }
-.gallery-container th:nth-of-type(3) {
+.perftable th:nth-of-type(3) {
     width: 35%;
 }
-.gallery-container th:nth-of-type(4) {
+.perftable th:nth-of-type(4) {
     width: 15%;
 }
-.gallery-container th:nth-of-type(5) {
+.perftable th:nth-of-type(5) {
     width: 20%;
 }
 
-.gallery-container td {
+.perftable td {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.gallery-container tr {
+.perftable tr {
     border-bottom: 1px solid var(--color-pale);
 }
 
-.gallery-container .align-center {
+.perftable tr.last-tr {
+    border-bottom: 2px solid var(--color-pale);
+}
+
+.perftable .align-center {
     text-align: center;
 }
 
-.gallery-container .align-left {
+.perftable .align-left {
     text-align: left;
 }
 
-.gallery-container table img {
-    max-height: 10vh;
+
+.perftable table img {
+    max-width: 100%;
 }
 
 /* **************** */
