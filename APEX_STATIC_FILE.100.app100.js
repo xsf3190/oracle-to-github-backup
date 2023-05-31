@@ -970,6 +970,8 @@ if (lightbox_confirm_ok) {
 
             let title=document.querySelector("#ui-id-3"),
                 nb = Number(title.textContent.split("/").pop()) - 1;
+            console.log("title",title);
+            console.log("nb",nb);
             
             title.textContent = "x/" + nb;
             
