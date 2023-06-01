@@ -1,6 +1,4 @@
 let gArticleId,
-    //cards,
-    //gallery,
     gCloudName,
     perfObj = {images: []};
 
@@ -542,8 +540,7 @@ let selectedElement,
 const showLightbox = (e) => {
     if (e.srcElement.tagName === "IMG" && !e.srcElement.parentElement.classList.contains("deleted")) {
         selectedElement = e.srcElement;
-        apex.theme.openRegion("lightbox");        
-        perfObj.images.length = 0;
+        apex.theme.openRegion("lightbox");  
         lightbox_next.focus();
         replaceImg();
         if (!lightbox_img.requestFullscreen) {
@@ -633,8 +630,8 @@ const counter = () => {
         }
         pos++;
     }
-    let nb = gallery.querySelectorAll(".deleted").length;
-    nb = gallery.childElementCount - nb;
+    let nb = galleryList.querySelectorAll(".deleted").length;
+    nb = galleryList.childElementCount - nb;
     return pos + "/" + nb;
 };
 
