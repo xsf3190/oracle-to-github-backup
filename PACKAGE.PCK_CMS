@@ -713,11 +713,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_clob:=TO_CLOB(
         '<div class="homepage">
-            <div class="image-container">
-                <img src="https://res.cloudinary.com/mrbapex/q_auto,f_auto,w_491/homepage_roc9wg" alt="Architecture of always free lightweight CMS application">
-            </div>
-            <div class="text">
-                <p>A lightweight Content Management System (CMS) built using <span>Always Free</span> ad-free services provided by Oracle and Cloudinary.
+            <img src="https://res.cloudinary.com/mrbapex/q_auto,f_auto,w_491/homepage_roc9wg" alt="Architecture of always free lightweight CMS application">
+
+                <p>Lightweight Content Management System (CMS) built using <span>Always Free</span> ad-free services provided by Oracle and Cloudinary.
                 Authenticated by Facebook or Google, users securely upload media to their Cloudinary account and create content for publication.</p>
                 
                 <p>The application backs up itself and its data every day to a <a href="https://github.com/xsf3190/oracle-to-github-backup">Github repository</a> 
@@ -729,8 +727,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 at low bandwidth cost through its fast CDN network and dynamic sizing mechanisms.</p>
                 
                 <p>Media download performance on all client devices is automatically captured and uploaded to the database.</p>
-                <p></p>
-            </div>
+
          </div>
          <h2>PUBLISHED ARTICLES</h2>
         ');
