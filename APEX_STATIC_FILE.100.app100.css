@@ -82,6 +82,13 @@ body {
     color: green;
 }
 
+/************************************/
+/* STYLE APPLICABLE TO ALL ELEMENTS */
+/************************************/
+img {
+    max-inline-size: 100%;
+}
+
 nav {
   display: flex;
   justify-content: space-between;
@@ -194,18 +201,16 @@ button {
 }
 
 .homepage {
-    display: grid;
-    grid-template-columns: repeat(auto-fit,minmax(min(100%,21rem),1fr));
-    gap: 1rem;
     font-family: Georgia, sans-serif;
     font-size: var(--step-0);
     line-height: 1.4;
 }
 
-.homepage .image-container {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
+.homepage img {
+    float: left;
+    max-height: 65vh;
+    shape-outside: polygon(0 0,90% 0, 100% 30%,100% 70%, 90% 100%, 0 100%);
+    margin: 0 5ch 0;
 }
 
 .homepage p:first-child::first-letter {
@@ -216,13 +221,14 @@ button {
     font-style: italic;
 }
 
-.homepage .text > * + * {
+.homepage > * + * {
     margin-top: var(--space-m);
 }
 
 .homepage + h2 {
-    font-size: var(--step-4);
-    line-height: 5;
+    clear: left;
+    font-size: var(--step-3);
+    line-height: 4;
     text-align: center;
     text-decoration: slateblue solid underline;
     text-underline-position: under;
