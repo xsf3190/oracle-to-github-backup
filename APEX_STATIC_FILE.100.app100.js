@@ -1,5 +1,4 @@
 let gArticleId,
-    gCloudName,
     perfObj = {images: []};
 
 const cards = document.querySelector(".cards"),
@@ -41,6 +40,7 @@ const checkPerformance = () => {
 window.addEventListener("DOMContentLoaded", (event) => {
     console.log("DOM fully loaded and parsed");
     console.log("APP_USER",apex.env.APP_USER);
+
     /*
     **  Set click event handler on containing elements of cards and gallery
     */
@@ -148,12 +148,30 @@ popupClose.addEventListener("click",  () => {
 });
 
 const saveData = async ( data ) => {
+    execProcess("updateContent", {
+        x01: gArticleId, 
+        x02: document.querySelector(".ck-word-count__words").textContent, 
+        x03: document.querySelector(".ck-word-count__characters").textContent, 
+        p_clob_01: data}).then( (data) => {
+            if (data.articleId) {
+                gArticleId=data.articleId;
+                li = document.querySelector("[data-id='0']");    
+                li.dataset.id = data.articleId;
+                li.querySelector(".fa-id-card").textContent = data.articleId;
+            }
+        });
+
+
+    /*
     await execProcess("updateContent", {
             x01: gArticleId,
             x02: document.querySelector(".ck-word-count__words").textContent,
             x03: document.querySelector(".ck-word-count__characters").textContent,
             p_clob_01: data
         });
+    */
+
+    
 }
 
 const getCldSignature = async (callback, params_to_sign) => {
@@ -165,6 +183,7 @@ const getCldSignature = async (callback, params_to_sign) => {
 const widget=cloudinary.createUploadWidget(
     { 
         uploadSignature: getCldSignature,
+        clientAllowedFormats: ['image','video','audio'],
         sources: [
             "local",
             "url",
@@ -214,14 +233,20 @@ const widget=cloudinary.createUploadWidget(
                         "width": item.uploadInfo.width,
                         "height": item.uploadInfo.height,
                         "format": item.uploadInfo.format,
-                        "cld_cloud_name": gCloudName,
+                        "cld_cloud_name": item.uploadInfo.url.split("/")[3],
                         "article_id": item.uploadInfo.tags[0]
                     });
                 }
             });
             execProcess("uploadMetadata",{p_clob_01: JSON.stringify(metadata)}).then( (data) => {
-                let li = document.querySelector("[data-id='" + data.articleId + "']"),
-                    nomedia = li.querySelector("button.no-media.upload-media");
+                let li = document.querySelector("[data-id='" + data.articleId + "']");
+                if (!li) {
+                    // Article row inserted at this point so update UI
+                    li = document.querySelector("[data-id='0']");
+                    li.dataset.id = data.articleId;
+                    li.querySelector(".fa-id-card").textContent = data.articleId;
+                }
+                let nomedia = li.querySelector("button.no-media.upload-media");
                 if (nomedia) {
                     const img = document.createElement("img");
                     img.src = data.imgurl;
@@ -290,13 +315,7 @@ const copy_card = (articleId) => {
 const upload_media = (articleId) => {
     execProcess( "getCldDetails",{x01: articleId}).then( (data) => {
         widget.open();
-        widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey});
-        gCloudName = data.cloudname;
-        if (articleId === "0") {
-            let li = document.querySelector(".cards").children[1];
-            li.dataset.id = data.articleId;
-            li.querySelector(".fa-id-card").textContent = data.articleId;
-        }
+        widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
     });
 }
 
@@ -304,15 +323,11 @@ const upload_media = (articleId) => {
  ** GET CONTENT FOR RICH TEXT EDITOR 
  */
 const edit_text = (articleId,button) => {
+    gArticleId = articleId;
     if (articleId === "0") {
-        execProcess( "insertArticle").then( (data) => {
-            document.querySelector(".cards").children[1].dataset.id = data.articleId;
-            gArticleId = data.articleId;
-            apex.item( "P2_RICH_TEXT_EDITOR" ).setValue("");
-            apex.theme.openRegion("editor");
-        });
+        apex.item( "P2_RICH_TEXT_EDITOR" ).setValue("");
+        apex.theme.openRegion("editor");
     } else {
-        gArticleId = articleId;
         execProcess( "getContent", {x01: gArticleId}, {loadingIndicator:button}).then( (data) => {
             apex.item( "P2_RICH_TEXT_EDITOR" ).setValue(data.content);
             apex.theme.openRegion("editor");
@@ -392,7 +407,7 @@ const save_and_exit = () => {
 const show_gallery = (articleId) => {
     execProcess( "getThumbnails", {x01: articleId}).then( (data) => {
         apex.theme.openRegion("gallery");
-        console.log("galleryList",galleryList)
+
         galleryList.replaceChildren();
         galleryList.insertAdjacentHTML('afterbegin',data.content);
         gArticleId = articleId;
