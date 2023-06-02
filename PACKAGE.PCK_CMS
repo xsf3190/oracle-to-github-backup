@@ -269,25 +269,47 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE getCldDetails IS
         l_article_id article.id%type:=apex_application.g_x01;
         l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
-    BEGIN
-        IF (l_article_id=0) THEN
-            INSERT INTO article(id, author_user_id, created_date) VALUES (seq_article.nextval, l_user_id, current_date);
-            l_article_id:=seq_article.currval;
-        END IF;
-        
-        /* get Cloudinary details either of logged on user of the hosting Cloudinary user */
-        FOR C IN (SELECT NVL(u1.cld_cloud_name,u2.cld_cloud_name) cld_cloud_name, NVL(u1.cld_api_key, u2.cld_api_key) cld_api_key, NVL(u1.cld_api_secret,u2.cld_api_secret) cld_api_secret
-                    FROM users u1, users u2
-                   WHERE u1.id=l_user_id
-                     AND u2.hosting_user_ind='Y')
-        LOOP
+        l_cld_cloud_name users.cld_cloud_name%type;
+        l_cld_api_key users.cld_api_key%type;
+        l_cld_api_secret users.cld_api_secret%type;
+        l_image_max_size usage.image_max_size%type;
+        l_video_max_size usage.video_max_size%type;
+    BEGIN      
+        /* get Cloudinary details either of logged on user of the hosting user */
+        BEGIN
+            SELECT cld_cloud_name, cld_api_key, image_max_size, video_max_size
+              INTO l_cld_cloud_name, l_cld_api_key, l_image_max_size, l_video_max_size
+              FROM 
+                    (
+                        SELECT ROW_NUMBER() OVER (ORDER BY usage_date DESC) rn, users.cld_cloud_name, users.cld_api_key, usage.image_max_size, usage.video_max_size
+                        FROM users, usage 
+                        WHERE users.id=l_user_id
+                        AND usage.user_id=users.id
+                    ) 
+             WHERE rn=1;
+             
+            EXCEPTION
+                WHEN NO_DATA_FOUND THEN
+                    SELECT cld_cloud_name, cld_api_key, image_max_size, video_max_size
+                      INTO l_cld_cloud_name, l_cld_api_key, l_image_max_size, l_video_max_size
+                      FROM 
+                            (
+                                SELECT ROW_NUMBER() OVER (ORDER BY usage_date DESC) rn, users.cld_cloud_name, users.cld_api_key, usage.image_max_size, usage.video_max_size
+                                FROM users, usage 
+                                WHERE users.hosting_user_ind='Y'
+                                AND usage.user_id=users.id
+                            ) 
+                     WHERE rn=1;               
+            END;
+
             apex_json.open_object; 
             apex_json.write('success', TRUE);
-            apex_json.write('cloudname', C.cld_cloud_name);
-            apex_json.write('apikey', C.cld_api_key);
-            apex_json.write('articleId', l_article_id);
+            apex_json.write('cloudname', l_cld_cloud_name);
+            apex_json.write('apikey', l_cld_api_key);
+            apex_json.write('maxImageFileSize', l_image_max_size);
+            apex_json.write('maxVideoFileSize', l_video_max_size);
+            apex_json.write('articleId', CASE WHEN l_article_id=0 THEN seq_article.nextval ELSE l_article_id END);
             apex_json.close_object;
-        END LOOP;
         
         EXCEPTION
             WHEN OTHERS THEN
@@ -382,7 +404,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_timezone users.client_tz%type:=apex_util.get_session_state('APP_CLIENT_TZ');
     BEGIN
         IF (l_timezone IS NOT NULL) THEN
-            RETURN ( TO_CHAR(pTimestamp AT TIME ZONE l_timezone, 'dd Mon yyyy hh24:mi:ss TZD') );
+            RETURN ( TO_CHAR(pTimestamp AT TIME ZONE l_timezone, 'dd Mon yyyy fmhh:mi PM') );
         ELSE
             RETURN ( TO_CHAR(pTimestamp, 'dd Mon yyyy'));
         END IF;
@@ -715,10 +737,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         '<div class="homepage">
             <img src="https://res.cloudinary.com/mrbapex/q_auto,f_auto,w_491/homepage_roc9wg" alt="Architecture of always free lightweight CMS application">
 
-                <p>Lightweight Content Management System (CMS) built using <span>Always Free</span> ad-free services provided by Oracle and Cloudinary.
+                <p>Lightweight Content Management System built using <span>Always Free</span> <strong>ad-free</strong> services provided by Oracle and Cloudinary.
                 Authenticated by Facebook or Google, users securely upload media to their Cloudinary account and create content for publication.</p>
                 
-                <p>The application backs up itself and its data every day to a <a href="https://github.com/xsf3190/oracle-to-github-backup">Github repository</a> 
+                <p>The application backs up itself and its data every day to a <a href="https://github.com/xsf3190/oracle-to-github-backup" target="_blank">Github repository</a> 
                 from which it automatically restores itself into a companion recovery database.</p>
                 
                 <p>An <span>Always Free</span> Autonomous database (ADB) can store hundreds of thousands of media URLs and articles.</p>
@@ -896,10 +918,15 @@ PROCEDURE getThumbnails IS
         l_updated_date article.updated_date%type:=current_timestamp;
         nb_assets PLS_INTEGER;
     BEGIN
-        SELECT article_id INTO l_article_id
-        FROM JSON_TABLE(l_metadata FORMAT JSON, '$.images[*]' COLUMNS (article_id)) WHERE ROWNUM=1;
+        SELECT article_id 
+          INTO l_article_id
+          FROM JSON_TABLE(l_metadata FORMAT JSON, '$.images[*]' COLUMNS (article_id)) WHERE ROWNUM=1;
         
-        UPDATE article SET updated_date=current_timestamp WHERE id=l_article_id;
+        MERGE INTO article t
+        USING (SELECT l_article_id article_id FROM dual) s
+           ON (t.id=s.article_id)
+         WHEN MATCHED THEN UPDATE SET updated_date=current_timestamp
+         WHEN NOT MATCHED THEN INSERT (id, author_user_id, created_date) VALUES (s.article_id, l_user_id, current_timestamp);
         
         SELECT NVL(MAX(display_order),0) INTO l_start_order FROM asset WHERE article_id=l_article_id;
 
@@ -1135,15 +1162,22 @@ PROCEDURE getThumbnails IS
         l_word_count NUMBER:=REGEXP_SUBSTR(l_word_count_item,'(\d)+');
         l_char_count NUMBER:=REGEXP_SUBSTR(l_char_count_item,'(\d)+');  
     BEGIN
+        /* Ignore when CKEditor savedata function is called during widget initialization */
         IF (l_article_id IS NULL) THEN
             RETURN;
         END IF;
-
-        UPDATE article SET body=apex_application.g_clob_01, word_count=l_word_count, char_count=l_char_count, updated_date=current_timestamp
-         WHERE id=l_article_id;
-                  
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
+        
+        IF (l_article_id=0) THEN
+            INSERT INTO article(id, author_user_id, created_date) VALUES (seq_article.nextval, apex_util.get_session_state('APP_USER_ID'), current_date);
+        ELSE
+            UPDATE article SET body=apex_application.g_clob_01, word_count=l_word_count, char_count=l_char_count, updated_date=current_timestamp WHERE id=l_article_id;
+        END IF;
+        
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        IF (l_article_id=0) THEN
+            APEX_JSON.write('articleId',seq_article.currval);
+        END IF;
         apex_json.close_object;
          
         EXCEPTION
