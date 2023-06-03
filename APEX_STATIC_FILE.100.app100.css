@@ -172,6 +172,7 @@ dialog h2 {
     line-height: 1.2;
     text-decoration: slateblue solid underline;
     text-underline-position: under;
+    text-align: center;
 }
 
 dialog p {
@@ -180,7 +181,12 @@ dialog p {
 
 dialog button.close {
     place-self: start end;
-    border-radius: 50%;
+    min-height: 44px;
+    min-width: 44px;
+    background-color: transparent;
+    font-size: var(--step-1);
+    color: var(--color-button);
+    outline: 0;
 }
 
 button {
