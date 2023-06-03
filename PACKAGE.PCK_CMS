@@ -6,21 +6,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE deleteAll(pUserId IN users.id%type);
     --
-    PROCEDURE deleteAllSubmit;
-    --
     PROCEDURE deleteArticle;
     --
     PROCEDURE deleteAsset;
     --
-    PROCEDURE deleteAssetCld(pCloudName IN VARCHAR2, pPublicId IN VARCHAR2);
-    --
-    PROCEDURE deleteAssets(pArticleId IN asset.article_id%type, pResourceType IN asset.resource_type%type);
-    --
-    PROCEDURE download_app_export;
-    --
     FUNCTION getArticles RETURN CLOB;
-    --
-    PROCEDURE getAssetKey(pUrl IN VARCHAR2, pCld_cloud_name IN OUT asset.cld_cloud_name%type, pResource_type IN OUT asset.resource_type%type, pPublic_id IN OUT asset.public_id%type);
     --
     PROCEDURE getCldDetails;
     --
@@ -38,13 +28,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getPerformance;
     --
-    --PROCEDURE getPerformance(pDbid IN ROWID DEFAULT NULL);
-    --
     PROCEDURE getThumbnails;
     --
     PROCEDURE getUsage(pUserId IN users.id%type DEFAULT NULL, pUsageDate IN DATE DEFAULT NULL);
-    --
-    PROCEDURE insertArticle;
     --
     PROCEDURE log(pMsg IN VARCHAR2);
     --
@@ -62,13 +48,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE setClientTZ;
     --
-    PROCEDURE transferAssets(pUserId IN users.id%type);
-    --
     PROCEDURE updateAsset;
     --
     PROCEDURE updateContent;
-    --
-    PROCEDURE uploadAnalytics;
     --
     PROCEDURE uploadMetadata;
     --
@@ -370,32 +352,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
     
-    /*  Extract ASSET primary key fields from cloudinary url 
-    **  https://res.cloudinary.com/{cloud_name}/transform_params/{public_id}   (/image/upload/ not included in published image urls)
-    */
-    PROCEDURE getAssetKey(pUrl IN VARCHAR2, pCld_cloud_name IN OUT asset.cld_cloud_name%type, pResource_type IN OUT asset.resource_type%type, pPublic_id IN OUT asset.public_id%type) IS
-        p1 PLS_INTEGER;
-        p2 PLS_INTEGER;
-        p3 PLS_INTEGER;
-    BEGIN
-        p1:=INSTR(pUrl,'/',1,3);
-        p2:=INSTR(pUrl,'/',1,4);
-        
-        pCld_cloud_name:=SUBSTR(pUrl,p1+1,p2-p1-1);
-        
-        pPublic_id:=SUBSTR(pUrl,INSTR(pUrl,'/',-1)+1);
-        
-        IF (INSTR(pUrl,'/video/')>0) THEN
-            pResource_type:='video';
-            p3:=INSTR(pPublic_id,'.',-1);
-            IF (p3>0) THEN
-                pPublic_id:=SUBSTR(pPublic_id,1,p3-1);
-            END IF;
-        ELSE
-            pResource_type:='image';
-        END IF;
-    END;
-    
     /*
      **  Format timestamp according to user's current time zone
      */
@@ -466,6 +422,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_excerpt       VARCHAR2(161);
         l_excerpt_more  VARCHAR2(3);
         l_excerpt_words VARCHAR2(15);
+        --l_extra_link_attributes apex_t_varchar2('target', '_blank');
         
         PROCEDURE split2(pInput IN VARCHAR2, pMaxLen1 IN INTEGER, pOutput1 IN OUT VARCHAR2, pMore1 IN OUT VARCHAR2, 
                                              pMaxLen2 IN INTEGER, pOutput2 IN OUT VARCHAR2, pMore2 IN OUT VARCHAR2) IS
@@ -518,7 +475,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     FROM article 
                    WHERE id=l_article_id) 
         LOOP
-            l_body_html := APEX_MARKDOWN.TO_HTML (p_markdown => C.body, p_embedded_html_mode => APEX_MARKDOWN.c_embedded_html_preserve); -- escapes special characters while preserving embedded html
+            l_body_html := APEX_MARKDOWN.TO_HTML (p_markdown => C.body, p_embedded_html_mode => APEX_MARKDOWN.c_embedded_html_preserve, p_extra_link_attributes => apex_t_varchar2('target', '_blank')); -- escapes special characters while preserving embedded html
             apex_escape.set_html_escaping_mode('E');
             l_plain_text:=dbms_lob.substr(utl_i18n.unescape_reference(APEX_ESCAPE.STRIPHTML(l_body_html)),title_len+excerpt_len+20,1); -- strip html to plain text, removing any XSS embedded in <script></noscript>
             l_plain_text:=APEX_ESCAPE.STRIPHTML(l_plain_text);
@@ -571,23 +528,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         APEX_JSON.write('success', TRUE);
         APEX_JSON.write('articleId',seq_article.currval);
         APEX_JSON.write('updated', fmtUpdatedDate(current_date));
-        APEX_JSON.close_object;
-               
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-    END;    
-
-    /*
-     **  Create new article article returning new article ID
-     */    
-    PROCEDURE insertArticle IS
-    BEGIN
-        INSERT INTO article(id, author_user_id, created_date) VALUES (seq_article.nextval, apex_util.get_session_state('APP_USER_ID'), current_date);
-        
-        APEX_JSON.open_object; 
-        APEX_JSON.write('success', TRUE);
-        APEX_JSON.write('articleId',seq_article.currval);
         APEX_JSON.close_object;
                
         EXCEPTION
@@ -668,12 +608,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                           <ul class="dropdown-items">
                             <li><button type="button" class="fa fa-cloud-upload upload-media">Upload</button></li>
                             <li><button type="button" class="fa fa-edit edit-text">Edit</button></li>
-                            <li><button type="button" class="fa fa-newspaper-o preview">Preview</button></li>' ||
+                            <li><button type="button" class="fa fa-newspaper-o preview"' || CASE WHEN C.id<0 THEN ' disabled' END || '>Preview</button></li>' ||
                             CASE 
                               WHEN C.is_public='Y' THEN 
                                 '<li><button type="button" class="fa fa-share2 unpublish">Unpublish</button></li>'
                               ELSE 
-                                '<li><button type="button" class="fa fa-share2 publish">Publish</button></li>'
+                                '<li><button type="button" class="fa fa-share2 publish"' || CASE WHEN C.id<0 THEN ' disabled' END || '>Publish</button></li>'
                             END 
                             || '
                             <li><button type="button" class="fa fa-trash delete">Delete</button></li>
@@ -737,11 +677,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         '<div class="homepage">
             <img src="https://res.cloudinary.com/mrbapex/q_auto,f_auto,w_491/homepage_roc9wg" alt="Architecture of always free lightweight CMS application">
 
-                <p>Lightweight Content Management System built using <span>Always Free</span> <strong>ad-free</strong> services provided by Oracle and Cloudinary.
+                <p>A lightweight Content Management System built using <span>Always Free</span> <strong>ad-free</strong> services provided by Oracle and Cloudinary.
                 Authenticated by Facebook or Google, users securely upload media to their Cloudinary account and create content for publication.</p>
                 
                 <p>The application backs up itself and its data every day to a <a href="https://github.com/xsf3190/oracle-to-github-backup" target="_blank">Github repository</a> 
-                from which it automatically restores itself into a companion recovery database.</p>
+                from which it is automatically restored into a recovery database.</p>
                 
                 <p>An <span>Always Free</span> Autonomous database (ADB) can store hundreds of thousands of media URLs and articles.</p>
                 
@@ -749,6 +689,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 at low bandwidth cost through its fast CDN network and dynamic sizing mechanisms.</p>
                 
                 <p>Media download performance on all client devices is automatically captured and uploaded to the database.</p>
+                
+                <p><a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">Login Facebook</a></p>
+                <p><a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">Login Google</a></p>
 
          </div>
          <h2>PUBLISHED ARTICLES</h2>
@@ -1064,50 +1007,6 @@ PROCEDURE getThumbnails IS
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);        
-    END;    
-    
-    PROCEDURE getPerformancex(pDbid IN ROWID) IS
-        l_dbid ROWID:=apex_application.g_x01;
-        l_content CLOB;
-        l_ip_address performance.ip_address%type;
-    BEGIN
-        IF (apex_authentication.is_authenticated) THEN
-            l_ip_address:=NULL;
-        ELSE
-            l_ip_address:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
-        END IF;
-        
-        /* 1 list item per performance row in descending order capture_date */
-        l_content:=to_clob('<ol>');
-        FOR C IN (SELECT p.capture_date, url, transfersize, duration, window_innerwidth, servertiming
-                    FROM asset a, performance p
-                   WHERE a.ROWID=NVL(pDbid,l_dbid)
-                     AND a.cld_cloud_name=p.cld_cloud_name
-                     AND a.resource_type=p.resource_type
-                     AND a.public_id=p.public_id
-                     AND p.ip_address = NVL(l_ip_address, p.ip_address)
-                    ORDER BY p.capture_date DESC )
-        LOOP
-            l_content:=l_content || to_clob(
-                '<li>
-                    <span>downloaded:</span><span>' || fmtUpdatedDate(C.capture_date) || '</span>
-                    <span>url:</span><span>' || C.url || '</span>
-                    <span>transfer:</span><span>' || apex_string_util.to_display_filesize(C.transfersize) ||'</span>
-                    <span>duration:</span><span>' || C.duration ||'ms</span>
-                    <span>servertiming:</span><span>' || C.servertiming || '</span>
-                </li>');
-        END LOOP;
-        
-        l_content:=l_content || to_clob('</ol>');
-        
-        APEX_JSON.open_object; 
-        APEX_JSON.write('success', TRUE);
-        APEX_JSON.write('content', l_content);
-        APEX_JSON.close_object;          
-        
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);        
     END;
     
     /*
@@ -1214,9 +1113,19 @@ PROCEDURE getThumbnails IS
      */   
     PROCEDURE deleteArticle IS
         l_article_id article.id%type:=apex_application.g_x01;
-        n PLS_INTEGER;
+        l_clob CLOB;
+        l_url VARCHAR2(500);
     BEGIN
-        n:=deleteUploadedMedia(l_article_id);
+        FOR C IN (SELECT DISTINCT a.resource_type, u.cld_cloud_name, u.cld_api_key, u.cld_api_secret 
+                    FROM users u, article t, asset a
+                   WHERE t.id=l_article_id
+                     AND t.author_user_id=u.id
+                     AND t.id=a.article_id)
+        LOOP
+            l_url:='https://api.cloudinary.com/v1_1/' || C.cld_cloud_name || '/resources/' || C.resource_type || '/tags/' || l_article_id;
+            l_clob := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'DELETE',p_username=>C.cld_api_key,p_password=>C.cld_api_secret); 
+            log(l_clob);
+        END LOOP;
         
         DELETE asset WHERE article_id=l_article_id;
         
@@ -1262,45 +1171,6 @@ PROCEDURE getThumbnails IS
         l_rowid ROWID:=CHARTOROWID(l_asset_dbid);
         l_cld_cloud_name asset.cld_cloud_name%type;
         l_public_id asset.public_id%type;
-        l_job_name user_scheduler_jobs.job_name%type:=dbms_scheduler.generate_job_name(prefix=>'deleteAsset');
-    BEGIN
-        DELETE asset WHERE ROWID=l_rowid RETURNING cld_cloud_name, public_id INTO l_cld_cloud_name, l_public_id;
-        
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.close_object;
-        
-        -- submit job to delete Cloudinary asset in background
-        
-        dbms_scheduler.create_job (
-            job_name => l_job_name,
-            program_name => 'P_DELETEASSETCLD',
-            enabled => FALSE);
-            
-        dbms_scheduler.set_job_argument_value(
-            job_name          => l_job_name,
-            argument_name => 'P_CLOUD_NAME',
-            argument_value    => l_cld_cloud_name);
-            
-        dbms_scheduler.set_job_argument_value(
-            job_name          => l_job_name,
-            argument_name => 'P_PUBLIC_ID',
-            argument_value    => l_public_id);            
-            
-        dbms_scheduler.enable (name => l_job_name);        
-        
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-    END;      
-    
-    /*
-     **  Delete asset from user's Cloudinary account
-     */   
-    PROCEDURE deleteAssetCld(pCloudName IN VARCHAR2, pPublicId IN VARCHAR2) IS
-        l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
-        l_url VARCHAR2(100);
-        l_clob CLOB;
         l_cld_api_key users.cld_api_key%type;
         l_cld_api_secret users.cld_api_secret%type;
         l_parm_names apex_application_global.VC_ARR2;
@@ -1309,18 +1179,19 @@ PROCEDURE getThumbnails IS
         l_signature VARCHAR2(100);
         l_string_to_sign varchar2(2000);  
         l_error_message VARCHAR2(500);
-        l_output_msg VARCHAR2(500);
+        l_clob CLOB;
     BEGIN
-        SELECT cld_api_key, cld_api_secret
-          INTO l_cld_api_key, l_cld_api_secret
-          FROM users
-         WHERE cld_cloud_name=pCloudName;
-
-
+        SELECT a.cld_cloud_name, a.public_id, u.cld_api_key, u.cld_api_secret
+          INTO l_cld_cloud_name, l_public_id, l_cld_api_key, l_cld_api_secret
+          FROM asset a, article t, users u
+         WHERE a.ROWID=l_rowid
+           AND a.article_id=t.id
+           AND t.author_user_id=u.id;
+        
         l_parm_names(1):='invalidate';
         l_parm_values(1):='true';
         l_parm_names(2):='public_id';
-        l_parm_values(2):=pPublicId;        
+        l_parm_values(2):=l_public_id;        
         l_parm_names(3):='timestamp';    
         l_parm_values(3):=l_timestamp;                
         
@@ -1334,39 +1205,29 @@ PROCEDURE getThumbnails IS
         l_parm_names(5):='api_key';
         l_parm_values(5):=l_cld_api_key;            
         
-        l_url:='https://api.cloudinary.com/v1_1/' || pCloudName || '/image/destroy';
         l_clob := apex_web_service.make_rest_request(
-            p_url=>l_url, 
+            p_url=>'https://api.cloudinary.com/v1_1/' || l_cld_cloud_name || '/image/destroy', 
             p_http_method=>'POST',
             p_parm_name=>l_parm_names,
             p_parm_value=>l_parm_values); 
 
         SELECT error_message INTO l_error_message FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS error_message VARCHAR2(500) PATH '$.error.message');
         
-        -- Using dbms_output in job logs message to user_scheduler_job_run_details.output
-        l_output_msg:='pck_cms.deleteAssetCld(pCloudName=>''' || pCloudName || ''',pPublicId=>''' || pPublicId || ''')';
-        IF (l_error_message IS NULL) THEN
-            dbms_output.put_line('SUCCESS: ' || l_output_msg); 
-        ELSE
-            dbms_output.put_line('ERROR: ' || l_output_msg || ' - ' || l_error_message); 
+        IF (l_error_message IS NOT NULL) THEN
+            log(l_clob);
+            RAISE_APPLICATION_ERROR(-20001, l_error_message);
         END IF;
         
+        DELETE asset WHERE ROWID=l_rowid;
+        
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm);
-                RAISE;    
-    END;    
-    
-    /*
-     **  Delete asset rows for a given article
-     */   
-    PROCEDURE deleteAssets(pArticleId IN asset.article_id%type, pResourceType IN asset.resource_type%type) IS
-        n NUMBER;
-    BEGIN
-        n:=deleteUploadedMedia(pArticleId, pResourceType);
-        
-        DELETE asset WHERE article_id=pArticleId AND resource_type=pResourceType;
-    END;    
+                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+    END;
     
     /*
      **  Remove user and all articles, assets,grants etc. Runs as a background job 
@@ -1392,35 +1253,6 @@ PROCEDURE getThumbnails IS
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm);
                 RAISE;        
-    END;
-
-    /*
-     **  Submit background job to remove user and all articles, assets,grants etc.
-     */       
-    PROCEDURE deleteAllSubmit IS
-        l_job_name VARCHAR2(30);
-        l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
-    BEGIN
-        l_job_name:='DELETE_USER_DATA_'||l_user_id;
-        
-        dbms_scheduler.create_job(
-            job_name =>  l_job_name,
-            program_name => 'P_DELETE_ALL',
-            enabled =>    FALSE );
-            
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_name => 'PUSERID',
-            argument_value => l_user_id);
-        
-        dbms_scheduler.enable(l_job_name);
-        
-        apex_application.g_x01:='All User Data being deleted';
-        
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm);
-                RAISE;
     END;
     
     /*
@@ -1507,97 +1339,7 @@ PROCEDURE getThumbnails IS
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
-    /**
-     **   Transfer user's assets to their new Cloudinary account
-     **   Procedure called by dbms_scheduler job
-     */    
-    PROCEDURE transferAssets(pUserId IN users.id%type) IS
-        l_cld_cloud_name users.cld_cloud_name%type;
-        l_cld_api_key users.cld_api_key%type;
-        l_cld_api_secret users.cld_api_secret%type;
-        l_url VARCHAR2(500);
-        l_parm_names apex_application_global.VC_ARR2;
-        l_parm_values apex_application_global.VC_ARR2;
-        l_timestamp NUMBER:=trunc((cast(current_timestamp at time zone 'UTC' as date) - to_date('01-jan-1970','dd-mon-yyyy')) * (86400));
-        l_signature VARCHAR2(100);
-        l_string_to_sign varchar2(2000);
-        l_public_id asset.public_id%type;
-        l_clob CLOB;
-        n INTEGER;
-        TYPE t_asset IS RECORD(
-            cld_cloud_from asset.cld_cloud_name%type, 
-            article_id asset.article_id%type, 
-            resource_type asset.resource_type%type,
-            public_id asset.public_id%type,
-            rid ROWID);
-        TYPE tt_asset IS TABLE OF t_asset;
-        l_assets tt_asset;
-    BEGIN
-        log('Starting transfer for pUserId:'||pUserId);
-        
-        SELECT cld_cloud_name, cld_api_key, cld_api_secret INTO l_cld_cloud_name, l_cld_api_key, l_cld_api_secret FROM users WHERE id=pUserId;
-        
-        SELECT a.cld_cloud_name, a.article_id, a.resource_type, a.public_id, a.rowid 
-          BULK COLLECT INTO l_assets
-          FROM article t, asset a 
-         WHERE t.author_user_id=pUserId
-           AND t.id=a.article_id;
-                    
-        FOR i IN l_assets.FIRST..l_assets.LAST LOOP
-            l_url:='https://api.cloudinary.com/v1_1/' || l_cld_cloud_name || '/' || l_assets(i).resource_type || '/upload';
-            
-            l_parm_names(1):='file';    
-            l_parm_values(1):='https://res.cloudinary.com/' || l_assets(i).cld_cloud_from || '/' || l_assets(i).resource_type || '/upload/' || l_assets(i).public_id;
-            l_parm_names(2):='api_key';    
-            l_parm_values(2):=l_cld_api_key;            
-            l_parm_names(3):='public_id';    
-            l_parm_values(3):=l_assets(i).public_id;
-            l_parm_names(4):='tags';    
-            l_parm_values(4):=l_assets(i).article_id;
-            l_parm_names(5):='timestamp';    
-            l_parm_values(5):=l_timestamp;                
-            
-            l_string_to_sign:=NULL;
-            FOR I IN 3..5 LOOP
-                l_string_to_sign:=l_string_to_sign || l_parm_names(i) || '=' || l_parm_values(i) || '&';
-            END LOOP;
-            l_string_to_sign:=RTRIM(l_string_to_sign,'&') || l_cld_api_secret;
-            l_parm_names(6):='signature';
-            l_parm_values(6):=dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign), dbms_crypto.HASH_SH1);
-            
-            log(pUserId || ': Transferring public_id ' || l_assets(i).public_id);
-            l_clob:=apex_web_service.make_rest_request(
-                p_url=>l_url, 
-                p_http_method=>'POST',
-                p_username=>l_cld_api_key,
-                p_password=>l_cld_api_secret,
-                p_parm_name=>l_parm_names,
-                p_parm_value=>l_parm_values
-            );      
-        END LOOP;
-        
-        -- Delete transferred Media from the original hosting account.
-        FOR C IN (SELECT t.id 
-                    FROM article t
-                   WHERE t.author_user_id=pUserId
-                     AND EXISTS (SELECT null FROM asset a WHERE t.id=a.article_id) )
-        LOOP 
-            n:=deleteUploadedMedia(C.id); 
-            log(pUserId || ': Deleted article ' || C.id || ' including ' || n || ' assets.' );
-        END LOOP;           
-        
-        -- Update the assets table with user's new cloud name
-        FORALL i IN l_assets.first .. l_assets.last
-        UPDATE asset
-           SET cld_cloud_name=l_cld_cloud_name
-         WHERE ROWID  = l_assets(i).rid;
-        n:=SQL%ROWCOUNT;   
-        
-        log(pUserId || ': Transferred ' || n || ' assets from ' || l_assets(1).cld_cloud_from || ' to ' || l_cld_cloud_name);
-        
-        COMMIT;     
-    END;
+
     
     /**
      **    Update user's record  with Cloudinary API details. Submit background job to transfer users's Cloudinary assets.
@@ -1758,73 +1500,6 @@ PROCEDURE getThumbnails IS
                 );
         END LOOP;
         COMMIT;
-    END;
-    
-    PROCEDURE uploadAnalytics IS
-    BEGIN
-        FOR C IN (SELECT dbid, transferSize, contentType FROM JSON_TABLE(apex_application.g_clob_01 FORMAT JSON, '$.images[*]' COLUMNS (dbid, transferSize, contentType)) )
-        LOOP
-            log(C.dbid || ',' || C.transferSize || ',' || C.contentType);
-        END LOOP;
-    END;
-    
-    /*
-     **  Download APEX application on user request
-     */
-    PROCEDURE download_app_export IS
-        l_files apex_t_export_files;
-        l_blob blob;
-        l_dest_offset NUMBER := 1;
-        l_src_offset  NUMBER := 1;
-        l_lang		  NUMBER := 0;
-        l_warning     VARCHAR2 (1000);
-        l_zip_file_name VARCHAR2(50):='APEX_Application.zip';
-        l_zip_file blob;     
-        l_mail_id  NUMBER;
-    BEGIN
-        /* create export of the application - file type is clob */
-        l_files := apex_export.get_application(p_application_id => apex_application.g_flow_id, p_with_date=>true);
-        
-        /* convert clob to blob for apex_zip */
-        DBMS_LOB.CREATETEMPORARY (l_blob, FALSE);
-        DBMS_LOB.CONVERTTOBLOB(l_blob,l_files(1).contents,DBMS_LOB.LOBMAXSIZE,l_dest_offset,l_src_offset,DBMS_LOB.DEFAULT_CSID,l_lang,l_warning);
-        
-        /* create zip file containing the export file */
-        apex_zip.add_file (
-            p_zipped_blob => l_zip_file,
-            p_file_name   => l_files(1).name,
-            p_content     =>  l_blob);
-        apex_zip.finish (p_zipped_blob => l_zip_file );
-        
-        l_mail_id:=apex_mail.send(
-            p_to        => 'mark.russellbrown@gmail.com',
-            p_from      => 'mark.russellbrown@gmail.com',
-            p_body      => 'Attachment message body.',
-            p_subj      => 'Attachment message subject.');
-            
-        apex_mail.add_attachment(
-            p_mail_id    => l_mail_id,
-            p_attachment => l_zip_file,
-            p_filename   => 'apex_application.f100.zip',
-            p_mime_type  => 'application/octet-stream');
-            
-        apex_mail.push_queue(); 
-        
-        /* enable it to be downloaded */
-        sys.HTP.init;
-        sys.OWA_UTIL.mime_header('application/zip', FALSE);
-        sys.HTP.p('Content-Length: ' || DBMS_LOB.getlength(l_zip_file));
-        sys.HTP.p('Content-Disposition: filename="' || l_zip_file_name || '"');
-        sys.OWA_UTIL.http_header_close;
-        
-        sys.WPG_DOCLOAD.download_file(l_zip_file);
-        apex_application.stop_apex_engine;
-        DBMS_LOB.FREETEMPORARY (l_blob);
-        EXCEPTION
-            WHEN apex_application.e_stop_apex_engine THEN
-                NULL;
-            WHEN OTHERS THEN
-                HTP.p('Whoops');
     END;
 
 END;
