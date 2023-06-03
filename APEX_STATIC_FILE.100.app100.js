@@ -2,8 +2,7 @@ let gArticleId,
     perfObj = {images: []};
 
 const cards = document.querySelector(".cards"),
-      gallery = document.querySelector("#gallery .gallery-container"),
-      galleryList = gallery.querySelector("ul"),
+      galleryList = document.querySelector(".gallery-container ul"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
       popupConfirm = popup.querySelector("button.confirm"),
@@ -147,31 +146,28 @@ popupClose.addEventListener("click",  () => {
     popup.close();
 });
 
+/* 
+ ** CARD 0 HAS CONTENT SO ENABLE BUTTONS AND SET ID IN UI 
+ */
+const enable_card_zero = (articleId) => {
+    li = document.querySelector("[data-id='0']");
+    li.dataset.id = articleId;
+    li.querySelector(".fa-id-card").textContent = articleId;
+    li.querySelectorAll(".dropdown-items button:disabled").forEach((btn) => {
+        btn.disabled = false;
+    });
+    gArticleId=articleId;
+    return li;
+}
+
 const saveData = async ( data ) => {
-    execProcess("updateContent", {
-        x01: gArticleId, 
-        x02: document.querySelector(".ck-word-count__words").textContent, 
-        x03: document.querySelector(".ck-word-count__characters").textContent, 
-        p_clob_01: data}).then( (data) => {
-            if (data.articleId) {
-                gArticleId=data.articleId;
-                li = document.querySelector("[data-id='0']");    
-                li.dataset.id = data.articleId;
-                li.querySelector(".fa-id-card").textContent = data.articleId;
-            }
-        });
+    execProcess("updateContent", {x01: gArticleId, x02: document.querySelector(".ck-word-count__words").textContent, 
+                                  x03: document.querySelector(".ck-word-count__characters").textContent, p_clob_01: data}).then( (data) => {
+        if (data.articleId) {
+            enable_card_zero(data.articleId);
+        }
+    });
 
-
-    /*
-    await execProcess("updateContent", {
-            x01: gArticleId,
-            x02: document.querySelector(".ck-word-count__words").textContent,
-            x03: document.querySelector(".ck-word-count__characters").textContent,
-            p_clob_01: data
-        });
-    */
-
-    
 }
 
 const getCldSignature = async (callback, params_to_sign) => {
@@ -241,10 +237,7 @@ const widget=cloudinary.createUploadWidget(
             execProcess("uploadMetadata",{p_clob_01: JSON.stringify(metadata)}).then( (data) => {
                 let li = document.querySelector("[data-id='" + data.articleId + "']");
                 if (!li) {
-                    // Article row inserted at this point so update UI
-                    li = document.querySelector("[data-id='0']");
-                    li.dataset.id = data.articleId;
-                    li.querySelector(".fa-id-card").textContent = data.articleId;
+                    li = enable_card_zero(data.articleId);
                 }
                 let nomedia = li.querySelector("button.no-media.upload-media");
                 if (nomedia) {
@@ -417,12 +410,7 @@ const show_gallery = (articleId) => {
             document.querySelector("#ui-id-2").textContent = title.textContent;
         } else {
             document.querySelector("#ui-id-2").textContent = "Gallery";
-        }  
-
-        // simulate click if single gallery image
-        //if (gallery.childElementCount === 1) {
-        //    gallery.querySelector("img").click();
-        //}
+        }
     });
 };
 
@@ -973,7 +961,7 @@ if (lightbox_confirm_ok) {
         if (lightbox_figure.classList.contains("deleted")) {
             return;
         }
-        execProcess( "deleteAsset", {x01: selectedElement.parentElement.dataset.id}).then( (data) => {
+        execProcess( "deleteAsset", {x01: selectedElement.parentElement.dataset.id},{loadingIndicator:lightbox_confirm_ok}).then( (data) => {
             selectedElement.removeEventListener("click",showLightbox);
             lightbox_figure.classList.add("deleted");
             selectedElement.parentElement.classList.add("deleted");
@@ -982,8 +970,6 @@ if (lightbox_confirm_ok) {
 
             let title=document.querySelector("#ui-id-3"),
                 nb = Number(title.textContent.split("/").pop()) - 1;
-            console.log("title",title);
-            console.log("nb",nb);
             
             title.textContent = "x/" + nb;
             
