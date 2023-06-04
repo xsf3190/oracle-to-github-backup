@@ -168,6 +168,11 @@ dialog.preview > div {
   grid-template-columns: minmax(1rem, 1fr) minmax(auto, var(--preview-width)) minmax(1rem, 1fr);
 }
 
+dialog.preview .details {
+    display: flex;
+    justify-content: space-around;
+}
+
 dialog h2 {
     line-height: 1.2;
     text-decoration: slateblue solid underline;
@@ -177,6 +182,17 @@ dialog h2 {
 
 dialog p {
     line-height: 1.5;
+}
+
+dialog a {
+    outline: none;
+    text-decoration: underline;
+    text-underline-position: under;
+}
+
+dialog a:hover {
+    text-decoration: none;
+    background: var(--color-pale);
 }
 
 dialog button.close {
