@@ -648,7 +648,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 <div>
                     <div></div> <!-- empty div for preview grid -->
                     <div class="content ck-content"></div>
-                    <button type="button" class="close">&times;</button>
+                    <button type="button" class="close" autofocus>&times;</button>
                 </div>
             </dialog>
             <dialog class="perftable">
@@ -1037,11 +1037,17 @@ PROCEDURE getThumbnails IS
     PROCEDURE getContentHTML IS
         l_article_id article.id%type:=apex_application.g_x01;
     BEGIN
-        FOR C IN (SELECT body_html FROM article WHERE id=l_article_id) 
+        FOR C IN (SELECT a.body_html, UPPER(u.name) name, apex_util.get_since(a.created_date) created, CASE WHEN a.word_count<200 THEN 'less than a minute' ELSE ROUND(a.word_count/200) || ' minute read' END minutes 
+                    FROM article a, users u 
+                   WHERE a.id=l_article_id 
+                     AND author_user_id=u.id) 
         LOOP
             apex_json.open_object; 
             apex_json.write('success', TRUE); 
             apex_json.write('content', C.body_html); 
+            apex_json.write('name', C.name); 
+            apex_json.write('created', C.created); 
+            apex_json.write('minutes', C.minutes); 
             apex_json.close_object;
         END LOOP;
         
@@ -1169,6 +1175,7 @@ PROCEDURE getThumbnails IS
     PROCEDURE deleteAsset IS
         l_asset_dbid VARCHAR2(20) := apex_application.g_x01;
         l_rowid ROWID:=CHARTOROWID(l_asset_dbid);
+        l_article_id asset.article_id%type;
         l_cld_cloud_name asset.cld_cloud_name%type;
         l_public_id asset.public_id%type;
         l_cld_api_key users.cld_api_key%type;
@@ -1180,9 +1187,11 @@ PROCEDURE getThumbnails IS
         l_string_to_sign varchar2(2000);  
         l_error_message VARCHAR2(500);
         l_clob CLOB;
+        l_url VARCHAR2(500);
+        l_updated_date VARCHAR2(20);
     BEGIN
-        SELECT a.cld_cloud_name, a.public_id, u.cld_api_key, u.cld_api_secret
-          INTO l_cld_cloud_name, l_public_id, l_cld_api_key, l_cld_api_secret
+        SELECT a.article_id, a.cld_cloud_name, a.public_id, u.cld_api_key, u.cld_api_secret
+          INTO l_article_id, l_cld_cloud_name, l_public_id, l_cld_api_key, l_cld_api_secret
           FROM asset a, article t, users u
          WHERE a.ROWID=l_rowid
            AND a.article_id=t.id
@@ -1220,8 +1229,32 @@ PROCEDURE getThumbnails IS
         
         DELETE asset WHERE ROWID=l_rowid;
         
+        UPDATE article SET updated_date=current_date WHERE id=l_article_id;
+        
+        /* Check whether we need to change the article's cover page image */
+        FOR C IN (
+            SELECT rid, cld_cloud_name, resource_type, public_id, format, width
+            FROM 
+            (
+                SELECT ROWID rid, display_order, MIN(display_order) OVER () min_display_order,
+                        cld_cloud_name, resource_type, public_id, format, width
+                FROM asset 
+                WHERE article_id=l_article_id
+            )
+            WHERE display_order=min_display_order) 
+        LOOP
+            IF (l_rowid<>C.rid) THEN
+                l_url:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
+            END IF;
+        END LOOP;
+        
         apex_json.open_object; 
         apex_json.write('success', TRUE);
+        apex_json.write('articleId', l_article_id);
+        apex_json.write('updated', fmtUpdatedDate(current_date));
+        IF (l_url IS NOT NULL) THEN
+            apex_json.write('url', l_url);
+        END IF;
         apex_json.close_object;
 
         EXCEPTION
