@@ -340,6 +340,24 @@ const edit_text = (articleId,button) => {
 const preview_article = (articleId,button) => {
     execProcess( "getContentHTML", {x01: articleId}, {loadingIndicator:button}).then( (data) => {
         preview.querySelector(".content").innerHTML = data.content;
+
+        let details = document.createElement("div");
+        details.classList.add("details");
+
+        let name = document.createElement("span");
+        name.textContent=data.name;
+        details.appendChild(name);
+
+        let created = document.createElement("span");
+        created.textContent=data.created;
+        details.appendChild(created);
+
+        let minutes = document.createElement("span");
+        minutes.textContent=data.minutes;
+        details.appendChild(minutes);
+        
+        let content = preview.querySelector(".content");
+        content.firstChild.after(details);
         preview.showModal();
     });
 }
@@ -977,23 +995,31 @@ if (lightbox_confirm_ok) {
                 btn.disabled = true;
             });
 
-            /* update card gallery count */
-            let card = cards.querySelector("[data-id='" + gArticleId + "']");
+            /* update card gallery count and possibly the image on the home page */
+            let card = cards.querySelector("[data-id='" + data.articleId + "']"),
+                img = card.querySelector("img"),
+                show_gallery = card.querySelector(".show-gallery"),
+                updated_date = card.querySelector(".updated-date");
 
+            updated_date.textContent = data.updated;
+            
             if (nb === 0) {
                 lightbox_nav.querySelectorAll("button").forEach((btn) => {
                     btn.disabled = true;
                 });
-                let img = card.querySelector("img");
                 let nomedia = document.createElement("button");
                 nomedia.textContent = "UPLOAD MEDIA";
                 nomedia.classList.add("no-media","upload-media");
                 img.replaceWith(nomedia);
-                card.querySelector(".show-gallery").disabled = true;
-                card.querySelector(".show-gallery").textContent = "0/0"
+                show_gallery.disabled = true;
+                show_gallery.textContent = "0/0"
             } else {
-                card.querySelector(".show-gallery").textContent = "1/" + nb;
+                show_gallery.textContent = "1/" + nb;
             }
+            if (data.url) {
+                img.src = data.url;
+            }
+            
         });
     });
 }
