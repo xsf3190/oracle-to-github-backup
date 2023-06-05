@@ -274,16 +274,16 @@ const add_card = document.querySelector(".add-card");
 if (add_card) {
     add_card.addEventListener('click',  e => {
         // check that there isn't already a new card - i.e. the 2nd card with data-id="0" meaning that no content has yet been added to it
-        if (document.querySelector(".cards").children[1].dataset.id === "0") {
-            popupOpen("Forgive the mild reproof...","You already added a new card - add content to that one before adding another");
-        } else {
-            let first_card = document.querySelector(".card:first-child");
-            let clone = first_card.cloneNode(true);
-            first_card.style.display = "grid";
-            first_card.insertAdjacentElement('beforebegin',clone);
-            first_card.dataset.id = "0";
-            first_card.querySelector(".fa-id-card").textContent = "0";
+        if (cards.childElementCount>1 && cards.children[1].dataset.id === "0") {
+            popupOpen("No need to do that","... you already opened a new card");
+            return;
         }
+        let first_card = document.querySelector(".card:first-child");
+        let clone = first_card.cloneNode(true);
+        first_card.style.display = "grid";
+        first_card.insertAdjacentElement('beforebegin',clone);
+        first_card.dataset.id = "0";
+        first_card.querySelector(".fa-id-card").textContent = "0";
     });
 }
 
@@ -303,12 +303,25 @@ const copy_card = (articleId) => {
 };
 
 /* 
- ** UPLOAD MEDIA 
+ ** UPLOAD MEDIA. PROMPT FOR CLOUDINARY API KEY IF NON-SUBSCRIBER
  */
 const upload_media = (articleId) => {
     execProcess( "getCldDetails",{x01: articleId}).then( (data) => {
-        widget.open();
-        widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
+        if (data.cldapikey==="Y") {
+            widget.open();
+            widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
+            return;
+        }
+        const dialog = document.querySelector(".cldapikey");
+        const promise = new Promise(function(resolve, reject) {
+            dialog.showModal();
+            dialog.onclose = resolve;
+        });
+        promise.then(function(response) {
+            console.log("response",response);
+            widget.open();
+            widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
+        });
     });
 }
 
@@ -339,25 +352,11 @@ const edit_text = (articleId,button) => {
  */
 const preview_article = (articleId,button) => {
     execProcess( "getContentHTML", {x01: articleId}, {loadingIndicator:button}).then( (data) => {
-        preview.querySelector(".content").innerHTML = data.content;
+        const content = preview.querySelector(".content");
+        content.innerHTML = data.content;
+        const ele = content.firstElementChild;
+        ele.insertAdjacentHTML("afterend", data.details);
 
-        let details = document.createElement("div");
-        details.classList.add("details");
-
-        let name = document.createElement("span");
-        name.textContent=data.name;
-        details.appendChild(name);
-
-        let created = document.createElement("span");
-        created.textContent=data.created;
-        details.appendChild(created);
-
-        let minutes = document.createElement("span");
-        minutes.textContent=data.minutes;
-        details.appendChild(minutes);
-        
-        let content = preview.querySelector(".content");
-        content.firstChild.after(details);
         preview.showModal();
     });
 }
