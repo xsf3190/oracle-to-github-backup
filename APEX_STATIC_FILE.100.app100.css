@@ -171,6 +171,18 @@ dialog.preview > div {
 dialog.preview .details {
     display: flex;
     justify-content: space-around;
+    font-family: sans-serif;
+    font-weight: bold;
+    font-size: 90%;
+    line-height: 3;
+    color: mediumslateblue;
+}
+
+dialog.preview h2:first-of-type {
+    line-height: 1.2;
+    text-decoration: slateblue solid underline;
+    text-underline-position: under;
+    text-align: center;
 }
 
 dialog h2 {
