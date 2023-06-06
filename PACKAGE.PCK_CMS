@@ -620,7 +620,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                                 '<li><button type="button" class="fa fa-share2 publish"' || CASE WHEN C.id<0 THEN ' disabled' END || '>Publish</button></li>'
                             END 
                             || '
-                            <li><button type="button" class="fa fa-trash delete">Delete</button></li>
+                            <li><button type="button" class="fa fa-trash delete"' || CASE WHEN C.id=1 THEN ' disabled' END || '>Delete</button></li>
                             <li><button type="button" class="fa fa-id-card">' || C.id || '</button></li>
                         </div>'
                         END ||'
@@ -667,15 +667,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <p>You can upload up to 10 media files (maximum 10 MB) as a guest</p>
                     <p>Already have a Cloudinary account? Enter your API key in the field below</p>
                     <p>Subscribe to a free <a href="">Cloudinary plan</a> and enter your API key in the field below</p>
-                    
-                    <div class="form">
-                        <label for="cldapikey">Cloudinary API Environment variable</label>
+                    <fieldset>
+                        <legend>Cloudinary API Environment variable</legend>
                         <input type="text" id="cldapikey">
-                    </div>
+                    </fieldset>
                     <div class="button-container">
                         <button type="button" class="save">Save Changes</button>
                         <button type="button" class="guest">Continue as guest</button>
-                        <button type="button" class="close">Cancel</button>
                     </div>
                 </div>
             </dialog> 
@@ -747,6 +745,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 <button type="button" class="thumbs-minus fa fa-minus"></button>
                 <button type="button" class="thumbs-plus fa fa-plus"></button>
             </div>
+            <button type="button" class="unoptimized">UNOPTIMIZED</button>
             <button type="button" class="list-performance">PERFORMANCE</button>
         </nav>
         <div class="gallery-container" role="region" aria-label="gallery" tabindex="0">
@@ -939,14 +938,14 @@ PROCEDURE getThumbnails IS
         l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
         l_ip_address performance.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
     BEGIN
-        INSERT INTO performance(cld_cloud_name, resource_type, public_id, url, transfersize, duration, window_innerwidth, capture_date, user_id, ip_address, servertiming)
-        SELECT cld_cloud_name, resource_type, public_id, url, transfersize, duration, window_innerwidth, timestamp'1970-01-01 00:00:00' + numtodsinterval(epoch,'second') capture_date, l_user_id, l_ip_address,
+        INSERT INTO performance(cld_cloud_name, resource_type, public_id, url, transfersize, duration, content_type, window_innerwidth, browser, capture_date, user_id, ip_address, servertiming)
+        SELECT cld_cloud_name, resource_type, public_id, url, transfersize, duration, content_type, window_innerwidth, browser, timestamp'1970-01-01 00:00:00' + numtodsinterval(epoch,'second') capture_date, l_user_id, l_ip_address,
         LISTAGG(name||','||duration2 || NVL2(description,','||description,null),' | ') WITHIN GROUP (ORDER BY seq) servertiming
           FROM JSON_TABLE(l_performance FORMAT JSON, '$.images[*]' 
-          COLUMNS (cld_cloud_name, resource_type, public_id, url, transfersize, duration, window_innerwidth, epoch,
+          COLUMNS (cld_cloud_name, resource_type, public_id, url, transfersize, duration, content_type, window_innerwidth, browser, epoch,
           NESTED servertiming[*]  COLUMNS (seq for ordinality, name, description, duration2 path '$.duration')))
           WHERE name<>'rtt'
-          GROUP BY cld_cloud_name, resource_type, public_id, url, transfersize, duration, window_innerwidth, epoch, l_user_id
+          GROUP BY cld_cloud_name, resource_type, public_id, url, transfersize, duration, content_type, window_innerwidth, browser, epoch, l_user_id
         LOG ERRORS INTO ERR$_PERFORMANCE;
         
         APEX_JSON.open_object; 
