@@ -1,4 +1,5 @@
 let gArticleId,
+    gBrowser,
     perfObj = {images: []};
 
 const cards = document.querySelector(".cards"),
@@ -39,6 +40,14 @@ const checkPerformance = () => {
 window.addEventListener("DOMContentLoaded", (event) => {
     console.log("DOM fully loaded and parsed");
     console.log("APP_USER",apex.env.APP_USER);
+
+    let browser = bowser.getParser(window.navigator.userAgent),
+        browserName = browser.getBrowserName(),
+        browserVersion = browser.getBrowserVersion();
+
+    gBrowser = browserName + "," + browserVersion;
+
+    console.log("gBrowser",gBrowser);
 
     /*
     **  Set click event handler on containing elements of cards and gallery
@@ -100,10 +109,20 @@ const perfObserver = (list) => {
             if (resource_type === "video" && entry.initiatorType === "img") {
                 public_id = public_id.substring(0,public_id.lastIndexOf("."));
             }
-            perfObj.images.push(
-                {"cld_cloud_name": parts[3], "resource_type": resource_type, "public_id": public_id, "epoch": Math.round(Date.now()/1000),
-                 "url": entry.name, "transfersize": entry.transferSize, "duration": duration, 
-                 "window_innerwidth": window.innerWidth, "servertiming": entry.serverTiming});
+
+            fetch(entry.name,{method:'HEAD', headers: {Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*"}})
+                .then(response => {
+                    const contentType = response.headers.get('Content-Type');
+                    perfObj.images.push(
+                        {"cld_cloud_name": parts[3], "resource_type": resource_type, "public_id": public_id, "epoch": Math.round(Date.now()/1000),
+                        "url": entry.name, "transfersize": entry.transferSize, "duration": duration, "content_type":contentType,
+                        "window_innerwidth": window.innerWidth, "browser":gBrowser, "servertiming": entry.serverTiming});
+                })
+                .catch(error => {
+                    console.error('Error fetching image content-type:', error);
+                });
+
+            
 
             //if (entry.initiatorType === "video" || entry.initiatorType === "audio") {
             //    lightbox_audio.dispatchEvent(new CustomEvent("observed", {
