@@ -48,14 +48,6 @@ window.addEventListener("DOMContentLoaded", (event) => {
     gBrowser = browserName + "," + browserVersion;
 
     console.log("gBrowser",gBrowser);
-
-    /*
-    **  Set click event handler on containing elements of cards and gallery
-    */
-    //cards = document.querySelector("[region-id='main'] .cards");
-    
-    
-    //confirm = document.querySelector("dialog.confirm");
     
     if (navigator.maxTouchPoints > 1) {
         cards.addEventListener("touchstart",cardHandler);
@@ -91,25 +83,50 @@ window.addEventListener("DOMContentLoaded", (event) => {
     execProcess( "setClientTZ", {x01: Intl.DateTimeFormat().resolvedOptions().timeZone}).then( () => {
         console.log("Client Time Zone set for APP_PAGE_ID",apex.env.APP_PAGE_ID);
     });
+
+    if ('onpagehide' in self) {
+        addEventListener('pagehide', sendBeacon, { capture: true} );
+    }
+
+    addEventListener('visibilitychange', () => {
+        console.log("visibilitychange")
+        if (document.visibilityState === 'hidden') {
+            sendBeacon();
+        }
+    }, { capture: true} );
+
 });
 
+const sendBeacon = () => {
+    if (perfObj.images.length) {
+        execProcess("uploadPerformance",{p_clob_01: JSON.stringify(perfObj)}).then( () => {
+            perfObj.images.length = 0;
+        });
+    }
+}
+
+/*
+**  BATCH PERFORMANCE ENTRIES IN ARRAY TO AVOID TOO MANY DATABASE PROCESS CALLS
+*/
 const perfObserver = (list) => {
     list.getEntries().forEach((entry) => {
-        /* Only interested in actual network image/video/audio transfers */
-        if (entry.transferSize > 0 && (entry.initiatorType === "img" || entry.initiatorType === "video" || entry.initiatorType === "audio")) {
+        /* Process network media transfers. Note that transferSize=300 for the HEAD fetch that retrieves content-type  */
+        if (entry.transferSize > 300 && (entry.initiatorType === "img" || entry.initiatorType === "video" || entry.initiatorType === "audio")) {
             //console.log(entry);
             const duration = Math.round(entry.duration * 1) / 1;
             const parts = entry.name.split("/");
-            let public_id = parts.pop();
-            let resource_type = "image"
+            let public_id = parts.pop(),
+                resource_type = "image";
+
             if (parts[4] === "video") {
-                resource_type = "video"
+                resource_type = "video";
             }
-            // Cloudinary video and audio thumbnails are images with file type. Remove the file type to allow database upload
+            // Cloudinary video and audio thumbnail URLs include file type, which we remove in order to allow database upload into target table
             if (resource_type === "video" && entry.initiatorType === "img") {
                 public_id = public_id.substring(0,public_id.lastIndexOf("."));
             }
 
+            // Get the media content-type with HEAD fetch. Wish I knew how Developer Tools do it.
             fetch(entry.name,{method:'HEAD', headers: {Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*"}})
                 .then(response => {
                     const contentType = response.headers.get('Content-Type');
@@ -121,14 +138,6 @@ const perfObserver = (list) => {
                 .catch(error => {
                     console.error('Error fetching image content-type:', error);
                 });
-
-            
-
-            //if (entry.initiatorType === "video" || entry.initiatorType === "audio") {
-            //    lightbox_audio.dispatchEvent(new CustomEvent("observed", {
-            //        detail: { name: public_id }
-            //    }));
-            //}
         };
         
     });
@@ -166,7 +175,7 @@ popupClose.addEventListener("click",  () => {
 });
 
 /* 
- ** CARD 0 HAS CONTENT SO ENABLE BUTTONS AND SET ID IN UI 
+ ** CARD 0 HAS CONTENT - MEDIA OR TEXT - SO ENABLE BUTTONS AND SET ARTICLE ID IN DROPDOWN LIST
  */
 const enable_card_zero = (articleId) => {
     li = document.querySelector("[data-id='0']");
@@ -179,6 +188,9 @@ const enable_card_zero = (articleId) => {
     return li;
 }
 
+/* 
+ ** RICH TEXT EDITOR AUTOSAVE FEATURE FUNCTION TO SEND UPDATED TEXT TO DATABASE. RETURNS data.articleId IF ARTICLE ROW WAS CREATED.
+ */
 const saveData = async ( data ) => {
     execProcess("updateContent", {x01: gArticleId, x02: document.querySelector(".ck-word-count__words").textContent, 
                                   x03: document.querySelector(".ck-word-count__characters").textContent, p_clob_01: data}).then( (data) => {
@@ -189,12 +201,18 @@ const saveData = async ( data ) => {
 
 }
 
+/* 
+ ** GENERATE SIGNATURE FOR CLOUDINARY SUSCRIBER TO ENABLE SECURE MEDIA UPLOAD
+ */
 const getCldSignature = async (callback, params_to_sign) => {
     execProcess("getCldSignature",{p_clob_01: JSON.stringify(params_to_sign)}).then( (data) => {
         callback(data.signature);
     });
 };
 
+/* 
+ ** CREATE CLOUDINARY UPLOAD WIDGET ONE TIME. OPENED FOR EACH SUBSEQUENT UPLOAD
+ */
 const widget=cloudinary.createUploadWidget(
     { 
         uploadSignature: getCldSignature,
