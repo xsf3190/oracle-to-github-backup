@@ -937,9 +937,10 @@ PROCEDURE getThumbnails IS
         l_servertiming performance.servertiming%type;
         l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
         l_ip_address performance.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
+        l_session_id NUMBER:=APEX_CUSTOM_AUTH.GET_SESSION_ID;
     BEGIN
-        INSERT INTO performance(cld_cloud_name, resource_type, public_id, url, transfersize, duration, content_type, window_innerwidth, browser, capture_date, user_id, ip_address, servertiming)
-        SELECT cld_cloud_name, resource_type, public_id, url, transfersize, duration, content_type, window_innerwidth, browser, timestamp'1970-01-01 00:00:00' + numtodsinterval(epoch,'second') capture_date, l_user_id, l_ip_address,
+        INSERT INTO performance(cld_cloud_name, resource_type, public_id, session_id, url, transfersize, duration, content_type, window_innerwidth, browser, capture_date, user_id, ip_address, servertiming)
+        SELECT cld_cloud_name, resource_type, public_id, l_session_id, url, transfersize, duration, content_type, window_innerwidth, browser, timestamp'1970-01-01 00:00:00' + numtodsinterval(epoch,'second') capture_date, l_user_id, l_ip_address,
         LISTAGG(name||','||duration2 || NVL2(description,','||description,null),' | ') WITHIN GROUP (ORDER BY seq) servertiming
           FROM JSON_TABLE(l_performance FORMAT JSON, '$.images[*]' 
           COLUMNS (cld_cloud_name, resource_type, public_id, url, transfersize, duration, content_type, window_innerwidth, browser, epoch,
@@ -977,7 +978,7 @@ PROCEDURE getThumbnails IS
         */
         FOR C IN (SELECT  COUNT(*) OVER (PARTITION BY a.cld_cloud_name, a.resource_type, a.public_id) nb_rows, 
                           ROW_NUMBER() OVER (PARTITION BY a.display_order,a.cld_cloud_name, a.resource_type, a.public_id ORDER BY p.capture_date DESC) rn, 
-                          a.cld_cloud_name, a.resource_type, a.public_id, a.format, a.width, p.capture_date, p.url, p.transfersize, p.duration, p.window_innerwidth, p.ip_address, p.servertiming
+                          a.cld_cloud_name, a.resource_type, a.public_id, a.format, a.width, a.bytes, p.capture_date, p.url, p.transfersize, p.duration, p.content_type, p.browser, p.session_id, p.window_innerwidth, p.ip_address, p.servertiming
                     FROM asset a, performance p
                    WHERE a.article_id=l_article_id
                      AND a.cld_cloud_name=p.cld_cloud_name
@@ -993,9 +994,9 @@ PROCEDURE getThumbnails IS
                     <thead>
                         <tr>
                             <th></th>
-                            <th>TIME<br>IP ADDRESS</th>
+                            <th>TIME<br>IP ADDRESS<br>BROWSER</th>
                             <th class="align-left">URL<br>' || SUBSTR(C.url,1,INSTR(C.url,'/',1,4))|| '</th>
-                            <th>TRANSFER SIZE<br>DURATION</th>
+                            <th>TRANSFER SIZE<br>DURATION<br>CONTENT-TYPE</th>
                             <th>SERVER TIMING</th>
                         </tr>
                     </thead>
@@ -1011,13 +1012,14 @@ PROCEDURE getThumbnails IS
                 
             IF (C.rn=1) THEN 
                 l_content:=l_content || to_clob(
-                '<td rowspan="' || C.nb_rows || '"><img src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '"></td>');
+                '<td rowspan="' || C.nb_rows || '"><figure><img src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
+                    <figcaption>' || SUBSTR(C.public_id,1,INSTR(C.public_id,'_',-1)-1) || '.' || C.format || '<br>' || apex_string_util.to_display_filesize(C.bytes) || '</figcaption></figure></td>');
             END IF;
             
             l_content:=l_content || to_clob('
-                <td class="align-center">' || fmtUpdatedDate(C.capture_date) || '<br>' || C.ip_address|| '</td>
+                <td class="align-center">' || fmtUpdatedDate(C.capture_date) || '<br>' || C.ip_address|| '<br>' || C.browser || '</td>
                 <td>' || SUBSTR(C.url,INSTR(C.url,'/',1,4)+1) || '</td>
-                <td class="align-center">' || apex_string_util.to_display_filesize(C.transfersize) || '<br>' || C.duration || ' ms</td>
+                <td class="align-center">' || apex_string_util.to_display_filesize(C.transfersize) || '<br>' || C.duration || ' ms<br>' || C.content_type|| '</td>
                 <td>' || REPLACE(C.servertiming,'|','<br>') || '</td>
             </tr>');
                 
