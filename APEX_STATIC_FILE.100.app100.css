@@ -532,6 +532,11 @@ nav button {
     font-size: var(--step--2);
 }
 
+.perftable caption {
+    caption-side: top;
+    padding: 0.5rem;
+}
+
 .perftable th {
     background-color: var(--color-dark);
     color: var(--color-light-glare);
@@ -539,19 +544,19 @@ nav button {
     padding-bottom: 0.5rem;
 }
 .perftable th:nth-of-type(1) {
-    width: 15%;
+    width: 25%;
 }
 .perftable th:nth-of-type(2) {
-    width: 15%;
+    width: 25%;
 }
 .perftable th:nth-of-type(3) {
-    width: 35%;
-}
-.perftable th:nth-of-type(4) {
     width: 15%;
 }
-.perftable th:nth-of-type(5) {
+.perftable th:nth-of-type(4) {
     width: 20%;
+}
+.perftable th:nth-of-type(5) {
+    width: 15%;
 }
 
 .perftable td {
@@ -574,6 +579,10 @@ nav button {
 
 .perftable .align-left {
     text-align: left;
+}
+
+.perftable .label {
+    font-weight: bold;
 }
 
 
