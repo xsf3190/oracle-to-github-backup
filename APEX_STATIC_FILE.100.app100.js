@@ -1,5 +1,6 @@
 let gArticleId,
     gBrowser,
+    gConnectionType,
     perfObj = {images: []};
 
 const cards = document.querySelector(".cards"),
@@ -46,8 +47,13 @@ window.addEventListener("DOMContentLoaded", (event) => {
         browserVersion = browser.getBrowserVersion();
 
     gBrowser = browserName + "," + browserVersion;
-
     console.log("gBrowser",gBrowser);
+
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (connection) {
+        gConnectionType = connection.downlink + " Mb/s" + " -" + connection.effectiveType;
+        console.log("gConnectionType",gConnectionType);
+    }
     
     if (navigator.maxTouchPoints > 1) {
         cards.addEventListener("touchstart",cardHandler);
@@ -110,9 +116,11 @@ const sendBeacon = () => {
 */
 const perfObserver = (list) => {
     list.getEntries().forEach((entry) => {
+        if (gBrowser.startsWith("Safari")) {
+            console.log(entry);
+        }
         /* Process network media transfers. Note that transferSize=300 for the HEAD fetch that retrieves content-type  */
         if (entry.transferSize > 300 && (entry.initiatorType === "img" || entry.initiatorType === "video" || entry.initiatorType === "audio")) {
-            //console.log(entry);
             const duration = Math.round(entry.duration * 1) / 1;
             const parts = entry.name.split("/");
             let public_id = parts.pop(),
@@ -133,7 +141,8 @@ const perfObserver = (list) => {
                     perfObj.images.push(
                         {"cld_cloud_name": parts[3], "resource_type": resource_type, "public_id": public_id, "epoch": Math.round(Date.now()/1000),
                         "url": entry.name, "transfersize": entry.transferSize, "duration": duration, "content_type":contentType,
-                        "window_innerwidth": window.innerWidth, "browser":gBrowser, "servertiming": entry.serverTiming});
+                        "window_innerwidth": window.innerWidth, "browser":gBrowser, "connection_type": gConnectionType, "servertiming": entry.serverTiming}
+                    );
                 })
                 .catch(error => {
                     console.error('Error fetching image content-type:', error);
@@ -628,7 +637,7 @@ const setGalleryWidth = (sizing,thumbs_minus,thumbs_plus) => {
  **  LIST PERFORMANCE METRICS
  */
 const list_performance = document.querySelector(".list-performance");
-list_performance.addEventListener("click", () => {
+list_performance.addEventListener("click",  () => {
     execProcess("uploadPerformance",{p_clob_01: JSON.stringify(perfObj)}).then( () => {
         perfObj.images.length = 0;
         execProcess("getPerformance", {x01:gArticleId}).then((data) => {
