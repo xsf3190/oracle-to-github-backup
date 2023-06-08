@@ -7,9 +7,9 @@ Schema export dump files containing row data are encrypted with a generated rand
 
 Optional restore procedure imports schema and Apex applications from GITHUB into a target ADB identified by DB LINK.
 
-Note that ORDS metadata exports must be manually imported since these are SQLPlus scripts. ADB does not support running external scripts from PLSQL.
+ORDS metadata export scripts have to be manually imported as ADB does not support running scripts from PLSQL.
 
-Individual file exports should not exceed GITHUB recommendation of 50MB. 
+All files in this repository are created/updated by a scheduled Oracle job running daily at 8pm GMT.
 
 ## Pre-requisites
 1. Obtain GITHUB Personal access token (classic) - https://github.com/settings/tokens
@@ -18,15 +18,14 @@ Individual file exports should not exceed GITHUB recommendation of 50MB.
 
 ## Use
 1. Make Oracle data and definitions available for review / sharing through private or public GITHUB repositories.
-2. Implement an automated backup / restore cycle between 2 ADB instances to enable fine-grained point-in-time recovery.
-3. Deploy environment to test new Oracle / Apex software versions.
-4. Run fully scripted migrations between different platforms (caveat: ORDS metadata).
+2. Provide an off-site backup solution for subscribers to OCI "Always Free". 
+3. Implement an automated backup / restore cycle between 2 ADB instances to enable fine-grained point-in-time recovery.
+4. Deploy environment to test new Oracle / Apex software versions.
+5. Run fully scripted migrations between different platforms (caveat: ORDS metadata).
 
-All file commits to this repository are issued by a daily Oracle process using the GITHUB API.
+Should be used for modestly sized schemas (<100MB) although this depends on the nature of data stored.
 
-Originally created to provide a backup solution for subscribers to OCI "Always Free". 
-
-Should be used for modestly sized schemas (<100MB) although the export employs advanced compression reducing the size of uploaded dump files by an order of magnitude.
+Note that dump files are compressed by an order of magnitude.
 
 ## Install
 For backup:
