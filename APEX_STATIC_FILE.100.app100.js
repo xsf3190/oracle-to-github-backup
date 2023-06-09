@@ -116,8 +116,10 @@ const sendBeacon = () => {
 */
 const perfObserver = (list) => {
     list.getEntries().forEach((entry) => {
-        if (gBrowser.startsWith("Safari")) {
-            console.log(entry);
+        if (gBrowser.startsWith("Safari") && entry.initiatorType === "img") {
+            console.log("decodedBodySize",entry.decodedBodySize);
+            console.log("transferSize",entry.transferSize);
+            console.log("duration",entry.duration);
         }
         /* Process network media transfers. Note that transferSize=300 for the HEAD fetch that retrieves content-type  */
         if (entry.transferSize > 300 && (entry.initiatorType === "img" || entry.initiatorType === "video" || entry.initiatorType === "audio")) {
@@ -218,86 +220,6 @@ const getCldSignature = async (callback, params_to_sign) => {
         callback(data.signature);
     });
 };
-
-/* 
- ** CREATE CLOUDINARY UPLOAD WIDGET ONE TIME. OPENED FOR EACH SUBSEQUENT UPLOAD
- */
-const widget=cloudinary.createUploadWidget(
-    { 
-        uploadSignature: getCldSignature,
-        clientAllowedFormats: ['image','video','audio'],
-        sources: [
-            "local",
-            "url",
-            "camera",
-            "image_search",
-            "google_drive",
-            "facebook",
-            "dropbox",
-            "instagram",
-            "unsplash",
-            "shutterstock"
-        ],
-        defaultSource: "local",
-        googleApiKey: "AIzaSyCUob7BOkIEqwI6ZeBgaTUd8mb_-r5kW0Y",
-        dropboxAppKey: "7i2pqj2wc3p47by",
-        use_filename: true,
-        preBatch: (cb, data) => {
-            const maxLength = 248;
-            let errors=0;
-            for (i=0; i<data.files.length; i++) {
-                if (data.files[i].name.length>maxLength) {
-                    errors++;
-                }
-            }
-            if (errors>0) {
-                alert("Files names selected for upload must be no greater than " + maxLength + " characters in length");
-                cb({cancel: true}); 
-            } else { 
-                cb({}); 
-            }
-        }
-    },
-    (error, result) => {
-        if (error) {
-            alertBoxOpen("FAILURE IN CLOUDINARY UPLOAD", error.message);
-        }
-        if (result.info.files && result.event === "queues-end") { 
-            let metadata = {
-                images: []
-            }
-            result.info.files.forEach((item) => {
-                if (item.uploadInfo) {
-                    metadata.images.push({
-                        "public_id": item.uploadInfo.public_id,
-                        "bytes": item.uploadInfo.bytes,
-                        "resource_type": item.uploadInfo.resource_type,
-                        "width": item.uploadInfo.width,
-                        "height": item.uploadInfo.height,
-                        "format": item.uploadInfo.format,
-                        "cld_cloud_name": item.uploadInfo.url.split("/")[3],
-                        "article_id": item.uploadInfo.tags[0]
-                    });
-                }
-            });
-            execProcess("uploadMetadata",{p_clob_01: JSON.stringify(metadata)}).then( (data) => {
-                let li = document.querySelector("[data-id='" + data.articleId + "']");
-                if (!li) {
-                    li = enable_card_zero(data.articleId);
-                }
-                let nomedia = li.querySelector("button.no-media.upload-media");
-                if (nomedia) {
-                    const img = document.createElement("img");
-                    img.src = data.imgurl;
-                    nomedia.replaceWith(img);
-                }
-                li.querySelector(".show-gallery").textContent = "1/" + data.nbAssets;
-                li.querySelector(".show-gallery").disabled = false;
-                li.querySelector(".updated-date").textContent = data.updated;
-            });
-        };
-    }
-);
 
 if (window.location.hash === "#_=_"){
     history.replaceState 
