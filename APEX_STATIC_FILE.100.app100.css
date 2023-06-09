@@ -585,9 +585,14 @@ nav button {
     font-weight: bold;
 }
 
+.perftable figure {
+    text-align: center;
+    inline-size: 100%;
+}
 
-.perftable table img {
-    max-width: 100%;
+.perftable img {
+    block-size: 15vh;
+    object-fit: contain;
 }
 
 /* **************** */
