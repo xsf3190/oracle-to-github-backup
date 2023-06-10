@@ -495,6 +495,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         l_clob CLOB;
         l_grants apex_t_varchar2;
         l_grant VARCHAR2(4000);
+        e_failed_to_mount EXCEPTION;
+        PRAGMA EXCEPTION_INIT (e_failed_to_mount, -17676);  
     BEGIN        
         l_clob := apex_util.blob_to_clob(p_blob => pBlob );
 
@@ -510,6 +512,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         END LOOP;
         
         EXCEPTION
+            WHEN e_failed_to_mount THEN 
+                log_error(sqlcode,sqlerrm);
             WHEN OTHERS THEN 
                 log_error(sqlcode,sqlerrm);
                 RAISE;
@@ -527,10 +531,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         pEmail IN VARCHAR2, 
         pWorkspace IN VARCHAR2,
         pSchema IN VARCHAR2) 
-    IS
-        e_user_not_exists EXCEPTION;
-        PRAGMA EXCEPTION_INIT (e_user_not_exists, -1918);  
-        
+    IS  
         l_github_files apex_t_varchar2;
         l_clob CLOB;
         l_git_url VARCHAR2(200);
