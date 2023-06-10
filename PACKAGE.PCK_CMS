@@ -1349,12 +1349,32 @@ PROCEDURE getThumbnails IS
     PROCEDURE publishArticle IS
         l_article_id article.id%type:=apex_application.g_x01;
         l_is_public article.is_public%type:=apex_application.g_x02;
+        n PLS_INTEGER:=-1;
     BEGIN
-        UPDATE article SET is_public=l_is_public, updated_date=current_date WHERE id=l_article_id;
+        /* Rejet publication request if cover image does not have ALT description */
         
         apex_json.open_object; 
+        
+        IF (l_is_public='Y') THEN
+            SELECT COUNT(*) INTO n FROM dual WHERE EXISTS
+            (
+                SELECT alt_text, display_order FROM
+                (
+                    SELECT MIN(display_order) OVER () cover, display_order, alt_text FROM asset WHERE article_id=l_article_id 
+                )
+                WHERE display_order=cover AND alt_text IS NOT NULL
+            );
+            IF (n=0) THEN
+                apex_json.write('message', 'Cover Image ALT TEXT must be set before article can be published');
+            END IF;
+        END IF;
+        
+        IF (l_is_public='N' OR n=1) THEN
+            UPDATE article SET is_public=l_is_public, updated_date=current_date WHERE id=l_article_id;
+            apex_json.write('updated', fmtUpdatedDate(current_date));
+        END IF;
+        
         apex_json.write('success', TRUE);
-        apex_json.write('updated', fmtUpdatedDate(current_date));
         apex_json.close_object;        
 
         EXCEPTION
