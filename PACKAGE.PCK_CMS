@@ -749,6 +749,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         </nav>
         <div class="gallery-container" role="region" aria-label="gallery" tabindex="0">
             <ul></ul>
+            <div class="gallery-overlay">
+                <img src="">
+                <span></span>
+                <button type="button" class="close">&times;</button>
+                <button type="button" class="prev">&lt;</button>
+                <button type="button" class="next">&gt;</button>
+            </div>
         </div>
         ');
         RETURN (l_clob);
@@ -1351,7 +1358,7 @@ PROCEDURE getThumbnails IS
         l_is_public article.is_public%type:=apex_application.g_x02;
         n PLS_INTEGER:=-1;
     BEGIN
-        /* Rejet publication request if cover image does not have ALT description */
+        /* Reject publication request if cover image does not have ALT description */
         
         apex_json.open_object; 
         
