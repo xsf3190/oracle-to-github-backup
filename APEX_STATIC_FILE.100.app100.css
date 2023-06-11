@@ -520,6 +520,52 @@ nav button {
   grid-column: span 2;
 }
 
+/* ************************** */
+/* GALLERY FULLSCREEN STYLES  */
+/* ************************** */
+.gallery-overlay {
+    display: grid;
+    grid-template-areas: "overlay";
+}
+
+.gallery-overlay > img {
+    grid-area: overlay;
+    place-self: center;
+    inline-size: 100vw;
+    block-size: 100vh;
+    object-fit: contain;
+}
+
+.gallery-overlay > button {
+    grid-area: overlay;
+    background-color: transparent;
+    font-size: var(--step-2);
+    color: var(--color-light);
+    outline: 0;
+}
+
+.gallery-overlay > button.close {
+    place-self: start end;
+}
+
+.gallery-overlay > button.prev {
+    place-self: center start;
+}
+
+.gallery-overlay > button.next {
+    place-self: center end;
+}
+
+.gallery-overlay > span {
+    grid-area: overlay;
+    place-self: end center;
+    display: inline-block;
+    font-size: var(--step-0);
+    padding: 1em;
+    background-color: var(--color-dark);
+    color: var(--color-light);
+}
+
 /* ************************* */
 /* PERFORMANCE TABLE STYLES  */
 /* ************************* */
