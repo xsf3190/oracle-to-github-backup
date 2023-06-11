@@ -314,6 +314,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 FROM apex_application_static_files f, apex_applications a
                 WHERE f.application_id=a.application_id
                 AND SUBSTR(f.mime_type,INSTR(f.mime_type,'/')+1) IN ('javascript','css')
+                AND INSTR(f.file_name,'.min.')=0
                 UNION ALL
                 
                 SELECT 'ORDS_METADATA',sys_context('userenv','current_schema'), 0
