@@ -1,10 +1,16 @@
 let gArticleId,
     gBrowser,
     gConnectionType,
+    gFullImage,
     perfObj = {images: []};
 
 const cards = document.querySelector(".cards"),
-      galleryList = document.querySelector(".gallery-container ul"),
+      galleryList = document.querySelector(".gallery-container > ul"),
+      galleryFull = document.querySelector(".gallery-container > div");
+      galleryFullClose = galleryFull.querySelector("button.close");
+      galleryFullPrev = galleryFull.querySelector("button.prev");
+      galleryFullNext = galleryFull.querySelector("button.next");
+      listPerformance = document.querySelector(".list-performance")
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
       popupConfirm = popup.querySelector("button.confirm"),
@@ -222,22 +228,6 @@ const cardHandler = (e) => {
     }
 }
 
-const showFullScreen = (e) => {
-    const img = e.srcElement;
-    if (!document.fullscreenElement) {
-        if (img.requestFullscreen) {
-            img.requestFullscreen().then(() => {
-                //getURL(selectedElement);
-                //window.addEventListener("keydown", enableKeydown);
-                console.log("requestFullscreen");
-            })
-            .catch((err) => {
-                popup(`Error attempting to enable fullscreen mode",${err.message} (${err.name})`);
-            });
-        }
-    };
-}
-
 /* ************************************************* 
  **
  **                 GALLERY CODE
@@ -280,16 +270,77 @@ const setGalleryWidth = (sizing,thumbs_minus,thumbs_plus) => {
 };
 
 /*
-** SHOW SELECTED IMAGE IN FULLSCREEN
+** CLICK THUMBNAIL TO SHOW FULLSCREEN 
 */
+const showFullScreen = (e) => {
+    galleryFull.requestFullscreen();
+    gFullImage = e.srcElement;
+    setImgSrc(e.srcElement);
+}
 
+/*
+** SET FULLSCREEN IMAGE URL ACCORDING TO DEVICE WIDTH
+*/
+const setImgSrc = (img) => {
+    const fullscreenImg = galleryFull.querySelector("img");
+    fullscreenImg.src = img.src;
 
+    const dimensions = img.dataset.dimensions.split(':'),
+          widths = dimensions.map(dimension => dimension.substring(dimension,dimension.indexOf("x")));
+    
+    const closest = widths.reduce((prev, curr) => {
+        return Math.abs(curr - window.innerWidth) < Math.abs(prev - window.innerWidth) ? curr : prev;
+    });                              
+
+    let url=img.src;
+    if (closest === widths[widths.length - 1]) {
+        url = url.replace(/,w_\d+/,  "");
+    } else {
+        url = url.replace(/,w_\d+/,  ",w_" + closest);
+    }
+    const span = galleryFull.querySelector("span");
+    span.textContent ="";
+    if (url !== img.src) {
+        span.textContent = "Downloading image width " + closest + "px";
+        fullscreenImg.src=url;
+    }
+};
+
+/*
+ **  CLOSE FULLSCREEN
+ */
+galleryFullClose.addEventListener("click",  () => {
+    document.exitFullscreen();
+});
+
+/*
+ **  NEXT IMAGE
+ */
+galleryFullNext.addEventListener("click",  () => {
+    if (gFullImage.parentElement.nextElementSibling) {
+        gFullImage = gFullImage.parentElement.nextElementSibling.firstElementChild;
+    } else {
+        gFullImage = gFullImage.parentElement.parentElement.firstElementChild.firstElementChild;
+    }
+    setImgSrc(gFullImage);
+});
+
+/*
+ **  PREVIOUS IMAGE
+ */
+galleryFullPrev.addEventListener("click",  () => {
+    if (gFullImage.parentElement.previousElementSibling) {
+        gFullImage = gFullImage.parentElement.previousElementSibling.firstElementChild;
+    } else {
+        gFullImage = gFullImage.parentElement.parentElement.lastElementChild.firstElementChild;
+    }
+    setImgSrc(gFullImage);
+});
 
 /*
  **  LIST PERFORMANCE METRICS
  */
-const list_performance = document.querySelector(".list-performance");
-list_performance.addEventListener("click",  () => {
+listPerformance.addEventListener("click",  () => {
     execProcess("uploadPerformance",{p_clob_01: JSON.stringify(perfObj)}).then( () => {
         perfObj.images.length = 0;
         execProcess("getPerformance", {x01:gArticleId}).then((data) => {
