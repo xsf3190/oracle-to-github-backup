@@ -111,6 +111,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     */
     PROCEDURE signout IS
     BEGIN
+    pck_cms.log('signout called');
         apex_session.delete_session;
         apex_authentication.logout(apex_application.g_flow_id, apex_custom_auth.get_session_id);
     END;
