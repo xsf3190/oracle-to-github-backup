@@ -46,7 +46,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE saveArticle;
     --
-    PROCEDURE setClientTZ;
+    PROCEDURE setClientInfo;
     --
     PROCEDURE updateAsset;
     --
@@ -340,12 +340,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
     
     /*
-     ** Set Time Zone according to client device. Procedure called on Home Page Load
+     ** Set Time Zone according to client device. Procedure called on DOMContentLoaded event
      */
-    PROCEDURE setClientTZ IS
+    PROCEDURE setClientInfo IS
         l_client_TZ users.client_tz%type:=apex_application.g_x01;
+        l_touchpoints NUMBER:=apex_application.g_x02;
     BEGIN
+        log('setClientInfo:apex_application.g_x02:'|| apex_application.g_x02);
         apex_util.set_session_state('APP_CLIENT_TZ',l_client_TZ,p_commit=>FALSE);
+        apex_util.set_session_state('APP_MAXTOUCHPOINTS',l_touchpoints,p_commit=>FALSE);
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -627,7 +630,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     </div>' ||
                     CASE WHEN C.first_asset=0 
                         THEN '<button type="button" class="no-media upload-media">UPLOAD MEDIA</button>' 
-                        ELSE '<img src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" alt="' || C.alt_text || '">' 
+                        ELSE '<img class="show-gallery" src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" alt="' || C.alt_text || '">' 
                     END ||
                     CASE WHEN COALESCE(C.title,C.excerpt) IS NULL 
                         THEN '<br>
@@ -655,6 +658,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <button type="button" class="close" autofocus>&times;</button>
                 </div>
             </dialog>
+            <dialog class="gallery">
+                <button type="button" class="close" autofocus>&times;</button>
+                <nav>
+                    <div>
+                        <button type="button" class="thumbs-minus fa fa-minus"></button>
+                        <button type="button" class="thumbs-plus fa fa-plus"></button>
+                    </div>
+                    <button type="button" class="list-performance">PERFORMANCE</button>
+                </nav>
+                <div class="gallery-container" role="region" aria-label="gallery">
+                    <p class="instruction"><span></span>Image to view in full screen</p>
+                    <ul tabindex="0"></ul>
+                </div>
+                <div class="gallery-overlay">
+                    <img src="">
+                    <span></span>
+                    <button type="button" class="close">&times;</button>
+                    <button type="button" class="prev">&lt;</button>
+                    <button type="button" class="next">&gt;</button>
+                </div>
+            </dialog>            
             <dialog class="perftable">
                 <div>
                     <button type="button" class="close">&times;</button>
@@ -664,9 +688,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             <dialog class="cldapikey">
                 <div>
                     <button type="button" class="close">&times;</button>
-                    <p>You can upload up to 10 media files (maximum 10 MB) as a guest</p>
-                    <p>Already have a Cloudinary account? Enter your API key in the field below</p>
-                    <p>Subscribe to a free <a href="">Cloudinary plan</a> and enter your API key in the field below</p>
+                    <p>Subscribe to a free <a href="https://cloudinary.com/users/register_free">Cloudinary plan</a> and enter your API key in the field below</p>
+                    <p>Alternatively click "Continue as guest" for limited access</p>
                     <fieldset>
                         <legend>Cloudinary API Environment variable</legend>
                         <input type="text" id="cldapikey">
@@ -738,7 +761,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     */
     FUNCTION getGallery RETURN CLOB IS
         l_clob CLOB;
-    BEGIN
+        l_maxtouchpoints NUMBER:=NVL(apex_util.get_session_state('APP_MAXTOUCHPOINTS'),0);
+    BEGIN     
+    log('getGallery:APP_MAXTOUCHPOINTS:'|| apex_util.get_session_state('APP_MAXTOUCHPOINTS'));
         l_clob:=TO_CLOB(
         '<nav>
             <div>
@@ -748,6 +773,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             <button type="button" class="list-performance">PERFORMANCE</button>
         </nav>
         <div class="gallery-container" role="region" aria-label="gallery" tabindex="0">
+            <p>' || CASE WHEN l_maxtouchpoints=0 THEN 'Click ' ELSE 'Tap ' END || 'Image to view in full screen</p>
             <ul></ul>
             <div class="gallery-overlay">
                 <img src="">
