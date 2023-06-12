@@ -2,22 +2,29 @@ let gArticleId,
     gBrowser,
     gConnectionType,
     gFullImage,
-    perfObj = {images: []};
+    gPerfObj = {images: []};
 
 const cards = document.querySelector(".cards"),
-      galleryList = document.querySelector(".gallery-container > ul"),
-      galleryFull = document.querySelector(".gallery-container > div");
-      galleryFullClose = galleryFull.querySelector("button.close");
-      galleryFullPrev = galleryFull.querySelector("button.prev");
-      galleryFullNext = galleryFull.querySelector("button.next");
-      listPerformance = document.querySelector(".list-performance")
       popup = document.querySelector("dialog.popup"),
-      popupClose = popup.querySelector("button.close"),
       popupConfirm = popup.querySelector("button.confirm"),
       preview = document.querySelector("dialog.preview"),
-      previewClose = preview.querySelector("button.close")
-      perftable = document.querySelector("dialog.perftable"),
-      perftableClose = perftable.querySelector("button.close");
+      gallery = document.querySelector("dialog.gallery"),
+      galleryList = gallery.querySelector("ul"),
+      galleryFull = gallery.querySelector(".gallery-overlay"),
+      galleryFullClose = galleryFull.querySelector("button.close"),
+      galleryFullPrev = galleryFull.querySelector("button.prev"),
+      galleryFullNext = galleryFull.querySelector("button.next"),
+      listPerformance = gallery.querySelector(".list-performance"),      
+      perftable = document.querySelector("dialog.perftable");
+
+/*
+**  CLOSE DIALOGS
+*/
+document.querySelectorAll("button.close").forEach((button) => {
+    button.addEventListener("click", (e) => {
+         e.target.closest("dialog").close();
+    });
+});
 
 const checkPerformance = () => {
     if (performance === undefined) {
@@ -42,6 +49,15 @@ const checkPerformance = () => {
     }
     return ok;
 }
+
+/*
+window.addEventListener("touchstart", () => {
+    document.body.classList.add("touch");
+    window.removeEventListener("touchstart", touched, false);
+  },
+  false
+);
+*/
 
 window.addEventListener("DOMContentLoaded", (event) => {
     console.log("DOM fully loaded and parsed");
@@ -73,7 +89,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
         observer.observe({ type: "resource", buffered: true });
     }
     
-    execProcess( "setClientTZ", {x01: Intl.DateTimeFormat().resolvedOptions().timeZone}).then( () => {
+    execProcess( "setClientInfo", {x01: Intl.DateTimeFormat().resolvedOptions().timeZone, x02: navigator.maxTouchPoints}).then( () => {
         console.log("Client Time Zone set for APP_PAGE_ID",apex.env.APP_PAGE_ID);
     });
 
@@ -91,9 +107,9 @@ window.addEventListener("DOMContentLoaded", (event) => {
 });
 
 const sendBeacon = () => {
-    if (perfObj.images.length) {
-        execProcess("uploadPerformance",{p_clob_01: JSON.stringify(perfObj)}).then( () => {
-            perfObj.images.length = 0;
+    if (gPerfObj.images.length) {
+        execProcess("uploadPerformance",{p_clob_01: JSON.stringify(gPerfObj)}).then( () => {
+            gPerfObj.images.length = 0;
         });
     }
 }
@@ -127,7 +143,7 @@ const perfObserver = (list) => {
             fetch(entry.name,{method:'HEAD', headers: {Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*"}})
                 .then(response => {
                     const contentType = response.headers.get('Content-Type');
-                    perfObj.images.push(
+                    gPerfObj.images.push(
                         {"cld_cloud_name": parts[3], "resource_type": resource_type, "public_id": public_id, "epoch": Math.round(Date.now()/1000),
                         "url": entry.name, "transfersize": entry.transferSize, "duration": duration, "content_type":contentType,
                         "window_innerwidth": window.innerWidth, "browser":gBrowser, "connection_type": gConnectionType, "servertiming": entry.serverTiming}
@@ -168,11 +184,6 @@ const popupOpen = (heading, text) => {
     popup.showModal();
 }
 
-popupClose.addEventListener("click",  () => {
-    popup.close();
-});
-
-
 /* 
  ** GET CONTENT FOR PREVIEW DIALOG 
  */
@@ -187,28 +198,17 @@ const preview_article = (articleId,button) => {
     });
 }
 
-previewClose.addEventListener("click",  () => {
-    preview.close();
-});
-
 /*
  ** OPEN GALLERY FOR SELECTED ARTICLE
  */
 const show_gallery = (articleId) => {
     execProcess( "getThumbnails", {x01: articleId}).then( (data) => {
-        apex.theme.openRegion("gallery");
-
+        gallery.showModal();
+        const action = gallery.querySelector(".instruction > span");
+        action.textContent = navigator.maxTouchPoints > 1 ? "Tap " : "Click ";
         galleryList.replaceChildren();
         galleryList.insertAdjacentHTML('afterbegin',data.content);
         gArticleId = articleId;
-
-        const title = document.querySelector("[data-id='" + articleId + "'] .title");
-        
-        if (title) {
-            document.querySelector("#ui-id-" + apex.env.APP_PAGE_ID).textContent = title.textContent;
-        } else {
-            document.querySelector("#ui-id-" + apex.env.APP_PAGE_ID).textContent = "Gallery";
-        }
     });
 };
 
@@ -241,8 +241,8 @@ const galleryWidth = Number(getComputedStyle(document.documentElement).getProper
 const min_gallery_width = galleryWidth * .5,
       max_gallery_width = galleryWidth * 1.5;
 
-const thumbs_minus = document.querySelector("#gallery .thumbs-minus");
-const thumbs_plus = document.querySelector("#gallery .thumbs-plus");
+const thumbs_minus = gallery.querySelector(".thumbs-minus");
+const thumbs_plus = gallery.querySelector(".thumbs-plus");
 
 thumbs_minus.addEventListener("click", () => {
     setGalleryWidth("down",thumbs_minus,thumbs_plus);
@@ -269,13 +269,27 @@ const setGalleryWidth = (sizing,thumbs_minus,thumbs_plus) => {
     thumbs_plus.disabled = width === max_gallery_width ? true : false;
 };
 
+enableKeydown = (event) => {
+    const keyName = event.key;
+    if (keyName === "Escape") {
+        galleryFullClose.click();
+    } else if (keyName === "ArrowLeft") {
+        galleryFullPrev.click();
+    } else if (keyName === "ArrowRight") {
+        galleryFullNext.click();
+    }
+}
+
 /*
-** CLICK THUMBNAIL TO SHOW FULLSCREEN 
+** CLICK THUMBNAIL SHOWS IMAGE IN FULLSCREEN
 */
 const showFullScreen = (e) => {
-    galleryFull.requestFullscreen();
-    gFullImage = e.srcElement;
-    setImgSrc(e.srcElement);
+    galleryFull.requestFullscreen().then(() => {
+        gFullImage = e.srcElement;
+        setImgSrc(e.srcElement);
+        galleryFull.style.display = "grid";
+        window.addEventListener("keydown", enableKeydown);
+    })
 }
 
 /*
@@ -303,14 +317,23 @@ const setImgSrc = (img) => {
     if (url !== img.src) {
         span.textContent = "Downloading image width " + closest + "px";
         fullscreenImg.src=url;
+        fullscreenImg.style.width="500px";
     }
 };
+
+galleryFull.addEventListener("fullscreenchange", (e) => {
+    if (!document.fullscreenElement) {
+        window.removeEventListener("keydown", enableKeydown);
+        galleryFull.style.display = "none";
+    }
+});
 
 /*
  **  CLOSE FULLSCREEN
  */
 galleryFullClose.addEventListener("click",  () => {
     document.exitFullscreen();
+    galleryFull.style.display = "none";
 });
 
 /*
@@ -341,24 +364,11 @@ galleryFullPrev.addEventListener("click",  () => {
  **  LIST PERFORMANCE METRICS
  */
 listPerformance.addEventListener("click",  () => {
-    execProcess("uploadPerformance",{p_clob_01: JSON.stringify(perfObj)}).then( () => {
-        perfObj.images.length = 0;
+    execProcess("uploadPerformance",{p_clob_01: JSON.stringify(gPerfObj)}).then( () => {
+        gPerfObj.images.length = 0;
         execProcess("getPerformance", {x01:gArticleId}).then((data) => {
             perftable.querySelector(".content").innerHTML = data.content;
             perftable.showModal();
         });
     });
 });
-
-perftable.addEventListener("click",  () => {
-    perftable.close();
-});
-
-window.addEventListener(
-  "touchstart",
-  function touched() {
-    document.body.classList.add("touch");
-    window.removeEventListener("touchstart", touched, false);
-  },
-  false
-);
