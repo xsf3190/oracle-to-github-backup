@@ -22,7 +22,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "ADMIN"."PCK_RESTORE" IS
     --
 END;
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
-
+        e_failed_to_mount EXCEPTION;
+        PRAGMA EXCEPTION_INIT (e_failed_to_mount, -17676);  
     /*
     **  Logging procedures
     */
@@ -495,8 +496,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         l_clob CLOB;
         l_grants apex_t_varchar2;
         l_grant VARCHAR2(4000);
-        e_failed_to_mount EXCEPTION;
-        PRAGMA EXCEPTION_INIT (e_failed_to_mount, -17676);  
     BEGIN        
         l_clob := apex_util.blob_to_clob(p_blob => pBlob );
 
