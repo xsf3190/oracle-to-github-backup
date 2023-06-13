@@ -120,19 +120,10 @@ textarea + span {
   place-self: end end;
 }
 
-fieldset {
-  border: 1px solid var(--color-pale);
-  padding: 0.25em;
-}
 
-fieldset button {
-  font-weight: 500;
-}
-
-legend {
-  font-weight: 500;
-}
-
+/* ************* */
+/* DIALOG STYLES */
+/* ************* */
 
 dialog {
     border: none !important;
@@ -153,14 +144,29 @@ dialog.popup {
     inline-size: 50vw;
 }
 
-dialog.perftable > div {
+dialog.perftable > div, dialog.gallery > div {
     display: grid;
     gap: 1rem;
+}
+
+dialog.gallery fieldset {
+    display: flex;
+    justify-content: space-between;
+}
+
+dialog.gallery legend {
+    border-radius: 0.3em;
+    border-top: inherit;
+    line-height: 1.5;
+    background-color: inherit;
+    padding-inline-start: 0.5em;
+    padding-inline-end: 0.5em;
 }
 
 dialog.preview, dialog.perftable, dialog.gallery {
     color: currentColor;
     inline-size: 100vw;
+    block-size: 100vh;
 }
 
 dialog.preview > div {
@@ -212,9 +218,15 @@ dialog button.close {
     min-height: 44px;
     min-width: 44px;
     background-color: transparent;
-    font-size: var(--step-2);
+    font-size: var(--step-4);
     color: var(--color-button);
     outline: 0;
+}
+
+dialog legend > button {
+    color: var(--color-light);
+    background-color: transparent;
+    vertical-align: text-bottom;
 }
 
 button {
@@ -233,6 +245,11 @@ button {
     justify-content: center;
     gap: 0.5em;
 }
+
+
+/* *************** */
+/* HOMEPAGE STYLES */
+/* *************** */
 
 .homepage {
     font-family: Georgia, sans-serif;
@@ -419,7 +436,11 @@ nav button {
   box-shadow: 0 0 0 4px var(--color-button-focus);
 }
 
-/* Override CKEditor default styles */
+
+/* ******************************** */
+/* OVERRIDE CKEDITOR DEFAULT STYLES */
+/* ******************************** */
+
 .ck-content > * + * {
     margin-top: var(--space-s);
 }
@@ -485,12 +506,6 @@ nav button {
 /* *************** */
 /* GALLERY STYLES  */
 /* *************** */
-.gallery-container {
-  max-inline-size: 100%;
-  margin-inline: auto;
-  padding: var(--space-s) var(--space-m);
-  font-size: var(--step-0);
-}
 
 .gallery-container ul {
   list-style: none;
@@ -499,17 +514,8 @@ nav button {
   grid-template-columns: repeat(auto-fill, minmax(var(--gallery-width), 1fr));
 }
 
-.gallery-container ul > li:not(.deleted) {
-  cursor: pointer;
-}
-
 .drag-in-progress {
     opacity: 0.4;
-}
-
-.deleted {
-  cursor: none;
-  filter: var(--blur);
 }
 
 .gallery-container ul img {
@@ -542,7 +548,7 @@ nav button {
     grid-area: overlay;
     background-color: transparent;
     font-size: var(--step-2);
-    color: var(--color-light);
+    color: var(--color-light) !important;
     outline: 0;
 }
 
@@ -558,7 +564,7 @@ nav button {
     place-self: center end;
 }
 
-.gallery-overlay > span {
+.gallery-overlay > fieldset {
     grid-area: overlay;
     place-self: end center;
     display: inline-block;
@@ -641,79 +647,4 @@ nav button {
 .perftable img {
     block-size: 15vh;
     object-fit: contain;
-}
-
-/* **************** */
-/* LIGHTBOX STYLES  */
-/* **************** */
-.lightbox {
-    font-size: var(--step--1);
-}
-
-.lightbox > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.lightbox > div > * {
-    flex: max(340px,100%/2 - 1rem);
-}
-
-.lightbox img,
-.lightbox video {
-  object-fit: contain;
-  margin: auto;
-  max-inline-size: 100%;
-}
-
-.lightbox audio {
-    margin: auto;
-    margin-top: 1em;
-}
-
-.deleted + span {
-    margin: auto;
-    color: green;
-}
-
-.lightbox .form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-s);
-}
-
-.lightbox .form > :last-child {
-    visibility: hidden;
-    place-self: end;
-}
-
-.lightbox footer {
-    margin-top: 1em;
-    display: flex;
-    flex-wrap: wrap;
-    font-size: var(--step--2);
-    border-top: solid 1px var(--color-pale);
-    padding: 0.5em;
-}
-
-.lightbox footer  span:nth-child(odd) {
-    padding-inline-start: 0.5em;
-    padding-inline-end: 0.5em;
-    font-weight: 600;
-}
-
-.lightbox footer  span:nth-child(even):not(:last-child) {
-    padding-inline-end: 0.5em;
-    border-right: 2px solid var(--color-secondary);
-}
-
-.lightbox-performance li + li {
-    border-top: 1px solid var(--color-pale);
-    margin-top: 0.75em;
-}
-
-.lightbox-performance li {
-    font-size: inherit;
-    line-height: 1.25;
 }
