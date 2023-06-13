@@ -659,24 +659,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 </div>
             </dialog>
             <dialog class="gallery">
-                <button type="button" class="close" autofocus>&times;</button>
-                <nav>
-                    <div>
-                        <button type="button" class="thumbs-minus fa fa-minus"></button>
-                        <button type="button" class="thumbs-plus fa fa-plus"></button>
+                <div>
+                    <button type="button" class="close" autofocus>&times;</button>
+                    <nav>
+                        <div>
+                            <button type="button" class="thumbs-minus fa fa-minus"></button>
+                            <button type="button" class="thumbs-plus fa fa-plus"></button>
+                        </div>
+                        <button type="button" class="list-performance">PERFORMANCE</button>
+                    </nav>
+                    <div class="gallery-container" role="region" aria-label="gallery">
+                        <p class="instruction"><span></span>Image to view in full screen</p>
+                        <ul tabindex="0"></ul>
                     </div>
-                    <button type="button" class="list-performance">PERFORMANCE</button>
-                </nav>
-                <div class="gallery-container" role="region" aria-label="gallery">
-                    <p class="instruction"><span></span>Image to view in full screen</p>
-                    <ul tabindex="0"></ul>
-                </div>
-                <div class="gallery-overlay">
-                    <img src="">
-                    <span></span>
-                    <button type="button" class="close">&times;</button>
-                    <button type="button" class="prev">&lt;</button>
-                    <button type="button" class="next">&gt;</button>
+                    <div class="gallery-overlay">
+                        <img src="">
+                        <fieldset>
+                            <legend>Dimension downloaded for device <span></span><button class="copy-url" type="button">&lt;&gt;</button><button class="close-fieldset" type="button">&times;</button></legend>
+                            <button type="button" class="dimensions">412x512</button>
+                            <button type="button" class="dimensions">812x812</button>
+                            <button type="button" class="dimensions">1412x1512</button>
+                        </fieldset>
+                        <button type="button" class="close">&times;</button>
+                        <button type="button" class="prev">&lt;</button>
+                        <button type="button" class="next">&gt;</button>
+                    </div>
                 </div>
             </dialog>            
             <dialog class="perftable">
