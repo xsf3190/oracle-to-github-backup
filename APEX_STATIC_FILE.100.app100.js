@@ -11,16 +11,19 @@ const cards = document.querySelector(".cards"),
       gallery = document.querySelector("dialog.gallery"),
       galleryList = gallery.querySelector("ul"),
       galleryFull = gallery.querySelector(".gallery-overlay"),
+      galleryFullImg = galleryFull.querySelector("img");
       galleryFullClose = galleryFull.querySelector("button.close"),
       galleryFullPrev = galleryFull.querySelector("button.prev"),
       galleryFullNext = galleryFull.querySelector("button.next"),
+      galleryFullCloseFieldset = galleryFull.querySelector("button.close-fieldset"),
+      galleryFullDimensions = galleryFull.querySelectorAll("fieldset button.dimensions"),
       listPerformance = gallery.querySelector(".list-performance"),      
       perftable = document.querySelector("dialog.perftable");
 
 /*
 **  CLOSE DIALOGS
 */
-document.querySelectorAll("button.close").forEach((button) => {
+document.querySelectorAll("button.close:not(.fieldset-close").forEach((button) => {
     button.addEventListener("click", (e) => {
          e.target.closest("dialog").close();
     });
@@ -204,8 +207,7 @@ const preview_article = (articleId,button) => {
 const show_gallery = (articleId) => {
     execProcess( "getThumbnails", {x01: articleId}).then( (data) => {
         gallery.showModal();
-        const action = gallery.querySelector(".instruction > span");
-        action.textContent = navigator.maxTouchPoints > 1 ? "Tap " : "Click ";
+        gallery.querySelector(".instruction > span").textContent = navigator.maxTouchPoints > 1 ? "Tap " : "Click ";
         galleryList.replaceChildren();
         galleryList.insertAdjacentHTML('afterbegin',data.content);
         gArticleId = articleId;
@@ -296,15 +298,19 @@ const showFullScreen = (e) => {
 ** SET FULLSCREEN IMAGE URL ACCORDING TO DEVICE WIDTH
 */
 const setImgSrc = (img) => {
-    const fullscreenImg = galleryFull.querySelector("img");
-    fullscreenImg.src = img.src;
+    galleryFullImg.style.width = "";
+    galleryFullImg.src = img.src;
 
     const dimensions = img.dataset.dimensions.split(':'),
           widths = dimensions.map(dimension => dimension.substring(dimension,dimension.indexOf("x")));
-    
+
     const closest = widths.reduce((prev, curr) => {
         return Math.abs(curr - window.innerWidth) < Math.abs(prev - window.innerWidth) ? curr : prev;
-    });                              
+    });
+
+    const urls = widths.map((width, index) => {
+        return index === widths.length - 1 ? img.src.replace(/,w_\d+/,  "") : img.src.replace(/,w_\d+/,  ",w_" + width);
+    });
 
     let url=img.src;
     if (closest === widths[widths.length - 1]) {
@@ -312,12 +318,20 @@ const setImgSrc = (img) => {
     } else {
         url = url.replace(/,w_\d+/,  ",w_" + closest);
     }
-    const span = galleryFull.querySelector("span");
-    span.textContent ="";
+
+    galleryFull.querySelector("legend > span").textContent = window.innerWidth + " x " + window.innerHeight;
+    galleryFull.querySelectorAll("fieldset button.dimensions").forEach((button,index) => {
+        button.textContent = dimensions[index];
+        button.dataset.url = urls[index];
+        if (widths[index] === closest) {
+            button.style.backgroundColor = "var(--color-button)";
+        } else {
+            button.style.backgroundColor = "var(--color-pale)";
+        }
+    });
+
     if (url !== img.src) {
-        span.textContent = "Downloading image width " + closest + "px";
-        fullscreenImg.src=url;
-        fullscreenImg.style.width="500px";
+        galleryFullImg.src=url;
     }
 };
 
@@ -326,6 +340,13 @@ galleryFull.addEventListener("fullscreenchange", (e) => {
         window.removeEventListener("keydown", enableKeydown);
         galleryFull.style.display = "none";
     }
+});
+
+/*
+ **  CLOSE FULLSCREEN FIELDSET
+ */
+galleryFullCloseFieldset.addEventListener("click",  () => {
+    galleryFull.querySelector("fieldset").style.display = "none";
 });
 
 /*
@@ -358,6 +379,41 @@ galleryFullPrev.addEventListener("click",  () => {
         gFullImage = gFullImage.parentElement.parentElement.lastElementChild.firstElementChild;
     }
     setImgSrc(gFullImage);
+});
+
+/*
+**  CLICK DIMENSION BUTTONS
+*/
+galleryFull.querySelectorAll("button.dimensions").forEach((button) => {
+    button.addEventListener("click", (e) => {
+        const img = button.parentElement.previousElementSibling;
+        const dimensions = button.textContent.split("x");
+        img.style.width = dimensions[0]+"px";
+        img.src=button.dataset.url;
+        e.target.style.backgroundColor = "var(--color-button)";
+        let curr = e.target;
+        let el = curr.nextElementSibling;
+        while (el) {
+            el.style.backgroundColor = "var(--color-pale)";
+            el = el.nextElementSibling;
+        }
+        el = curr.previousElementSibling;
+        while (el) {
+            if (el.tagName === "BUTTON") {
+                el.style.backgroundColor = "var(--color-pale)";
+            }
+            el = el.previousElementSibling;
+        }        
+
+        /*
+        try {
+            await navigator.clipboard.writeText(img.src);
+            popupOpen("Copied URL to clipboard",img.src);
+        } catch (err) {
+            popupOpen('Failed to copy URL!', err)
+        }
+        */
+    });
 });
 
 /*
