@@ -60,7 +60,7 @@
     --color-button-text: #FFF;
     --color-pale: hsl(var(--hue) var(--saturation) calc(var(--lightness) + 35%));
 
-    --gallery-width: 10rem;
+    --gallery-width: 15rem;
     --preview-width: 60ch;
     --blur: blur(5px);
 }
@@ -285,15 +285,17 @@ button {
     text-underline-position: under;
 }
 
+/* *************** */
+/* CARD STYLES */
+/* *************** */
+
 nav button:not(.fa):hover {
     text-decoration: overline;
 }
 
 nav button {
     background-color: transparent;
-    /*font-size: 1.5em;*/
 }
-
 
 .button-container {
   display: flex;
@@ -303,10 +305,7 @@ nav button {
 .cards {
   display: grid;
   list-style-type: none;
-  grid-template-columns: repeat(
-    auto-fill,
-    minmax(min(25ch, 100%), 1fr)
-  );
+  grid-template-columns: repeat(auto-fill,minmax(min(25ch, 100%), 1fr));
   gap: 3ch;
   font-size: var(--step-0);
 }
@@ -510,12 +509,17 @@ nav button {
 .gallery-container ul {
   list-style: none;
   display: grid;
-  grid-gap: var(--space-3xs);
+  grid-gap: 0.5em;
   grid-template-columns: repeat(auto-fill, minmax(var(--gallery-width), 1fr));
 }
 
 .drag-in-progress {
     opacity: 0.4;
+}
+
+.gallery-container .instruction > span {
+  padding: 0 0.5em;
+  color: var(--color-secondary);
 }
 
 .gallery-container ul img {
@@ -524,9 +528,7 @@ nav button {
   object-fit: scale-down;
 }
 
-.gallery-container ul .landscape {
-  grid-column: span 2;
-}
+
 
 /* ************************** */
 /* GALLERY FULLSCREEN STYLES  */
@@ -544,6 +546,21 @@ nav button {
     object-fit: contain;
 }
 
+.gallery-overlay > div {
+    grid-area: overlay;
+    place-self: start start;
+    color: var(--color-light);
+    font-size: 80%;
+}
+
+.gallery-overlay > div > * + * {
+    margin-inline-start: 1em;
+}
+
+.gallery-overlay button.copy-url {
+    font-size: inherit;
+}
+
 .gallery-overlay > button {
     grid-area: overlay;
     background-color: transparent;
@@ -552,7 +569,7 @@ nav button {
     outline: 0;
 }
 
-.gallery-overlay > button.close {
+.gallery-overlay > button.close-fullscreen {
     place-self: start end;
 }
 
