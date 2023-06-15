@@ -310,7 +310,7 @@ nav button {
   font-size: var(--step-0);
 }
 
-.card:first-child {
+.card:first-child:not(.is-gallery) {
     display: none;
 }
 
@@ -349,11 +349,6 @@ nav button {
     font-family: inherit;
     font-size: var(--step-0);
     border-radius: 0.7em;
-}
-
-.card button:disabled {
-  pointer-events: none;
-  opacity: 0.5;
 }
 
 .card .dropdown {
@@ -526,6 +521,10 @@ nav button {
   inline-size: 100%;
   block-size: 100%;
   object-fit: scale-down;
+}
+
+video, audio {
+    inline-size: 100%;
 }
 
 
