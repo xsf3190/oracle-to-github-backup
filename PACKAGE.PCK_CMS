@@ -368,49 +368,73 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             RETURN ( TO_CHAR(pTimestamp, 'dd Mon yyyy'));
         END IF;
     END;
+    
+    FUNCTION getMediaType(pResourceType IN VARCHAR2, pFormat IN VARCHAR2) RETURN VARCHAR2 
+    IS
+    BEGIN
+        IF (pResourceType='image') THEN
+            RETURN ('image');
+        ELSIF (pResourceType='video' AND pFormat IN ('mp4')) THEN
+            RETURN ('video');
+        ELSIF (pResourceType='video' AND pFormat IN ('m4a','wav')) THEN
+            RETURN('audio');
+        ELSE
+            RAISE_APPLICATION_ERROR(-20001,'Media type not supported - ' || pFormat);
+        END IF;
+    END;
 
     /*
-     **  Format Cloudinary URL by default as img src
+     **  Format Cloudinary URL
      */    
     FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pImgSrc IN BOOLEAN DEFAULT TRUE) RETURN VARCHAR2 
     IS
         l_url VARCHAR2(500);
-        l_left PLS_INTEGER:=1;
-        l_right PLS_INTEGER:=3;
-        l_target PLS_INTEGER:=400;
-        TYPE t_arr IS VARRAY(3) OF INTEGER;
-        l_arr t_arr:=t_arr(1,2,3);
-    BEGIN
-            /* 
-             ** Return thumbnail (25% width) url of Cloudinary asset
-             ** N.b. video and audio are presented as images
-             */
-        l_url:='https://res.cloudinary.com/' || pCloudname;
+        l_media_type VARCHAR(5):=getMediaType(pResourceType, pFormat);
         
-        IF (pImgSrc OR pResourceType='image') THEN
+        FUNCTION getWidth RETURN VARCHAR2 IS
+            l_left PLS_INTEGER:=1;
+            l_right PLS_INTEGER:=3;
+            l_min_width PLS_INTEGER:=360;
+            TYPE t_arr IS VARRAY(3) OF INTEGER;
+            l_arr t_arr:=t_arr(1,2,3);        
+        BEGIN
+            IF (l_media_type='audio' AND pImgSrc) THEN
+                RETURN (',w_' || l_min_width);
+            END IF;
+            
+            IF (pWidth*.25<l_min_width) THEN
+                RETURN NULL;
+            END IF;
+            
             l_arr(1):=pWidth*.25;
             l_arr(2):=pWidth*.625;
             l_arr(3):=pWidth;
             l_left:=1;
             l_right:=3;
             WHILE (l_left<l_right) LOOP
-                IF (ABS(l_arr(l_left)-l_target) <= ABS(l_arr(l_right)-l_target)) THEN
+                IF (ABS(l_arr(l_left)-l_min_width) <= ABS(l_arr(l_right)-l_min_width)) THEN
                     l_right:=l_right-1;
                 ELSE
                     l_left:=l_left+1;
                 END IF;
-            END LOOP;
-
+            END LOOP;        
+            RETURN ',w_' || ROUND(l_arr(l_left));
+        END;
+    BEGIN
+        /* 
+         ** Return best-fit thumbnail url of Cloudinary asset
+         */
+        l_url:='https://res.cloudinary.com/' || pCloudname;
+        
+        IF (pImgSrc OR l_media_type='image') THEN
             l_url:=l_url ||
-                CASE WHEN pResourceType='image' THEN  '/q_auto,f_auto,w_' || ROUND(l_arr(l_left)) || '/' || pPublicId
-                     WHEN pResourceType='video' AND pFormat IN ('mp4') THEN '/video/upload/q_auto,f_auto,w_' || l_arr(l_left) || '/' || pPublicId || '.jpg'
-                     WHEN pResourceType='video' AND pFormat IN ('m4a','wav') THEN '/video/upload/q_auto,f_auto,w_' || l_target || '/fl_waveform' || '/' || pPublicId || '.png'
+                CASE l_media_type
+                    WHEN 'image' THEN '/q_auto,f_auto' || getwidth() || '/' || pPublicId
+                    WHEN 'video' THEN '/video/upload/q_auto,f_auto' || getwidth() || '/' || pPublicId || '.jpg' -- video poster
+                    WHEN 'audio' THEN '/video/upload/q_auto,f_auto' || getwidth() || '/fl_waveform' || '/' || pPublicId || '.png'  --audio waveform
                 END;
         ELSE
-            l_url:=l_url ||
-                CASE WHEN pResourceType='video' AND pFormat IN ('mp4') THEN '/video/upload/q_auto,f_auto/' || pPublicId
-                     WHEN pResourceType='video' AND pFormat IN ('m4a','wav') THEN '/video/upload/' || pPublicId || '.xxx'
-                END;            
+            l_url:=l_url || '/video/upload/q_auto' || getwidth() || '/' || pPublicId || '.xxx';    
         END IF;
                 
         RETURN (l_url);
@@ -785,8 +809,10 @@ PROCEDURE getThumbnails IS
         l_article_id article.id%type:=apex_application.g_x01;
         l_maxtouchpoints INTEGER:=apex_application.g_x02;
         l_instruction VARCHAR2(300);
-        l_url VARCHAR2(300);
+        l_url_image VARCHAR2(300); -- includes image, video poster and audo waveform 
+        l_url_video VARCHAR2(300); -- includes video and audio
         n PLS_INTEGER:=0;
+        l_media_type VARCHAR(5);
     BEGIN
         FOR C IN (
             SELECT a.rowid row_id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(created_date,'dd-Mon-yyyy') uploaded, 
@@ -797,8 +823,37 @@ PROCEDURE getThumbnails IS
              ORDER BY a.display_order )
         LOOP
             n:=n+1;
-            l_clob:=l_clob || TO_CLOB('<li class="card" tabindex="0" data-id="' || C.row_id || '">');
-
+            l_media_type:=getMediaType(C.resource_type, C.format);
+            l_clob:=l_clob || TO_CLOB('<li class="card is-gallery" tabindex="0" data-id="' || C.row_id || '">');
+            
+            l_url_image:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
+            l_url_video:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width, FALSE);
+            
+            CASE l_media_type
+                WHEN 'image' THEN
+                    l_clob:=l_clob || TO_CLOB(
+                    '<img data-dimensions="'  || ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':' || C.width || 'x' || C.height || '"
+                        src="' || l_url_image || '">');
+                                                
+                WHEN 'video' THEN
+                    l_clob:=l_clob || TO_CLOB(
+                    '<video controls poster="' || REPLACE(l_url_video,'.xxx','.jpg') || '">
+                        <source src="' || REPLACE(l_url_video,'.xxx','.webm') || '" type="video/webm"></source>
+                        <source src="' || REPLACE(l_url_video,'.xxx','.mp4') || '" type="video/mp4"></source>
+                    </video>');
+                    
+                WHEN 'audio' THEN
+                    l_clob:=l_clob || TO_CLOB('<img data-dimensions="360x360:360x360:360x360" src="' || REPLACE(l_url_video,'.xxx','.png') || '">');
+                    l_clob:=l_clob || TO_CLOB(
+                    '<audio controls>
+                        <source src="' || REPLACE(l_url_video,'.xxx','.aac') || '" type="audio/aac"></source>
+                        <source src="' || REPLACE(l_url_video,'.xxx','.ogg') || '" type="audio/ogg"></source>
+                        <source src="' || REPLACE(l_url_video,'.xxx','.mp3') || '" type="audio/mpeg"></source>
+                        <source src="' || REPLACE(l_url_video,'.xxx','.wav') || '" type="audio/wav"></source>
+                    </audio>');
+        
+            END CASE;
+            
             IF (apex_authentication.is_authenticated) THEN
                 l_clob:=l_clob ||TO_CLOB(
                 '<div class="dropdown">
@@ -809,28 +864,7 @@ PROCEDURE getThumbnails IS
                         <li><button type="button" class="fa fa-id-card view-details">View Details</button></li>
                         <li><button type="button" class="fa fa-trash delete-asset">Delete</button></li>
                 </div>');
-            END IF;
-            
-            l_url:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width, FALSE);
-            
-            CASE 
-                WHEN C.resource_type='image' THEN
-                    l_clob:=l_clob || TO_CLOB('<img data-dimensions="'  || ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' 
-                                                                    || ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':' 
-                                                                    || C.width || 'x' || C.height || '"
-                                                src="' || l_url || '" ');
-                                                
-                WHEN C.resource_type='video' AND C.format IN ('mp4') THEN
-                    l_clob:=l_clob || TO_CLOB('<video poster="' || l_url || '"><source="' || REPLACE(l_url,'.jpg','.webm') || '" type="video/webm" controls></video>');
-                    
-                WHEN C.resource_type='video' AND C.format IN ('m4a','wav') THEN
-                    l_clob:=l_clob || TO_CLOB('<audio controls>
-                        <source src="' || REPLACE(l_url,'.xxx','.aac') || '" type="audio/aac"></source>
-                        <source src="' || REPLACE(l_url,'.xxx','.ogg') || '" type="audio/ogg"></source>
-                        <source src="' || REPLACE(l_url,'.xxx','.mp3') || '" type="audio/mpeg"></source>
-                        <source src="' || REPLACE(l_url,'.xxx','.wav') || '" type="audio/wav"></source></audio>');
-        
-            END CASE;
+            END IF;            
 
             l_clob:=l_clob || TO_CLOB('</li>');
         END LOOP;
