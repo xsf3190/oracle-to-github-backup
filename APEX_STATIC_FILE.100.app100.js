@@ -58,15 +58,6 @@ const checkPerformance = () => {
     return ok;
 }
 
-/*
-window.addEventListener("touchstart", () => {
-    document.body.classList.add("touch");
-    window.removeEventListener("touchstart", touched, false);
-  },
-  false
-);
-*/
-
 window.addEventListener("DOMContentLoaded", (event) => {
     console.log("DOM fully loaded and parsed");
     console.log("APP_USER",apex.env.APP_USER);
@@ -136,19 +127,20 @@ const perfObserver = (list) => {
         if (entry.transferSize > 300 && (entry.initiatorType === "img" || entry.initiatorType === "video" || entry.initiatorType === "audio")) {
             const duration = Math.round(entry.duration * 1) / 1;
             const parts = entry.name.split("/");
-            let public_id = parts.pop(),
-                resource_type = "image";
+            let public_id = parts.pop();
+            
+            
+            const resource_type = parts[4] === "video" ? 'video' : "image";
 
-            if (parts[4] === "video") {
-                resource_type = "video";
-            }
-            // Cloudinary video and audio thumbnail URLs include file type, which we remove in order to allow database upload into target table
-            if (resource_type === "video" && entry.initiatorType === "img") {
+            const filetype = public_id.substring(public_id.lastIndexOf(".")+1);
+            if (['png','jpg','webm','mp4','aac','ogg','mp3','wav'].indexOf(filetype)>=0) {
                 public_id = public_id.substring(0,public_id.lastIndexOf("."));
             }
 
+            //console.log("entry",entry.initiatorType,parts[3],resource_type,public_id);
+
             // Get the media content-type with HEAD fetch. Wish I knew how Developer Tools do it.
-            fetch(entry.name,{method:'HEAD', headers: {Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*"}})
+            fetch(entry.name,{method:'HEAD', headers: {Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,video/webm,video/mp4,audio/aac,audio/ogg,audio/mp3,audio/wav",}})
                 .then(response => {
                     const contentType = response.headers.get('Content-Type');
                     gPerfObj.images.push(
@@ -292,9 +284,10 @@ enableKeydown = (event) => {
 ** CLICK THUMBNAIL SHOWS IMAGE IN FULLSCREEN
 */
 const showFullScreen = (e) => {
+    if (e.target.tagName !== "IMG") return;
     galleryFull.requestFullscreen().then(() => {
-        gFullImage = e.srcElement;
-        setImgSrc(e.srcElement);
+        gFullImage = e.target;
+        setImgSrc(e.target);
         galleryFull.style.display = "grid";
         window.addEventListener("keydown", enableKeydown);
     })
@@ -317,6 +310,8 @@ const counter = () => {
 ** SET FULLSCREEN IMAGE URL ACCORDING TO DEVICE WIDTH
 */
 const setImgSrc = (img) => {
+
+    console.log("img",img);
     galleryFullCounter.textContent = counter();
     galleryFullImg.style.width = "";
     galleryFullImg.src = img.src;
@@ -339,7 +334,7 @@ const setImgSrc = (img) => {
         url = url.replace(/,w_\d+/,  ",w_" + closest);
     }
 
-    galleryFullLegend.textContent = "Closest resolution downloaded for container " + window.innerWidth + " x " + window.innerHeight;
+    galleryFullLegend.textContent = "Closest resolution downloaded for window " + window.innerWidth + " x " + window.innerHeight;
     galleryFull.querySelectorAll("fieldset button.dimensions").forEach((button,index) => {
         button.textContent = dimensions[index];
         button.dataset.url = urls[index];
