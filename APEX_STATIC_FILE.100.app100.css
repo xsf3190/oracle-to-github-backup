@@ -358,6 +358,7 @@ nav button {
 .card .dropdown .dropdown-items {
     display: none;
     position: absolute;
+    z-index: 1;
     right: 0;
     background-color: white;
     color: var(--color-button);
@@ -521,6 +522,10 @@ nav button {
   inline-size: 100%;
   block-size: 100%;
   object-fit: scale-down;
+}
+
+.gallery-container img.no-show {
+    display: none;
 }
 
 video, audio {
