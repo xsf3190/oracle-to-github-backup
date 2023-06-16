@@ -62,11 +62,11 @@ window.addEventListener("DOMContentLoaded", (event) => {
     console.log("DOM fully loaded and parsed");
     console.log("APP_USER",apex.env.APP_USER);
 
-    let browser = bowser.getParser(window.navigator.userAgent),
-        browserName = browser.getBrowserName(),
-        browserVersion = browser.getBrowserVersion();
+    const browser = bowser.getParser(window.navigator.userAgent),
+          browserName = browser.getBrowserName(),
+          browserVersion = browser.getBrowserVersion().split(".");
 
-    gBrowser = browserName + "," + browserVersion;
+    gBrowser = browserName + " " + browserVersion[0];
     console.log("gBrowser",gBrowser);
 
     const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -118,13 +118,9 @@ const sendBeacon = () => {
 */
 const perfObserver = (list) => {
     list.getEntries().forEach((entry) => {
-        if (gBrowser.startsWith("Safari") && entry.initiatorType === "img") {
-            console.log("decodedBodySize",entry.decodedBodySize);
-            console.log("transferSize",entry.transferSize);
-            console.log("duration",entry.duration);
-        }
         /* Process network media transfers. Note that transferSize=300 for the HEAD fetch that retrieves content-type  */
-        if (entry.transferSize > 300 && (entry.initiatorType === "img" || entry.initiatorType === "video" || entry.initiatorType === "audio")) {
+        if ((entry.transferSize > 300 || gBrowser.startsWith("Safari")) && (entry.initiatorType === "img" || entry.initiatorType === "video" || entry.initiatorType === "audio")) {
+            console.log("start perf for ",gBrowser);
             const duration = Math.round(entry.duration * 1) / 1;
             const parts = entry.name.split("/");
             let public_id = parts.pop();
@@ -143,9 +139,13 @@ const perfObserver = (list) => {
             fetch(entry.name,{method:'HEAD', headers: {Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,video/webm,video/mp4,audio/aac,audio/ogg,audio/mp3,audio/wav",}})
                 .then(response => {
                     const contentType = response.headers.get('Content-Type');
+                    let transferSize = entry.transferSize;
+                    if (gBrowser.startsWith("Safari")) {
+                        transferSize = response.headers.get('Content-Length');
+                    }
                     gPerfObj.images.push(
                         {"cld_cloud_name": parts[3], "resource_type": resource_type, "public_id": public_id, "epoch": Math.round(Date.now()/1000),
-                        "url": entry.name, "transfersize": entry.transferSize, "duration": duration, "content_type":contentType,
+                        "url": entry.name, "transfersize": transferSize, "duration": duration, "content_type":contentType,
                         "window_innerwidth": window.innerWidth, "browser":gBrowser, "connection_type": gConnectionType, "servertiming": entry.serverTiming}
                     );
                 })
@@ -303,6 +303,13 @@ const counter = () => {
         li = li.previousElementSibling;
         pos++;
     }
+    if (galleryList.childElementCount === 1) {
+        galleryFullNext.style.display = "none";
+        galleryFullPrev.style.display = "none";
+    } else {
+        galleryFullNext.style.display = "block";
+        galleryFullPrev.style.display = "block";
+    }
     return pos + "/" + galleryList.childElementCount;
 };
 
@@ -310,8 +317,6 @@ const counter = () => {
 ** SET FULLSCREEN IMAGE URL ACCORDING TO DEVICE WIDTH
 */
 const setImgSrc = (img) => {
-
-    console.log("img",img);
     galleryFullCounter.textContent = counter();
     galleryFullImg.style.width = "";
     galleryFullImg.src = img.src;
@@ -381,6 +386,9 @@ galleryFullNext.addEventListener("click",  () => {
     } else {
         gFullImage = gFullImage.parentElement.parentElement.firstElementChild.firstElementChild;
     }
+    if (gFullImage.tagName !== "IMG") {
+        gFullImage = gFullImage.nextElementSibling;
+    }
     setImgSrc(gFullImage);
 });
 
@@ -393,6 +401,9 @@ galleryFullPrev.addEventListener("click",  () => {
     } else {
         gFullImage = gFullImage.parentElement.parentElement.lastElementChild.firstElementChild;
     }
+    if (gFullImage.tagName !== "IMG") {
+        gFullImage = gFullImage.nextElementSibling;
+    }    
     setImgSrc(gFullImage);
 });
 
