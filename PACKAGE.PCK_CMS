@@ -316,7 +316,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             COLUMNS filename_override,headers,source,tags,timestamp,use_filename                 
             );
         
-        /* get Cloudinary details either of logged on user of the hosting Cloudinary user */
+        /* get Cloudinary details either of logged on user OR the hosting Cloudinary user */
         FOR C IN (SELECT NVL(u1.cld_cloud_name,u2.cld_cloud_name) cld_cloud_name, NVL(u1.cld_api_key, u2.cld_api_key) cld_api_key, NVL(u1.cld_api_secret,u2.cld_api_secret) cld_api_secret
                     FROM users u1, users u2
                    WHERE u1.id=l_user_id
@@ -342,7 +342,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_client_TZ users.client_tz%type:=apex_application.g_x01;
         l_touchpoints NUMBER:=apex_application.g_x02;
     BEGIN
-        log('setClientInfo:apex_application.g_x02:'|| apex_application.g_x02);
         apex_util.set_session_state('APP_CLIENT_TZ',l_client_TZ,p_commit=>FALSE);
         apex_util.set_session_state('APP_MAXTOUCHPOINTS',l_touchpoints,p_commit=>FALSE);
         
@@ -811,49 +810,31 @@ PROCEDURE getThumbnails IS
         l_instruction VARCHAR2(300);
         l_url_image VARCHAR2(300); -- includes image, video poster and audo waveform 
         l_url_video VARCHAR2(300); -- includes video and audio
-        n PLS_INTEGER:=0;
+        --n PLS_INTEGER:=0;
         l_media_type VARCHAR(5);
     BEGIN
         FOR C IN (
             SELECT a.rowid row_id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(created_date,'dd-Mon-yyyy') uploaded, 
-                   DECODE(a.width,0,400,a.width) width, DECODE(a.height,0,500,a.height) height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format
+                   a.width, a.height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format,
+                   COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY a.display_order) rn
               FROM asset a
              WHERE a.article_id=l_article_id
                AND NVL(a.format,'N/A')<>'clt'
              ORDER BY a.display_order )
         LOOP
-            n:=n+1;
+            IF (C.rn=1) THEN
+                l_instruction:=CASE WHEN l_maxtouchpoints > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen' || 
+                       CASE WHEN apex_authentication.is_authenticated AND C.nb > 1 THEN '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover' END;
+            END IF;
             l_media_type:=getMediaType(C.resource_type, C.format);
             l_clob:=l_clob || TO_CLOB('<li class="card is-gallery" tabindex="0" data-id="' || C.row_id || '">');
             
             l_url_image:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
             l_url_video:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width, FALSE);
             
-            CASE l_media_type
-                WHEN 'image' THEN
-                    l_clob:=l_clob || TO_CLOB(
-                    '<img data-dimensions="'  || ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':' || C.width || 'x' || C.height || '"
-                        src="' || l_url_image || '">');
-                                                
-                WHEN 'video' THEN
-                    l_clob:=l_clob || TO_CLOB(
-                    '<video controls poster="' || REPLACE(l_url_video,'.xxx','.jpg') || '">
-                        <source src="' || REPLACE(l_url_video,'.xxx','.webm') || '" type="video/webm"></source>
-                        <source src="' || REPLACE(l_url_video,'.xxx','.mp4') || '" type="video/mp4"></source>
-                    </video>');
-                    
-                WHEN 'audio' THEN
-                    l_clob:=l_clob || TO_CLOB('<img data-dimensions="360x360:360x360:360x360" src="' || REPLACE(l_url_video,'.xxx','.png') || '">');
-                    l_clob:=l_clob || TO_CLOB(
-                    '<audio controls>
-                        <source src="' || REPLACE(l_url_video,'.xxx','.aac') || '" type="audio/aac"></source>
-                        <source src="' || REPLACE(l_url_video,'.xxx','.ogg') || '" type="audio/ogg"></source>
-                        <source src="' || REPLACE(l_url_video,'.xxx','.mp3') || '" type="audio/mpeg"></source>
-                        <source src="' || REPLACE(l_url_video,'.xxx','.wav') || '" type="audio/wav"></source>
-                    </audio>');
-        
-            END CASE;
-            
+            l_clob:=l_clob ||TO_CLOB('
+                <div class="button-container">
+                    <span>' || C.rn || '/' || C.nb || '</span>');
             IF (apex_authentication.is_authenticated) THEN
                 l_clob:=l_clob ||TO_CLOB(
                 '<div class="dropdown">
@@ -864,14 +845,37 @@ PROCEDURE getThumbnails IS
                         <li><button type="button" class="fa fa-id-card view-details">View Details</button></li>
                         <li><button type="button" class="fa fa-trash delete-asset">Delete</button></li>
                 </div>');
-            END IF;            
-
+            END IF;
+            l_clob:=l_clob ||TO_CLOB('</div>');
+            
+            CASE l_media_type
+                WHEN 'image' THEN
+                    l_clob:=l_clob || TO_CLOB(
+                    '<img data-dimensions="'  || ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':' || C.width || 'x' || C.height || '"
+                        src="' || l_url_image || '">');
+                                                
+                WHEN 'video' THEN
+                    l_clob:=l_clob || TO_CLOB('<img class="no-show" data-dimensions="360x360:360x360:360x360" src="' || REPLACE(l_url_video,'.xxx','.jpg') || '">');
+                    l_clob:=l_clob || TO_CLOB(
+                    '<video controls preload="metadata" poster="' || REPLACE(l_url_video,'.xxx','.jpg') || '">
+                        <source src="' || REPLACE(l_url_video,'.xxx','.webm') || '" type="video/webm"></source>
+                        <source src="' || REPLACE(l_url_video,'.xxx','.mp4') || '" type="video/mp4"></source>
+                    </video>');
+                    
+                WHEN 'audio' THEN
+                    l_clob:=l_clob || TO_CLOB('<img data-dimensions="360x360:360x360:360x360" src="' || REPLACE(l_url_image,'.xxx','.png') || '">');
+                    l_clob:=l_clob || TO_CLOB(
+                    '<audio preload="metadata" controls>
+                        <source src="' || REPLACE(l_url_video,'.xxx','.aac') || '" type="audio/aac"></source>
+                        <source src="' || REPLACE(l_url_video,'.xxx','.ogg') || '" type="audio/ogg"></source>
+                        <source src="' || REPLACE(l_url_video,'.xxx','.mp3') || '" type="audio/mpeg"></source>
+                        <source src="' || REPLACE(l_url_video,'.xxx','.wav') || '" type="audio/wav"></source>
+                    </audio>');
+        
+            END CASE;
+            
             l_clob:=l_clob || TO_CLOB('</li>');
         END LOOP;
-        
-        l_instruction:=CASE WHEN l_maxtouchpoints > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen' || 
-                       CASE WHEN apex_authentication.is_authenticated AND n > 1 THEN '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover' END;
-        
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -911,8 +915,8 @@ PROCEDURE getThumbnails IS
         
         SELECT NVL(MAX(display_order),0) INTO l_start_order FROM asset WHERE article_id=l_article_id;
 
-        INSERT INTO asset(article_id, public_id, width, height, bytes, resource_type, format, cld_cloud_name, created_date, display_order)
-        SELECT article_id, public_id, width, height, bytes, resource_type, format, cld_cloud_name, current_timestamp, l_start_order+ROWNUM
+        INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, created_date, display_order)
+        SELECT seq_asset.nextval, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, current_timestamp, l_start_order+ROWNUM
           FROM JSON_TABLE(l_metadata FORMAT JSON, '$.images[*]' COLUMNS (article_id, public_id, width, height, bytes, resource_type, format, cld_cloud_name));
 
         /* Return upload details to calling Javascript process in order to update front-end */
@@ -946,20 +950,28 @@ PROCEDURE getThumbnails IS
      */       
     PROCEDURE uploadPerformance IS
         l_performance clob:=apex_application.g_clob_01;
-        l_servertiming performance.servertiming%type;
         l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
         l_ip_address performance.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
         l_session_id NUMBER:=APEX_CUSTOM_AUTH.GET_SESSION_ID;
+        n PLS_INTEGER;
     BEGIN
-        INSERT /*+ ignore_row_on_dupkey_index ( performance (session_id, url)) */ INTO performance(cld_cloud_name, resource_type, public_id, session_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, capture_date, user_id, ip_address, servertiming)
-        SELECT cld_cloud_name, resource_type, public_id, l_session_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, timestamp'1970-01-01 00:00:00' + numtodsinterval(epoch,'second') capture_date, l_user_id, l_ip_address,
-        LISTAGG(name||','||duration2 || NVL2(description,','||description,null),' | ') WITHIN GROUP (ORDER BY seq) servertiming
-          FROM JSON_TABLE(l_performance FORMAT JSON, '$.images[*]' 
-          COLUMNS (cld_cloud_name, resource_type, public_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, epoch,
-          NESTED servertiming[*]  COLUMNS (seq for ordinality, name, description, duration2 path '$.duration')))
-          WHERE name<>'rtt'
-          GROUP BY cld_cloud_name, resource_type, public_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, epoch, l_user_id;
-          
+        log(l_performance);
+
+        INSERT /*+ ignore_row_on_dupkey_index ( performance (session_id, url)) */ 
+          INTO performance(id, asset_id, session_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, capture_date, user_id, ip_address)
+          WITH json AS 
+          (
+                SELECT cld_cloud_name, resource_type, public_id, l_session_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, timestamp'1970-01-01 00:00:00' + numtodsinterval(epoch,'second') capture_date, l_user_id, l_ip_address
+                  FROM JSON_TABLE(l_performance FORMAT JSON, '$.images[*]' 
+                        COLUMNS (cld_cloud_name, resource_type, public_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, epoch))
+          )
+        SELECT seq_performance.nextval, a.id, l_session_id, j.url, j.connection_type, j.transfersize, j.duration, j.content_type, j.window_innerwidth, j.browser, j.capture_date, l_user_id, l_ip_address
+          FROM json j, asset a
+         WHERE j.cld_cloud_name=a.cld_cloud_name
+           AND j.resource_type=a.resource_type
+           AND j.public_id=a.public_id;
+
+        log(sql%rowcount);
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
         APEX_JSON.close_object; 
@@ -989,7 +1001,7 @@ PROCEDURE getThumbnails IS
         END IF;
         
         /* 
-        */
+        
         FOR C IN (SELECT  COUNT(*) OVER (PARTITION BY a.cld_cloud_name, a.resource_type, a.public_id) nb_rows, 
                           ROW_NUMBER() OVER (PARTITION BY a.display_order,a.cld_cloud_name, a.resource_type, a.public_id ORDER BY p.capture_date DESC) rn, 
                           a.cld_cloud_name, a.resource_type, a.public_id, a.format, a.width, a.bytes, apex_util.get_since(a.created_date) created_date, apex_util.get_since(p.capture_date) capture_date, 
@@ -1065,6 +1077,7 @@ PROCEDURE getThumbnails IS
         ELSE
             l_content:= to_clob('<p>All media for your session was retrieved from Cache</p>');
         END IF;
+        */
         
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
