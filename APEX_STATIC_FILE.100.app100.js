@@ -118,9 +118,13 @@ const sendBeacon = () => {
 */
 const perfObserver = (list) => {
     list.getEntries().forEach((entry) => {
-        /* Process network media transfers. Note that transferSize=300 for the HEAD fetch that retrieves content-type  */
+        /* 
+        ** Process network media transfers. 
+        ** Safari does not publish transferSize so we handle that in the HEAD fetch
+        ** Transfers <=300 are treated as cache transfers
+        ** HEAD fetch retrieves content-type for all browsers as this is reported inaccurately for Cloudinary asset downloads
+        */ 
         if ((entry.transferSize > 300 || gBrowser.startsWith("Safari")) && (entry.initiatorType === "img" || entry.initiatorType === "video" || entry.initiatorType === "audio")) {
-            console.log("start perf for ",gBrowser);
             const duration = Math.round(entry.duration * 1) / 1;
             const parts = entry.name.split("/");
             let public_id = parts.pop();
@@ -150,7 +154,8 @@ const perfObserver = (list) => {
                     );
                 })
                 .catch(error => {
-                    console.error('Error fetching image content-type:', error);
+                    console.error('Error fetching media content-type:', error);
+                    popupOpen('Error fetching media content-type:', error);
                 });
         };
         
