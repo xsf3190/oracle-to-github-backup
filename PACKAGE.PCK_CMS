@@ -959,12 +959,12 @@ PROCEDURE getThumbnails IS
 
         INSERT /*+ ignore_row_on_dupkey_index ( performance (session_id, url)) */ 
           INTO performance(id, asset_id, session_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, capture_date, user_id, ip_address)
-          WITH json AS 
-          (
-                SELECT cld_cloud_name, resource_type, public_id, l_session_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, timestamp'1970-01-01 00:00:00' + numtodsinterval(epoch,'second') capture_date, l_user_id, l_ip_address
-                  FROM JSON_TABLE(l_performance FORMAT JSON, '$.images[*]' 
-                        COLUMNS (cld_cloud_name, resource_type, public_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, epoch))
-          )
+        WITH json AS 
+        (
+            SELECT cld_cloud_name, resource_type, public_id, l_session_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, timestamp'1970-01-01 00:00:00' + numtodsinterval(epoch,'second') capture_date, l_user_id, l_ip_address
+              FROM JSON_TABLE(l_performance FORMAT JSON, '$.images[*]' 
+                    COLUMNS (cld_cloud_name, resource_type, public_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, epoch))
+        )
         SELECT seq_performance.nextval, a.id, l_session_id, j.url, j.connection_type, j.transfersize, j.duration, j.content_type, j.window_innerwidth, j.browser, j.capture_date, l_user_id, l_ip_address
           FROM json j, asset a
          WHERE j.cld_cloud_name=a.cld_cloud_name
@@ -972,6 +972,22 @@ PROCEDURE getThumbnails IS
            AND j.public_id=a.public_id;
 
         log(sql%rowcount);
+        
+        INSERT /*+ ignore_row_on_dupkey_index ( servertiming (performance_id, seq)) */ 
+          INTO servertiming(performance_id, seq, name, duration, description)
+        WITH json AS 
+        (
+            SELECT url, seq, name, duration, description
+              FROM JSON_TABLE(l_performance FORMAT JSON, '$.images[*]' 
+                    COLUMNS (url,
+                        NESTED  '$.servertiming[*]' columns (seq for ordinality,name,duration,description))) 
+        )
+        SELECT p.id, j.seq, j.name, j.duration, j.description
+          FROM json j, performance p
+         WHERE p.session_id=l_session_id
+           AND p.url=j.url
+           AND j.seq IS NOT NULL;        
+        
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
         APEX_JSON.close_object; 
