@@ -783,12 +783,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
              WHERE art.id=cov.article_id) 
         LOOP
             l_clob:=l_clob || TO_CLOB('<div class="homepage"><img src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" alt="' || C.alt_text || '">');
-            l_clob:=l_clob || C.body_html || TO_CLOB('</div>');
+            l_clob:=l_clob || TO_CLOB(C.body_html || '</div>');
         END LOOP;
         
-        l_clob:=l_clob || '<h2>PUBLISHED ARTICLES</h2>';
+        l_clob:=l_clob || TO_CLOB('<h2>PUBLISHED ARTICLES</h2>');
         
         l_clob:=l_clob || getArticles('Y');
+        
+        l_clob:=l_clob || TO_CLOB('
+            <script type="module">
+              import {onCLS, onFID, onLCP} from ''https://unpkg.com/web-vitals?module'';
+              onCLS(addToQueue);
+              onFID(addToQueue);
+              onLCP(addToQueue);
+            </script>');
         
         RETURN (l_clob);
 
