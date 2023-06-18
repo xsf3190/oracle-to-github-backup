@@ -4,7 +4,8 @@ let gArticleId,
     gFullImage,
     gPerfObj = {images: []};
 
-const cards = document.querySelector(".cards"),
+const queue = new Set(),
+      cards = document.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupConfirm = popup.querySelector("button.confirm"),
       preview = document.querySelector("dialog.preview"),
@@ -33,6 +34,25 @@ document.querySelectorAll("button.close").forEach((button) => {
         e.target.closest("dialog").close();
     });
 });
+
+const addToQueue = (metric) => {
+  queue.add(metric);
+}
+
+const flushQueue = () => {
+  if (queue.size > 0) {
+    // Replace with whatever serialization method you prefer.
+    // Note: JSON.stringify will likely include more data than you need.
+    const body = JSON.stringify([...queue]);
+    console.log(body);
+    /*
+    (navigator.sendBeacon && navigator.sendBeacon('/analytics', body)) ||
+      fetch('/analytics', {body, method: 'POST', keepalive: true});
+    */
+
+    queue.clear();
+  }
+}
 
 const checkPerformance = () => {
     if (performance === undefined) {
@@ -86,23 +106,29 @@ window.addEventListener("DOMContentLoaded", (event) => {
     if (checkPerformance()) {
         const observer = new PerformanceObserver(perfObserver);
         observer.observe({ type: "resource", buffered: true });
+
+        //const observerLCP = new PerformanceObserver(perfObserverLCP);
+        //observerLCP.observe({ type: "largest-contentful-paint", buffered: true });
     }
     
     execProcess( "setClientInfo", {x01: Intl.DateTimeFormat().resolvedOptions().timeZone, x02: navigator.maxTouchPoints}).then( () => {
         console.log("Client Time Zone set for APP_PAGE_ID",apex.env.APP_PAGE_ID);
     });
 
-    if ('onpagehide' in self) {
-        addEventListener('pagehide', sendBeacon, { capture: true} );
-    }
-
     addEventListener('visibilitychange', () => {
         console.log("visibilitychange")
+        flushQueue();
         if (document.visibilityState === 'hidden') {
             sendBeacon();
         }
     }, { capture: true} );
-
+    
+    if ('onpagehide' in self) {
+        addEventListener('pagehide', () => {
+            flushQueue();
+            sendBeacon();
+        }, { capture: true} );
+    }
 });
 
 const sendBeacon = () => {
@@ -113,31 +139,43 @@ const sendBeacon = () => {
     }
 }
 
+const perfObserverLCP = (list) => {
+    const entries = list.getEntries();
+    const lastEntry = entries[entries.length - 1]; // Use the latest LCP candidate
+    const lcp = (lastEntry.startTime/1000).toFixed(1);
+    const ele = document.createElement("p");
+    const text = document.createTextNode("Largest Contentful Paint: " + lcp + " seconds");
+    ele.appendChild(text);
+    const page = document.querySelector(".homepage");
+    page.appendChild(ele);
+    console.log(lastEntry);
+}
+
 /*
 **  BATCH PERFORMANCE ENTRIES IN ARRAY TO AVOID TOO MANY DATABASE PROCESS CALLS
 */
 const perfObserver = (list) => {
     list.getEntries().forEach((entry) => {
         /* 
-        ** Process network media transfers. 
+        ** Process network media transfers - ignore cache
         ** Safari does not publish transferSize so we handle that in the HEAD fetch
         ** Transfers <=300 are treated as cache transfers
         ** HEAD fetch retrieves content-type for all browsers as this is reported inaccurately for Cloudinary asset downloads
         */ 
-        if ((entry.transferSize > 300 || gBrowser.startsWith("Safari")) && (entry.initiatorType === "img" || entry.initiatorType === "video" || entry.initiatorType === "audio")) {
+ 
+        if (["img","video","audio"].indexOf(entry.initiatorType)===-1) return;
+
+        if (entry.transferSize > 0 || gBrowser.startsWith("Safari")) {
             const duration = Math.round(entry.duration * 1) / 1;
+            
             const parts = entry.name.split("/");
             let public_id = parts.pop();
-            
-            
             const resource_type = parts[4] === "video" ? 'video' : "image";
 
             const filetype = public_id.substring(public_id.lastIndexOf(".")+1);
             if (['png','jpg','webm','mp4','aac','ogg','mp3','wav'].indexOf(filetype)>=0) {
                 public_id = public_id.substring(0,public_id.lastIndexOf("."));
             }
-
-            //console.log("entry",entry.initiatorType,parts[3],resource_type,public_id);
 
             // Get the media content-type with HEAD fetch. Wish I knew how Developer Tools do it.
             fetch(entry.name,{method:'HEAD', headers: {Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,video/webm,video/mp4,audio/aac,audio/ogg,audio/mp3,audio/wav",}})
