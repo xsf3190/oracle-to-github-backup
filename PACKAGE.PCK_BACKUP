@@ -374,8 +374,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                     l_blob:=TO_BLOB(BFILENAME('DATA_PUMP_DIR',l_backup(i).object_name));
                     
                 WHEN 'GRANT' THEN
+                    dbms_metadata.set_transform_param(dbms_metadata.session_transform,'EMIT_SCHEMA',true);
                     l_clob:=LTRIM(LTRIM(dbms_metadata.get_granted_ddl(l_backup(i).object_name,sys_context('userenv','current_schema')),chr(13)||chr(10)));
                     l_clob:=REPLACE(l_clob,'"','');
+                    dbms_metadata.set_transform_param(dbms_metadata.session_transform,'EMIT_SCHEMA',false);
                 
                 ELSE
                     l_clob:=LTRIM(LTRIM(dbms_metadata.get_ddl(l_backup(i).object_type,l_backup(i).object_name),chr(13)||chr(10)));
