@@ -2,7 +2,8 @@ let gArticleId,
     gBrowser,
     gConnectionType,
     gFullImage,
-    gPerfObj = {images: []};
+    gPerfObj = {images: []},
+    gCWVurl;
 
 const queue = new Set(),
       cards = document.querySelector(".cards"),
@@ -40,15 +41,12 @@ const addToQueue = (metric) => {
 }
 
 const flushQueue = () => {
-  if (queue.size > 0) {
-    // Replace with whatever serialization method you prefer.
-    // Note: JSON.stringify will likely include more data than you need.
+  if (queue.size > 0) {    
     const body = JSON.stringify([...queue]);
-    console.log(body);
-    /*
-    (navigator.sendBeacon && navigator.sendBeacon('/analytics', body)) ||
-      fetch('/analytics', {body, method: 'POST', keepalive: true});
-    */
+    let url = gCWVurl + "?session=" + apex.env.APP_SESSION + "&browser=" + gBrowser + "&width=" + window.innerWidth;
+
+    (navigator.sendBeacon && navigator.sendBeacon(url, body)) ||
+      fetch(url, {body, method: 'POST', keepalive: true});
 
     queue.clear();
   }
@@ -137,18 +135,6 @@ const sendBeacon = () => {
             gPerfObj.images.length = 0;
         });
     }
-}
-
-const perfObserverLCP = (list) => {
-    const entries = list.getEntries();
-    const lastEntry = entries[entries.length - 1]; // Use the latest LCP candidate
-    const lcp = (lastEntry.startTime/1000).toFixed(1);
-    const ele = document.createElement("p");
-    const text = document.createTextNode("Largest Contentful Paint: " + lcp + " seconds");
-    ele.appendChild(text);
-    const page = document.querySelector(".homepage");
-    page.appendChild(ele);
-    console.log(lastEntry);
 }
 
 /*
