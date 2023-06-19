@@ -48,6 +48,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE updateContent;
     --
+    PROCEDURE uploadCWV(pBodyText IN CLOB);
+    --
     PROCEDURE uploadMetadata;
     --
     PROCEDURE uploadPerformance;
@@ -757,6 +759,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     */
     FUNCTION getHomepage RETURN CLOB IS
         l_clob CLOB;
+        l_cwv_url VARCHAR2(300):=apex_util.host_url() || '/ords/api/public/web-vitals';
     BEGIN
         /*
                 <p><a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">Login Facebook</a></p>
@@ -777,22 +780,51 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                  WHERE asset.article_id=1  /* HOMEPAGE convention */
                 ) 
                 WHERE display_order=min_display_order
+            ),
+            metrics AS 
+            (
+                SELECT nb_assets, bytes, nb_articles, word_count  
+                  FROM (SELECT COUNT(*) nb_assets, SUM(bytes) bytes FROM asset), (SELECT COUNT(*) nb_articles, SUM(word_count) word_count FROM article)
+            ),
+            credits AS
+            (
+                SELECT SUM(credits_limit) total_credits, SUM(credits_limit - (credits_limit*(used_percent/100))) credits_remaining
+                FROM usage 
+                WHERE usage_date=(SELECT MAX(usage_date) FROM usage)
+            ),
+            db AS
+            (
+                SELECT SUM(seg.bytes), pdb.total_size
+                FROM user_segments seg, V$pdbs pdb
+                GROUP BY total_size
             )
-            SELECT art.body_html, cov.alt_text, cov.cld_cloud_name, cov.resource_type, cov.public_id, cov.width, cov.format
-              FROM article art, cover cov 
+            SELECT art.body_html, cov.alt_text, cov.cld_cloud_name, cov.resource_type, cov.public_id, cov.width, cov.format, met.nb_assets, met.bytes, met.nb_articles, met.word_count, cr.total_credits, cr.credits_remaining
+              FROM article art, cover cov, metrics met, credits cr, db
              WHERE art.id=cov.article_id) 
         LOOP
             l_clob:=l_clob || TO_CLOB('<div class="homepage"><img src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" alt="' || C.alt_text || '">');
-            l_clob:=l_clob || TO_CLOB(C.body_html || '</div>');
+            l_clob:=l_clob || TO_CLOB(C.body_html);
+            
+            l_clob:=l_clob || TO_CLOB('
+                <p>The database holds -</p>
+                <ul>
+                    <li>' || TO_CHAR(C.nb_assets,'9,999,999') || ' media assets (' || apex_string_util.to_display_filesize(C.bytes) || ') hosted by Cloudinary</li>
+                    <li>' || C.nb_articles || ' articles (' || TO_CHAR(C.word_count,'999,999') || ' words)</li>
+                </ul>');
+            
+            l_clob:=l_clob || TO_CLOB('<p>This represents ' || ROUND((C.total_credits - C.credits_remaining)*100 / C.total_credits) || '% of capacity</p>');
+            
+            l_clob:=l_clob || TO_CLOB('</div>');
         END LOOP;
         
         l_clob:=l_clob || TO_CLOB('<h2>PUBLISHED ARTICLES</h2>');
         
         l_clob:=l_clob || getArticles('Y');
-        
+ 
         l_clob:=l_clob || TO_CLOB('
             <script type="module">
               import {onCLS, onFID, onLCP} from ''https://unpkg.com/web-vitals?module'';
+              gCWVurl = "' || l_cwv_url || '";
               onCLS(addToQueue);
               onFID(addToQueue);
               onLCP(addToQueue);
@@ -1591,7 +1623,38 @@ PROCEDURE getThumbnails IS
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm);
                 RAISE;
-    END;    
+    END;
+    
+    /*
+     **  Upload Core Web Vitals sent via navigator.beacon - hence no response sent.
+     */      
+    PROCEDURE uploadCWV(pBodyText IN CLOB) IS
+        l_bodytext CLOB:=pBodyText;
+        l_ip_address performance.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
+        l_plist apex_t_varchar2;
+        l_offset PLS_INTEGER;
+        l_key VARCHAR2(20);
+        l_value VARCHAR2(50);
+        l_session_id core_web_vitals.session_id%type;
+        l_browser core_web_vitals.browser%type;
+        l_width core_web_vitals.width%type;
+    BEGIN
+        l_plist := apex_string.split(owa_util.get_cgi_env('QUERY_STRING'), '&');
+        FOR i IN 1..l_plist.COUNT LOOP
+            l_offset := instr(l_plist(i), '=');
+            l_key:=substr(l_plist(i), 1, l_offset - 1);
+            l_value := substr(l_plist(i), l_offset + 1);
+            CASE l_key
+                WHEN 'session' THEN l_session_id:=l_value;
+                WHEN 'browser' THEN l_browser:=replace(l_value,'+',' ');
+                WHEN 'width' THEN l_width:=l_value;
+            END CASE;
+        END LOOP;
+        INSERT INTO core_web_vitals (name, value, rating, ip_address, session_id, browser, width)
+        SELECT name, value, rating, l_ip_address, l_session_id, l_browser, l_width
+        FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' COLUMNS (name, value, rating))
+        LOG ERRORS INTO core_web_vitals_err REJECT LIMIT UNLIMITED;
+    END;
 
     /*
      **  Get Cloudinary usage details for each Cloudinary subscriber. Daily job.
