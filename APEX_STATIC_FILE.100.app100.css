@@ -251,6 +251,23 @@ button {
 /* HOMEPAGE STYLES */
 /* *************** */
 
+[region-id="articles"] > div {
+    display: grid;
+    list-style-type: none;
+    grid-template-columns: repeat(auto-fit,minmax(min(25ch, 100%), 1fr));
+    gap: 1rem;
+    font-size: var(--step-1);
+}
+
+[region-id="articles"] > h2 {
+    font-size: var(--step-3);
+    line-height: 4;
+    text-align: center;
+    text-decoration: slateblue solid underline;
+    text-underline-position: under;
+}
+
+/*
 .homepage {
     font-family: Georgia, sans-serif;
     font-size: var(--step-0);
@@ -284,6 +301,7 @@ button {
     text-decoration: slateblue solid underline;
     text-underline-position: under;
 }
+*/
 
 /* *************** */
 /* CARD STYLES */
@@ -356,7 +374,10 @@ nav button {
 }
 
 .card .dropdown .dropdown-items {
-    display: none;
+    /*display: none;*/
+    opacity: 0;
+    transition: opacity 400ms;
+    transition-delay: 300ms;
     position: absolute;
     z-index: 1;
     right: 0;
@@ -370,7 +391,10 @@ nav button {
 }
 
 .card .dropdown:hover .dropdown-items {
-  display: block;
+  /*display: block;*/
+  opacity: 1;
+  transition: opacity 100ms;
+  transition-delay: 0ms;
 }
 
 .card .dropdown-items button {
