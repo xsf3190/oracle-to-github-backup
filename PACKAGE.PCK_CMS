@@ -794,27 +794,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             ),
             db AS
             (
-                SELECT SUM(seg.bytes), pdb.total_size
-                FROM user_segments seg, V$pdbs pdb
-                GROUP BY total_size
+                SELECT ROUND((used_bytes*100)/max_size) used_pct FROM (SELECT max_size FROM v$pdbs), (SELECT SUM(bytes) used_bytes FROM dba_segments WHERE tablespace_name<>'SAMPLESCHEMA')
             )
-            SELECT art.body_html, cov.alt_text, cov.cld_cloud_name, cov.resource_type, cov.public_id, cov.width, cov.format, met.nb_assets, met.bytes, met.nb_articles, met.word_count, cr.total_credits, cr.credits_remaining
+            SELECT art.body_html, cov.alt_text, cov.cld_cloud_name, cov.resource_type, cov.public_id, cov.width, cov.format, 
+                   met.nb_assets, met.bytes, met.nb_articles, met.word_count, cr.total_credits, cr.credits_remaining,
+                   db.used_pct
               FROM article art, cover cov, metrics met, credits cr, db
              WHERE art.id=cov.article_id) 
         LOOP
-            l_clob:=l_clob || TO_CLOB('<div class="homepage"><img src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" alt="' || C.alt_text || '">');
-            l_clob:=l_clob || TO_CLOB(C.body_html);
-            
             l_clob:=l_clob || TO_CLOB('
-                <p>The database holds -</p>
-                <ul>
-                    <li>' || TO_CHAR(C.nb_assets,'9,999,999') || ' media assets (' || apex_string_util.to_display_filesize(C.bytes) || ') hosted by Cloudinary</li>
-                    <li>' || C.nb_articles || ' articles (' || TO_CHAR(C.word_count,'999,999') || ' words)</li>
-                </ul>');
-            
-            l_clob:=l_clob || TO_CLOB('<p>This represents ' || ROUND((C.total_credits - C.credits_remaining)*100 / C.total_credits) || '% of capacity</p>');
-            
-            l_clob:=l_clob || TO_CLOB('</div>');
+                <div>
+                    <img src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" alt="' || C.alt_text || '">
+                    <div class="ck-content">' || C.body_html || '
+                        <table>
+                            <tr><td></td><td>HOSTING</td><td>CAPACITY USED</td></tr>
+                            <tr>
+                                <td>CLOUDINARY</td>
+                                <td>' || TO_CHAR(C.nb_assets,'9,999,999') || ' media assets (' || apex_string_util.to_display_filesize(C.bytes) || ')</td>
+                                <td>' || ROUND((C.total_credits - C.credits_remaining)*100 / C.total_credits) || '%</td>
+                                </tr>
+                            <tr>
+                                <td>ORACLE</td>
+                                <td>' || C.nb_articles || ' articles (' || TO_CHAR(C.word_count,'999,999') || ' words)</td>
+                                <td>' || ROUND(C.used_pct) || '%</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>');
         END LOOP;
         
         l_clob:=l_clob || TO_CLOB('<h2>PUBLISHED ARTICLES</h2>');
