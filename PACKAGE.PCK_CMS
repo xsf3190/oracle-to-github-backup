@@ -710,8 +710,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                         <fieldset>
                             <legend><span></span><button class="close-fieldset" type="button">&times;</button></legend>
                             <button type="button" class="dimensions"></button>
+                            <button type="button">&boxbox;</button>
                             <button type="button" class="dimensions"></button>
+                            <button type="button">&boxbox;</button>
                             <button type="button" class="dimensions"></button>
+                            <button type="button">&boxbox;</button>
                         </fieldset>
                         <div>
                             <span class="counter"></span>
@@ -810,13 +813,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                             <tr><td></td><td>HOSTING</td><td>CAPACITY USED</td></tr>
                             <tr>
                                 <td>CLOUDINARY</td>
-                                <td>' || TO_CHAR(C.nb_assets,'9,999,999') || ' media assets (' || apex_string_util.to_display_filesize(C.bytes) || ')</td>
-                                <td>' || ROUND((C.total_credits - C.credits_remaining)*100 / C.total_credits) || '%</td>
+                                <td style="line-height:1.5">' || TO_CHAR(C.nb_assets,'9,999,999') || ' media files<br>(' || apex_string_util.to_display_filesize(C.bytes) || ')</td>
+                                <td style="text-align: center">' || ROUND((C.total_credits - C.credits_remaining)*100 / C.total_credits) || '%</td>
                                 </tr>
                             <tr>
                                 <td>ORACLE</td>
-                                <td>' || C.nb_articles || ' articles (' || TO_CHAR(C.word_count,'999,999') || ' words)</td>
-                                <td>' || ROUND(C.used_pct) || '%</td>
+                                <td style="line-height:1.5">' || C.nb_articles || ' articles<br>(' || TO_CHAR(C.word_count,'fm999,999') || ' words)</td>
+                                <td style="text-align: center">' || ROUND(C.used_pct) || '%</td>
                             </tr>
                         </table>
                     </div>
@@ -886,9 +889,8 @@ PROCEDURE getThumbnails IS
                 '<div class="dropdown">
                       <button type="button" class="fa fa-caret-down"></button>
                       <ul class="dropdown-items">
-                        <li><button type="button" class="fa fa-edit edit-description">Description</button></li>
-                        <li><button type="button" class="fa fa-edit edit-alt-text">Alt Text</button></li>
-                        <li><button type="button" class="fa fa-id-card view-details">View Details</button></li>
+                        <li><button type="button" class="fa fa-edit edit-alt-text">Edit Text</button></li>
+                        <li><button type="button" class="fa fa-id-card view-performance">Performance</button></li>
                         <li><button type="button" class="fa fa-trash delete-asset">Delete</button></li>
                 </div>');
             END IF;
@@ -1001,8 +1003,6 @@ PROCEDURE getThumbnails IS
         l_session_id NUMBER:=APEX_CUSTOM_AUTH.GET_SESSION_ID;
         n PLS_INTEGER;
     BEGIN
-        log(l_performance);
-
         INSERT /*+ ignore_row_on_dupkey_index ( performance (session_id, url)) */ 
           INTO performance(id, asset_id, session_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, capture_date, user_id, ip_address)
         WITH json AS 
@@ -1016,8 +1016,6 @@ PROCEDURE getThumbnails IS
          WHERE j.cld_cloud_name=a.cld_cloud_name
            AND j.resource_type=a.resource_type
            AND j.public_id=a.public_id;
-
-        log(sql%rowcount);
         
         INSERT /*+ ignore_row_on_dupkey_index ( servertiming (performance_id, seq)) */ 
           INTO servertiming(performance_id, seq, name, duration, description)
