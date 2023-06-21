@@ -355,9 +355,14 @@ nav button {
   cursor: pointer;
 }
 
-.card button.fa, nav button.fa {
+nav button.fa {
   padding: 0.25em 0.4em;
   font-size: 1.6em;
+}
+
+.card button.fa {
+  padding: 0.25em 0.4em;
+  font-size: 1.3em;
 }
 
 .card button:not(.fa) {
@@ -367,6 +372,12 @@ nav button {
     font-family: inherit;
     font-size: var(--step-0);
     border-radius: 0.7em;
+}
+
+
+.card button:has(.fa) {
+    font-size: var(--step--1);
+    line-height: 1.4;
 }
 
 .card .dropdown {
@@ -402,10 +413,6 @@ nav button {
   color: var(--color-button);
   width: 100%;
   border-bottom: solid 1px var(--color-button);
-}
-
-.card .dropdown-items button:hover {
-  background-color: var(--color-background-pale);
 }
 
 .card .title {
@@ -445,6 +452,7 @@ nav button {
   font-size: calc(var(--step--2)*.80);
 }
 
+/*
 .card button:hover, .card button:active {
   background-color: var(--color-button-hover);
 }
@@ -454,7 +462,7 @@ nav button {
   outline-color: transparent;
   box-shadow: 0 0 0 4px var(--color-button-focus);
 }
-
+*/
 
 /* ******************************** */
 /* OVERRIDE CKEDITOR DEFAULT STYLES */
@@ -526,8 +534,9 @@ nav button {
 /* GALLERY STYLES  */
 /* *************** */
 
-.gallery-container ul {
+.gallery-container > ul {
   list-style: none;
+  margin: 0;
   display: grid;
   grid-gap: 0.5em;
   grid-template-columns: repeat(auto-fill, minmax(var(--gallery-width), 1fr));
