@@ -28,7 +28,7 @@ prompt APPLICATION 102 - TEST
 -- Application Export:
 --   Application:     102
 --   Name:            TEST
---   Date and Time:   20:00 Tuesday June 20, 2023
+--   Date and Time:   20:01 Wednesday June 21, 2023
 --   Exported By:     EXAMPLE
 --   Flashback:       0
 --   Export Type:     Application Export
@@ -48,7 +48,7 @@ prompt APPLICATION 102 - TEST
 --         Authentication:         1
 --         Authorization:          1
 --       User Interface:
---         Themes:                 1
+--         Themes:                 2
 --         Templates:
 --           Page:                10
 --           Region:              21
@@ -111,7 +111,7 @@ wwv_flow_imp.create_flow(
 ,p_substitution_string_01=>'APP_NAME'
 ,p_substitution_value_01=>'TEST'
 ,p_last_updated_by=>'EXAMPLE'
-,p_last_upd_yyyymmddhh24miss=>'20230620193648'
+,p_last_upd_yyyymmddhh24miss=>'20230621062604'
 ,p_file_prefix => nvl(wwv_flow_application_install.get_static_app_file_prefix,'')
 ,p_files_version=>4
 ,p_print_server_type=>'NATIVE'
@@ -7130,6 +7130,16 @@ wwv_flow_imp_shared.create_theme(
 ,p_javascript_file_urls=>wwv_flow_string.join(wwv_flow_t_varchar2(
 '#APEX_FILES#libraries/apex/#MIN_DIRECTORY#widget.stickyWidget#MIN#.js?v=#APEX_VERSION#',
 '#THEME_FILES#js/theme42#MIN#.js?v=#APEX_VERSION#'))
+);
+wwv_flow_imp_shared.create_theme(
+ p_id=>wwv_flow_imp.id(20648770755079747)
+,p_theme_id=>101
+,p_theme_name=>'test'
+,p_theme_internal_name=>'TEST'
+,p_navigation_type=>'L'
+,p_nav_bar_type=>'LIST'
+,p_is_locked=>false
+,p_file_prefix => nvl(wwv_flow_application_install.get_static_theme_file_prefix(101),'')
 );
 end;
 /
