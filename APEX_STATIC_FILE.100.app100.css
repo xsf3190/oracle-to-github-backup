@@ -328,7 +328,8 @@ nav button {
   font-size: var(--step-0);
 }
 
-.card:first-child:not(.is-gallery) {
+
+.cards > .card:first-child {
     display: none;
 }
 
@@ -594,16 +595,17 @@ video, audio {
     margin-inline-start: 1em;
 }
 
-.gallery-overlay button.copy-url {
-    font-size: inherit;
-}
-
 .gallery-overlay > button {
     grid-area: overlay;
     background-color: transparent;
     font-size: var(--step-2);
     color: var(--color-light) !important;
     outline: 0;
+}
+
+.gallery-overlay .copy-url {
+    background-color: transparent;
+    margin-left: -1em;
 }
 
 .gallery-overlay > button.close-fullscreen {
