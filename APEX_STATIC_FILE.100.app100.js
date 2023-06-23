@@ -16,7 +16,6 @@ const queue = new Set(),
       galleryFull = gallery.querySelector(".gallery-overlay"),
       galleryFullImg = galleryFull.querySelector("img");
       galleryFullCounter = galleryFull.querySelector("span.counter"),
-      galleryFullCopyUrl = galleryFull.querySelector("button.copy-url"),
       galleryFullClose = galleryFull.querySelector("button.close-fullscreen"),
       galleryFullPrev = galleryFull.querySelector("button.prev"),
       galleryFullNext = galleryFull.querySelector("button.next"),
@@ -369,7 +368,7 @@ const setImgSrc = (img) => {
     }
 
     galleryFullLegend.textContent = "Closest resolution downloaded for window " + window.innerWidth + " x " + window.innerHeight;
-    galleryFull.querySelectorAll("fieldset button.dimensions").forEach((button,index) => {
+    galleryFull.querySelectorAll("button.dimensions").forEach((button,index) => {
         button.textContent = dimensions[index];
         button.dataset.url = urls[index];
         if (widths[index] === closest) {
@@ -378,6 +377,16 @@ const setImgSrc = (img) => {
             button.style.backgroundColor = "var(--color-pale)";
         }
     });
+
+    galleryFull.querySelectorAll("button.copy-url").forEach((button,index) => {
+        if (widths[index] === closest) {
+            button.disabled = false;
+            button.style.backgroundColor = "var(--color-button)";
+        } else {
+            button.disabled = true;
+            button.style.backgroundColor = "var(--color-pale)";
+        }
+    });    
 
     if (url !== img.src) {
         galleryFullImg.src=url;
@@ -439,13 +448,15 @@ galleryFullPrev.addEventListener("click",  () => {
 /*
  **  COPY URL
  */
-galleryFullCopyUrl.addEventListener("click", async () => {
-    try {
-        await navigator.clipboard.writeText(galleryFullImg.src);
-        popupOpen("Copied URL to clipboard","");
-    } catch (err) {
-        popupOpen('Failed to copy URL!', err)
-    }
+galleryFull.querySelectorAll("button.copy-url").forEach((button) => {
+    button.addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(galleryFullImg.src);
+            popupOpen("Copied URL to clipboard",galleryFullImg.src);
+        } catch (err) {
+            popupOpen('Failed to copy URL!', err)
+        }
+    });
 });
 
 /*
@@ -462,12 +473,15 @@ galleryFull.querySelectorAll("button.dimensions").forEach((button) => {
         let curr = e.target;
         let el = curr.nextElementSibling;
         while (el) {
-            el.style.backgroundColor = "var(--color-pale)";
+            if (el.tagName === "BUTTON" && el.classList.contains("dimensions")) {
+                el.style.backgroundColor = "var(--color-pale)";
+                el = el.nextElementSibling;
+            }
             el = el.nextElementSibling;
         }
         el = curr.previousElementSibling;
         while (el) {
-            if (el.tagName === "BUTTON") {
+            if (el.tagName === "BUTTON" && el.classList.contains("dimensions")) {
                 el.style.backgroundColor = "var(--color-pale)";
             }
             el = el.previousElementSibling;
