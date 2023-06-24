@@ -633,7 +633,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                         <button type="button" class="fa fa-play show-gallery"' || CASE WHEN C.first_asset=0 THEN ' disabled' END || '>' || C.first_asset || '/' || C.nb_assets || '</button>' ||
                         CASE WHEN apex_authentication.is_authenticated THEN
                         '<div class="dropdown">
-                          <button type="button" class="fa fa-caret-down"></button>
+                          <button type="button" class="fa fa-caret-down show-dropdown"></button>
                           <ul class="dropdown-items">
                             <li><button type="button" class="fa fa-cloud-upload upload-media">Upload</button></li>
                             <li><button type="button" class="fa fa-edit edit-text">Edit</button></li>
@@ -705,9 +705,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                             <button type="button" class="dimensions"></button>
                             <button type="button" class="copy-url" disabled>&boxbox;</button>
                         </fieldset>
-                        <div>
-                            <span class="counter"></span>
-                        </div>
+                        <span class="counter"></span>
                         <button type="button" class="close-fullscreen">&times;</button>
                         <button type="button" class="prev">&lt;</button>
                         <button type="button" class="next">&gt;</button>
@@ -798,7 +796,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         LOOP
             l_clob:=l_clob || TO_CLOB('
                 <div>
-                    <img src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" alt="' || C.alt_text || '">
+                    <img class="hero-img" src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" alt="' || C.alt_text || '">
                     <div class="ck-content">' || C.body_html || '
                         <table>
                             <tr><td></td><td>HOSTING</td><td>CAPACITY USED</td></tr>
@@ -837,42 +835,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm);
                 RAISE;
     END;
+    
 
-/*
- **  Build gallery of thumbnail images from ASSET table 
- **  Executed in response to user requesting gallery of media assets for a given article
- */
-PROCEDURE getThumbnails IS
-        l_clob CLOB;
-        l_article_id article.id%type:=apex_application.g_x01;
-        l_maxtouchpoints INTEGER:=apex_application.g_x02;
-        l_instruction VARCHAR2(300);
+    PROCEDURE getThumbnailContent(pArticleId IN article.id%type, pNbItems IN OUT PLS_INTEGER, pInstruction IN OUT NOCOPY VARCHAR2, pContent IN OUT NOCOPY CLOB) 
+    IS
         l_url_image VARCHAR2(300);
-        l_media_type VARCHAR2(5);
+        l_media_type VARCHAR2(5);   
     BEGIN
+        pNbItems:=0;
         FOR C IN (
             SELECT a.rowid row_id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(created_date,'dd-Mon-yyyy') uploaded, 
                    DECODE(a.width,0,gWidthThumbnail,a.width) width, DECODE(a.height,0,gWidthThumbnail,a.height) height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format,
                    COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY a.display_order) rn
               FROM asset a
-             WHERE a.article_id=l_article_id
+             WHERE a.article_id=pArticleId
                AND NVL(a.format,'N/A')<>'clt'
              ORDER BY a.display_order )
         LOOP
-            IF (C.rn=1) THEN
-                l_instruction:=CASE WHEN l_maxtouchpoints > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen' || 
-                       CASE WHEN apex_authentication.is_authenticated AND C.nb > 1 THEN '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover' END;
-            END IF;
+            pNbItems:=pNbItems+1;
             
-            l_clob:=l_clob || TO_CLOB('
+            pContent:=pContent || TO_CLOB('
                 <li class="card" tabindex="0"' || CASE WHEN apex_authentication.is_authenticated THEN ' data-id="' || C.row_id || '"' END || '>
                     <div class="button-container">
                         <span>' || C.rn || '/' || C.nb || '</span>' || 
                         CASE WHEN apex_authentication.is_authenticated THEN
                         '<div class="dropdown">
-                            <button type="button" class="fa fa-caret-down"></button>
+                            <button type="button" class="fa fa-caret-down show-dropdown"></button>
                             <ul class="dropdown-items">
-                                <li><button type="button" class="fa fa-edit edit-alt-text">Edit Text</button></li>
+                                <li><button type="button" class="fa fa-refresh update-asset">Update Text</button></li>
                                 <li><button type="button" class="fa fa-id-card view-performance">Performance</button></li>
                                 <li><button type="button" class="fa fa-trash delete-asset">Delete</button></li>
                             </ul>
@@ -882,17 +872,15 @@ PROCEDURE getThumbnails IS
             l_url_image:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
             l_media_type:=getMediaType(C.resource_type, C.format);
             
-            l_clob:=l_clob || TO_CLOB('<img data-dimensions="'  || 
+            pContent:=pContent || TO_CLOB('<img data-dimensions="'  || 
                                             ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || 
                                             ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':' || 
                                             C.width || 'x' || C.height || '" src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>');
-                    
-            
             
             CASE l_media_type
                                             
                 WHEN 'video' THEN
-                    l_clob:=l_clob || TO_CLOB(
+                    pContent:=pContent || TO_CLOB(
                     '<video controls preload="metadata" poster="' || l_url_image || '">
                         <source src="' || REPLACE(l_url_image,'.jpg','.webm') || '" type="video/webm"></source>
                         <source src="' || REPLACE(l_url_image,'.jpg','.mp4') || '" type="video/mp4"></source>
@@ -900,7 +888,7 @@ PROCEDURE getThumbnails IS
                     
                 WHEN 'audio' THEN
                     l_url_image:=REGEXP_REPLACE(l_url_image,',w_(\d)+\/fl_waveform',NULL);
-                    l_clob:=l_clob || TO_CLOB(
+                    pContent:=pContent || TO_CLOB(
                     '<audio preload="metadata" controls>
                         <source src="' || REPLACE(l_url_image,'.png','.aac') || '" type="audio/aac"></source>
                         <source src="' || REPLACE(l_url_image,'.png','.ogg') || '" type="audio/ogg"></source>
@@ -912,8 +900,38 @@ PROCEDURE getThumbnails IS
         
             END CASE;
             
-            l_clob:=l_clob || TO_CLOB('</li>');
+            pContent:=pContent || TO_CLOB('
+                <div>
+                    <label for="alt-text">Alt text<span></span></label>
+                    <textarea id="alt-text" maxlength="50">' || C.alt_text || '</textarea>
+                </div>
+                <div>
+                    <label for="description">Description<span></span></label>
+                    <textarea id="description" maxlength="500">' || C.description || '</textarea>                    
+                </div>');
+            
+            pContent:=pContent || TO_CLOB('</li>');
+            
         END LOOP;
+        
+        pInstruction:=CASE WHEN apex_util.get_session_state('APP_MAXTOUCHPOINTS') > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen' || 
+                       CASE WHEN apex_authentication.is_authenticated AND pNbItems > 1 THEN 
+                            '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover' END;
+
+    END;
+    
+    /*
+     **  Build gallery of thumbnail images from ASSET table 
+     **  Executed in response to user requesting gallery of media assets for a given article
+     */
+    PROCEDURE getThumbnails IS
+        l_clob CLOB;
+        l_article_id article.id%type:=apex_application.g_x01;
+        l_maxtouchpoints INTEGER:=apex_application.g_x02;
+        l_instruction VARCHAR2(300);
+        n PLS_INTEGER;
+    BEGIN
+        getThumbnailContent(l_article_id, n, l_instruction, l_clob);
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -1286,13 +1304,23 @@ PROCEDURE getThumbnails IS
         l_rowid ROWID:=CHARTOROWID(l_asset_dbid);
         l_alt_text asset.alt_text%type := apex_application.g_x02;
         l_description asset.description%type := apex_application.g_x03;
+        l_alt_text_old asset.alt_text%type := apex_application.g_x02;
+        l_description_old asset.description%type := apex_application.g_x03; 
+        l_alt_text_updated BOOLEAN;
+        l_description_updated BOOLEAN;
     BEGIN
-        UPDATE asset SET alt_text=l_alt_text, description=l_description, updated_date=current_timestamp 
-         WHERE ROWID=l_rowid;
+        SELECT alt_text, description INTO l_alt_text_old,l_description_old  FROM asset WHERE ROWID=l_rowid;
+        
+        UPDATE asset SET alt_text=l_alt_text, description=l_description, updated_date=current_timestamp WHERE ROWID=l_rowid;
+        
+        l_alt_text_updated:=NVL(l_alt_text,'x') != NVL(l_alt_text_old,'x');
+        l_description_updated:=NVL(l_description,'x') != NVL(l_description_old,'x');
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('updated', fmtUpdatedDate(current_timestamp)); 
+        apex_json.write('alt_text_updated',l_alt_text_updated);
+        apex_json.write('description_updated',l_description_updated);
         apex_json.close_object;
         
         EXCEPTION
@@ -1318,8 +1346,9 @@ PROCEDURE getThumbnails IS
         l_string_to_sign varchar2(2000);  
         l_error_message VARCHAR2(500);
         l_clob CLOB;
-        l_url VARCHAR2(500);
+        l_instruction VARCHAR2(500);
         l_updated_date VARCHAR2(20);
+        n PLS_INTEGER;
     BEGIN
         SELECT a.article_id, a.cld_cloud_name, a.public_id, u.cld_api_key, u.cld_api_secret
           INTO l_article_id, l_cld_cloud_name, l_public_id, l_cld_api_key, l_cld_api_secret
@@ -1362,30 +1391,18 @@ PROCEDURE getThumbnails IS
         
         UPDATE article SET updated_date=current_date WHERE id=l_article_id;
         
-        /* Check whether we need to change the article's cover page image */
-        FOR C IN (
-            SELECT rid, cld_cloud_name, resource_type, public_id, format, width
-            FROM 
-            (
-                SELECT ROWID rid, display_order, MIN(display_order) OVER () min_display_order,
-                        cld_cloud_name, resource_type, public_id, format, width
-                FROM asset 
-                WHERE article_id=l_article_id
-            )
-            WHERE display_order=min_display_order) 
-        LOOP
-            IF (l_rowid<>C.rid) THEN
-                l_url:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
-            END IF;
-        END LOOP;
+        l_clob:=NULL;
+        
+        getThumbnailContent(l_article_id, n, l_instruction, l_clob);
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('articleId', l_article_id);
         apex_json.write('updated', fmtUpdatedDate(current_date));
-        IF (l_url IS NOT NULL) THEN
-            apex_json.write('url', l_url);
-        END IF;
+        apex_json.write('content', l_clob);
+        apex_json.write('nb', n);
+        apex_json.write('instruction', l_instruction);
+
         apex_json.close_object;
 
         EXCEPTION
