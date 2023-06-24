@@ -109,10 +109,10 @@ new Sortable(galleryList, {
 window.addEventListener("DOMContentLoaded", () => {
     if (navigator.maxTouchPoints > 1) {
             cards.addEventListener("touchstart",cardHandlerAuth);
-            //galleryList.addEventListener("touchstart",showLightbox);
+            galleryList.addEventListener("touchstart",assetHandlerAuth);
     } else {
         cards.addEventListener("click",cardHandlerAuth);
-        //galleryList.addEventListener("click",showLightbox);
+        galleryList.addEventListener("click",assetHandlerAuth);
     }
 });
 
@@ -379,23 +379,68 @@ const cardHandlerAuth = (e) => {
     }
 }
 
+/* *******************************
+** START OF THUMBNAIL GALLERY CODE 
+*  *******************************/
+
+/* 
+ ** DELETE ASSET AND UPDATE THUMBNAIL GALLERY
+ */
+const delete_asset = (dbid, button) => {
+    execProcess( "deleteAsset", {x01: dbid},{loadingIndicator:button}).then( (data) => {
+        if (Number(data.nb)===0) {
+            location.replace(location.href);
+            return;
+        }
+
+        galleryList.replaceChildren();
+        galleryList.insertAdjacentHTML('afterbegin',data.content);
+        galleryInstruction.textContent = data.instruction;
+        
+        let card = cards.querySelector("[data-id='" + data.articleId + "']"),
+                cover_img = card.querySelector("img"),
+                show_gallery = card.querySelector(".show-gallery"),
+                updated_date = card.querySelector(".updated-date"),
+                first_thumbnail = galleryList.children[0].querySelector("img");
+        
+        if (cover_img.src !== first_thumbnail.src) {
+            cover_img.src = first_thumbnail.src;
+        }
+        updated_date.textContent = data.updated;
+        show_gallery.textContent = "1/" + data.nb;
+    });
+}
+
+/* 
+ ** DELETE ASSET AND UPDATE THUMBNAIL GALLERY
+ */
+const update_asset = (dbid, li) => {
+    const altText = li.querySelector("#alt-text").value,
+          description = li.querySelector("#description").value;
+    execProcess( "updateAsset", {x01: dbid, x02: altText, x03: description}).then( (data) => {
+        if (data.alt_text_updated) {
+            li.querySelector("[for='alt-text'] > span").textContent = "OK";
+        }
+    });
+}
+
+/* 
+ ** HANDLE ASSET ACTIONS THAT UPDATE CONTENT
+ */
+const assetHandlerAuth = (e) => {
+
+    const item = e.target.closest(".card");
+    if (!item) return;
+
+    const dbid = item.dataset.id;
+
+    if (e.target.matches(".delete-asset")) {
+        delete_asset(dbid, e.target);                                 
+    } else if (e.target.matches(".update-asset")) {
+        update_asset(dbid, item); 
+    }
+}
+
 /*
  *  Global variables that are set throughout the code to support GALLERY and LIGHTBOX components
  */
-let selectedElement,
-    lastTag,
-    lightbox_touchstartX = 0,
-    lightbox_touchendX = 0
-    timeout = false;
-
-const showLightbox = (e) => {
-    if (e.srcElement.tagName === "IMG" && !e.srcElement.parentElement.classList.contains("deleted")) {
-        selectedElement = e.srcElement;
-        apex.theme.openRegion("lightbox");  
-        lightbox_next.focus();
-        replaceImg();
-        if (!lightbox_img.requestFullscreen) {
-            lightbox_fullscreen.disabled = true;
-        }
-    }
-}
