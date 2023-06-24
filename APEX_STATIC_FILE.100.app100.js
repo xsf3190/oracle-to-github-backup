@@ -241,9 +241,24 @@ const show_gallery = (articleId) => {
 };
 
 /*
+ ** HANDLE OPENING / CLOSING DROPDOWN MENUS
+ */
+window.onclick = (e) => {
+    let open = e.target.matches(".show-dropdown") && e.target.nextElementSibling.classList.contains("visible");
+
+    document.querySelectorAll(".dropdown-items.visible").forEach((dropdown) => {
+        dropdown.classList.toggle("visible",false);
+    });
+    
+    if (!open && e.target.matches(".show-dropdown")) {
+        e.target.nextElementSibling.classList.toggle("visible");
+    }
+}
+/*
  ** CARD HANDLER FOR READ-ONLY ACTIONS 
  */
 const cardHandler = (e) => {
+    
     const card = e.srcElement.closest(".card");
     if (!card) return;
 
@@ -381,10 +396,10 @@ const setImgSrc = (img) => {
     galleryFull.querySelectorAll("button.copy-url").forEach((button,index) => {
         if (widths[index] === closest) {
             button.disabled = false;
-            button.style.backgroundColor = "var(--color-button)";
+            //button.style.backgroundColor = "var(--color-button)";
         } else {
             button.disabled = true;
-            button.style.backgroundColor = "var(--color-pale)";
+            //button.style.backgroundColor = "var(--color-pale)";
         }
     });    
 
@@ -472,17 +487,28 @@ galleryFull.querySelectorAll("button.dimensions").forEach((button) => {
         e.target.style.backgroundColor = "var(--color-button)";
         let curr = e.target;
         let el = curr.nextElementSibling;
+        el.disabled = false;
+        el = el.nextElementSibling;
+        
         while (el) {
-            if (el.tagName === "BUTTON" && el.classList.contains("dimensions")) {
-                el.style.backgroundColor = "var(--color-pale)";
-                el = el.nextElementSibling;
+            if (el.tagName === "BUTTON") {
+                if (el.classList.contains("dimensions")) {
+                    el.style.backgroundColor = "var(--color-pale)";
+                } else {
+                    el.disabled = true;
+                }
             }
             el = el.nextElementSibling;
         }
+
         el = curr.previousElementSibling;
         while (el) {
-            if (el.tagName === "BUTTON" && el.classList.contains("dimensions")) {
-                el.style.backgroundColor = "var(--color-pale)";
+            if (el.tagName === "BUTTON") {
+                if (el.classList.contains("dimensions")) {
+                    el.style.backgroundColor = "var(--color-pale)";
+                } else {
+                    el.disabled = true;
+                }
             }
             el = el.previousElementSibling;
         }
