@@ -62,7 +62,6 @@
 
     --gallery-width: 15rem;
     --preview-width: 60ch;
-    --blur: blur(5px);
 }
 
 body {
@@ -99,25 +98,17 @@ nav {
 }
 
 label {
-    font-weight: 500;
-    margin-bottom: calc(var(--space-s) * -1);
+    display: block;
 }
 
 textarea {
     padding: 0.25em 0.5em;
     height: var(--space-m);
-    line-height: 1.1;
+    line-height: 1.2;
     border: 2px solid var(--color-pale);
     border-radius: 4px;
-    transition: 180ms box-shadow ease-in-out;
     resize: vertical;
-}
-
-textarea + span {
-  margin-top: calc(var(--space-s) * -1);
-  font-size: 70%;
-  font-style: italic;
-  place-self: end end;
+    inline-size: 100%;
 }
 
 
@@ -259,6 +250,10 @@ button {
     font-size: var(--step-1);
 }
 
+[region-id="articles"] .hero-img {
+    margin: auto;
+}
+
 [region-id="articles"] > h2 {
     font-size: var(--step-3);
     line-height: 4;
@@ -266,42 +261,6 @@ button {
     text-decoration: slateblue solid underline;
     text-underline-position: under;
 }
-
-/*
-.homepage {
-    font-family: Georgia, sans-serif;
-    font-size: var(--step-0);
-    line-height: 1.4;
-}
-
-.homepage img {
-    float: left;
-    max-height: 65vh;
-    shape-outside: polygon(0 0,90% 0, 100% 30%,100% 70%, 90% 100%, 0 100%);
-    margin: 0 5ch 0;
-}
-
-.homepage p:first-child::first-letter {
-    initial-letter: 2;
-}
-
-.homepage span:first-child{
-    font-style: italic;
-}
-
-.homepage > * + * {
-    margin-top: var(--space-m);
-}
-
-.homepage + h2 {
-    clear: left;
-    font-size: var(--step-3);
-    line-height: 4;
-    text-align: center;
-    text-decoration: slateblue solid underline;
-    text-underline-position: under;
-}
-*/
 
 /* *************** */
 /* CARD STYLES */
@@ -386,8 +345,8 @@ nav button.fa {
 }
 
 .card .dropdown .dropdown-items {
-    /*display: none;*/
-    opacity: 0;
+    display: none;
+    /*opacity: 0;*/
     transition: opacity 400ms;
     transition-delay: 300ms;
     position: absolute;
@@ -402,9 +361,9 @@ nav button.fa {
     border-radius: 1em;
 }
 
-.card .dropdown:hover .dropdown-items {
-  /*display: block;*/
-  opacity: 1;
+.card .dropdown .dropdown-items.visible {
+  display: block;
+  /*opacity: 1;*/
   transition: opacity 100ms;
   transition-delay: 0ms;
 }
@@ -414,6 +373,11 @@ nav button.fa {
   color: var(--color-button);
   width: 100%;
   border-bottom: solid 1px var(--color-button);
+}
+
+.card .dropdown-items button:hover {
+  background-color: var(--color-button);
+  color: var(--color-light-glare);
 }
 
 .card .title {
@@ -556,10 +520,7 @@ nav button.fa {
   inline-size: 100%;
   block-size: 100%;
   object-fit: scale-down;
-}
-
-.gallery-container img.no-show {
-    display: none;
+  max-height: 20ch; /* bollox safari */
 }
 
 video, audio {
@@ -584,15 +545,11 @@ video, audio {
     object-fit: contain;
 }
 
-.gallery-overlay > div {
+.gallery-overlay > span.counter {
     grid-area: overlay;
     place-self: start start;
     color: var(--color-light);
     font-size: 80%;
-}
-
-.gallery-overlay > div > * + * {
-    margin-inline-start: 1em;
 }
 
 .gallery-overlay > button {
