@@ -903,11 +903,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             pContent:=pContent || TO_CLOB('
                 <div>
                     <label for="alt-text">Alt text<span></span></label>
-                    <textarea id="alt-text" maxlength="50">' || C.alt_text || '</textarea>
+                    <textarea id="alt-text" maxlength="50"' || CASE WHEN NOT apex_authentication.is_authenticated THEN ' readonly' END || '>' || C.alt_text || '</textarea>
                 </div>
                 <div>
                     <label for="description">Description<span></span></label>
-                    <textarea id="description" maxlength="500">' || C.description || '</textarea>                    
+                    <textarea id="description" maxlength="500"' || CASE WHEN NOT apex_authentication.is_authenticated THEN ' readonly' END || '>' || C.description || '</textarea>                    
                 </div>');
             
             pContent:=pContent || TO_CLOB('</li>');
