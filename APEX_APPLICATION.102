@@ -28,14 +28,14 @@ prompt APPLICATION 102 - TEST
 -- Application Export:
 --   Application:     102
 --   Name:            TEST
---   Date and Time:   20:01 Saturday June 24, 2023
+--   Date and Time:   20:01 Sunday June 25, 2023
 --   Exported By:     EXAMPLE
 --   Flashback:       0
 --   Export Type:     Application Export
 --     Pages:                      3
 --       Items:                    3
 --       Processes:                4
---       Regions:                  3
+--       Regions:                  2
 --       Buttons:                  1
 --     Shared Components:
 --       Logic:
@@ -111,7 +111,7 @@ wwv_flow_imp.create_flow(
 ,p_substitution_string_01=>'APP_NAME'
 ,p_substitution_value_01=>'TEST'
 ,p_last_updated_by=>'EXAMPLE'
-,p_last_upd_yyyymmddhh24miss=>'20230621062604'
+,p_last_upd_yyyymmddhh24miss=>'20230625124802'
 ,p_file_prefix => nvl(wwv_flow_application_install.get_static_app_file_prefix,'')
 ,p_files_version=>4
 ,p_print_server_type=>'NATIVE'
@@ -130,10 +130,9 @@ wwv_flow_imp_shared.create_user_interface(
 ,p_theme_style_by_user_pref=>false
 ,p_built_with_love=>false
 ,p_global_page_id=>0
-,p_navigation_list_id=>wwv_flow_imp.id(20132081248968855)
-,p_navigation_list_position=>'SIDE'
-,p_navigation_list_template_id=>wwv_flow_imp.id(20294984102969000)
-,p_nav_list_template_options=>'#DEFAULT#:t-TreeNav--styleA:js-navCollapsed--hidden'
+,p_navigation_list_position=>'TOP'
+,p_navigation_list_template_id=>wwv_flow_imp.id(20300335608969004)
+,p_nav_list_template_options=>'#DEFAULT#:js-tabLike'
 ,p_nav_bar_type=>'LIST'
 ,p_nav_bar_list_id=>wwv_flow_imp.id(20332392139969048)
 ,p_nav_bar_list_template_id=>wwv_flow_imp.id(20294554550968999)
@@ -1895,12 +1894,6 @@ wwv_flow_imp_shared.create_template(
 '  <meta http-equiv="x-ua-compatible" content="IE=edge" />',
 '  <meta charset="utf-8">',
 '  <title>#TITLE#</title>',
-'  #APEX_CSS#',
-'  #THEME_CSS#',
-'  #TEMPLATE_CSS#',
-'  #THEME_STYLE_CSS#',
-'  #APPLICATION_CSS#',
-'  #PAGE_CSS#  ',
 '  #FAVICONS#',
 '  #HEAD#',
 '  <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
@@ -1909,64 +1902,21 @@ wwv_flow_imp_shared.create_template(
 '<a href="#main" id="t_Body_skipToContent">&APP_TEXT$UI_PAGE_SKIP_TO_CONTENT.</a>',
 '#FORM_OPEN#',
 '<header class="t-Header" id="t_Header" role="banner">',
-'  #REGION_POSITION_07#',
-'  <div class="t-Header-branding">',
-'    <div class="t-Header-controls">',
-'      <button class="t-Button t-Button--icon t-Button--header t-Button--headerTree" aria-label="#EXPAND_COLLAPSE_NAV_LABEL#" title="#EXPAND_COLLAPSE_NAV_LABEL#" id="t_Button_navControl" type="button"><span class="t-Icon fa fa-bars" aria-hidden="true"'
-||'></span></button>',
-'    </div>',
-'    <div class="t-Header-logo">',
-'      <a href="#HOME_LINK#" class="t-Header-logo-link">#LOGO#</a>',
-'      #AFTER_LOGO#',
-'    </div>',
-'    <div class="t-Header-navBar">',
-'      <div class="t-Header-navBar--start">#BEFORE_NAVIGATION_BAR#</div>',
-'      <div class="t-Header-navBar--center">#NAVIGATION_BAR#</div>',
-'      <div class="t-Header-navBar--end">#AFTER_NAVIGATION_BAR#</div>',
-'    </div>',
-'  </div>',
 '</header>',
 '    '))
 ,p_box=>wwv_flow_string.join(wwv_flow_t_varchar2(
-'<div class="t-Body">',
-'  <div class="t-Body-main">',
-'    <div class="t-Body-title" id="t_Body_title">#REGION_POSITION_01#</div>',
-'    <div class="t-Body-content" id="t_Body_content">',
+'',
 '      <main id="main" class="t-Body-mainContent">',
 '        #SUCCESS_MESSAGE##NOTIFICATION_MESSAGE##GLOBAL_NOTIFICATION#',
 '        <div class="t-Body-fullContent">#REGION_POSITION_08#</div>',
 '        <div class="t-Body-contentInner">#BODY#</div>',
 '      </main>',
 '      <footer class="t-Footer" id="t_Footer" role="contentinfo">',
-'        <div class="t-Footer-body">',
-'          <div class="t-Footer-content">#REGION_POSITION_05#</div>',
-'          <div class="t-Footer-apex">',
-'            <div class="t-Footer-version">#APP_VERSION#</div>',
-'            <div class="t-Footer-customize">#CUSTOMIZE#</div>',
-'            #BUILT_WITH_LOVE_USING_APEX#',
-'          </div>',
-'        </div>',
-'        <div class="t-Footer-top">',
-'          <a href="#top" class="t-Footer-topButton" id="t_Footer_topButton" title="&"APP_TEXT$APEX.UI.BACK_TO_TOP"." aria-label="&"APP_TEXT$APEX.UI.BACK_TO_TOP"."><span class="a-Icon icon-up-chevron" aria-hidden="true"></span></a>',
-'        </div>',
 '      </footer>',
-'    </div>',
-'  </div>',
-'</div>',
-'<div class="t-Body-inlineDialogs" id="t_Body_inlineDialogs">#REGION_POSITION_04#</div>'))
-,p_footer_template=>wwv_flow_string.join(wwv_flow_t_varchar2(
-'#FORM_CLOSE#',
-'#DEVELOPER_TOOLBAR#',
-'#APEX_JAVASCRIPT#',
-'#GENERATED_CSS#',
-'#THEME_JAVASCRIPT#',
-'#TEMPLATE_JAVASCRIPT#',
-'#APPLICATION_JAVASCRIPT#',
-'#PAGE_JAVASCRIPT#  ',
-'#GENERATED_JAVASCRIPT#',
-'</body>',
-'</html>',
 ''))
+,p_footer_template=>wwv_flow_string.join(wwv_flow_t_varchar2(
+'</body>',
+'</html>'))
 ,p_success_message=>wwv_flow_string.join(wwv_flow_t_varchar2(
 '<div class="t-Body-alert">',
 '  <div class="t-Alert t-Alert--defaultIcons t-Alert--success t-Alert--horizontal t-Alert--page t-Alert--colorBG" id="t_Alert_Success">',
@@ -7126,10 +7076,7 @@ wwv_flow_imp_shared.create_theme(
 ,p_default_navbar_list_template=>wwv_flow_imp.id(20294554550968999)
 ,p_file_prefix => nvl(wwv_flow_application_install.get_static_theme_file_prefix(42),'#APEX_FILES#themes/theme_42/22.2/')
 ,p_files_version=>64
-,p_icon_library=>'FONTAPEX'
-,p_javascript_file_urls=>wwv_flow_string.join(wwv_flow_t_varchar2(
-'#APEX_FILES#libraries/apex/#MIN_DIRECTORY#widget.stickyWidget#MIN#.js?v=#APEX_VERSION#',
-'#THEME_FILES#js/theme42#MIN#.js?v=#APEX_VERSION#'))
+,p_javascript_file_urls=>'#THEME_FILES#js/theme42#MIN#.js?v=#APEX_VERSION#'
 );
 wwv_flow_imp_shared.create_theme(
  p_id=>wwv_flow_imp.id(20648770755079747)
@@ -14211,38 +14158,25 @@ wwv_flow_imp_page.create_page(
 ,p_alias=>'HOME'
 ,p_step_title=>'TEST'
 ,p_autocomplete_on_off=>'OFF'
+,p_step_template=>wwv_flow_imp.id(20149522867968890)
 ,p_page_template_options=>'#DEFAULT#'
 ,p_page_is_public_y_n=>'Y'
 ,p_protection_level=>'C'
 ,p_page_component_map=>'13'
 ,p_last_updated_by=>'EXAMPLE'
-,p_last_upd_yyyymmddhh24miss=>'20230614111439'
+,p_last_upd_yyyymmddhh24miss=>'20230625123301'
 );
 wwv_flow_imp_page.create_page_plug(
  p_id=>wwv_flow_imp.id(13892644823569146)
 ,p_plug_name=>'New'
-,p_region_template_options=>'#DEFAULT#:t-Region--scrollBody'
-,p_plug_template=>wwv_flow_imp.id(20234215806968950)
+,p_region_template_options=>'#DEFAULT#'
+,p_plug_template=>wwv_flow_imp.id(20168202648968910)
 ,p_plug_display_sequence=>10
 ,p_include_in_reg_disp_sel_yn=>'Y'
 ,p_plug_source=>'<h1>HELLO WORLD</h1>'
 ,p_plug_query_options=>'DERIVED_REPORT_COLUMNS'
 ,p_attribute_01=>'N'
 ,p_attribute_02=>'HTML'
-);
-wwv_flow_imp_page.create_page_plug(
- p_id=>wwv_flow_imp.id(20343258260969103)
-,p_plug_name=>'TEST'
-,p_region_template_options=>'#DEFAULT#'
-,p_escape_on_http_output=>'Y'
-,p_plug_template=>wwv_flow_imp.id(20201222664968928)
-,p_plug_display_sequence=>10
-,p_plug_display_point=>'REGION_POSITION_01'
-,p_plug_query_num_rows=>15
-,p_region_image=>'#APP_FILES#icons/app-icon-512.png'
-,p_attribute_01=>'N'
-,p_attribute_02=>'HTML'
-,p_attribute_03=>'Y'
 );
 end;
 /
