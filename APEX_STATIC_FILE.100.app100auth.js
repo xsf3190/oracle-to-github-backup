@@ -419,8 +419,15 @@ const update_asset = (dbid, li) => {
           description = li.querySelector("#description").value;
     execProcess( "updateAsset", {x01: dbid, x02: altText, x03: description}).then( (data) => {
         if (data.alt_text_updated) {
-            li.querySelector("[for='alt-text'] > span").textContent = "OK";
+            li.querySelector("[for='alt-text'] > span").textContent = " - updated successfully";
+        } else {
+            li.querySelector("[for='alt-text'] > span").textContent = "";
         }
+        if (data.description_updated) {
+            li.querySelector("[for='description'] > span").textContent = " - updated successfully";
+        } else {
+            li.querySelector("[for='description'] > span").textContent = "";
+        }       
     });
 }
 
