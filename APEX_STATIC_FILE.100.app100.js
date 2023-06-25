@@ -36,6 +36,7 @@ document.querySelectorAll("button.close").forEach((button) => {
 });
 
 const addToQueue = (metric) => {
+    console.log(metric);
   queue.add(metric);
 }
 
