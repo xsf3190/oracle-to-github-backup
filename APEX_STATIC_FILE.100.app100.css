@@ -101,6 +101,10 @@ label {
     display: block;
 }
 
+label > span {
+    color: var(--color-secondary);
+}
+
 textarea {
     padding: 0.25em 0.5em;
     height: var(--space-m);
@@ -109,6 +113,11 @@ textarea {
     border-radius: 4px;
     resize: vertical;
     inline-size: 100%;
+}
+
+textarea:read-only {
+    background-color: var(--color-light);
+    cursor: not-allowed;
 }
 
 
@@ -525,6 +534,10 @@ nav button.fa {
 
 video, audio {
     inline-size: 100%;
+}
+
+video {
+    min-height: 20ch;
 }
 
 
