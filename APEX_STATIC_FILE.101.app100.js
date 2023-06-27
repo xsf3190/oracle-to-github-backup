@@ -3,9 +3,11 @@ let gArticleId,
     gConnectionType,
     gFullImage,
     gPerfObj = {images: []},
-    gCWVurl;
+    gRestUrl;
 
-const queue = new Set(),
+const apex_app_id = document.querySelector("#pFlowId").value,
+      apex_session = document.querySelector("#pInstance").value,
+      queue = new Set(),
       cards = document.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupConfirm = popup.querySelector("button.confirm"),
@@ -36,14 +38,13 @@ document.querySelectorAll("button.close").forEach((button) => {
 });
 
 const addToQueue = (metric) => {
-    console.log(metric);
-  queue.add(metric);
+    queue.add(metric);
 }
 
 const flushQueue = () => {
   if (queue.size > 0) {    
     const body = JSON.stringify([...queue]);
-    let url = gCWVurl + "?session=" + apex.env.APP_SESSION + "&browser=" + gBrowser + "&width=" + window.innerWidth;
+    let url = gRestUrl + "web-vitals" + "?session=" + apex_session + "&browser=" + gBrowser + "&width=" + window.innerWidth;
 
     (navigator.sendBeacon && navigator.sendBeacon(url, body)) ||
       fetch(url, {body, method: 'POST', keepalive: true});
@@ -78,7 +79,9 @@ const checkPerformance = () => {
 
 window.addEventListener("DOMContentLoaded", (event) => {
     console.log("DOM fully loaded and parsed");
-    console.log("APP_USER",apex.env.APP_USER);
+    //console.log("APP_USER",apex.env.APP_USER);
+    console.log("apex_app_id",apex_app_id);
+    console.log("apex_session",apex_session);
 
     const browser = bowser.getParser(window.navigator.userAgent),
           browserName = browser.getBrowserName(),
@@ -104,15 +107,23 @@ window.addEventListener("DOMContentLoaded", (event) => {
     if (checkPerformance()) {
         const observer = new PerformanceObserver(perfObserver);
         observer.observe({ type: "resource", buffered: true });
-
-        //const observerLCP = new PerformanceObserver(perfObserverLCP);
-        //observerLCP.observe({ type: "largest-contentful-paint", buffered: true });
     }
-    
+    const data = {"timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, "maxtouchpoints": navigator.maxTouchPoints},
+          json = JSON.stringify(data),
+          apex = "home," + apex_session;
+        //apex = apex_app_id + "," + apex_session;
+
+    fetch(gRestUrl + "client-info", {json, method: 'POST', headers: {"Apex-Session":apex}})
+        .then((r) => r.json())
+        .then((data) => console.log(data))
+        .catch((e) => console.log('Booo'));
+
+
+    /*
     execProcess( "setClientInfo", {x01: Intl.DateTimeFormat().resolvedOptions().timeZone, x02: navigator.maxTouchPoints}).then( () => {
         console.log("Client Time Zone set for APP_PAGE_ID",apex.env.APP_PAGE_ID);
     });
-
+    */
     addEventListener('visibilitychange', () => {
         console.log("visibilitychange")
         flushQueue();
@@ -191,6 +202,8 @@ const perfObserver = (list) => {
  */
 const execProcess = (processName, input, options) => {
     return new Promise( resolve => {
+        
+        /*
         const result = apex.server.process( processName, input, options);
         result.done( function( data ) {
             if (data.success) {
@@ -202,6 +215,7 @@ const execProcess = (processName, input, options) => {
         result.fail(function( jqXHR ) {
             popupOpen("FAILURE CALLING AJAX PROCESS "+processName, jqXHR.responseText);
         });
+        */
     });
 }
 
