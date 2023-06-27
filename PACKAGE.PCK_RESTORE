@@ -22,8 +22,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "ADMIN"."PCK_RESTORE" IS
     --
 END;
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
-        e_failed_to_mount EXCEPTION;
-        PRAGMA EXCEPTION_INIT (e_failed_to_mount, -17676);  
     /*
     **  Logging procedures
     */
@@ -511,11 +509,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         END LOOP;
         
         EXCEPTION
-            WHEN e_failed_to_mount THEN 
-                log_error(sqlcode,sqlerrm);
             WHEN OTHERS THEN 
                 log_error(sqlcode,sqlerrm);
-                RAISE;
+                --RAISE;
     END;
     
     /*
