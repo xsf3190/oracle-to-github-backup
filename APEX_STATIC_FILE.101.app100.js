@@ -2,12 +2,14 @@ let gArticleId,
     gBrowser,
     gConnectionType,
     gFullImage,
-    gPerfObj = {images: []},
+    //gPerfObj = {images: []},
     gRestUrl;
 
 const apex_app_id = document.querySelector("#pFlowId").value,
+      apex_page_id = document.querySelector("#pFlowStepId").value,
       apex_session = document.querySelector("#pInstance").value,
-      queue = new Set(),
+      vitalsQueue = new Set(),
+      mediaQueue = new Set(),
       cards = document.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupConfirm = popup.querySelector("button.confirm"),
@@ -37,20 +39,23 @@ document.querySelectorAll("button.close").forEach((button) => {
     });
 });
 
-const addToQueue = (metric) => {
-    queue.add(metric);
+const addToVitalsQueue = (metric) => {
+    vitalsQueue.add(metric);
 }
 
-const flushQueue = () => {
-  if (queue.size > 0) {    
-    const body = JSON.stringify([...queue]);
-    let url = gRestUrl + "web-vitals" + "?session=" + apex_session + "&browser=" + gBrowser + "&width=" + window.innerWidth;
-
-    (navigator.sendBeacon && navigator.sendBeacon(url, body)) ||
-      fetch(url, {body, method: 'POST', keepalive: true});
-
-    queue.clear();
-  }
+const flushQueues = () => {
+    if (vitalsQueue.size > 0) {    
+        const body = JSON.stringify([...vitalsQueue]);
+        let url = gRestUrl + "web-vitals" + "?session=" + apex_session + "&browser=" + gBrowser + "&width=" + window.innerWidth;
+        (navigator.sendBeacon && navigator.sendBeacon(url, body)) || fetch(url, {body, method: 'POST', keepalive: true});
+        vitalsQueue.clear();
+    }
+    if (mediaQueue.size > 0) {    
+        const body = JSON.stringify([...mediaQueue]);
+        let url = gRestUrl + "media-performance";
+        (navigator.sendBeacon && navigator.sendBeacon(url, body)) || fetch(url, {body, method: 'POST', keepalive: true});
+        mediaQueue.clear();
+    }
 }
 
 const checkPerformance = () => {
@@ -79,8 +84,9 @@ const checkPerformance = () => {
 
 window.addEventListener("DOMContentLoaded", (event) => {
     console.log("DOM fully loaded and parsed");
-    //console.log("APP_USER",apex.env.APP_USER);
+    
     console.log("apex_app_id",apex_app_id);
+    console.log("apex_page_id",apex_page_id);
     console.log("apex_session",apex_session);
 
     const browser = bowser.getParser(window.navigator.userAgent),
@@ -108,38 +114,24 @@ window.addEventListener("DOMContentLoaded", (event) => {
         const observer = new PerformanceObserver(perfObserver);
         observer.observe({ type: "resource", buffered: true });
     }
-    const data = {"timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, "maxtouchpoints": navigator.maxTouchPoints},
-          json = JSON.stringify(data),
-          apex = "home," + apex_session;
-        //apex = apex_app_id + "," + apex_session;
 
-    fetch(gRestUrl + "client-info", {json, method: 'POST', headers: {"Apex-Session":apex}})
-        .then((r) => r.json())
-        .then((data) => console.log(data))
-        .catch((e) => console.log('Booo'));
-
-
-    /*
-    execProcess( "setClientInfo", {x01: Intl.DateTimeFormat().resolvedOptions().timeZone, x02: navigator.maxTouchPoints}).then( () => {
-        console.log("Client Time Zone set for APP_PAGE_ID",apex.env.APP_PAGE_ID);
+    execProcess( "client-info", "POST", {"timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, "maxtouchpoints": navigator.maxTouchPoints}).then( () => {
+        console.log("Client Time Zone set for APP_PAGE_ID",apex_page_id);
     });
-    */
+    
     addEventListener('visibilitychange', () => {
-        console.log("visibilitychange")
-        flushQueue();
-        if (document.visibilityState === 'hidden') {
-            sendBeacon();
+        if (document.visibilityState === "hidden") {
+            flushQueues();
         }
     }, { capture: true} );
     
     if ('onpagehide' in self) {
         addEventListener('pagehide', () => {
-            flushQueue();
-            sendBeacon();
+            flushQueues();
         }, { capture: true} );
     }
 });
-
+/*
 const sendBeacon = () => {
     if (gPerfObj.images.length) {
         execProcess("uploadPerformance",{p_clob_01: JSON.stringify(gPerfObj)}).then( () => {
@@ -147,6 +139,7 @@ const sendBeacon = () => {
         });
     }
 }
+*/
 
 /*
 **  BATCH PERFORMANCE ENTRIES IN ARRAY TO AVOID TOO MANY DATABASE PROCESS CALLS
@@ -182,7 +175,8 @@ const perfObserver = (list) => {
                     if (gBrowser.startsWith("Safari")) {
                         transferSize = response.headers.get('Content-Length');
                     }
-                    gPerfObj.images.push(
+                    //gPerfObj.images.push(
+                    mediaQueue.add(
                         {"cld_cloud_name": parts[3], "resource_type": resource_type, "public_id": public_id, "epoch": Math.round(Date.now()/1000),
                         "url": entry.name, "transfersize": transferSize, "duration": duration, "content_type":contentType,
                         "window_innerwidth": window.innerWidth, "browser":gBrowser, "connection_type": gConnectionType, "servertiming": entry.serverTiming}
@@ -200,22 +194,20 @@ const perfObserver = (list) => {
 /* 
  ** CALLS AJAX PROCESS RETURNING DATA
  */
-const execProcess = (processName, input, options) => {
-    return new Promise( resolve => {
-        
-        /*
-        const result = apex.server.process( processName, input, options);
-        result.done( function( data ) {
+const execProcess = (template, method, input) => {
+    return new Promise( async resolve => {
+        try {
+            const response = await fetch(gRestUrl + template, {method: method, body: JSON.stringify(input)});
+            const data = await response.json();
             if (data.success) {
                 resolve(data);
             } else {
                 popupOpen("FAILURE IN ORACLE SERVER PROCESS", data.sqlerrm);
             }
-        });
-        result.fail(function( jqXHR ) {
-            popupOpen("FAILURE CALLING AJAX PROCESS "+processName, jqXHR.responseText);
-        });
-        */
+        } catch (e) {
+            console.log('Booo');
+            console.log(e);
+        }
     });
 }
 
