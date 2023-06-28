@@ -48,11 +48,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE updateContent;
     --
-    PROCEDURE uploadCWV(pBodyText IN CLOB);
+    PROCEDURE uploadWebVitals(pBodyText IN CLOB);
     --
     PROCEDURE uploadMetadata;
     --
-    PROCEDURE uploadPerformance;
+    PROCEDURE uploadPerformance(pBodyText IN CLOB);
     --
     PROCEDURE updateUser;
     --    
@@ -242,6 +242,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pEmail=>:B6,
                 pWorkspace=>:B7,
                 pSchema=>:B8); END;}' USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email, l_workspace_name,sys_context('userenv','current_schema');
+                
+        INSERT INTO metrics (id,log_date,nb_assets,bytes,nb_articles,word_count,total_credits,credits_remaining,total_used,max_size)
+        WITH metrics AS 
+            (
+                SELECT nb_assets, bytes, nb_articles, word_count  
+                  FROM (SELECT COUNT(*) nb_assets, SUM(bytes) bytes FROM asset), (SELECT COUNT(*) nb_articles, SUM(word_count) word_count FROM article)
+            ),
+            credits AS
+            (
+                SELECT SUM(credits_limit) total_credits, SUM(credits_limit - (credits_limit*(used_percent/100))) credits_remaining
+                FROM usage 
+                WHERE usage_date=(SELECT MAX(usage_date) FROM usage)
+            ),
+            db1 AS
+            (
+                SELECT total_used_adb1+total_used_adb2 total_used FROM (SELECT SUM(bytes) total_used_adb1 FROM dba_segments WHERE tablespace_name<>'SAMPLESCHEMA'), (SELECT SUM(bytes) total_used_adb2 FROM dba_segments@restore_link WHERE tablespace_name<>'SAMPLESCHEMA')
+            ),
+            db2 AS
+            (
+                SELECT max_size_adb1+max_size_adb2 max_size FROM (SELECT max_size max_size_adb1 FROM v$pdbs), (SELECT max_size max_size_adb2 FROM v$pdbs@restore_link)
+            )            
+        SELECT SEQ_METRICS.nextval as id, current_timestamp as log_date, met.nb_assets, met.bytes, met.nb_articles, met.word_count, cr.total_credits, cr.credits_remaining, db1.total_used, db2.max_size
+          FROM metrics met, credits cr, db1, db2;
+          
+        COMMIT;
         
         EXCEPTION
             WHEN OTHERS THEN
@@ -344,12 +369,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      ** Set Time Zone according to client device. Procedure called on DOMContentLoaded event
      */
     PROCEDURE setClientInfo(pBodyText IN CLOB)  IS
-        l_body CLOB:=pBodyText;
+        l_bodytext CLOB:=pBodyText;
         l_client_TZ users.client_tz%type:=apex_application.g_x01;
         l_touchpoints NUMBER:=apex_application.g_x02;
     BEGIN
-        log(l_body);
-        --apex_util.set_session_state('APP_CLIENT_TZ',l_client_TZ,p_commit=>FALSE);
+        SELECT timezone
+          INTO l_client_TZ
+          FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' COLUMNS (timezone));
+        
+        apex_util.set_session_state('APP_CLIENT_TZ',l_client_TZ,p_commit=>FALSE);
         --apex_util.set_session_state('APP_MAXTOUCHPOINTS',l_touchpoints,p_commit=>FALSE);
         
         apex_json.open_object; 
@@ -777,28 +805,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 ) 
                 WHERE display_order=min_display_order
             ),
-            metrics AS 
+            metric AS
             (
-                SELECT nb_assets, bytes, nb_articles, word_count  
-                  FROM (SELECT COUNT(*) nb_assets, SUM(bytes) bytes FROM asset), (SELECT COUNT(*) nb_articles, SUM(word_count) word_count FROM article)
-            ),
-            credits AS
-            (
-                SELECT SUM(credits_limit) total_credits, SUM(credits_limit - (credits_limit*(used_percent/100))) credits_remaining
-                FROM usage 
-                WHERE usage_date=(SELECT MAX(usage_date) FROM usage)
-            ),
-            db1 AS
-            (
-                SELECT total_used_adb1+total_used_adb2 total_used FROM (SELECT SUM(bytes) total_used_adb1 FROM dba_segments WHERE tablespace_name<>'SAMPLESCHEMA'), (SELECT SUM(bytes) total_used_adb2 FROM dba_segments@restore_link WHERE tablespace_name<>'SAMPLESCHEMA')
-            ),
-            db2 AS
-            (
-                SELECT max_size_adb1+max_size_adb2 max_size FROM (SELECT max_size max_size_adb1 FROM v$pdbs), (SELECT max_size max_size_adb2 FROM v$pdbs@restore_link)
-            )            
+                SELECT nb_assets,bytes,nb_articles,word_count,total_credits,credits_remaining,total_used,max_size
+                FROM
+                (
+                SELECT id, MAX(id) OVER () max_id, nb_assets,bytes,nb_articles,word_count,total_credits,credits_remaining,total_used,max_size
+                FROM metrics
+                )
+                WHERE id=max_id
+            )
             SELECT art.body_html, cov.alt_text, cov.cld_cloud_name, cov.resource_type, cov.public_id, cov.width, cov.format, 
-                   met.nb_assets, met.bytes, met.nb_articles, met.word_count, cr.total_credits, cr.credits_remaining, db1.total_used, db2.max_size
-              FROM article art, cover cov, metrics met, credits cr, db1, db2
+                   met.nb_assets, met.bytes, met.nb_articles, met.word_count, met.total_credits, met.credits_remaining, met.total_used, met.max_size
+              FROM article art, cover cov,  metric met
              WHERE art.id=cov.article_id) 
         LOOP
             l_clob:=l_clob || TO_CLOB('
@@ -830,9 +849,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             <script type="module">
               import {onCLS, onFID, onLCP} from ''https://unpkg.com/web-vitals?module'';
               gRestUrl = "' || l_rest_url || '";
-              onCLS(addToQueue);
-              onFID(addToQueue);
-              onLCP(addToQueue);
+              onCLS(addToVitalsQueue);
+              onFID(addToVitalsQueue);
+              onLCP(addToVitalsQueue);
             </script>');
         
         RETURN (l_clob);
@@ -1011,7 +1030,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Upload Performance data from entries accumulated by Javascript Performance API
      */       
-    PROCEDURE uploadPerformance IS
+    PROCEDURE uploadPerformance(pBodyText IN CLOB) IS
+        l_bodytext CLOB:=pBodyText;
         l_performance clob:=apex_application.g_clob_01;
         l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
         l_ip_address performance.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
@@ -1023,7 +1043,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         WITH json AS 
         (
             SELECT cld_cloud_name, resource_type, public_id, l_session_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, timestamp'1970-01-01 00:00:00' + numtodsinterval(epoch,'second') capture_date, l_user_id, l_ip_address
-              FROM JSON_TABLE(l_performance FORMAT JSON, '$.images[*]' 
+              FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' 
                     COLUMNS (cld_cloud_name, resource_type, public_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, epoch))
         )
         SELECT seq_performance.nextval, a.id, l_session_id, j.url, j.connection_type, j.transfersize, j.duration, j.content_type, j.window_innerwidth, j.browser, j.capture_date, l_user_id, l_ip_address
@@ -1037,7 +1057,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         WITH json AS 
         (
             SELECT url, seq, name, duration, description
-              FROM JSON_TABLE(l_performance FORMAT JSON, '$.images[*]' 
+              FROM JSON_TABLE(l_performance FORMAT JSON, '$[*]' 
                     COLUMNS (url,
                         NESTED  '$.servertiming[*]' columns (seq for ordinality,name,duration,description))) 
         )
@@ -1646,7 +1666,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Upload Core Web Vitals sent via navigator.beacon - hence no response sent.
      */      
-    PROCEDURE uploadCWV(pBodyText IN CLOB) IS
+    PROCEDURE uploadWebVitals(pBodyText IN CLOB) IS
         l_bodytext CLOB:=pBodyText;
         l_ip_address performance.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
         l_plist apex_t_varchar2;
