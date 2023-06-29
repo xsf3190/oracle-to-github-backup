@@ -256,11 +256,6 @@ button {
     list-style-type: none;
     grid-template-columns: repeat(auto-fit,minmax(min(25ch, 100%), 1fr));
     gap: 1rem;
-    font-size: var(--step-1);
-}
-
-[region-id="articles"] .hero-img {
-    margin: auto;
 }
 
 [region-id="articles"] > h2 {
@@ -269,6 +264,111 @@ button {
     text-align: center;
     text-decoration: slateblue solid underline;
     text-underline-position: under;
+}
+
+ul.homepage {
+  list-style-type: none;
+  display: grid;
+  grid-template-columns: repeat(20,1fr);
+  grid-auto-rows: 4vh;
+  padding: 1rem;
+}
+
+
+ul.homepage>li:nth-of-type(1) {
+  grid-column: span 9;
+  grid-row: span 8;
+  border-right: 7px solid black;
+  border-bottom: 10px solid black;
+}
+
+ul.homepage>li:nth-of-type(2) {
+  grid-column: span 11;
+  grid-row: span 8;
+  border-bottom: 10px solid black;
+}
+
+
+ul.homepage>li:nth-of-type(3) {
+  grid-column: span 9;
+  grid-row: span 5;
+    border-right: 7px solid black;
+  border-bottom: 10px solid black;
+}
+
+ul.homepage>li:nth-of-type(4) {
+  grid-column: span 11;
+  grid-row: span 5;
+  border-bottom: 10px solid black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+ul.homepage>li:nth-of-type(2), ul.homepage>li:nth-of-type(4), ul.homepage>li:nth-of-type(5) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+ul.homepage>li:nth-of-type(2) svg{
+  height: 100%;
+/*   width: 90%; */
+}
+
+ul.homepage>li:nth-of-type(4) svg{
+  width: 50%;
+}
+
+ul.homepage>li:nth-of-type(5) {
+  grid-column: span 2;
+  grid-row: span 7;
+  border-right: 7px solid black;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  font-weight: 900;
+  font-family: monospace;
+  font-size: 1.1rem;
+  padding: 1.1rem;
+}
+
+ul.homepage>li:nth-of-type(6) {
+  grid-column: span 7;
+  grid-row: span 7;
+  border-right: 7px solid black;
+}
+
+ul.homepage>li:nth-of-type(6) svg {
+  inline-size: 15%;
+  block-size: 15%
+}
+
+ul.homepage>li:nth-of-type(7) {
+  grid-column: span 6;
+  grid-row: span 7;
+  border-right: 7px solid black;
+/*   display: grid; */
+}
+
+ul.homepage>li:nth-of-type(8) {
+  grid-column: span 5;
+  grid-row: span 7;
+}
+
+.red { 
+  background-color: #ca5020;
+}
+
+.grey { 
+  background-color: #e8e8e8;
+}
+
+.yellow { 
+  background-color: #ffed91;
+}
+
+.blue { 
+  background-color: #044281;
 }
 
 /* *************** */
