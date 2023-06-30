@@ -177,7 +177,7 @@ const perfObserver = (list) => {
                     }
                     //gPerfObj.images.push(
                     mediaQueue.add(
-                        {"cld_cloud_name": parts[3], "resource_type": resource_type, "public_id": public_id, "epoch": Math.round(Date.now()/1000),
+                        {"session_id": apex_session, "cld_cloud_name": parts[3], "resource_type": resource_type, "public_id": public_id, "epoch": Math.round(Date.now()/1000),
                         "url": entry.name, "transfersize": transferSize, "duration": duration, "content_type":contentType,
                         "window_innerwidth": window.innerWidth, "browser":gBrowser, "connection_type": gConnectionType, "servertiming": entry.serverTiming}
                     );
@@ -197,7 +197,15 @@ const perfObserver = (list) => {
 const execProcess = (template, method, input) => {
     return new Promise( async resolve => {
         try {
-            const response = await fetch(gRestUrl + template, {method: method, body: JSON.stringify(input)});
+            let url = gRestUrl + template;
+            let response;
+            if (method==="GET") {
+                url += "/" + input;
+                response = await fetch(url, {method: method});
+            } else {
+                response = await fetch(url, {method: method, body: JSON.stringify(input)});
+            }
+
             const data = await response.json();
             if (data.success) {
                 resolve(data);
@@ -223,7 +231,7 @@ const popupOpen = (heading, text) => {
  ** GET CONTENT FOR PREVIEW DIALOG 
  */
 const preview_article = (articleId,button) => {
-    execProcess( "getContentHTML", {x01: articleId}, {loadingIndicator:button}).then( (data) => {
+    execProcess( "article","GET", articleId).then( (data) => {
         const content = preview.querySelector(".content");
         content.innerHTML = data.content;
         const ele = content.firstElementChild;
@@ -237,7 +245,8 @@ const preview_article = (articleId,button) => {
  ** OPEN GALLERY FOR SELECTED ARTICLE
  */
 const show_gallery = (articleId) => {
-    execProcess( "getThumbnails", {x01: articleId, x02: navigator.maxTouchPoints}).then( (data) => {
+    //execProcess( "getThumbnails", {x01: articleId, x02: navigator.maxTouchPoints}).then( (data) => {
+    execProcess( "gallery","GET",articleId).then( (data) => {
         gallery.showModal();
         galleryInstruction.replaceChildren();
         galleryInstruction.insertAdjacentHTML('afterbegin',data.instruction);
