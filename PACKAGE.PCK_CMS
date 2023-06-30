@@ -18,13 +18,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getContent;
     --
-    PROCEDURE getContentHTML;
+    PROCEDURE getContentHTML(pArticleId IN article.id%type, pCurrentUser IN users.email%type);
     --
     FUNCTION getHomepage RETURN CLOB;
     --
     PROCEDURE getPerformance;
     --
-    PROCEDURE getThumbnails;
+    PROCEDURE getThumbnails(pArticleId IN article.id%type, pCurrentUser IN users.email%type);
     --
     PROCEDURE getUsage(pUserId IN users.id%type DEFAULT NULL, pUsageDate IN DATE DEFAULT NULL);
     --
@@ -657,6 +657,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
     
+    PROCEDURE signout IS
+    BEGIN
+        apex_session.delete_session;
+        apex_authentication.logout(apex_application.g_flow_id, apex_custom_auth.get_session_id);
+    END;
+    
     /*
      **  Construct Home page HTML of qualifying blog articles
      **
@@ -677,6 +683,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_clob:=TO_CLOB(
             '<nav>
                 <button type="button" class="add-card">NEW CONTENT</button>
+                <button type="button" class="signout">SIGN OUT</button>
              </nav>');
         END IF;
         
@@ -723,7 +730,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_clob:=l_clob || TO_CLOB(
                 '<li class="card" tabindex="0" data-id="' || C.id || '">
                     <div class="button-container">
-                        <button type="button" class="fa fa-play show-gallery"' || CASE WHEN C.first_asset=0 THEN ' disabled' END || '>&blacktriangleright;' || C.first_asset || '/' || C.nb_assets || '</button>' ||
+                        <button type="button" class="show-gallery"' || CASE WHEN C.first_asset=0 THEN ' disabled' END || '>&blacktriangleright;' || C.first_asset || '/' || C.nb_assets || '</button>' ||
                         CASE WHEN apex_authentication.is_authenticated THEN
                         '<div class="dropdown">
                           <button type="button" class="fa fa-caret-down show-dropdown"></button>
@@ -940,7 +947,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         
         l_clob:=l_clob || getArticles('Y');
  
-        l_clob:=l_clob || l_js || TO_CLOB('
+        l_clob:=l_clob || l_js;
+        l_clob:=l_clob || TO_CLOB('
             <script type="module">
               import {onCLS, onFID, onLCP} from ''https://unpkg.com/web-vitals?module'';
               gRestUrl = "' || l_rest_url || '";
@@ -958,18 +966,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
 
-    PROCEDURE getThumbnailContent(pArticleId IN article.id%type, pNbItems IN OUT PLS_INTEGER, pInstruction IN OUT NOCOPY VARCHAR2, pContent IN OUT NOCOPY CLOB) 
+    PROCEDURE getThumbnailContent(pArticleId IN article.id%type, pCurrentUser IN users.email%type, pNbItems IN OUT PLS_INTEGER, pInstruction IN OUT NOCOPY VARCHAR2, pContent IN OUT NOCOPY CLOB) 
     IS
         l_url_image VARCHAR2(300);
         l_media_type VARCHAR2(5);   
     BEGIN
         pNbItems:=0;
         FOR C IN (
-            SELECT a.rowid row_id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(created_date,'dd-Mon-yyyy') uploaded, 
+            SELECT a.rowid row_id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
                    DECODE(a.width,0,gWidthThumbnail,a.width) width, DECODE(a.height,0,gWidthThumbnail,a.height) height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format,
                    COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY a.display_order) rn
-              FROM asset a
-             WHERE a.article_id=pArticleId
+              FROM asset a, article t, users u
+             WHERE t.id=pArticleId
+               AND a.article_id=t.id
+               AND u.email=NVL(pCurrentUser,u.email)
+               AND t.author_user_id=u.id
                AND NVL(a.format,'N/A')<>'clt'
              ORDER BY a.display_order )
         LOOP
@@ -1045,14 +1056,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Build gallery of thumbnail images from ASSET table 
      **  Executed in response to user requesting gallery of media assets for a given article
      */
-    PROCEDURE getThumbnails IS
+    PROCEDURE getThumbnails(pArticleId IN article.id%type, pCurrentUser IN users.email%type) IS
         l_clob CLOB;
         l_article_id article.id%type:=apex_application.g_x01;
         l_maxtouchpoints INTEGER:=apex_application.g_x02;
         l_instruction VARCHAR2(300);
         n PLS_INTEGER;
     BEGIN
-        getThumbnailContent(l_article_id, n, l_instruction, l_clob);
+        getThumbnailContent(pArticleId, pCurrentUser, n, l_instruction, l_clob);
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -1127,21 +1138,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */       
     PROCEDURE uploadPerformance(pBodyText IN CLOB) IS
         l_bodytext CLOB:=pBodyText;
-        l_performance clob:=apex_application.g_clob_01;
         l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
         l_ip_address performance.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
-        l_session_id NUMBER:=APEX_CUSTOM_AUTH.GET_SESSION_ID;
         n PLS_INTEGER;
     BEGIN
         INSERT /*+ ignore_row_on_dupkey_index ( performance (session_id, url)) */ 
           INTO performance(id, asset_id, session_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, capture_date, user_id, ip_address)
         WITH json AS 
         (
-            SELECT cld_cloud_name, resource_type, public_id, l_session_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, timestamp'1970-01-01 00:00:00' + numtodsinterval(epoch,'second') capture_date, l_user_id, l_ip_address
+            SELECT session_id, cld_cloud_name, resource_type, public_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, timestamp'1970-01-01 00:00:00' + numtodsinterval(epoch,'second') capture_date, l_user_id, l_ip_address
               FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' 
-                    COLUMNS (cld_cloud_name, resource_type, public_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, epoch))
+                    COLUMNS (session_id, cld_cloud_name, resource_type, public_id, url, connection_type, transfersize, duration, content_type, window_innerwidth, browser, epoch))
         )
-        SELECT seq_performance.nextval, a.id, l_session_id, j.url, j.connection_type, j.transfersize, j.duration, j.content_type, j.window_innerwidth, j.browser, j.capture_date, l_user_id, l_ip_address
+        SELECT seq_performance.nextval, a.id, j.session_id, j.url, j.connection_type, j.transfersize, j.duration, j.content_type, j.window_innerwidth, j.browser, j.capture_date, l_user_id, l_ip_address
           FROM json j, asset a
          WHERE j.cld_cloud_name=a.cld_cloud_name
            AND j.resource_type=a.resource_type
@@ -1151,14 +1160,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
           INTO servertiming(performance_id, seq, name, duration, description)
         WITH json AS 
         (
-            SELECT url, seq, name, duration, description
-              FROM JSON_TABLE(l_performance FORMAT JSON, '$[*]' 
-                    COLUMNS (url,
+            SELECT session_id, url, seq, name, duration, description
+              FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' 
+                    COLUMNS (session_id, url,
                         NESTED  '$.servertiming[*]' columns (seq for ordinality,name,duration,description))) 
         )
         SELECT p.id, j.seq, j.name, j.duration, j.description
           FROM json j, performance p
-         WHERE p.session_id=l_session_id
+         WHERE p.session_id=j.session_id
            AND p.url=j.url
            AND j.seq IS NOT NULL;        
         
@@ -1304,13 +1313,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Get the selected article's content in HTML format
      **
      */    
-    PROCEDURE getContentHTML IS
-        l_article_id article.id%type:=apex_application.g_x01;
+    PROCEDURE getContentHTML(pArticleId IN article.id%type, pCurrentUser IN users.email%type)  IS
+        
     BEGIN
         FOR C IN (SELECT a.body_html, UPPER(u.name) name, apex_util.get_since(a.created_date) created, CASE WHEN a.word_count<200 THEN 'less than a minute' ELSE ROUND(a.word_count/200) || ' minute read' END minutes 
                     FROM article a, users u 
-                   WHERE a.id=l_article_id 
-                     AND author_user_id=u.id) 
+                   WHERE a.id=pArticleId 
+                     AND a.author_user_id=u.id
+                     AND u.email=NVL(pCurrentUser,u.email) )
         LOOP
             apex_json.open_object; 
             apex_json.write('success', TRUE); 
@@ -1454,6 +1464,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Delete 1 asset for a given article
      */   
     PROCEDURE deleteAsset IS
+        pCurrentUser users.email%type;
         l_asset_dbid VARCHAR2(20) := apex_application.g_x01;
         l_rowid ROWID:=CHARTOROWID(l_asset_dbid);
         l_article_id asset.article_id%type;
@@ -1515,7 +1526,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         
         l_clob:=NULL;
         
-        getThumbnailContent(l_article_id, n, l_instruction, l_clob);
+        getThumbnailContent(l_article_id, pCurrentUser, n, l_instruction, l_clob);
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
