@@ -106,6 +106,14 @@ new Sortable(galleryList, {
     }
 });
 
+/* 
+ ** SIGN OUT
+ */
+const signout = document.querySelector(".signout");
+signout.addEventListener('click',  () => {
+    showPopup("signout clicked","");
+});
+
 window.addEventListener("DOMContentLoaded", () => {
     if (navigator.maxTouchPoints > 1) {
             cards.addEventListener("touchstart",cardHandlerAuth);
