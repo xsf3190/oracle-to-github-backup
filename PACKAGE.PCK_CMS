@@ -277,8 +277,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         **     Complex password auto-generated to encrypt schema export dump file
         */
        
-        SELECT github_token, github_repos_owner, github_repos, u.email, w.workspace_name 
-          INTO l_github_token, l_github_repos_owner, l_github_repos, l_email, l_workspace_name
+        l_email:='mark.brown@toptal.com'; -- must be defined as approved email sender in OCI tenancy. Domains like gmail, hotmail etc are not approved.
+        SELECT github_token, github_repos_owner, github_repos, w.workspace_name 
+          INTO l_github_token, l_github_repos_owner, l_github_repos, l_workspace_name
           FROM users u, apex_workspace_developers w 
          WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
            AND w.is_admin='Yes'
