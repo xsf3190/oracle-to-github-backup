@@ -260,6 +260,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_github_repos_owner users.github_repos_owner%type;
         l_github_repos users.github_repos%type;
         l_email users.email%type;
+        l_email_sender users.email%type;
         l_password VARCHAR2(20);
         l_github_filename VARCHAR2(100);
         l_workspace_name apex_workspace_developers.workspace_name%type;
@@ -277,16 +278,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         **     Complex password auto-generated to encrypt schema export dump file
         */
        
-        l_email:='mark.brown@toptal.com'; -- must be defined as approved email sender in OCI tenancy. Domains like gmail, hotmail etc are not approved.
-        SELECT github_token, github_repos_owner, github_repos, w.workspace_name 
-          INTO l_github_token, l_github_repos_owner, l_github_repos, l_workspace_name
+        SELECT github_token, github_repos_owner, github_repos, u.email, w.workspace_name 
+          INTO l_github_token, l_github_repos_owner, l_github_repos, l_email, l_workspace_name
           FROM users u, apex_workspace_developers w 
          WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
            AND w.is_admin='Yes'
            AND w.email=u.email;
+           
+        SELECT email 
+          INTO l_email_sender
+          FROM users 
+         WHERE approved_sender_ind='Y';
         
         l_password:=generate_password();
-        pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email, l_password, l_restore_files);
+        pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email_sender, l_email, l_password, l_restore_files);
     
         /*
         **  3. Restore from Github into Restore database, where a workspace with same name as current schema must exist.
@@ -303,9 +308,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pGithub_repos_owner=>:B3, 
                 pGithub_repos=>:B4,
                 pPassword=>:B5,
-                pEmail=>:B6,
-                pWorkspace=>:B7,
-                pSchema=>:B8); END;}' USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email, l_workspace_name,sys_context('userenv','current_schema');
+                pEmailSender=>:B6,
+                pEmail=>:B7,
+                pWorkspace=>:B8,
+                pSchema=>:B9); END;}' USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email_sender, l_email, l_workspace_name,sys_context('userenv','current_schema');
                 
         INSERT INTO metrics (id,log_date,nb_assets,bytes,nb_articles,word_count,total_credits,credits_remaining,total_used,max_size)
         WITH metrics AS 
@@ -731,7 +737,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_clob:=l_clob || TO_CLOB(
                 '<li class="card" tabindex="0" data-id="' || C.id || '">
                     <div class="button-container">
-                        <button type="button" class="show-gallery"' || CASE WHEN C.first_asset=0 THEN ' disabled' END || '>&blacktriangleright;' || C.first_asset || '/' || C.nb_assets || '</button>' ||
+                        <button type="button" class="fa show-gallery"' || CASE WHEN C.first_asset=0 THEN ' disabled' END || '>&blacktriangleright;' || C.first_asset || '/' || C.nb_assets || '</button>' ||
                         CASE WHEN apex_authentication.is_authenticated THEN
                         '<div class="dropdown">
                           <button type="button" class="fa fa-caret-down show-dropdown"></button>
