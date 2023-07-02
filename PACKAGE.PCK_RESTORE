@@ -6,6 +6,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "ADMIN"."PCK_RESTORE" IS
         pGithub_repos_owner IN VARCHAR2, 
         pGithub_repos IN VARCHAR2, 
         pPassword IN VARCHAR2, 
+        pEmailSender IN VARCHAR2, 
         pEmail IN VARCHAR2, 
         pWorkspace IN VARCHAR2,
         pSchema IN VARCHAR2);
@@ -16,6 +17,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "ADMIN"."PCK_RESTORE" IS
         pGithub_repos_owner IN VARCHAR2, 
         pGithub_repos IN VARCHAR2, 
         pPassword IN VARCHAR2, 
+        pEmailSender IN VARCHAR2, 
         pEmail IN VARCHAR2, 
         pWorkspace IN VARCHAR2,
         pSchema IN VARCHAR2);
@@ -55,6 +57,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         pGithub_repos_owner IN VARCHAR2, 
         pGithub_repos IN VARCHAR2, 
         pPassword IN VARCHAR2, 
+        pEmailSender IN VARCHAR2, 
         pEmail IN VARCHAR2, 
         pWorkspace IN VARCHAR2,
         pSchema IN VARCHAR2) 
@@ -65,15 +68,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
             job_name => l_job_name,
             job_type => 'STORED_PROCEDURE',
             job_action => 'PCK_RESTORE.start_import',
-            --auto_drop => FALSE,
-            number_of_arguments => 8);
-            
-        /*
-        dbms_scheduler.set_attribute(
-            name => l_job_name,
-            attribute => 'RESTARTABLE',
-            value => TRUE);
-        */
+            number_of_arguments => 9);
         
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
@@ -103,16 +98,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
             argument_position => 6,
-            argument_value => pEmail);
+            argument_value => pEmailSender);
             
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
             argument_position => 7,
+            argument_value => pEmail);            
+            
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 8,
             argument_value => pWorkspace);  
 
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
-            argument_position => 8,
+            argument_position => 9,
             argument_value => pSchema);  
             
         dbms_scheduler.enable(l_job_name);
@@ -523,6 +523,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         pGithub_repos_owner IN VARCHAR2, 
         pGithub_repos IN VARCHAR2, 
         pPassword IN VARCHAR2, 
+        pEmailSender IN VARCHAR2, 
         pEmail IN VARCHAR2, 
         pWorkspace IN VARCHAR2,
         pSchema IN VARCHAR2) 
@@ -540,7 +541,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "ADMIN"."PCK_RESTORE" IS
         PROCEDURE sendmail(pSubject IN VARCHAR2) IS
         BEGIN
             apex_util.set_security_group_id(p_security_group_id => l_workspace_id);    
-            apex_mail.send(p_to=>pEmail, p_from=>pEmail, p_body=>null, p_body_html=>l_body_html, p_subj=>pSubject);
+            apex_mail.send(p_to=>pEmail, p_from=>pEmailSender, p_body=>null, p_body_html=>l_body_html, p_subj=>pSubject);
             apex_mail.push_queue();
         END;
         
