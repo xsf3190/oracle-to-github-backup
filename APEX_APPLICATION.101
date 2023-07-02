@@ -28,7 +28,7 @@ prompt APPLICATION 101 - CMS application2
 -- Application Export:
 --   Application:     101
 --   Name:            CMS application2
---   Date and Time:   05:11 Sunday July 2, 2023
+--   Date and Time:   20:00 Sunday July 2, 2023
 --   Exported By:     EXAMPLE
 --   Flashback:       0
 --   Export Type:     Application Export
@@ -122,7 +122,7 @@ wwv_flow_imp.create_flow(
 ,p_substitution_string_01=>'APP_NAME'
 ,p_substitution_value_01=>'MRB'
 ,p_last_updated_by=>'EXAMPLE'
-,p_last_upd_yyyymmddhh24miss=>'20230630134607'
+,p_last_upd_yyyymmddhh24miss=>'20230702103605'
 ,p_file_prefix => nvl(wwv_flow_application_install.get_static_app_file_prefix,'')
 ,p_files_version=>1893
 ,p_print_server_type=>'NATIVE'
@@ -34710,7 +34710,7 @@ wwv_flow_imp_page.create_page(
 ,p_page_is_public_y_n=>'Y'
 ,p_page_component_map=>'13'
 ,p_last_updated_by=>'EXAMPLE'
-,p_last_upd_yyyymmddhh24miss=>'20230629092520'
+,p_last_upd_yyyymmddhh24miss=>'20230702103534'
 );
 wwv_flow_imp_page.create_page_plug(
  p_id=>wwv_flow_imp.id(47940482722759577)
@@ -34721,7 +34721,7 @@ wwv_flow_imp_page.create_page_plug(
 ,p_plug_display_sequence=>20
 ,p_include_in_reg_disp_sel_yn=>'Y'
 ,p_function_body_language=>'PLSQL'
-,p_plug_source=>'BEGIN RETURN pck_cms.getHomepage; END;'
+,p_plug_source=>'BEGIN RETURN pck_cms.getPageContent; END;'
 ,p_lazy_loading=>false
 ,p_plug_source_type=>'NATIVE_DYNAMIC_CONTENT'
 ,p_plug_query_options=>'DERIVED_REPORT_COLUMNS'
@@ -34805,7 +34805,7 @@ wwv_flow_imp_page.create_page(
 ,p_page_template_options=>'#DEFAULT#'
 ,p_page_component_map=>'25'
 ,p_last_updated_by=>'EXAMPLE'
-,p_last_upd_yyyymmddhh24miss=>'20230626133553'
+,p_last_upd_yyyymmddhh24miss=>'20230702103605'
 );
 wwv_flow_imp_page.create_page_plug(
  p_id=>wwv_flow_imp.id(29073926621146494)
@@ -34828,7 +34828,7 @@ wwv_flow_imp_page.create_page_plug(
 ,p_plug_display_sequence=>20
 ,p_include_in_reg_disp_sel_yn=>'Y'
 ,p_function_body_language=>'PLSQL'
-,p_plug_source=>'BEGIN RETURN pck_cms.getArticles; END;'
+,p_plug_source=>'BEGIN RETURN pck_cms.getPageContent; END;'
 ,p_lazy_loading=>false
 ,p_plug_source_type=>'NATIVE_DYNAMIC_CONTENT'
 ,p_plug_query_options=>'DERIVED_REPORT_COLUMNS'
