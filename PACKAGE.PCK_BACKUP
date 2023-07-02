@@ -4,6 +4,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_BACKUP" is
         p_github_token IN VARCHAR2,
         p_github_repos_owner IN VARCHAR2,
         p_github_repos IN VARCHAR2,
+        p_email_sender IN VARCHAR2,
         p_email IN VARCHAR2,
         p_password IN VARCHAR2,
         p_restore_files IN OUT VARCHAR2);
@@ -96,7 +97,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     ** Send email to Admin user summarizing backup status
     ** Email formatted as HTML so styling is primitive and included in-line
     */
-    PROCEDURE sendmail(p_backup IN tt_backup, p_email IN VARCHAR2, p_password IN VARCHAR2, p_error IN VARCHAR2 DEFAULT NULL) IS
+    PROCEDURE sendmail(p_backup IN tt_backup, p_email_sender IN VARCHAR2, p_email IN VARCHAR2, p_password IN VARCHAR2, p_error IN VARCHAR2 DEFAULT NULL) IS
         l_subject VARCHAR2(100);
         l_body CLOB;
         l_body_html CLOB;
@@ -216,7 +217,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         
         l_body_html:=l_body_html || to_clob('</body></html>');
         
-        apex_mail.send(p_to=>p_email, p_from=>p_email, p_body=>l_body, p_body_html=>l_body_html, p_subj=>l_subject);
+        apex_mail.send(p_to=>p_email, p_from=>p_email_sender, p_body=>l_body, p_body_html=>l_body_html, p_subj=>l_subject);
         apex_mail.push_queue(); 
     END;
     
@@ -231,6 +232,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         p_github_token IN VARCHAR2,
         p_github_repos_owner IN VARCHAR2,
         p_github_repos IN VARCHAR2,
+        p_email_sender IN VARCHAR2,
         p_email IN VARCHAR2,
         p_password IN VARCHAR2,
         p_restore_files IN OUT VARCHAR2)
@@ -427,7 +429,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         /*
         ** Send email to APEX Admin user with results of backup. Include encryption password.
         */
-        sendmail(l_backup, p_email, p_password);
+        sendmail(l_backup, p_email_sender, p_email, p_password);
         
         /*
         **  Send back to calling procedure list of Github files to be restored
@@ -442,7 +444,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm);
-                sendmail(l_backup, p_email, NULL, sqlcode || ': ' || sqlerrm);
+                sendmail(l_backup, p_email_sender, p_email, NULL, sqlcode || ': ' || sqlerrm);
                 RAISE;
     END;
 
