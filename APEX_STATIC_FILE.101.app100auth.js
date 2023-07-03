@@ -111,7 +111,9 @@ new Sortable(galleryList, {
  */
 const signout = document.querySelector(".signout");
 signout.addEventListener('click',  () => {
-    showPopup("signout clicked","");
+    execProcess("signout","DELETE",apex_session).then( () => {
+        console.log("signout completed");
+    });
 });
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -185,21 +187,6 @@ if (add_card) {
         first_card.querySelector(".fa-id-card").textContent = "0";
     });
 }
-
-/* 
- ** COPY CARD
- */
-const copy_card = (articleId) => {
-    execProcess( "copyArticle",{x01: articleId}).then( (data) => {
-        const li = document.querySelector("[data-id='" + articleId + "']");  //the card to copy
-        const clone = li.cloneNode(true);
-        clone.dataset.id=data.articleId;
-        clone.querySelector(".fa-id-card").textContent = data.articleId;
-        clone.querySelector(".updated-date").textContent = data.updated;
-        li.insertAdjacentElement('afterend',clone);
-        clone.focus();
-    });
-};
 
 /* 
  ** UPLOAD MEDIA. PROMPT FOR CLOUDINARY API KEY IF NON-SUBSCRIBER
@@ -378,8 +365,6 @@ const cardHandlerAuth = (e) => {
         upload_media(articleId);
     } else if (e.target.matches(".edit-text")) {
         edit_text(articleId,e.srcElement);          
-    } else if (e.target.matches(".copy-card")) {
-        copy_card(articleId);  
     } else if (e.target.matches(".publish")) {
         publish_article(articleId, e.srcElement);  
     } else if (e.target.matches(".unpublish")) {
