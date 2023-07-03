@@ -1,7 +1,5 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
-    PROCEDURE copyArticle;
-    --
     PROCEDURE daily_job;
     --
     PROCEDURE deleteAll(pUserId IN users.id%type);
@@ -43,6 +41,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     PROCEDURE saveArticle;
     --
     PROCEDURE setClientInfo(pBodyText IN CLOB);
+    --
+    PROCEDURE signout(pSessionId IN NUMBER);
     --
     PROCEDURE updateAsset;
     --
@@ -640,34 +640,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
+
     
-    /*
-     **  Copy selected article returning new article ID. Code is dead for now because don't know how to "copy" media 
-     */
-    PROCEDURE copyArticle IS
-        l_article_id article.id%type:=apex_application.g_x01;
-        l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
+    PROCEDURE signout(pSessionId IN NUMBER) IS
     BEGIN
-        INSERT INTO article(id,title,author_user_id,is_public,excerpt,word_count,updated_date,created_date,body,body_html,char_count,title_more,excerpt_more) 
-        SELECT seq_article.nextval, title,l_user_id,is_public,excerpt,word_count,null,current_date,body,body_html,char_count,title_more,excerpt_more
-          FROM article 
-         WHERE id=l_article_id;
+        log(apex_custom_auth.get_session_id);
+        apex_session.delete_session;
+        --apex_authentication.logout(apex_application.g_flow_id, apex_custom_auth.get_session_id);
+        apex_authentication.logout(apex_application.g_flow_id, pSessionId);
         
-        APEX_JSON.open_object; 
-        APEX_JSON.write('success', TRUE);
-        APEX_JSON.write('articleId',seq_article.currval);
-        APEX_JSON.write('updated', fmtUpdatedDate(current_date));
-        APEX_JSON.close_object;
-               
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+         
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-    END;
-    
-    PROCEDURE signout IS
-    BEGIN
-        apex_session.delete_session;
-        apex_authentication.logout(apex_application.g_flow_id, apex_custom_auth.get_session_id);
     END;
     
     /*
@@ -683,54 +671,40 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */
     FUNCTION getPageContent RETURN CLOB IS
         l_clob CLOB;
-        l_css CLOB;
-        l_js_1 CLOB;
-        l_js_2 CLOB;
+        l_css_file_urls APEX_APPLICATION_PAGES.css_file_urls%type;
+        l_javascript_file_urls APEX_APPLICATION_PAGES.javascript_file_urls%type;
         l_rest_url VARCHAR2(300);
-        --l_app_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
-        --l_app_user_name users.email%type:=apex_util.get_session_state('APP_USER_NAME');
     BEGIN
         SELECT apex_util.host_url() || '/ords/' || s.pattern || m.uri_prefix
           INTO l_rest_url
           FROM user_ords_schemas s, user_ords_modules m
          WHERE s.parsing_schema=sys_context('userenv','current_schema')
            AND m.name='public';
+           
+        SELECT NVL(css_file_urls,' '), NVL(javascript_file_urls,' ')
+          INTO l_css_file_urls, l_javascript_file_urls
+          FROM APEX_APPLICATION_PAGES 
+         WHERE application_id=apex_application.g_flow_id
+           AND page_id=apex_application.g_flow_step_id;
+           
+        --IF (apex_authentication.is_authenticated) THEN
+        --    l_clob:=l_clob || TO_CLOB('<script src="https://widget.cloudinary.com/v2.0/global/all.js"></script>');
+        --END IF;
         
-        FOR C IN (SELECT javascript_file_urls, css_file_urls 
-                    FROM APEX_APPLICATION_PAGES 
-                   WHERE application_id=apex_application.g_flow_id
-                     AND page_id=apex_application.g_flow_step_id)
-        LOOP
-            IF (INSTR(C.css_file_urls,'app100.min.css')=0) THEN
-                SELECT '<style>' || apex_util.blob_to_clob(file_content) || '</style>'
-                  INTO l_clob
-                  FROM APEX_APPLICATION_STATIC_FILES 
-                 WHERE application_id=apex_application.g_flow_id
-                   AND file_name='app100.css';
-            END IF;
-            IF (INSTR(C.javascript_file_urls,'app100.min.js')=0) THEN
-                SELECT apex_util.blob_to_clob(file_content)
-                  INTO l_js_1
-                  FROM APEX_APPLICATION_STATIC_FILES 
-                 WHERE application_id=apex_application.g_flow_id
-                   AND file_name='app100.js';
-            END IF;
-            IF (apex_authentication.is_authenticated) THEN
-                IF (INSTR(C.javascript_file_urls,'app100auth.min.js')=0) THEN
-                    SELECT apex_util.blob_to_clob(file_content)
-                      INTO l_js_2
-                      FROM APEX_APPLICATION_STATIC_FILES 
-                     WHERE application_id=apex_application.g_flow_id
-                       AND file_name='app100auth.js';
-                END IF;            
-            END IF;
-        END LOOP;
-
+        log('l_css_file_urls:'||l_css_file_urls);
+        log('apex_application.g_flow_id:'||apex_application.g_flow_id);
+        
+        IF (INSTR(l_css_file_urls,'app100.min.css')=0) THEN
+            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name='app100.css') LOOP
+                l_clob:=l_clob || '<style>' || apex_util.blob_to_clob(C.file_content) || '</style>';
+            END LOOP;
+        END IF;
         
         IF (apex_authentication.is_authenticated) THEN
             l_clob:=l_clob || TO_CLOB(
             '<nav>
                 <button type="button" class="add-card">NEW CONTENT</button>
+                <span>' || apex_application.g_user || '</span>
                 <button type="button" class="signout">SIGN OUT</button>
              </nav>');
         ELSE
@@ -761,7 +735,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         
         l_clob:=l_clob || TO_CLOB('<ul class="cards" role="list">');
             
-        log(apex_application.g_user);
         /* Create cards as <li> elements for each article */
         FOR C IN (
             WITH covers AS
@@ -905,8 +878,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             </dialog> 
             ');
  
-        IF (l_js_1 IS NOT NULL OR l_js_2 IS NOT NULL) THEN
-            l_clob:=l_clob || TO_CLOB('<script>' || l_js_1 || l_js_2 || '</script>');
+        IF (INSTR(l_javascript_file_urls,'app100.min.js')=0) THEN
+            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name='app100.js') LOOP
+                l_clob:=l_clob || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
+            END LOOP;
+            IF (apex_authentication.is_authenticated) THEN
+                FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name='app100auth.js') LOOP
+                    l_clob:=l_clob || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
+                END LOOP;            
+            END IF;
         END IF;
         
         l_clob:=l_clob || TO_CLOB('
