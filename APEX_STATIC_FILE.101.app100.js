@@ -2,7 +2,6 @@ let gArticleId,
     gBrowser,
     gConnectionType,
     gFullImage,
-    //gPerfObj = {images: []},
     gRestUrl;
 
 const apex_app_id = document.querySelector("#pFlowId").value,
@@ -46,13 +45,13 @@ const addToVitalsQueue = (metric) => {
 const flushQueues = () => {
     if (vitalsQueue.size > 0) {    
         const body = JSON.stringify([...vitalsQueue]);
-        let url = gRestUrl + "web-vitals" + "?session=" + apex_session + "&browser=" + gBrowser + "&width=" + window.innerWidth;
+        let url = gRestUrl[0] + "web-vitals" + "?session=" + apex_session + "&browser=" + gBrowser + "&width=" + window.innerWidth;
         (navigator.sendBeacon && navigator.sendBeacon(url, body)) || fetch(url, {body, method: 'POST', keepalive: true});
         vitalsQueue.clear();
     }
     if (mediaQueue.size > 0) {    
         const body = JSON.stringify([...mediaQueue]);
-        let url = gRestUrl + "media-performance";
+        let url = gRestUrl[0] + "media-performance";
         (navigator.sendBeacon && navigator.sendBeacon(url, body)) || fetch(url, {body, method: 'POST', keepalive: true});
         mediaQueue.clear();
     }
@@ -94,6 +93,9 @@ window.addEventListener("DOMContentLoaded", (event) => {
           browserVersion = browser.getBrowserVersion().split(".");
 
     gBrowser = browserName + " " + browserVersion[0];
+    if (browserVersion[1]!=="0") {
+        gBrowser+="."+browserVersion[1];
+    }
     console.log("gBrowser",gBrowser);
 
     const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -199,8 +201,13 @@ const execProcess = (template, method, input) => {
         try {
             let url = gRestUrl + template;
             let response;
-            if (method==="GET") {
-                url += "/" + input;
+            
+            let user_id=document.querySelector("#user-id");
+            if (user_id) {
+                user_id=user_id.dataset.id
+            }
+            if (method==="GET" || method==="DELETE") {
+                url += "/?id=" + input + "&user_id=" + user_id;
                 response = await fetch(url, {method: method});
             } else {
                 response = await fetch(url, {method: method, body: JSON.stringify(input)});
