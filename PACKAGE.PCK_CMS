@@ -16,13 +16,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getContent;
     --
-    PROCEDURE getContentHTML(pArticleId IN article.id%type, pCurrentUser IN users.email%type);
+    PROCEDURE getContentHTML(pArticleId IN article.id%type, pUserId IN VARCHAR2);
     --
     FUNCTION getHomepage RETURN CLOB;
     --
     PROCEDURE getPerformance;
     --
-    PROCEDURE getThumbnails(pArticleId IN article.id%type, pCurrentUser IN users.email%type);
+    PROCEDURE getThumbnails(pArticleId IN article.id%type, pUserId IN VARCHAR2);
     --
     PROCEDURE getUsage(pUserId IN users.id%type DEFAULT NULL, pUsageDate IN DATE DEFAULT NULL);
     --
@@ -673,26 +673,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_clob CLOB;
         l_css_file_urls APEX_APPLICATION_PAGES.css_file_urls%type;
         l_javascript_file_urls APEX_APPLICATION_PAGES.javascript_file_urls%type;
-        l_rest_url VARCHAR2(300);
     BEGIN
-        SELECT apex_util.host_url() || '/ords/' || s.pattern || m.uri_prefix
-          INTO l_rest_url
-          FROM user_ords_schemas s, user_ords_modules m
-         WHERE s.parsing_schema=sys_context('userenv','current_schema')
-           AND m.name='public';
-           
         SELECT NVL(css_file_urls,' '), NVL(javascript_file_urls,' ')
           INTO l_css_file_urls, l_javascript_file_urls
           FROM APEX_APPLICATION_PAGES 
          WHERE application_id=apex_application.g_flow_id
            AND page_id=apex_application.g_flow_step_id;
-           
-        --IF (apex_authentication.is_authenticated) THEN
-        --    l_clob:=l_clob || TO_CLOB('<script src="https://widget.cloudinary.com/v2.0/global/all.js"></script>');
-        --END IF;
-        
-        log('l_css_file_urls:'||l_css_file_urls);
-        log('apex_application.g_flow_id:'||apex_application.g_flow_id);
         
         IF (INSTR(l_css_file_urls,'app100.min.css')=0) THEN
             FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name='app100.css') LOOP
@@ -701,12 +687,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END IF;
         
         IF (apex_authentication.is_authenticated) THEN
-            l_clob:=l_clob || TO_CLOB(
-            '<nav>
-                <button type="button" class="add-card">NEW CONTENT</button>
-                <span>' || apex_application.g_user || '</span>
-                <button type="button" class="signout">SIGN OUT</button>
-             </nav>');
+            FOR C IN (SELECT id FROM users WHERE email=apex_application.g_user) LOOP
+                l_clob:=l_clob || TO_CLOB(
+                '<nav>
+                    <button type="button" class="add-card">NEW CONTENT</button>
+                    <span id="user-id" data-id="' || C.id || '">' || apex_application.g_user || '</span>
+                    <button type="button" class="signout">SIGN OUT</button>
+                 </nav>');
+            END LOOP;
         ELSE
             FOR C IN (SELECT body_html FROM article WHERE id=1) 
             LOOP
@@ -889,14 +877,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END IF;
         END IF;
         
-        l_clob:=l_clob || TO_CLOB('
+        FOR C IN ( SELECT apex_util.host_url() || '/ords/' || s.pattern || m.uri_prefix url
+                     FROM user_ords_schemas s, user_ords_modules m
+                    WHERE s.parsing_schema=sys_context('userenv','current_schema')
+                      AND m.name='public' ) 
+        LOOP
+            l_clob:=l_clob || TO_CLOB('
             <script type="module">
               import {onCLS, onFID, onLCP} from ''https://unpkg.com/web-vitals?module'';
-              gRestUrl = "' || l_rest_url || '";
+              gRestUrl = "' || C.url || '";
               onCLS(addToVitalsQueue);
               onFID(addToVitalsQueue);
               onLCP(addToVitalsQueue);
-            </script>');            
+            </script>');
+        END LOOP;
+        
+           
 
         RETURN (l_clob);
 
@@ -1022,7 +1018,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
 
-    PROCEDURE getThumbnailContent(pArticleId IN article.id%type, pCurrentUser IN users.email%type, pNbItems IN OUT PLS_INTEGER, pInstruction IN OUT NOCOPY VARCHAR2, pContent IN OUT NOCOPY CLOB) 
+    PROCEDURE getThumbnailContent(pArticleId IN article.id%type, pUserId IN users.id%type, pNbItems IN OUT PLS_INTEGER, pInstruction IN OUT NOCOPY VARCHAR2, pContent IN OUT NOCOPY CLOB) 
     IS
         l_url_image VARCHAR2(300);
         l_media_type VARCHAR2(5);   
@@ -1032,11 +1028,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             SELECT a.rowid row_id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
                    DECODE(a.width,0,gWidthThumbnail,a.width) width, DECODE(a.height,0,gWidthThumbnail,a.height) height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format,
                    COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY a.display_order) rn
-              FROM asset a, article t, users u
+              FROM asset a, article t
              WHERE t.id=pArticleId
                AND a.article_id=t.id
-               AND u.email=NVL(pCurrentUser,u.email)
-               AND t.author_user_id=u.id
+               AND t.author_user_id=NVL(pUserId, t.author_user_id)
                AND NVL(a.format,'N/A')<>'clt'
              ORDER BY a.display_order )
         LOOP
@@ -1112,14 +1107,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Build gallery of thumbnail images from ASSET table 
      **  Executed in response to user requesting gallery of media assets for a given article
      */
-    PROCEDURE getThumbnails(pArticleId IN article.id%type, pCurrentUser IN users.email%type) IS
+    PROCEDURE getThumbnails(pArticleId IN article.id%type, pUserId IN VARCHAR2) IS
         l_clob CLOB;
-        l_article_id article.id%type:=apex_application.g_x01;
-        l_maxtouchpoints INTEGER:=apex_application.g_x02;
+        l_user_id users.id%type;
         l_instruction VARCHAR2(300);
         n PLS_INTEGER;
     BEGIN
-        getThumbnailContent(pArticleId, pCurrentUser, n, l_instruction, l_clob);
+        IF (pUserId<>'null') THEN
+            l_user_id:=TO_NUMBER(pUserId);
+        END IF;
+        
+        getThumbnailContent(pArticleId, l_user_id, n, l_instruction, l_clob);
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -1369,27 +1367,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Get the selected article's content in HTML format
      **
      */    
-    PROCEDURE getContentHTML(pArticleId IN article.id%type, pCurrentUser IN users.email%type)  IS
-        
+    PROCEDURE getContentHTML(pArticleId IN article.id%type, pUserId IN VARCHAR2)  IS
+        l_user_id users.id%type;
     BEGIN
+        IF (pUserId<>'null') THEN
+            l_user_id:=TO_NUMBER(pUserId);
+        END IF;
         FOR C IN (SELECT a.body_html, UPPER(u.name) name, apex_util.get_since(a.created_date) created, CASE WHEN a.word_count<200 THEN 'less than a minute' ELSE ROUND(a.word_count/200) || ' minute read' END minutes 
                     FROM article a, users u 
                    WHERE a.id=pArticleId 
                      AND a.author_user_id=u.id
-                     AND u.email=NVL(pCurrentUser,u.email) )
+                     AND a.author_user_id=NVL(l_user_id,a.author_user_id)
+                     AND a.is_public=CASE WHEN l_user_id IS NULL THEN 'Y' ELSE a.is_public END)
         LOOP
             apex_json.open_object; 
             apex_json.write('success', TRUE); 
-            apex_json.write('content', C.body_html); 
-            --apex_json.write('name', C.name); 
-            --apex_json.write('created', C.created); 
-            --apex_json.write('minutes', C.minutes); 
+            apex_json.write('content', C.body_html);
             apex_json.write('details','<div class="details"><span>' || C.name || '</span><span>-</span><span>' || C.created || '</span><span>-</span><span>' || C.minutes || '</span></div>');
             apex_json.close_object;
         END LOOP;
         
         EXCEPTION
-            WHEN NO_DATA_FOUND THEN NULL;
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm, pAjax=>TRUE);
     END;    
