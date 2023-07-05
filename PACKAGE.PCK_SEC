@@ -23,7 +23,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_user_name users.name%type;
         l_client_tz users.client_tz%type;
         l_client_tz_session users.client_tz%type:=apex_util.get_session_state('APP_CLIENT_TZ');
+        l_workspace_id apex_workspaces.workspace_id%type;
     BEGIN
+        pck_cms.log(APEX_APPLICATION.G_FLOW_ID||':'||APEX_APPLICATION.G_USER||':'||APEX_APPLICATION.G_INSTANCE);
+        SELECT workspace_id
+          INTO l_workspace_id
+          FROM apex_workspaces
+         WHERE workspace = (
+                SELECT workspace
+                FROM apex_applications
+                WHERE application_id = APEX_APPLICATION.G_FLOW_ID
+                );
+    
+      FOR C IN (
+        SELECT apex_session_id
+          FROM apex_workspace_sessions
+         WHERE workspace_id = l_workspace_id
+           AND user_name = APEX_APPLICATION.G_USER
+           AND apex_session_id != APEX_APPLICATION.G_INSTANCE
+      )
+      LOOP
+        apex_session.delete_session(
+          p_session_id => C.apex_session_id
+        );
+      END LOOP;
+    
         INSERT INTO user_login(auth_provider,email,name) VALUES (p_auth_provider, p_email, p_name);
         
         BEGIN
