@@ -111,8 +111,8 @@ new Sortable(galleryList, {
  */
 const signout = document.querySelector(".signout");
 signout.addEventListener('click',  () => {
-    execProcess("signout","DELETE",apex_session).then( () => {
-        console.log("signout completed");
+    execProcess("signout","GET",apex_session).then( () => {
+        history.back();
     });
 });
 
