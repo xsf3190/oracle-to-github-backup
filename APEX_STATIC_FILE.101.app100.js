@@ -45,13 +45,13 @@ const addToVitalsQueue = (metric) => {
 const flushQueues = () => {
     if (vitalsQueue.size > 0) {    
         const body = JSON.stringify([...vitalsQueue]);
-        let url = gRestUrl[0] + "web-vitals" + "?session=" + apex_session + "&browser=" + gBrowser + "&width=" + window.innerWidth;
+        let url = gRestUrl + "web-vitals" + "?session=" + apex_session + "&browser=" + gBrowser + "&width=" + window.innerWidth;
         (navigator.sendBeacon && navigator.sendBeacon(url, body)) || fetch(url, {body, method: 'POST', keepalive: true});
         vitalsQueue.clear();
     }
     if (mediaQueue.size > 0) {    
         const body = JSON.stringify([...mediaQueue]);
-        let url = gRestUrl[0] + "media-performance";
+        let url = gRestUrl + "media-performance";
         (navigator.sendBeacon && navigator.sendBeacon(url, body)) || fetch(url, {body, method: 'POST', keepalive: true});
         mediaQueue.clear();
     }
