@@ -2,7 +2,7 @@
  ** GENERATE SIGNATURE FOR CLOUDINARY SUSCRIBER TO ENABLE SECURE MEDIA UPLOAD
  */
 const getCldSignature = async (callback, params_to_sign) => {
-    execProcess("getCldSignature",{p_clob_01: JSON.stringify(params_to_sign)}).then( (data) => {
+    execProcess("cld-signature","POST",params_to_sign).then( (data) => {
         callback(data.signature);
     });
 };
@@ -68,7 +68,7 @@ const widget=cloudinary.createUploadWidget(
                     });
                 }
             });
-            execProcess("uploadMetadata",{p_clob_01: JSON.stringify(metadata)}).then( (data) => {
+            execProcess("cld-upload","POST",metadata).then( (data) => {
                 let li = document.querySelector("[data-id='" + data.articleId + "']");
                 if (!li) {
                     li = enable_card_zero(data.articleId);
@@ -192,7 +192,7 @@ if (add_card) {
  ** UPLOAD MEDIA. PROMPT FOR CLOUDINARY API KEY IF NON-SUBSCRIBER
  */
 const upload_media = (articleId) => {
-    execProcess( "getCldDetails",{x01: articleId}).then( (data) => {
+    execProcess( "cld-details","GET",articleId).then( (data) => {
         if (data.cldapikey==="Y") {
             widget.open();
             widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
@@ -220,7 +220,7 @@ const edit_text = (articleId,button) => {
         apex.item( "P2_RICH_TEXT_EDITOR" ).setValue("");
         apex.theme.openRegion("editor");
     } else {
-        execProcess( "getContent", {x01: gArticleId}, {loadingIndicator:button}).then( (data) => {
+        execProcess( "article-source","GET", gArticleId).then( (data) => {
             apex.item( "P2_RICH_TEXT_EDITOR" ).setValue(data.content);
             apex.theme.openRegion("editor");
             const title = document.querySelector("[data-id='" + articleId + "'] .title");
