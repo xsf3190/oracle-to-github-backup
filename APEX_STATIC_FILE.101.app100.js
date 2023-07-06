@@ -118,7 +118,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
     }
 
     execProcess( "client-info", "POST", {"timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, "maxtouchpoints": navigator.maxTouchPoints}).then( () => {
-        console.log("Client Time Zone set for APP_PAGE_ID",apex_page_id);
+        console.log("Client Time Zone set for page",apex_page_id);
     });
     
     addEventListener('visibilitychange', () => {
@@ -210,6 +210,7 @@ const execProcess = (template, method, input) => {
                 url += "/?id=" + input + "&user_id=" + user_id;
                 response = await fetch(url, {method: method});
             } else {
+                url += "/?user_id=" + user_id;
                 response = await fetch(url, {method: method, body: JSON.stringify(input)});
             }
 
