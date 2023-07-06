@@ -10,11 +10,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     FUNCTION getPageContent RETURN CLOB;
     --
-    PROCEDURE getCldDetails;
+    PROCEDURE getCldDetails(pArticleId IN article.id%type, pUserId IN VARCHAR2);
     --
-    PROCEDURE getCldSignature;
+    PROCEDURE getCldSignature(pParamsToSign IN CLOB, pUserId IN VARCHAR2);
     --
-    PROCEDURE getContent;
+    PROCEDURE getContentMD(pArticleId IN article.id%type, pUserId IN VARCHAR2);
     --
     PROCEDURE getContentHTML(pArticleId IN article.id%type, pUserId IN VARCHAR2);
     --
@@ -38,7 +38,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE saveArticle;
     --
-    PROCEDURE setClientInfo(pBodyText IN CLOB);
+    PROCEDURE setClientInfo(pBodyText IN CLOB, pUserId IN VARCHAR2);
     --
     PROCEDURE signout(pSessionId IN NUMBER, pUserId IN VARCHAR2);
     --
@@ -48,7 +48,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE uploadWebVitals(pBodyText IN CLOB);
     --
-    PROCEDURE uploadMetadata;
+    PROCEDURE uploadCldMetadata(pBodyText IN CLOB, pUserId IN VARCHAR2);
     --
     PROCEDURE uploadPerformance(pBodyText IN CLOB);
     --
@@ -342,9 +342,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 RAISE;
     END;
     
-    PROCEDURE getCldDetails IS
-        l_article_id article.id%type:=apex_application.g_x01;
-        l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
+    PROCEDURE getCldDetails(pArticleId IN article.id%type, pUserId IN VARCHAR2) IS
+        l_user_id users.id%type:=TO_NUMBER(pUserId);
         l_cld_cloud_name users.cld_cloud_name%type;
         l_cld_api_key users.cld_api_key%type;
         l_cld_api_secret users.cld_api_secret%type;
@@ -388,7 +387,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('maxImageFileSize', l_image_max_size);
             apex_json.write('maxVideoFileSize', l_video_max_size);
             apex_json.write('cldapikey', l_cldapikey);
-            apex_json.write('articleId', CASE WHEN l_article_id=0 THEN seq_article.nextval ELSE l_article_id END);
+            apex_json.write('articleId', CASE WHEN pArticleId=0 THEN seq_article.nextval ELSE pArticleId END);
             apex_json.close_object;
         
         EXCEPTION
@@ -396,12 +395,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
     
-    PROCEDURE getCldSignature IS
-        l_params_to_sign clob:=apex_application.g_clob_01;
-        l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
+    PROCEDURE getCldSignature(pParamsToSign IN CLOB, pUserId IN VARCHAR2) IS
+        l_params_to_sign clob:=pParamsToSign;
+        l_user_id users.id%type:=TO_NUMBER(pUserId);
         l_string_to_sign varchar2(2000):=NULL; 
     BEGIN
-        /* INSERT INTO log(procedure_name, message) VALUES ('generateCldSignature', 'pApexSession' || ': ' || pApexSession || ' pBodytext' || ': ' || pBodytext);*/
+        log(l_params_to_sign);
+        log('l_user_id:'||l_user_id);
         
         SELECT NVL2(filename_override,'filename_override='||filename_override||'&',NULL) ||
                NVL2(headers,'headers='||headers||'&',NULL) ||
@@ -436,16 +436,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      ** Set Time Zone according to client device. Procedure called on DOMContentLoaded event
      */
-    PROCEDURE setClientInfo(pBodyText IN CLOB)  IS
+    PROCEDURE setClientInfo(pBodyText IN CLOB, pUserId IN VARCHAR2)  IS
         l_bodytext CLOB:=pBodyText;
-        l_client_TZ users.client_tz%type:=apex_application.g_x01;
-        l_touchpoints NUMBER:=apex_application.g_x02;
+        l_client_TZ users.client_tz%type;
+        l_touchpoints NUMBER;
+        l_user_id users.id%type;
     BEGIN
+        IF (pUserId<>'null') THEN
+            l_user_id:=TO_NUMBER(pUserId);
+        END IF;
+        
         SELECT timezone
           INTO l_client_TZ
           FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' COLUMNS (timezone));
+          
+        UPDATE users SET client_tz=l_client_TZ, updated_date=current_timestamp WHERE id=l_user_id;
         
-        apex_util.set_session_state('APP_CLIENT_TZ',l_client_TZ,p_commit=>FALSE);
+        --apex_util.set_session_state('APP_CLIENT_TZ',l_client_TZ,p_commit=>FALSE);
         --apex_util.set_session_state('APP_MAXTOUCHPOINTS',l_touchpoints,p_commit=>FALSE);
         
         apex_json.open_object; 
@@ -646,11 +653,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         apex_session.delete_session(p_session_id=>pSessionId);
 
-
         owa_cookie.send(
-        name => 'ORA_WWV_APP_101',
-        value => null,
-        expires => sysdate -1, path =>'ords' );
+            name => 'ORA_WWV_APP_101',
+            value => null,
+            expires => sysdate -1, 
+            path =>'ords' );
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -668,7 +675,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **    - articles where PUBLIC=Y
      **
      **  Authenticated user -
-     **    - articles where PUBLIC=Y
+     **    - articles authored by user
      **    - first card is for creatng a new article
      **    - create menu and buttons to manage article
      */
@@ -1066,10 +1073,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Insert uploaded asset metadata into ASSETS table
      **  Return new asset count and url of first image as default cover image
      */       
-    PROCEDURE uploadMetadata IS
+    PROCEDURE uploadCldMetadata(pBodyText IN CLOB, pUserId IN VARCHAR2) IS
         l_article_id article.id%type;
-        l_metadata clob:=apex_application.g_clob_01;
-        l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
+        l_metadata clob:=pBodyText;
+        l_user_id users.id%type:=TO_NUMBER(pUserId);
         l_start_order PLS_INTEGER;
         l_updated_date article.updated_date%type:=current_timestamp;
         nb_assets PLS_INTEGER;
@@ -1275,10 +1282,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Get the selected article's content for Rich Text Editor (format is markdown).
      **
      */    
-    PROCEDURE getContent IS
-        l_article_id article.id%type:=apex_application.g_x01;
+    PROCEDURE getContentMD(pArticleId IN article.id%type, pUserId IN VARCHAR2) IS
+        l_user_id users.id%type:=TO_NUMBER(pUserId);
     BEGIN
-        FOR C IN (SELECT body FROM article WHERE id=l_article_id) 
+        FOR C IN (SELECT body 
+                    FROM article 
+                   WHERE id=pArticleId
+                     AND author_user_id=l_user_id) 
         LOOP
             apex_json.open_object; 
             apex_json.write('success', TRUE); 
