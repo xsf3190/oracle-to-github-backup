@@ -116,6 +116,24 @@ signout.addEventListener('click',  () => {
     });
 });
 
+let editor;
+ClassicEditor.create(document.querySelector("#editor"), {
+        autosave: {
+            save( editor ) {
+                return saveData( editor.getData() );
+            }
+        }
+    })
+    .then( (newEditor) => {
+        editor = newEditor;
+        const wordCountPlugin = editor.plugins.get( 'WordCount' );
+        const wordCountWrapper = document.getElementById( 'word-count' );
+        wordCountWrapper.appendChild( wordCountPlugin.wordCountContainer );
+    })
+    .catch(error => {
+        console.error(error);
+    });
+
 window.addEventListener("DOMContentLoaded", () => {
     if (navigator.maxTouchPoints > 1) {
             cards.addEventListener("touchstart",cardHandlerAuth);
@@ -214,21 +232,25 @@ const upload_media = (articleId) => {
 /* 
  ** GET CONTENT FOR RICH TEXT EDITOR 
  */
+const editorDialog = document.querySelector("dialog.editor");
+
 const edit_text = (articleId,button) => {
     gArticleId = articleId;
     if (articleId === "0") {
-        apex.item( "P2_RICH_TEXT_EDITOR" ).setValue("");
-        apex.theme.openRegion("editor");
+        editor.setData("");
+        editorDialog.showModal();
     } else {
-        execProcess( "article-source","GET", gArticleId).then( (data) => {
-            apex.item( "P2_RICH_TEXT_EDITOR" ).setValue(data.content);
-            apex.theme.openRegion("editor");
+        execProcess( "article","GET", gArticleId).then( (data) => {
+            editor.setData(data.content);
+            editorDialog.showModal();
+            /*
             const title = document.querySelector("[data-id='" + articleId + "'] .title");
             if (title) {
                 document.querySelector("#ui-id-1").textContent = title.textContent;
             } else {
                 document.querySelector("#ui-id-1").textContent = "Edit Text";
-            }  
+            } 
+            */ 
         });
     }
 }
