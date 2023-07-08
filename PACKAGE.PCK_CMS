@@ -823,6 +823,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <button type="button" class="close" autofocus>&times;</button>
                 </div>
             </dialog>
+            <dialog class="editor">
+                <div>
+                    <div></div>
+                    <div>
+                        <div id="editor"></div>
+                        <div id="word-count"></div>
+                    </div>
+                    <button type="button" class="close" autofocus>&times;</button>
+                </div>
+            </dialog>            
             <dialog class="gallery">
                 <div>
                     <button type="button" class="close" autofocus>&times;</button>
@@ -904,8 +914,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
               onLCP(addToVitalsQueue);
             </script>');
         END LOOP;
-        
-           
 
         RETURN (l_clob);
 
