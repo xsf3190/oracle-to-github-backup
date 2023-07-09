@@ -44,7 +44,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE updateAsset;
     --
-    PROCEDURE updateContent;
+    PROCEDURE updateContent(pBodyText IN CLOB, pArticleId IN article.id%type, pUserId IN VARCHAR2);
     --
     PROCEDURE uploadWebVitals(pBodyText IN CLOB);
     --
@@ -431,8 +431,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
     
-
-    
     /*
      ** Set Time Zone according to client device. Procedure called on DOMContentLoaded event
      */
@@ -441,7 +439,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_client_TZ users.client_tz%type;
         l_touchpoints NUMBER;
         l_user_id users.id%type;
+        l_names owa_cookie.vc_arr;
+        l_vals owa_cookie.vc_arr;
+        l_num_vals INTEGER;
     BEGIN
+        owa_cookie.get_all(
+            names => l_names,
+            vals => l_vals,
+            num_vals => l_num_vals);
+        FOR i IN 1..l_names.COUNT LOOP
+            log(l_names(i)||':'||l_vals(i));
+        END LOOP;
+        
         IF (pUserId<>'null') THEN
             l_user_id:=TO_NUMBER(pUserId);
         END IF;
@@ -1342,27 +1351,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Procedure called by the autoSave feature of CK5Editor
      */        
-    PROCEDURE updateContent IS
-        l_article_id article.id%type:=apex_application.g_x01; 
+    PROCEDURE updateContent(pBodyText IN CLOB, pArticleId IN article.id%type, pUserId IN VARCHAR2) IS
+        --l_article_id article.id%type:=apex_application.g_x01; 
         l_word_count_item VARCHAR2(50):=apex_application.g_x02;
         l_char_count_item VARCHAR2(50):=apex_application.g_x03;
         l_word_count NUMBER:=REGEXP_SUBSTR(l_word_count_item,'(\d)+');
         l_char_count NUMBER:=REGEXP_SUBSTR(l_char_count_item,'(\d)+');  
     BEGIN
         /* Ignore when CKEditor savedata function is called during widget initialization */
-        IF (l_article_id IS NULL) THEN
+        IF (pArticleId IS NULL) THEN
             RETURN;
         END IF;
         
-        IF (l_article_id=0) THEN
+        IF (pArticleId=0) THEN
             INSERT INTO article(id, author_user_id, created_date) VALUES (seq_article.nextval, apex_util.get_session_state('APP_USER_ID'), current_date);
         ELSE
-            UPDATE article SET body=apex_application.g_clob_01, word_count=l_word_count, char_count=l_char_count, updated_date=current_timestamp WHERE id=l_article_id;
+            UPDATE article SET body=pBodyText, word_count=l_word_count, char_count=l_char_count, updated_date=current_timestamp WHERE id=pArticleId;
         END IF;
         
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
-        IF (l_article_id=0) THEN
+        IF (pArticleId=0) THEN
             APEX_JSON.write('articleId',seq_article.currval);
         END IF;
         apex_json.close_object;
