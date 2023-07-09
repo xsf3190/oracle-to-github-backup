@@ -116,6 +116,17 @@ signout.addEventListener('click',  () => {
     });
 });
 
+/* 
+ ** RICH TEXT EDITOR AUTOSAVE FEATURE FUNCTION TO SEND UPDATED TEXT TO DATABASE. RETURNS data.articleId IF ARTICLE ROW WAS CREATED.
+ */
+const saveData = async ( data ) => {
+    execProcess("article", "POST", gArticleId, data).then( (data) => {
+        if (data.articleId) {
+            enable_card_zero(data.articleId);
+        }
+    });
+}
+
 let editor;
 ClassicEditor.create(document.querySelector("#editor"), {
         autosave: {
@@ -157,19 +168,6 @@ const enable_card_zero = (articleId) => {
     });
     gArticleId=articleId;
     return li;
-}
-
-/* 
- ** RICH TEXT EDITOR AUTOSAVE FEATURE FUNCTION TO SEND UPDATED TEXT TO DATABASE. RETURNS data.articleId IF ARTICLE ROW WAS CREATED.
- */
-const saveData = async ( data ) => {
-    execProcess("updateContent", {x01: gArticleId, x02: document.querySelector(".ck-word-count__words").textContent, 
-                                  x03: document.querySelector(".ck-word-count__characters").textContent, p_clob_01: data}).then( (data) => {
-        if (data.articleId) {
-            enable_card_zero(data.articleId);
-        }
-    });
-
 }
 
 if (window.location.hash === "#_=_"){
