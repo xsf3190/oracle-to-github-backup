@@ -20,12 +20,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     */
     PROCEDURE insert_user_login(p_auth_provider IN VARCHAR2, p_email IN VARCHAR2, p_name IN VARCHAR2) IS
         l_user_id users.id%type;
-        l_user_name users.name%type;
-        l_client_tz users.client_tz%type;
-        l_client_tz_session users.client_tz%type:=apex_util.get_session_state('APP_CLIENT_TZ');
+        --l_user_name users.name%type;
+        --l_client_tz users.client_tz%type;
+        --l_client_tz_session users.client_tz%type:=apex_util.get_session_state('APP_CLIENT_TZ');
         l_workspace_id apex_workspaces.workspace_id%type;
     BEGIN
-        pck_cms.log(APEX_APPLICATION.G_FLOW_ID||':'||APEX_APPLICATION.G_USER||':'||APEX_APPLICATION.G_INSTANCE);
+        pck_cms.log('post-authentication:'||APEX_APPLICATION.G_FLOW_ID||':'||APEX_APPLICATION.G_USER||':'||APEX_APPLICATION.G_INSTANCE);
+        
         SELECT workspace_id
           INTO l_workspace_id
           FROM apex_workspaces
@@ -35,36 +36,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 WHERE application_id = APEX_APPLICATION.G_FLOW_ID
                 );
     
-      FOR C IN (
-        SELECT apex_session_id
-          FROM apex_workspace_sessions
-         WHERE workspace_id = l_workspace_id
-           AND user_name = APEX_APPLICATION.G_USER
-           AND apex_session_id != APEX_APPLICATION.G_INSTANCE
-      )
-      LOOP
-        apex_session.delete_session(
-          p_session_id => C.apex_session_id
-        );
-      END LOOP;
+        FOR C IN (
+            SELECT apex_session_id
+              FROM apex_workspace_sessions
+             WHERE workspace_id = l_workspace_id
+               AND user_name = APEX_APPLICATION.G_USER
+               AND apex_session_id != APEX_APPLICATION.G_INSTANCE
+        )
+        LOOP
+            apex_session.delete_session(p_session_id => C.apex_session_id);
+        END LOOP;
     
-        INSERT INTO user_login(auth_provider,email,name) VALUES (p_auth_provider, p_email, p_name);
+        INSERT INTO user_login(auth_provider,email,name,apex_session_id) VALUES (p_auth_provider, p_email, p_name, APEX_APPLICATION.G_INSTANCE);
         
         BEGIN
-            SELECT id, name
-              INTO l_user_id, l_user_name
-              FROM users WHERE email=p_email;
+            SELECT id
+              INTO l_user_id
+              FROM users 
+             WHERE email=p_email;
             
-            UPDATE users SET name=p_name, client_tz=l_client_tz_session, last_login_date=current_timestamp, last_login_provider=p_auth_provider WHERE id=l_user_id;
+            UPDATE users 
+               SET name=p_name, apex_session_id=APEX_APPLICATION.G_INSTANCE, last_login_date=current_timestamp, last_login_provider=p_auth_provider 
+             WHERE id=l_user_id;
             
             EXCEPTION WHEN NO_DATA_FOUND 
             THEN
-                INSERT INTO users(email, name, client_tz, last_login_date, last_login_provider) 
-                VALUES (p_email, p_name, l_client_tz_session, current_timestamp, p_auth_provider) 
-                RETURNING id, name INTO l_user_id, l_user_name;
+                INSERT INTO users(email, name, apex_session_id, last_login_date, last_login_provider) 
+                VALUES (p_email, p_name, APEX_APPLICATION.G_INSTANCE, current_timestamp, p_auth_provider);
+                --RETURNING id, name INTO l_user_id, l_user_name;
         END;
-        apex_util.set_session_state('APP_USER_ID',l_user_id);
-        apex_util.set_session_state('APP_USER_NAME',l_user_name);
+        --apex_util.set_session_state('APP_USER_ID',l_user_id);
+        --apex_util.set_session_state('APP_USER_NAME',l_user_name);
         
         COMMIT;
     END;    
