@@ -133,15 +133,6 @@ window.addEventListener("DOMContentLoaded", (event) => {
         }, { capture: true} );
     }
 });
-/*
-const sendBeacon = () => {
-    if (gPerfObj.images.length) {
-        execProcess("uploadPerformance",{p_clob_01: JSON.stringify(gPerfObj)}).then( () => {
-            gPerfObj.images.length = 0;
-        });
-    }
-}
-*/
 
 /*
 **  BATCH PERFORMANCE ENTRIES IN ARRAY TO AVOID TOO MANY DATABASE PROCESS CALLS
@@ -202,16 +193,10 @@ const execProcess = (template, method, input) => {
             let url = gRestUrl + template;
             let response;
             
-            let user_id=document.querySelector("#user-id");
-            if (user_id) {
-                user_id=user_id.dataset.id
-            }
             if (method==="GET" || method==="DELETE") {
-                url += "/?id=" + input + "&user_id=" + user_id;
-                response = await fetch(url, {method: method});
+                response = await fetch(url, {method: method, headers: {"Apex-Session": apex_app_id + "," + apex_session}});
             } else {
-                url += "/?user_id=" + user_id;
-                response = await fetch(url, {method: method, body: JSON.stringify(input)});
+                response = await fetch(url, {method: method, headers: {"Apex-Session": apex_app_id + "," + apex_session}, body: JSON.stringify(input)});
             }
 
             const data = await response.json();
@@ -239,7 +224,7 @@ const popupOpen = (heading, text) => {
  ** GET CONTENT FOR PREVIEW DIALOG 
  */
 const preview_article = (articleId,button) => {
-    execProcess( "article","GET", articleId).then( (data) => {
+    execProcess( "article/"+articleId,"GET").then( (data) => {
         const content = preview.querySelector(".content");
         content.innerHTML = data.content;
         const ele = content.firstElementChild;
@@ -253,8 +238,7 @@ const preview_article = (articleId,button) => {
  ** OPEN GALLERY FOR SELECTED ARTICLE
  */
 const show_gallery = (articleId) => {
-    //execProcess( "getThumbnails", {x01: articleId, x02: navigator.maxTouchPoints}).then( (data) => {
-    execProcess( "gallery","GET",articleId).then( (data) => {
+    execProcess( "gallery/"+articleId,"GET").then( (data) => {
         gallery.showModal();
         galleryInstruction.replaceChildren();
         galleryInstruction.insertAdjacentHTML('afterbegin',data.instruction);
