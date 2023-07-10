@@ -10,17 +10,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     FUNCTION getPageContent RETURN CLOB;
     --
-    PROCEDURE getCldDetails(pArticleId IN article.id%type, pUserId IN VARCHAR2);
+    PROCEDURE getCldDetails(pArticleId IN article.id%type);
     --
-    PROCEDURE getCldSignature(pParamsToSign IN CLOB, pUserId IN VARCHAR2);
+    PROCEDURE getCldSignature(pParamsToSign IN CLOB);
     --
-    PROCEDURE getContentMD(pArticleId IN article.id%type, pUserId IN VARCHAR2);
-    --
-    PROCEDURE getContentHTML(pArticleId IN article.id%type, pUserId IN VARCHAR2);
+    PROCEDURE getArticle(pArticleId IN article.id%type);
     --
     PROCEDURE getPerformance;
     --
-    PROCEDURE getThumbnails(pArticleId IN article.id%type, pUserId IN VARCHAR2);
+    PROCEDURE getThumbnails(pArticleId IN article.id%type);
     --
     PROCEDURE getUsage(pUserId IN users.id%type DEFAULT NULL, pUsageDate IN DATE DEFAULT NULL);
     --
@@ -38,9 +36,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE saveArticle;
     --
-    PROCEDURE setClientInfo(pBodyText IN CLOB, pUserId IN VARCHAR2);
+    PROCEDURE setClientInfo(pBodyText IN CLOB);
     --
-    PROCEDURE signout(pSessionId IN NUMBER, pUserId IN VARCHAR2);
+    PROCEDURE signout;
     --
     PROCEDURE updateAsset;
     --
@@ -48,7 +46,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE uploadWebVitals(pBodyText IN CLOB);
     --
-    PROCEDURE uploadCldMetadata(pBodyText IN CLOB, pUserId IN VARCHAR2);
+    PROCEDURE uploadCldMetadata(pBodyText IN CLOB);
     --
     PROCEDURE uploadPerformance(pBodyText IN CLOB);
     --
@@ -342,8 +340,57 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 RAISE;
     END;
     
-    PROCEDURE getCldDetails(pArticleId IN article.id%type, pUserId IN VARCHAR2) IS
-        l_user_id users.id%type:=TO_NUMBER(pUserId);
+    PROCEDURE getApexSession(pAppId IN OUT NUMBER, pSessionId IN OUT NUMBER) IS
+        l_apex_session VARCHAR2(100):=OWA_UTIL.get_cgi_env('Apex-Session');
+    BEGIN
+        pAppId:=SUBSTR(l_apex_session,1,INSTR(l_apex_session,',')-1);
+        pSessionId:=SUBSTR(l_apex_session,INSTR(l_apex_session,',')+1);
+    END;
+    
+    FUNCTION getUserId(pSaveCookie BOOLEAN DEFAULT FALSE) RETURN users.id%type IS
+        k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
+        k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);   
+        l_names owa_cookie.vc_arr;
+        l_vals owa_cookie.vc_arr;
+        l_num_vals INTEGER;
+        
+        l_app_id NUMBER;
+        l_session_id users.apex_session_id%type;
+        l_apex_cookie_value users.apex_cookie_value%type;
+        l_user_id users.id%type;
+    BEGIN
+        log('Starting getUserId called from '||k_calling_package||'.'||k_calling_subprog);
+        
+        getApexSession(l_app_id, l_session_id);
+        
+        BEGiN
+            SELECT u.id, apex_cookie_value
+              INTO l_user_id, l_apex_cookie_value
+              FROM apex_workspace_sessions s, users u
+             WHERE s.apex_session_id=l_session_id
+               AND s.user_name=u.email;
+            EXCEPTION
+                WHEN NO_DATA_FOUND THEN RETURN(NULL);
+        END;
+        
+        /* Additional check that session cookie is valid */
+        owa_cookie.get_all(names => l_names, vals => l_vals, num_vals => l_num_vals);
+        FOR i IN 1..l_names.COUNT LOOP
+            IF (l_names(i)='ORA_WWV_APP_' || l_app_id) THEN
+                IF (pSaveCookie) THEN
+                    UPDATE users SET apex_cookie_value=l_vals(i) WHERE id=l_user_id;
+                ELSIF (l_apex_cookie_value<>l_vals(i)) THEN
+                    RAISE_APPLICATION_ERROR(-20000,'SESSION COOKIE VALUE HAS CHANGED');
+                END IF;
+            END IF;
+        END LOOP;
+
+        RETURN (l_user_id);
+    END;    
+        
+    
+    PROCEDURE getCldDetails(pArticleId IN article.id%type) IS
+        l_user_id users.id%type:=getUserId();
         l_cld_cloud_name users.cld_cloud_name%type;
         l_cld_api_key users.cld_api_key%type;
         l_cld_api_secret users.cld_api_secret%type;
@@ -395,14 +442,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
     
-    PROCEDURE getCldSignature(pParamsToSign IN CLOB, pUserId IN VARCHAR2) IS
+    PROCEDURE getCldSignature(pParamsToSign IN CLOB) IS
         l_params_to_sign clob:=pParamsToSign;
-        l_user_id users.id%type:=TO_NUMBER(pUserId);
+        l_user_id users.id%type:=getUserId();
         l_string_to_sign varchar2(2000):=NULL; 
     BEGIN
-        log(l_params_to_sign);
-        log('l_user_id:'||l_user_id);
-        
         SELECT NVL2(filename_override,'filename_override='||filename_override||'&',NULL) ||
                NVL2(headers,'headers='||headers||'&',NULL) ||
                NVL2(source,'source='||source||'&',NULL) ||
@@ -434,35 +478,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      ** Set Time Zone according to client device. Procedure called on DOMContentLoaded event
      */
-    PROCEDURE setClientInfo(pBodyText IN CLOB, pUserId IN VARCHAR2)  IS
+    PROCEDURE setClientInfo(pBodyText IN CLOB) IS
         l_bodytext CLOB:=pBodyText;
         l_client_TZ users.client_tz%type;
-        l_touchpoints NUMBER;
+        l_maxtouchpoints NUMBER;
         l_user_id users.id%type;
-        l_names owa_cookie.vc_arr;
-        l_vals owa_cookie.vc_arr;
-        l_num_vals INTEGER;
     BEGIN
-        owa_cookie.get_all(
-            names => l_names,
-            vals => l_vals,
-            num_vals => l_num_vals);
-        FOR i IN 1..l_names.COUNT LOOP
-            log(l_names(i)||':'||l_vals(i));
-        END LOOP;
+        l_user_id:=getUserId(pSaveCookie=>TRUE);
         
-        IF (pUserId<>'null') THEN
-            l_user_id:=TO_NUMBER(pUserId);
+        IF (l_user_id IS NOT NULL) THEN
+            SELECT timezone, maxtouchpoints
+              INTO l_client_TZ, l_maxtouchpoints
+              FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' COLUMNS (timezone, maxtouchpoints));
+            UPDATE users SET client_tz=l_client_TZ, maxtouchpoints=l_maxtouchpoints, updated_date=current_timestamp WHERE id=l_user_id;          
         END IF;
-        
-        SELECT timezone
-          INTO l_client_TZ
-          FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' COLUMNS (timezone));
-          
-        UPDATE users SET client_tz=l_client_TZ, updated_date=current_timestamp WHERE id=l_user_id;
-        
-        --apex_util.set_session_state('APP_CLIENT_TZ',l_client_TZ,p_commit=>FALSE);
-        --apex_util.set_session_state('APP_MAXTOUCHPOINTS',l_touchpoints,p_commit=>FALSE);
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -656,18 +685,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     
-    PROCEDURE signout(pSessionId IN NUMBER, pUserId IN VARCHAR2) IS
+    PROCEDURE signout IS
+        l_app_id NUMBER;
+        l_session_id NUMBER;
     BEGIN
-        log('Logout:'||pSessionId||','||pUserId);
+        getApexSession(l_app_id, l_session_id);
 
-        apex_session.delete_session(p_session_id=>pSessionId);
-
+        apex_session.delete_session(p_session_id=>l_session_id);
+        /*
         owa_cookie.send(
             name => 'ORA_WWV_APP_101',
             value => null,
             expires => sysdate -1, 
             path =>'ords' );
-        
+        */
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.close_object;
@@ -1060,16 +1091,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Build gallery of thumbnail images from ASSET table 
      **  Executed in response to user requesting gallery of media assets for a given article
      */
-    PROCEDURE getThumbnails(pArticleId IN article.id%type, pUserId IN VARCHAR2) IS
+    PROCEDURE getThumbnails(pArticleId IN article.id%type) IS
         l_clob CLOB;
-        l_user_id users.id%type;
+        l_user_id users.id%type:=getUserId();
         l_instruction VARCHAR2(300);
         n PLS_INTEGER;
     BEGIN
-        IF (pUserId<>'null') THEN
-            l_user_id:=TO_NUMBER(pUserId);
-        END IF;
-        
         getThumbnailContent(pArticleId, l_user_id, n, l_instruction, l_clob);
 
         apex_json.open_object; 
@@ -1090,10 +1117,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Insert uploaded asset metadata into ASSETS table
      **  Return new asset count and url of first image as default cover image
      */       
-    PROCEDURE uploadCldMetadata(pBodyText IN CLOB, pUserId IN VARCHAR2) IS
+    PROCEDURE uploadCldMetadata(pBodyText IN CLOB) IS
         l_article_id article.id%type;
         l_metadata clob:=pBodyText;
-        l_user_id users.id%type:=TO_NUMBER(pUserId);
+        l_user_id users.id%type:=getUserId();
         l_start_order PLS_INTEGER;
         l_updated_date article.updated_date%type:=current_timestamp;
         nb_assets PLS_INTEGER;
@@ -1323,18 +1350,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Get the selected article's content in HTML format
      **
      */    
-    PROCEDURE getContentHTML(pArticleId IN article.id%type, pUserId IN VARCHAR2)  IS
+    PROCEDURE getArticle(pArticleId IN article.id%type)  IS
         l_user_id users.id%type;
     BEGIN
-        IF (pUserId<>'null') THEN
-            l_user_id:=TO_NUMBER(pUserId);
-        END IF;
+        l_user_id:=getUserId();
+
         FOR C IN (SELECT a.body_html, UPPER(u.name) name, apex_util.get_since(a.created_date) created, CASE WHEN a.word_count<200 THEN 'less than a minute' ELSE ROUND(a.word_count/200) || ' minute read' END minutes 
                     FROM article a, users u 
                    WHERE a.id=pArticleId 
-                     AND a.author_user_id=u.id
                      AND a.author_user_id=NVL(l_user_id,a.author_user_id)
-                     AND a.is_public=CASE WHEN l_user_id IS NULL THEN 'Y' ELSE a.is_public END)
+                     AND a.is_public=CASE WHEN l_user_id IS NULL THEN 'Y' ELSE a.is_public END
+                     AND a.author_user_id=u.id )
         LOOP
             apex_json.open_object; 
             apex_json.write('success', TRUE); 
