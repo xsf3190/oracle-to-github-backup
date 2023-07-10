@@ -111,7 +111,7 @@ new Sortable(galleryList, {
  */
 const signout = document.querySelector(".signout");
 signout.addEventListener('click',  () => {
-    execProcess("signout","GET",apex_session).then( () => {
+    execProcess("signout","DELETE").then( () => {
         history.back();
     });
 });
@@ -208,7 +208,7 @@ if (add_card) {
  ** UPLOAD MEDIA. PROMPT FOR CLOUDINARY API KEY IF NON-SUBSCRIBER
  */
 const upload_media = (articleId) => {
-    execProcess( "cld-details","GET",articleId).then( (data) => {
+    execProcess( "cld-details/"+articleId,"GET").then( (data) => {
         if (data.cldapikey==="Y") {
             widget.open();
             widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
