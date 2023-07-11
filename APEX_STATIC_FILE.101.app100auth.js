@@ -120,7 +120,8 @@ signout.addEventListener('click',  () => {
  ** RICH TEXT EDITOR AUTOSAVE FEATURE FUNCTION TO SEND UPDATED TEXT TO DATABASE. RETURNS data.articleId IF ARTICLE ROW WAS CREATED.
  */
 const saveData = async ( data ) => {
-    execProcess("article", "POST", gArticleId, data).then( (data) => {
+    //console.log("saveData");
+    await execProcess("article/"+gArticleId, "PUT",  data).then( (data) => {
         if (data.articleId) {
             enable_card_zero(data.articleId);
         }
@@ -131,9 +132,14 @@ let editor;
 ClassicEditor.create(document.querySelector("#editor"), {
         autosave: {
             save( editor ) {
+                //console.log("autosave",editorx);
                 return saveData( editor.getData() );
             }
-        }
+        },
+        title: {
+            placeholder: 'Enter title for article'
+        },
+        placeholder: 'Enter article content'
     })
     .then( (newEditor) => {
         editor = newEditor;
@@ -238,7 +244,7 @@ const edit_text = (articleId,button) => {
         editor.setData("");
         editorDialog.showModal();
     } else {
-        execProcess( "article","GET", gArticleId).then( (data) => {
+        execProcess( "article/"+gArticleId,"GET").then( (data) => {
             editor.setData(data.content);
             editorDialog.showModal();
             /*
