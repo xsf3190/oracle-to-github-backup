@@ -42,7 +42,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE updateAsset;
     --
-    PROCEDURE updateContent(pBodyText IN CLOB, pArticleId IN article.id%type, pUserId IN VARCHAR2);
+    PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
     --
     PROCEDURE uploadWebVitals(pBodyText IN CLOB);
     --
@@ -742,7 +742,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_clob:=l_clob || TO_CLOB(
                 '<nav>
                     <button type="button" class="add-card">NEW CONTENT</button>
-                    <span id="user-id" data-id="' || C.id || '">' || apex_application.g_user || '</span>
+                    <span>' || apex_application.g_user || '</span>
                     <button type="button" class="signout">SIGN OUT</button>
                  </nav>');
             END LOOP;
@@ -1377,7 +1377,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Procedure called by the autoSave feature of CK5Editor
      */        
-    PROCEDURE updateContent(pBodyText IN CLOB, pArticleId IN article.id%type, pUserId IN VARCHAR2) IS
+    PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
         --l_article_id article.id%type:=apex_application.g_x01; 
         l_word_count_item VARCHAR2(50):=apex_application.g_x02;
         l_char_count_item VARCHAR2(50):=apex_application.g_x03;
@@ -1385,6 +1385,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_char_count NUMBER:=REGEXP_SUBSTR(l_char_count_item,'(\d)+');  
     BEGIN
         /* Ignore when CKEditor savedata function is called during widget initialization */
+
         IF (pArticleId IS NULL) THEN
             RETURN;
         END IF;
@@ -1392,7 +1393,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         IF (pArticleId=0) THEN
             INSERT INTO article(id, author_user_id, created_date) VALUES (seq_article.nextval, apex_util.get_session_state('APP_USER_ID'), current_date);
         ELSE
-            UPDATE article SET body=pBodyText, word_count=l_word_count, char_count=l_char_count, updated_date=current_timestamp WHERE id=pArticleId;
+   --         UPDATE article SET body=pBodyText, word_count=l_word_count, char_count=l_char_count, updated_date=current_timestamp WHERE id=pArticleId;
+            UPDATE article SET body_html=pBodyText, updated_date=current_timestamp WHERE id=pArticleId;
         END IF;
         
         APEX_JSON.open_object; 
