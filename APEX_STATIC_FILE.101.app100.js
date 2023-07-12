@@ -188,26 +188,28 @@ const perfObserver = (list) => {
  ** CALLS AJAX PROCESS RETURNING DATA
  */
 const execProcess = (template, method, input) => {
-    return new Promise( async resolve => {
+    return new Promise( async (resolve,reject) => {
         try {
-            let url = gRestUrl + template;
+            const url = gRestUrl + template,
+                  session = apex_app_id + "," + apex_session;
+
             let response;
             
             if (method==="GET" || method==="DELETE") {
-                response = await fetch(url, {method: method, headers: {"Apex-Session": apex_app_id + "," + apex_session}});
+                response = await fetch(url, {method: method, headers: {"Apex-Session": session}});
             } else {
-                response = await fetch(url, {method: method, headers: {"Apex-Session": apex_app_id + "," + apex_session}, body: JSON.stringify(input)});
+                response = await fetch(url, {method: method, headers: {"Apex-Session": session}, body: JSON.stringify(input)});
             }
 
             const data = await response.json();
             if (data.success) {
                 resolve(data);
             } else {
-                popupOpen("FAILURE IN ORACLE SERVER PROCESS", data.sqlerrm);
+                //popupOpen("FAILURE IN ORACLE SERVER PROCESS", data.sqlerrm);
+                reject(data.sqlerrm);
             }
         } catch (e) {
-            console.log('Booo');
-            console.log(e);
+            console.error("execProcess",e);
         }
     });
 }
