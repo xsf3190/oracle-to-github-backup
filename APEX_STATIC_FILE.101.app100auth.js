@@ -121,35 +121,51 @@ signout.addEventListener('click',  () => {
  */
 const saveData = async ( data ) => {
     //console.log("saveData");
-    await execProcess("article/"+gArticleId, "PUT",  data).then( (data) => {
+    const word_count = document.querySelector(".ck-word-count__words").textContent;
+    const title = document.querySelector(".ck > h1").textContent;
+    await execProcess("article/"+gArticleId, "PUT",  {edit_text: data, title: title, word_count: word_count}).then( (data) => {
         if (data.articleId) {
             enable_card_zero(data.articleId);
         }
-    });
+    }).catch( (error) => console.error(error));
 }
 
 let editor;
 ClassicEditor.create(document.querySelector("#editor"), {
         autosave: {
             save( editor ) {
-                //console.log("autosave",editorx);
                 return saveData( editor.getData() );
             }
         },
         title: {
             placeholder: 'Enter title for article'
         },
-        placeholder: 'Enter article content'
+        placeholder: 'Enter article content',
+        wordCount: {displayCharacters: false}
     })
     .then( (newEditor) => {
         editor = newEditor;
         const wordCountPlugin = editor.plugins.get( 'WordCount' );
         const wordCountWrapper = document.getElementById( 'word-count' );
         wordCountWrapper.appendChild( wordCountPlugin.wordCountContainer );
+        displayStatus(editor);
     })
     .catch(error => {
         console.error(error);
     });
+
+const displayStatus = ( editor ) => {
+    const pendingActions = editor.plugins.get( 'PendingActions' );
+    const statusIndicator = document.querySelector( '#editor-status' );
+
+    pendingActions.on( 'change:hasAny', ( evt, propertyName, newValue ) => {
+        if ( newValue ) {
+            statusIndicator.textContent = "Saving";
+        } else {
+            statusIndicator.textContent = "Saved Successfully";
+        }
+    } );
+}    
 
 window.addEventListener("DOMContentLoaded", () => {
     if (navigator.maxTouchPoints > 1) {
@@ -245,7 +261,9 @@ const edit_text = (articleId,button) => {
         editorDialog.showModal();
     } else {
         execProcess( "article/"+gArticleId,"GET").then( (data) => {
-            editor.setData(data.content);
+            if (data.content) {
+                editor.setData(data.content);
+            }
             editorDialog.showModal();
             /*
             const title = document.querySelector("[data-id='" + articleId + "'] .title");
