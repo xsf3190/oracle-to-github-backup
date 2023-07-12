@@ -869,6 +869,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <div>
                         <div id="editor"></div>
                         <div id="word-count"></div>
+                        <div id="editor-status"></div>
                     </div>
                     <button type="button" class="close" autofocus>&times;</button>
                 </div>
@@ -1323,30 +1324,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     /*
-     **  Get the selected article's content for Rich Text Editor (format is markdown).
-     **
-     */    
-    PROCEDURE getContentMD(pArticleId IN article.id%type, pUserId IN VARCHAR2) IS
-        l_user_id users.id%type:=TO_NUMBER(pUserId);
-    BEGIN
-        FOR C IN (SELECT body 
-                    FROM article 
-                   WHERE id=pArticleId
-                     AND author_user_id=l_user_id) 
-        LOOP
-            apex_json.open_object; 
-            apex_json.write('success', TRUE); 
-            apex_json.write('content', C.body); 
-            apex_json.close_object;
-        END LOOP;
-        
-        EXCEPTION
-            WHEN NO_DATA_FOUND THEN NULL;
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm, pAjax=>TRUE);
-    END;
-    
-    /*
      **  Get the selected article's content in HTML format
      **
      */    
@@ -1378,24 +1355,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Procedure called by the autoSave feature of CK5Editor
      */        
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
-        --l_article_id article.id%type:=apex_application.g_x01; 
-        l_word_count_item VARCHAR2(50):=apex_application.g_x02;
-        l_char_count_item VARCHAR2(50):=apex_application.g_x03;
-        l_word_count NUMBER:=REGEXP_SUBSTR(l_word_count_item,'(\d)+');
-        l_char_count NUMBER:=REGEXP_SUBSTR(l_char_count_item,'(\d)+');  
+        --l_word_count NUMBER:=REGEXP_SUBSTR(l_word_count_item,'(\d)+');
+        --l_char_count NUMBER:=REGEXP_SUBSTR(l_char_count_item,'(\d)+'); 
+        l_user_id users.id%type:=getUserId();
+        l_article_id article.id%type;
     BEGIN
-        /* Ignore when CKEditor savedata function is called during widget initialization */
-
-        IF (pArticleId IS NULL) THEN
-            RETURN;
-        END IF;
-        
-        IF (pArticleId=0) THEN
-            INSERT INTO article(id, author_user_id, created_date) VALUES (seq_article.nextval, apex_util.get_session_state('APP_USER_ID'), current_date);
-        ELSE
-   --         UPDATE article SET body=pBodyText, word_count=l_word_count, char_count=l_char_count, updated_date=current_timestamp WHERE id=pArticleId;
-            UPDATE article SET body_html=pBodyText, updated_date=current_timestamp WHERE id=pArticleId;
-        END IF;
+        MERGE INTO article t
+            USING (
+                SELECT title, REGEXP_SUBSTR(word_count,'(\d)+') word_count, edit_text
+                FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (title, word_count, edit_text)) ) s
+            ON (t.id=pArticleId AND t.author_user_id=l_user_id)
+            WHEN NOT MATCHED THEN
+                INSERT (id, author_user_id, body_html, created_date) VALUES (seq_article.nextval, l_user_id, s.edit_text, current_date)
+            WHEN MATCHED THEN
+                UPDATE SET title=s.title, word_count=s.word_count, body_html=s.edit_text, updated_date=current_timestamp;
         
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
@@ -1808,7 +1781,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     /*
-     **  Upload Core Web Vitals sent via navigator.beacon - hence no response sent.
+     **  Upload Core Web Vitals uploaded through navigator.beacon - hence no response sent.
      */      
     PROCEDURE uploadWebVitals(pBodyText IN CLOB) IS
         l_bodytext CLOB:=pBodyText;
