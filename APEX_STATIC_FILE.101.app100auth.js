@@ -120,7 +120,6 @@ signout.addEventListener('click',  () => {
  ** RICH TEXT EDITOR AUTOSAVE FEATURE FUNCTION TO SEND UPDATED TEXT TO DATABASE. RETURNS data.articleId IF ARTICLE ROW WAS CREATED.
  */
 const saveData = async ( data ) => {
-    //console.log("saveData");
     const word_count = document.querySelector(".ck-word-count__words").textContent;
     const title = document.querySelector(".ck > h1").textContent;
     await execProcess("article/"+gArticleId, "PUT",  {edit_text: data, title: title, word_count: word_count}).then( (data) => {
@@ -133,6 +132,7 @@ const saveData = async ( data ) => {
 let editor;
 ClassicEditor.create(document.querySelector("#editor"), {
         autosave: {
+            waitingTime: 5000,
             save( editor ) {
                 return saveData( editor.getData() );
             }
@@ -210,21 +210,19 @@ const makeSuccess = (el) => {
  ** ADD NEW CARD
  */
 const add_card = document.querySelector(".add-card");
-if (add_card) {
-    add_card.addEventListener('click',  e => {
-        // check that there isn't already a new card - i.e. the 2nd card with data-id="0" meaning that no content has yet been added to it
-        if (cards.childElementCount>1 && cards.children[1].dataset.id === "0") {
-            popupOpen("No need to do that","... you already opened a new card");
-            return;
-        }
-        let first_card = document.querySelector(".card:first-child");
-        let clone = first_card.cloneNode(true);
-        first_card.style.display = "grid";
-        first_card.insertAdjacentElement('beforebegin',clone);
-        first_card.dataset.id = "0";
-        first_card.querySelector(".fa-id-card").textContent = "0";
-    });
-}
+add_card.addEventListener('click',  e => {
+    // check that there isn't already a new card - i.e. the 2nd card with data-id="0" meaning that no content has yet been added to it
+    if (cards.childElementCount>1 && cards.children[1].dataset.id === "0") {
+        popupOpen("No need to do that","... you already opened a new card");
+        return;
+    }
+    let first_card = document.querySelector(".card:first-child");
+    let clone = first_card.cloneNode(true);
+    first_card.style.display = "grid";
+    first_card.insertAdjacentElement('beforebegin',clone);
+    first_card.dataset.id = "0";
+    first_card.querySelector(".fa-id-card").textContent = "0";
+});
 
 /* 
  ** UPLOAD MEDIA. PROMPT FOR CLOUDINARY API KEY IF NON-SUBSCRIBER
@@ -260,10 +258,13 @@ const edit_text = (articleId,button) => {
         editor.setData("");
         editorDialog.showModal();
     } else {
-        execProcess( "article/"+gArticleId,"GET").then( (data) => {
+        execProcess( "article/"+articleId,"GET").then( (data) => {
             if (data.content) {
                 editor.setData(data.content);
+            } else {
+                editor.setData("");
             }
+            
             editorDialog.showModal();
             /*
             const title = document.querySelector("[data-id='" + articleId + "'] .title");
