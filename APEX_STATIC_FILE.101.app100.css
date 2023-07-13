@@ -539,7 +539,9 @@ nav button.fa {
 /* ******************************** */
 /* OVERRIDE CKEDITOR DEFAULT STYLES */
 /* ******************************** */
-
+.ck-content {
+    height: 90vh;
+}
 
 .ck-content > * + * {
     margin-top: var(--space-s);
@@ -570,7 +572,7 @@ nav button.fa {
 }
 
 .ck-content pre code {
-    font-size: 115%;
+    //font-size: 115%;
     /*white-space: pre-wrap;*/
     overflow-x: auto;
     display: block;
