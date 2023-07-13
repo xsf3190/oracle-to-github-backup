@@ -684,7 +684,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
-    
+    /*
+    ** Logout authenticated session
+    */
     PROCEDURE signout IS
         l_app_id NUMBER;
         l_session_id NUMBER;
@@ -1114,7 +1116,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     
     /*
      **  Load metadata after media uploaded to Cloudinary.
-     **  Cloudinary metadata received as JSON in apex_application.g_clob_01
      **  Insert uploaded asset metadata into ASSETS table
      **  Return new asset count and url of first image as default cover image
      */       
@@ -1352,7 +1353,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;    
 
     /*
-     **  Procedure called by the autoSave feature of CK5Editor
+     **  Procedure called by the autoSave feature of CKEditor
      */        
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
         --l_word_count NUMBER:=REGEXP_SUBSTR(l_word_count_item,'(\d)+');
@@ -1362,13 +1363,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         MERGE INTO article t
             USING (
-                SELECT title, REGEXP_SUBSTR(word_count,'(\d)+') word_count, edit_text
+                SELECT title, 
+                       REGEXP_SUBSTR(word_count,'(\d)+') word_count, 
+                       SUBSTR(apex_escape.striphtml(edit_text),LENGTH(title)+1,160) excerpt, 
+                       edit_text
                 FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (title, word_count, edit_text)) ) s
             ON (t.id=pArticleId AND t.author_user_id=l_user_id)
             WHEN NOT MATCHED THEN
-                INSERT (id, author_user_id, body_html, created_date) VALUES (seq_article.nextval, l_user_id, s.edit_text, current_date)
+                INSERT (id, author_user_id, excerpt, word_count, body_html, created_date) VALUES (seq_article.nextval, l_user_id, s.excerpt, s.word_count, s.edit_text, current_date)
             WHEN MATCHED THEN
-                UPDATE SET title=s.title, word_count=s.word_count, body_html=s.edit_text, updated_date=current_timestamp;
+                UPDATE SET title=s.title, excerpt=s.excerpt, word_count=s.word_count, body_html=s.edit_text, updated_date=current_timestamp;
         
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
