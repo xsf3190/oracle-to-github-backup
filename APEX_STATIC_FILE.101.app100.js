@@ -39,6 +39,7 @@ document.querySelectorAll("button.close").forEach((button) => {
 });
 
 const addToVitalsQueue = (metric) => {
+    console.log(metric.name,metric.value);
     vitalsQueue.add(metric);
 }
 
