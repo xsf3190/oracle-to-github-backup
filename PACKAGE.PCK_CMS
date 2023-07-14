@@ -348,8 +348,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     FUNCTION getUserId(pSaveCookie BOOLEAN DEFAULT FALSE) RETURN users.id%type IS
-        k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
-        k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);   
         l_names owa_cookie.vc_arr;
         l_vals owa_cookie.vc_arr;
         l_num_vals INTEGER;
@@ -358,12 +356,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_session_id users.apex_session_id%type;
         l_apex_cookie_value users.apex_cookie_value%type;
         l_user_id users.id%type;
-    BEGIN
-        log('Starting getUserId called from '||k_calling_package||'.'||k_calling_subprog);
-        
+    BEGIN        
         getApexSession(l_app_id, l_session_id);
         
-        BEGiN
+        BEGIN
             SELECT u.id, apex_cookie_value
               INTO l_user_id, l_apex_cookie_value
               FROM apex_workspace_sessions s, users u
@@ -1356,14 +1352,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Procedure called by the autoSave feature of CKEditor
      */        
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
-        --l_word_count NUMBER:=REGEXP_SUBSTR(l_word_count_item,'(\d)+');
-        --l_char_count NUMBER:=REGEXP_SUBSTR(l_char_count_item,'(\d)+'); 
         l_user_id users.id%type:=getUserId();
         l_article_id article.id%type;
     BEGIN
         MERGE INTO article t
             USING (
-                SELECT title, 
+                SELECT SUBSTR(title,1,60) title, 
                        REGEXP_SUBSTR(word_count,'(\d)+') word_count, 
                        SUBSTR(apex_escape.striphtml(edit_text),LENGTH(title)+1,160) excerpt, 
                        edit_text
