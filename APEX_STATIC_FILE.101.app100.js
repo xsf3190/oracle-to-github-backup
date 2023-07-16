@@ -45,8 +45,8 @@ const addToVitalsQueue = (metric) => {
 
 const flushQueues = () => {
     if (vitalsQueue.size > 0) {    
-        const body = JSON.stringify([...vitalsQueue]);
-        let url = gRestUrl + "web-vitals" + "?session=" + apex_session + "&browser=" + gBrowser + "&width=" + window.innerWidth;
+        const body =JSON.stringify( {session_id:apex_session, page_id: apex_page_id, cwv: [...vitalsQueue] });
+        let url = gRestUrl + "web-vitals";
         (navigator.sendBeacon && navigator.sendBeacon(url, body)) || fetch(url, {body, method: 'POST', keepalive: true});
         vitalsQueue.clear();
     }
@@ -206,8 +206,8 @@ const execProcess = (template, method, input) => {
             if (data.success) {
                 resolve(data);
             } else {
-                //popupOpen("FAILURE IN ORACLE SERVER PROCESS", data.sqlerrm);
                 reject(data.sqlerrm);
+                popupOpen("FAILURE IN HANDLER PROCESS FOR "+template, data.sqlerrm);
             }
         } catch (e) {
             console.error("execProcess",e);
