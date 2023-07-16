@@ -22,6 +22,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getUsage(pUserId IN users.id%type DEFAULT NULL, pUsageDate IN DATE DEFAULT NULL);
     --
+    PROCEDURE insertArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
+    --
     PROCEDURE log(pMsg IN VARCHAR2);
     --
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB);
@@ -86,23 +88,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
       </g>
     </svg>';
  
-     g_oracle_svg LONG:='<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 786.9448547363281 713.8074645996094" preserveAspectRatio="xMidYMid meet">
-  <!-- svg-source:excalidraw -->
-  
-  <defs>
-    <style class="style-fonts">
-      @font-face {
-        font-family: "Virgil";
-        src: url("https://excalidraw.com/Virgil.woff2");
-      }
-      @font-face {
-        font-family: "Cascadia";
-        src: url("https://excalidraw.com/Cascadia.woff2");
-      }
-    </style>
-  </defs>
-  <rect x="0" y="0" width="786.9448547363281" height="713.8074645996094" fill="#ffffff"></rect><g stroke-linecap="round" transform="translate(10 10) rotate(0 383.47242736816406 184.60592651367188)"><path d="M32 0 M32 0 C212.08 1.69, 391.69 1.36, 734.94 0 M32 0 C272.38 0.09, 512.56 -0.01, 734.94 0 M734.94 0 C758.23 -0.79, 766.59 10.21, 766.94 32 M734.94 0 C757.51 -0.25, 768.1 11.76, 766.94 32 M766.94 32 C765.73 144.62, 764.46 255.82, 766.94 337.21 M766.94 32 C765.64 127.55, 766.22 222.65, 766.94 337.21 M766.94 337.21 C766.88 356.61, 757.55 370.29, 734.94 369.21 M766.94 337.21 C769.21 358.29, 758.03 369.66, 734.94 369.21 M734.94 369.21 C499.75 369.51, 265.4 369.8, 32 369.21 M734.94 369.21 C506 368.74, 278.14 368.35, 32 369.21 M32 369.21 C12 370.75, -0.91 357.95, 0 337.21 M32 369.21 C9.63 367.09, -2.01 359.07, 0 337.21 M0 337.21 C-0.36 231.18, -0.31 121.94, 0 32 M0 337.21 C0.84 217.4, 1.69 99.02, 0 32 M0 32 C0.04 11.54, 10.42 -0.07, 32 0 M0 32 C0.08 8.6, 10.75 -2.22, 32 0" stroke="#000000" stroke-width="1" fill="none"></path></g><g transform="translate(79.83111572265625 31.40155029296875) rotate(0 321.3899230957031 22.5)"><text x="0" y="0" font-family="Virgil, Segoe UI Emoji" font-size="36px" fill="#f0000f" text-anchor="start" style="white-space: pre;" direction="ltr" dominant-baseline="text-before-edge">ORACLE CLOUD INFRASTRUCTURE</text></g><g stroke-linecap="round" transform="translate(70.62078857421875 581.0865783691406) rotate(0 41.74928283691406 41.74928283691406)"><path d="M55.9 1.89 C62.69 3.51, 69.62 10.23, 74.3 15.99 C78.98 21.76, 83.3 28.98, 83.98 36.48 C84.66 43.97, 81.77 54, 78.4 60.96 C75.02 67.92, 69.94 74.4, 63.72 78.25 C57.5 82.11, 48.78 84.43, 41.07 84.09 C33.36 83.75, 23.95 80.51, 17.47 76.22 C10.99 71.94, 4.92 65.27, 2.21 58.38 C-0.5 51.49, -0.45 42.25, 1.21 34.88 C2.87 27.52, 7.22 19.68, 12.17 14.17 C17.13 8.66, 23.49 3.78, 30.94 1.82 C38.4 -0.14, 52.23 1.83, 56.89 2.39 C61.56 2.96, 59.3 4.56, 58.92 5.19 M46.73 -0.2 C53.88 0.51, 62.15 6.49, 67.78 11.38 C73.41 16.26, 77.93 22.22, 80.49 29.1 C83.04 35.99, 84.96 45.46, 83.11 52.68 C81.26 59.9, 75.14 67.61, 69.36 72.42 C63.59 77.24, 55.87 80.43, 48.46 81.55 C41.05 82.67, 31.74 82.23, 24.91 79.15 C18.08 76.06, 11.65 69.16, 7.46 63.07 C3.27 56.97, -0.1 49.8, -0.23 42.59 C-0.36 35.37, 2.7 26.35, 6.68 19.77 C10.65 13.2, 16.68 6.39, 23.62 3.15 C30.56 -0.08, 44.24 0.94, 48.3 0.38 C52.37 -0.18, 48.4 -0.96, 48 -0.22" stroke="none" stroke-width="0" fill="#868e96"></path><path d="M59.12 4.05 C66.09 6.34, 73.45 12.93, 77.59 19.1 C81.74 25.27, 84.07 33.48, 84 41.08 C83.93 48.69, 81.39 58.17, 77.17 64.72 C72.95 71.27, 65.75 77.21, 58.7 80.39 C51.65 83.56, 42.4 85.04, 34.86 83.77 C27.33 82.51, 18.93 77.87, 13.48 72.79 C8.04 67.71, 4.28 60.52, 2.17 53.3 C0.06 46.07, -1.31 36.82, 0.83 29.45 C2.96 22.09, 9.04 13.88, 14.96 9.11 C20.88 4.34, 28.83 1.71, 36.35 0.82 C43.88 -0.07, 55.86 2.94, 60.11 3.77 C64.36 4.59, 62.13 4.94, 61.85 5.8 M49.04 1.54 C56.37 2.67, 65.46 6.73, 70.79 12.02 C76.12 17.31, 79.41 25.83, 81.03 33.27 C82.66 40.71, 82.61 49.97, 80.53 56.67 C78.45 63.37, 74.5 68.89, 68.55 73.47 C62.59 78.04, 52.54 83.51, 44.79 84.12 C37.04 84.73, 28.67 81, 22.03 77.1 C15.4 73.2, 8.82 66.98, 4.99 60.72 C1.15 54.46, -1.4 46.88, -0.97 39.55 C-0.53 32.21, 2.82 23.05, 7.6 16.72 C12.38 10.39, 20.66 3.97, 27.69 1.55 C34.71 -0.86, 46.08 1.98, 49.75 2.24 C53.42 2.49, 49.68 2.78, 49.71 3.09" stroke="#000000" stroke-width="1" fill="none"></path></g><g stroke-linecap="round"><g transform="translate(95.96489555868675 597.8370674741029) rotate(0 13.148185171917902 24.652908421457653)" fill-rule="evenodd"><path d="M-1.4 -0.69 L5.83 3.58 L9.02 4.92 L22.5 2.72 L31.82 -1.62 L31.16 4.78 L34.93 6.82 L36.04 16.65 L35.47 24.79 L30.97 31.09 L22.32 33.78 L24.01 36.12 L26.09 51.07 L11.09 49.15 L8.53 44.46 L1.62 44.67 L-0.76 41.75 L-8.68 32.53 L-5.89 33.1 L1.51 40.28 L10.43 38.34 L11.04 32.91 L3.32 28.85 L-0.39 25.17 L-2.79 16.5 L-1.11 9.91 L0.09 7.61 L0.13 0.13" stroke="none" stroke-width="0" fill="#fff" fill-rule="evenodd"></path><path d="M1.04 -0.89 C2.04 -0.48, 4.03 0.3, 5.04 1.3 C6.04 2.3, 6.18 4.73, 7.05 5.13 C7.93 5.54, 8.13 3.97, 10.28 3.74 C12.43 3.5, 17.58 3.81, 19.95 3.74 C22.32 3.66, 23.25 3.81, 24.5 3.29 C25.74 2.78, 26.31 1.49, 27.4 0.65 C28.49 -0.2, 30.49 -2.21, 31.03 -1.79 C31.57 -1.38, 30.64 2.06, 30.63 3.14 C30.62 4.21, 30.43 3.62, 30.95 4.65 C31.47 5.68, 33.17 7.09, 33.76 9.32 C34.34 11.55, 34.25 15.19, 34.47 18.03 C34.68 20.88, 35.69 24.21, 35.04 26.4 C34.38 28.59, 31.88 30.23, 30.54 31.17 C29.19 32.11, 28.22 31.62, 26.96 32.05 C25.7 32.48, 23.79 33.54, 22.99 33.75 C22.19 33.95, 22.01 32.63, 22.15 33.28 C22.28 33.92, 23.35 35.59, 23.81 37.61 C24.27 39.63, 24.89 43.17, 24.9 45.4 C24.91 47.63, 24.17 49.91, 23.86 50.97 C23.56 52.04, 24.91 51.9, 23.07 51.77 C21.23 51.65, 15.02 50.44, 12.83 50.24 C10.63 50.04, 10.43 51.8, 9.92 50.58 C9.4 49.36, 10.24 44.05, 9.72 42.91 C9.21 41.76, 8.13 43.31, 6.8 43.74 C5.46 44.16, 3.18 45.65, 1.71 45.44 C0.23 45.23, -1.18 43.78, -2.06 42.46 C-2.94 41.14, -2.71 38.44, -3.57 37.53 C-4.43 36.62, -6.17 37.39, -7.22 37 C-8.27 36.61, -10.17 35.75, -9.86 35.21 C-9.56 34.67, -6.31 33.68, -5.4 33.75 C-4.48 33.83, -5.36 34.54, -4.36 35.67 C-3.37 36.8, -0.9 39.45, 0.59 40.52 C2.08 41.6, 3.48 42.12, 4.58 42.13 C5.67 42.13, 6.27 40.93, 7.15 40.56 C8.04 40.19, 9.67 40.67, 9.91 39.88 C10.14 39.09, 8.35 36.56, 8.57 35.8 C8.8 35.05, 10.55 35.55, 11.26 35.35 C11.96 35.14, 13.41 35.18, 12.8 34.56 C12.2 33.95, 9.41 32.52, 7.63 31.64 C5.85 30.77, 3.38 30.04, 2.14 29.31 C0.9 28.59, 0.86 29.07, 0.19 27.3 C-0.47 25.54, -1.83 21.86, -1.85 18.72 C-1.88 15.57, -0.57 10.37, 0.03 8.43 C0.62 6.48, 1.85 7.64, 1.74 7.02 C1.62 6.4, -0.56 6.01, -0.65 4.71 C-0.75 3.41, 1.16 -0.03, 1.16 -0.76 M0.12 1.26 C1.15 1.96, 3.55 2.45, 4.6 2.77 C5.65 3.09, 5.45 3.41, 6.42 3.19 C7.39 2.98, 7.86 1.3, 10.4 1.5 C12.93 1.69, 19.62 4.27, 21.62 4.37 C23.63 4.47, 21.29 2.41, 22.42 2.09 C23.55 1.77, 27.08 3.25, 28.42 2.46 C29.76 1.67, 29.8 -2.58, 30.46 -2.65 C31.11 -2.71, 32.16 0.43, 32.36 2.09 C32.56 3.74, 31.43 5.87, 31.68 7.29 C31.92 8.7, 33.1 8.82, 33.83 10.58 C34.57 12.34, 35.81 15.39, 36.09 17.86 C36.37 20.33, 36.03 23.14, 35.53 25.4 C35.03 27.67, 34.47 30.44, 33.1 31.44 C31.74 32.44, 29.39 31.38, 27.35 31.41 C25.3 31.43, 21.41 31.26, 20.84 31.6 C20.27 31.93, 23.12 32.3, 23.93 33.41 C24.73 34.52, 25.76 36.21, 25.68 38.26 C25.59 40.3, 23.75 43.81, 23.43 45.69 C23.11 47.56, 24.02 48.66, 23.75 49.52 C23.47 50.39, 24.06 50.48, 21.78 50.88 C19.5 51.28, 12.07 52.08, 10.07 51.94 C8.07 51.79, 9.55 51.18, 9.76 50.03 C9.97 48.88, 11.58 46.16, 11.34 45.06 C11.1 43.96, 9.81 43.38, 8.32 43.45 C6.84 43.51, 3.95 45.71, 2.43 45.45 C0.9 45.19, 0.51 42.95, -0.8 41.88 C-2.12 40.82, -4.37 40.12, -5.45 39.05 C-6.54 37.99, -6.84 36.25, -7.32 35.48 C-7.81 34.71, -8.64 34.5, -8.35 34.45 C-8.05 34.41, -6.69 34.76, -5.54 35.21 C-4.39 35.66, -2.17 36.24, -1.43 37.15 C-0.69 38.06, -1.85 40.14, -1.08 40.65 C-0.3 41.15, 1.61 40.3, 3.22 40.17 C4.82 40.04, 7.32 40.21, 8.54 39.86 C9.77 39.51, 10.31 38.41, 10.55 38.06 C10.79 37.72, 9.69 38.26, 9.98 37.78 C10.26 37.3, 11.83 36.12, 12.24 35.18 C12.65 34.23, 13.38 32.72, 12.44 32.1 C11.5 31.47, 8.21 31.87, 6.59 31.41 C4.97 30.96, 4.09 29.97, 2.71 29.37 C1.34 28.77, -0.78 29.5, -1.64 27.82 C-2.5 26.13, -2.28 22.34, -2.45 19.26 C-2.62 16.18, -3.27 11.4, -2.66 9.35 C-2.05 7.29, 0.58 7.59, 1.21 6.95 C1.85 6.3, 1.24 6.9, 1.16 5.47 C1.09 4.05, 1.07 -0.49, 0.79 -1.59" stroke="#000000" stroke-width="1" fill="none"></path></g></g><mask></mask><g stroke-linecap="round" transform="translate(51.009063720703125 538.0015563964844) rotate(0 345.90032958984375 82.9029541015625)"><path d="M32 0 M32 0 C233.98 -0.54, 436.89 -1.2, 659.8 0 M32 0 C263.06 2.28, 494.92 2.49, 659.8 0 M659.8 0 C679.44 0.45, 691.95 11.25, 691.8 32 M659.8 0 C683.07 -1.14, 693.24 8.78, 691.8 32 M691.8 32 C693.81 70.59, 693.92 109.64, 691.8 133.81 M691.8 32 C692.91 67.9, 691.57 101.99, 691.8 133.81 M691.8 133.81 C693.18 153.81, 682.05 164.89, 659.8 165.81 M691.8 133.81 C690.31 153.67, 682.91 165.69, 659.8 165.81 M659.8 165.81 C523.87 166.96, 388.75 166.74, 32 165.81 M659.8 165.81 C464.14 166.15, 267.64 166.09, 32 165.81 M32 165.81 C9.77 166.7, 1.78 156.62, 0 133.81 M32 165.81 C8.86 164.01, -0.54 153.44, 0 133.81 M0 133.81 C0 105.75, 1.1 77.47, 0 32 M0 133.81 C-0.8 94.94, 0.05 54.91, 0 32 M0 32 C-1.17 8.72, 12.15 -1.58, 32 0 M0 32 C-1.48 11.6, 10.62 1.31, 32 0" stroke="#000000" stroke-width="1" fill="none"></path></g><g stroke-linecap="round"><g transform="translate(125.12301272956472 165.38497023474844) rotate(0 51.06445946820372 47.84720910885022)" fill-rule="evenodd"><path d="M-0.14 0.03 L-0.74 94.38 L2.4 97.9 L8.42 100.77 L22.68 102.89 L53.27 107.31 L85.93 101.69 L90.87 99.13 L98.5 96.82 L100.43 92.02 L101.5 1.85 L96.36 -2.13 L72.76 -8.86 L47.62 -12.89 L17.4 -6.73 L-1.78 -0.49" stroke="none" stroke-width="0" fill="#fa5252" fill-rule="evenodd"></path><path d="M-0.74 0.36 C-0.82 13.77, -1.49 64.14, -0.96 80.11 C-0.44 96.08, -0.02 92.66, 2.43 96.17 C4.88 99.68, 8.84 99.46, 13.73 101.19 C18.62 102.93, 25.38 105.49, 31.76 106.59 C38.14 107.68, 46.11 107.98, 52.02 107.76 C57.92 107.55, 61.94 106.21, 67.2 105.29 C72.46 104.38, 78.26 104.07, 83.57 102.26 C88.88 100.44, 96.34 97.96, 99.09 94.41 C101.83 90.86, 99.54 94.8, 100.03 80.95 C100.53 67.09, 102.11 24.73, 102.05 11.28 C101.99 -2.17, 102.27 3.15, 99.67 0.25 C97.07 -2.65, 90.84 -4.27, 86.45 -6.13 C82.05 -7.98, 78.73 -10.02, 73.3 -10.86 C67.88 -11.7, 58.71 -11.15, 53.89 -11.15 C49.07 -11.16, 50.21 -11.25, 44.41 -10.88 C38.61 -10.52, 26.65 -10.72, 19.1 -8.96 C11.55 -7.19, 2.31 -1.76, -0.92 -0.29 M1.08 -0.5 C1.4 13.06, 1.09 64.7, 1.24 81.05 C1.4 97.4, -0.1 94.08, 2 97.61 C4.1 101.14, 8.56 101.18, 13.84 102.22 C19.13 103.26, 27.68 102.99, 33.7 103.83 C39.71 104.68, 44.33 107.29, 49.92 107.28 C55.51 107.27, 61.83 104.73, 67.23 103.78 C72.63 102.83, 76.73 102.85, 82.34 101.58 C87.94 100.32, 97.82 99.73, 100.84 96.19 C103.87 92.65, 100.2 94.3, 100.51 80.34 C100.82 66.37, 102.5 25.74, 102.69 12.38 C102.88 -0.99, 104.43 3.33, 101.66 0.14 C98.89 -3.06, 90.95 -4.83, 86.1 -6.78 C81.25 -8.73, 77.96 -10.72, 72.55 -11.56 C67.14 -12.4, 58.67 -12.16, 53.64 -11.84 C48.6 -11.52, 48.26 -10.21, 42.35 -9.63 C36.44 -9.05, 25.08 -9.94, 18.18 -8.35 C11.29 -6.76, 4.3 -1.47, 0.98 -0.07" stroke="#c92a2a" stroke-width="1" fill="none"></path></g></g><mask></mask><g stroke-linecap="round" transform="translate(124.74955045228933 153.06011620710393) rotate(0 50.626483401915095 13.765081576212367)"><path d="M27.97 0.7 C36.09 -0.41, 47.76 0.51, 57.57 1.09 C67.39 1.66, 79.6 2.44, 86.87 4.15 C94.15 5.86, 99.65 8.76, 101.22 11.36 C102.79 13.97, 100.68 17.26, 96.28 19.79 C91.88 22.32, 83.75 25.28, 74.8 26.55 C65.85 27.81, 52.39 27.98, 42.56 27.39 C32.74 26.8, 22.68 24.81, 15.85 23.01 C9.01 21.22, 3.24 19.32, 1.55 16.61 C-0.14 13.89, 0.46 9.37, 5.72 6.7 C10.97 4.03, 27.21 1.54, 33.07 0.6 C38.94 -0.33, 40.42 0.7, 40.91 1.07 M51.55 1.19 C60.95 0.89, 71.88 0.02, 79.76 1.49 C87.64 2.97, 95.57 7.45, 98.8 10.03 C102.04 12.61, 102.51 14.53, 99.18 16.99 C95.86 19.44, 86.84 23.24, 78.85 24.77 C70.86 26.3, 60.95 26.24, 51.25 26.16 C41.55 26.08, 28.54 25.5, 20.64 24.28 C12.73 23.07, 6.61 21.28, 3.81 18.87 C1.01 16.47, 0.89 12.46, 3.84 9.86 C6.78 7.27, 13.57 5.1, 21.47 3.29 C29.37 1.48, 46.39 -0.48, 51.22 -1 C56.05 -1.53, 50.27 -0.46, 50.46 0.15" stroke="none" stroke-width="0" fill="#ffffff"></path><path d="M64.05 0.1 C73.42 0.68, 84.74 3.42, 91.08 5.44 C97.42 7.46, 101.84 9.6, 102.09 12.2 C102.34 14.8, 98.28 18.69, 92.57 21.04 C86.86 23.39, 77.19 25.37, 67.81 26.29 C58.43 27.22, 45.8 27.14, 36.29 26.56 C26.78 25.99, 16.76 24.94, 10.74 22.84 C4.73 20.74, 0.53 16.89, 0.22 13.96 C-0.08 11.02, 3.43 7.44, 8.92 5.25 C14.41 3.05, 23.83 1.72, 33.18 0.79 C42.54 -0.13, 59.41 -0.48, 65.04 -0.29 C70.67 -0.09, 67.08 1.49, 66.96 1.95 M44.65 -0.08 C54.11 -0.49, 66.93 0.32, 75.49 1.81 C84.06 3.3, 91.86 6.16, 96.06 8.85 C100.26 11.55, 102.37 15.3, 100.69 17.99 C99.01 20.69, 93.37 23.57, 85.98 25.04 C78.58 26.51, 66.19 26.62, 56.33 26.81 C46.47 27, 35.19 27.57, 26.81 26.19 C18.42 24.82, 10.53 21.18, 6.02 18.56 C1.5 15.94, -1.92 12.78, -0.31 10.48 C1.3 8.17, 8.21 6.46, 15.69 4.71 C23.16 2.95, 39.62 0.52, 44.53 -0.06 C49.45 -0.65, 44.82 0.71, 45.19 1.19" stroke="#c92a2a" stroke-width="1" fill="none"></path></g><g transform="translate(93.39942954695181 290.44092139055226) rotate(0 94.21556091308591 19.084503173828125)"><text x="94.21556091308594" y="0" font-family="Virgil, Segoe UI Emoji" font-size="30.535205078124978px" fill="#000000" text-anchor="middle" style="white-space: pre;" direction="ltr" dominant-baseline="text-before-edge">Primary ADB</text></g><g stroke-linecap="round"><g transform="translate(555.8300744971428 159.3449006546703) rotate(0 50.959503886294954 48.47655929679803)" fill-rule="evenodd"><path d="M-0.9 -1.67 L-1.81 92.36 L2.3 96.5 L5.64 98.87 L22.61 103.3 L52.38 106.77 L85.76 100.9 L92 100.71 L98.58 95.35 L100.19 91.99 L102.71 -0.29 L95.87 -4.01 L72.48 -8.17 L48.5 -9.37 L17.47 -8.2 L-1.42 -0.82" stroke="none" stroke-width="0" fill="#fa5252" fill-rule="evenodd"></path><path d="M-0.1 0.39 C0.06 13.98, 0.14 65.34, 0.43 81.31 C0.72 97.28, -0.5 92.68, 1.63 96.22 C3.76 99.76, 8.32 100.96, 13.23 102.53 C18.15 104.09, 24.75 105.09, 31.1 105.61 C37.46 106.13, 45.12 105.45, 51.36 105.64 C57.6 105.83, 62.98 107.29, 68.55 106.75 C74.11 106.2, 79.55 104.46, 84.76 102.38 C89.97 100.29, 97.17 97.73, 99.81 94.25 C102.45 90.77, 100.2 95.56, 100.6 81.51 C101 67.46, 102.35 23.68, 102.22 9.96 C102.09 -3.77, 102.46 1.84, 99.83 -0.83 C97.2 -3.5, 90.81 -4.73, 86.43 -6.06 C82.06 -7.38, 78.92 -8.15, 73.58 -8.78 C68.24 -9.41, 59.42 -9.51, 54.36 -9.84 C49.3 -10.16, 49.18 -10.84, 43.22 -10.74 C37.27 -10.64, 25.84 -10.98, 18.63 -9.24 C11.42 -7.49, 3.12 -1.76, -0.05 -0.28 M-1.61 -0.45 C-1.52 13.36, -0.69 66.53, -0.29 82.88 C0.11 99.24, -1.44 94.73, 0.79 97.69 C3.02 100.64, 7.78 99.21, 13.09 100.6 C18.41 101.98, 26.11 104.82, 32.69 106 C39.27 107.19, 46.47 107.7, 52.57 107.7 C58.67 107.7, 64.02 106.99, 69.28 106 C74.55 105.01, 79.32 103.44, 84.16 101.77 C88.99 100.09, 95.42 99.37, 98.29 95.94 C101.16 92.52, 100.6 95.47, 101.38 81.2 C102.15 66.94, 102.86 24.14, 102.95 10.36 C103.04 -3.43, 104.72 1.33, 101.91 -1.51 C99.1 -4.35, 90.9 -5.53, 86.08 -6.68 C81.25 -7.82, 78.26 -7.86, 72.97 -8.39 C67.69 -8.91, 59.16 -9.66, 54.36 -9.83 C49.57 -10, 50.35 -9.59, 44.2 -9.41 C38.05 -9.24, 25.06 -10.34, 17.47 -8.78 C9.87 -7.22, 1.27 -1.47, -1.36 -0.05" stroke="#c92a2a" stroke-width="1" fill="none"></path></g></g><mask></mask><g stroke-linecap="round" transform="translate(555.4566122198675 147.0200466270258) rotate(0 50.626483401915095 13.765081576212367)"><path d="M71.28 1.5 C80.1 2.19, 89.07 4.24, 94.06 6.62 C99.06 9, 102.38 13.08, 101.26 15.78 C100.13 18.49, 94.08 20.8, 87.32 22.85 C80.56 24.91, 70.37 27.59, 60.7 28.1 C51.02 28.61, 38.43 27.26, 29.27 25.94 C20.12 24.62, 10.55 22.42, 5.77 20.18 C0.99 17.95, -0.75 15.16, 0.61 12.5 C1.96 9.85, 7.34 6.36, 13.89 4.23 C20.45 2.1, 29.56 0.03, 39.93 -0.26 C50.3 -0.55, 69.84 2.1, 76.13 2.48 C82.43 2.86, 78.36 1.81, 77.71 2.01 M42.78 -0.71 C52.32 -1.19, 65.35 0.76, 74.11 2.14 C82.87 3.53, 90.81 5.51, 95.35 7.59 C99.89 9.67, 102.92 12.02, 101.33 14.63 C99.74 17.24, 93.01 20.9, 85.81 23.23 C78.61 25.56, 67.9 27.91, 58.14 28.61 C48.38 29.31, 36.18 28.79, 27.25 27.42 C18.31 26.05, 9.02 23.08, 4.51 20.37 C0 17.66, -1.57 13.77, 0.19 11.14 C1.94 8.5, 8.32 6.16, 15.06 4.55 C21.79 2.93, 35.92 1.92, 40.6 1.43 C45.28 0.94, 42.69 1.63, 43.13 1.62" stroke="none" stroke-width="0" fill="#ffffff"></path><path d="M51.42 1 C60.72 0.85, 72.65 1.53, 80.56 2.86 C88.47 4.2, 95.9 6.25, 98.88 8.99 C101.87 11.74, 101.64 16.72, 98.47 19.33 C95.31 21.95, 88.06 23.48, 79.89 24.7 C71.72 25.91, 59.47 26.57, 49.45 26.6 C39.42 26.63, 27.54 26.54, 19.75 24.89 C11.96 23.25, 5.56 19.42, 2.71 16.73 C-0.13 14.03, -0.4 11.08, 2.67 8.75 C5.73 6.42, 11.34 3.99, 21.1 2.73 C30.86 1.48, 53.28 1.32, 61.24 1.23 C69.2 1.13, 69.09 2.09, 68.88 2.17 M53.89 -0.43 C63.38 -0.53, 75.35 0.99, 82.79 2.56 C90.22 4.13, 96.18 6.21, 98.52 9 C100.85 11.8, 100.26 16.74, 96.81 19.33 C93.36 21.92, 86.16 23.19, 77.81 24.54 C69.46 25.9, 56.72 27.42, 46.7 27.46 C36.68 27.5, 25.22 26.29, 17.69 24.78 C10.16 23.27, 4.11 21.2, 1.53 18.42 C-1.04 15.64, -1.61 10.94, 2.22 8.1 C6.06 5.26, 15.86 2.81, 24.53 1.37 C33.19 -0.07, 49.32 -0.55, 54.24 -0.55 C59.15 -0.56, 54.19 0.88, 54 1.36" stroke="#c92a2a" stroke-width="1" fill="none"></path></g><g transform="translate(510.07805734294493 290.2878757362554) rotate(0 95.12284851074219 17.20257568359375)"><text x="95.12284851074219" y="0" font-family="Virgil, Segoe UI Emoji" font-size="27.524121093749986px" fill="#000000" text-anchor="middle" style="white-space: pre;" direction="ltr" dominant-baseline="text-before-edge">Recovery ADB</text></g><g stroke-linecap="round"><g transform="translate(171.08638177056264 341.34266958325475) rotate(0 -0.11902241781322687 88.56684783692072)"><path d="M-0.49 0.26 C-0.71 29.75, -0.83 147.32, -1.13 176.7 M1.45 -0.66 C1.12 28.99, -0.9 148.13, -1.69 177.79" stroke="#000000" stroke-width="1" fill="none"></path></g><g transform="translate(171.08638177056264 341.34266958325475) rotate(0 -0.11902241781322687 88.56684783692072)"><path d="M-10.93 150.64 C-9.81 157.68, -7.03 167.54, -3.44 176.02 M-12.09 150.14 C-8.79 154.28, -7.36 160.4, -1.16 178.69" stroke="#000000" stroke-width="1" fill="none"></path></g><g transform="translate(171.08638177056264 341.34266958325475) rotate(0 -0.11902241781322687 88.56684783692072)"><path d="M9.59 151.07 C4.25 157.89, 0.57 167.61, -3.44 176.02 M8.43 150.57 C7.58 154.74, 4.86 160.77, -1.16 178.69" stroke="#000000" stroke-width="1" fill="none"></path></g></g><mask></mask><g stroke-linecap="round"><g transform="translate(596.3878364187867 517.2168060149663) rotate(0 1.3213547073490872 -87.29830174918268)"><path d="M1.06 -0.19 C1.28 -29.06, 0.12 -144.02, 0.25 -172.77 M0.16 -1.33 C0.84 -30.57, 2.28 -145.55, 2.48 -174.41" stroke="#000000" stroke-width="1" fill="none"></path></g><g transform="translate(596.3878364187867 517.2168060149663) rotate(0 1.3213547073490872 -87.29830174918268)"><path d="M12.13 -147.63 C11.75 -150.99, 9.78 -157.32, 1.11 -176.34 M11.72 -146.4 C10.62 -152.58, 7.53 -161.14, 2.3 -174.86" stroke="#000000" stroke-width="1" fill="none"></path></g><g transform="translate(596.3878364187867 517.2168060149663) rotate(0 1.3213547073490872 -87.29830174918268)"><path d="M-8.39 -147.84 C-4.4 -151.33, -2 -157.63, 1.11 -176.34 M-8.8 -146.61 C-4.6 -152.7, -2.39 -161.21, 2.3 -174.86" stroke="#000000" stroke-width="1" fill="none"></path></g></g><mask></mask><g transform="translate(14.649688720703125 423.7976379394531) rotate(0 59.00398254394531 22.5)"><text x="0" y="0" font-family="Virgil, Segoe UI Emoji" font-size="36px" fill="#000000" text-anchor="start" style="white-space: pre;" direction="ltr" dominant-baseline="text-before-edge">Export</text></g><g transform="translate(637.0982360839844 424.0375671386719) rotate(0 57.959983825683594 22.5)"><text x="0" y="0" font-family="Virgil, Segoe UI Emoji" font-size="36px" fill="#000000" text-anchor="start" style="white-space: pre;" direction="ltr" dominant-baseline="text-before-edge">Import</text></g><g transform="translate(178.66049194335938 616.8913391113281) rotate(0 257.8125 12)"><text x="0" y="0" font-family="Cascadia, Segoe UI Emoji" font-size="20px" fill="#000000" text-anchor="start" style="white-space: pre;" direction="ltr" dominant-baseline="text-before-edge">https://github.com/{owner}/{repository-name}</text></g></svg>';
-
+     g_oracle_svg LONG:='<svg version="1.0" id="katman_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 67.8 50.6" style="enable-background:new 0 0 67.8 50.6;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#E50019;}
+	.st1{font-family:ArialMT;}
+	.st2{font-size:6px;}
+</style>
+<g id="Group_4747" transform="translate(-1175 -1724.682)">
+	<path id="Oracle" class="st0" d="M1199.3,1747h2.5l-1.3-2.1l-2.4,3.9h-1.1l3-4.7c0.1-0.2,0.3-0.3,0.6-0.3c0.2,0,0.4,0.1,0.6,0.3
+		l3,4.7h-1.1l-0.5-0.9h-2.5L1199.3,1747z M1210.9,1747.9v-4h-0.9v4.4c0,0.1,0.1,0.2,0.1,0.3c0.1,0.1,0.2,0.1,0.3,0.1h4.3l0.6-0.9
+		H1210.9z M1195.3,1747.2c0.9,0.1,1.7-0.6,1.8-1.5c0.1-0.9-0.6-1.7-1.5-1.8c-0.1,0-0.2,0-0.2,0h-4.1v4.9h0.9v-4h3.1
+		c0.4,0.1,0.8,0.5,0.7,0.9c0,0.4-0.3,0.7-0.7,0.7h-2.7l2.8,2.5h1.4l-1.9-1.6L1195.3,1747.2z M1185.3,1748.8c-1.4,0-2.5-1.1-2.5-2.5
+		c0-1.4,1.1-2.5,2.5-2.5c0,0,0,0,0,0h2.9c1.4,0,2.5,1.1,2.5,2.5c0,1.4-1.1,2.5-2.5,2.5c0,0,0,0,0,0H1185.3z M1188.1,1747.9
+		c0.9,0,1.6-0.7,1.6-1.5c0-0.9-0.7-1.6-1.5-1.6c0,0-0.1,0-0.1,0h-2.8c-0.9,0-1.6,0.7-1.6,1.5c0,0.9,0.7,1.6,1.5,1.6c0,0,0.1,0,0.1,0
+		H1188.1z M1206.1,1748.8c-1.4,0-2.5-1.1-2.5-2.5c0-1.4,1.1-2.5,2.5-2.5c0,0,0,0,0,0h3.4l-0.6,0.9h-2.8c-0.9,0-1.6,0.8-1.5,1.6
+		c0,0.8,0.7,1.5,1.5,1.5h3.4l-0.6,0.9L1206.1,1748.8z M1217.6,1747.9c-0.7,0-1.3-0.5-1.5-1.2h4l0.6-0.9h-4.6
+		c0.2-0.7,0.8-1.2,1.5-1.2h2.8l0.6-0.9h-3.4c-1.4,0-2.5,1.1-2.5,2.5s1.1,2.5,2.5,2.5h2.9l0.6-0.9L1217.6,1747.9"/>
+	<text transform="matrix(1 0 0 1 1182.5439 1755.1265)" class="st1 st2">Cloud Infrastructure</text>
+</g>
+</svg>';
+     
     g_facebook_svg LONG:='<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
 	 viewBox="0 0 40 40" style="enable-background:new 0 0 40 40;" xml:space="preserve">
 <style type="text/css">
@@ -793,8 +799,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                    c.alt_text,
                    NVL2(c.nb_assets,1,0) first_asset,
                    NVL(c.nb_assets,0) nb_assets,
-                   a.title || a.title_more title, 
-                   a.excerpt || a.excerpt_more excerpt,
+                   a.title, 
+                   a.excerpt,
                    CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
                    u.name,
                    NVL(a.updated_date, a.created_date) updated_date
@@ -818,7 +824,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                           <ul class="dropdown-items">
                             <li><button type="button" class="fa fa-cloud-upload upload-media">Upload</button></li>
                             <li><button type="button" class="fa fa-edit edit-text">Edit</button></li>
-                            <li><button type="button" class="fa fa-newspaper-o preview"' || CASE WHEN C.id<0 THEN ' disabled' END || '>Preview</button></li>' ||
+                            <li><button type="button" class="fa fa-newspaper-o preview"' || CASE WHEN C.id<0 OR COALESCE(C.title,C.excerpt) IS NULL THEN ' disabled' END || '>Preview</button></li>' ||
                             CASE 
                               WHEN C.is_public='Y' THEN 
                                 '<li><button type="button" class="fa fa-share2 unpublish">Unpublish</button></li>'
@@ -866,8 +872,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <div></div>
                     <div>
                         <div id="editor"></div>
-                        <div id="word-count"></div>
-                        <div id="editor-status"></div>
+                        <div class="button-container">
+                            <div id="editor-status"></div>
+                            <div id="word-count"></div>
+                        </div>
                     </div>
                     <button type="button" class="close" autofocus>&times;</button>
                 </div>
@@ -1346,7 +1354,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm, pAjax=>TRUE);
-    END;    
+    END;  
+    
+    /*
+     **  Insert row in article table for new article text content
+     */      
+    PROCEDURE insertArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS 
+        l_user_id users.id%type:=getUserId();
+    BEGIN
+        INSERT INTO article (id, author_user_id, created_date) 
+        SELECT seq_article.nextval, id, current_timestamp
+          FROM users u
+         WHERE id=l_user_id;
+        
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.write('articleId',seq_article.currval);
+        apex_json.close_object;
+    END;
 
     /*
      **  Procedure called by the autoSave feature of CKEditor
@@ -1354,26 +1379,54 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
         l_user_id users.id%type:=getUserId();
         l_article_id article.id%type;
+        l_title article.title%type;
+        l_excerpt varchar2(1000);
+        l_word_count article.word_count%type;
+        l_edit_text article.body_html%type;
+        l_name users.name%type;
+        l_client_TZ users.client_TZ%type;
+        l_words apex_t_varchar2;
+        l_rem PLS_INTEGER;
     BEGIN
-        MERGE INTO article t
-            USING (
-                SELECT SUBSTR(title,1,60) title, 
-                       REGEXP_SUBSTR(word_count,'(\d)+') word_count, 
-                       SUBSTR(apex_escape.striphtml(edit_text),LENGTH(title)+1,160) excerpt, 
-                       edit_text
-                FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (title, word_count, edit_text)) ) s
-            ON (t.id=pArticleId AND t.author_user_id=l_user_id)
-            WHEN NOT MATCHED THEN
-                INSERT (id, author_user_id, excerpt, word_count, body_html, created_date) VALUES (seq_article.nextval, l_user_id, s.excerpt, s.word_count, s.edit_text, current_date)
-            WHEN MATCHED THEN
-                UPDATE SET title=s.title, excerpt=s.excerpt, word_count=s.word_count, body_html=s.edit_text, updated_date=current_timestamp;
+        SELECT SUBSTR(title,1,60) title, 
+               REGEXP_SUBSTR(word_count,'(\d)+') word_count,
+               edit_text,
+               u.name,
+               u.client_TZ
+          INTO l_title, l_word_count, l_edit_text, l_name, l_client_TZ
+          FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (title, word_count, edit_text))
+          WHERE u.id=l_user_id;
+          
+        apex_escape.set_html_escaping_mode('E');
+        l_excerpt:=dbms_lob.substr(utl_i18n.unescape_reference(apex_escape.striphtml(l_edit_text)),200,NVL(LENGTHB(l_title),0)+1);
         
+        l_words:=apex_string.split(REPLACE(l_excerpt,CHR(10),' '),' ');
+        l_excerpt:=NULL;
+        FOR i IN 1..l_words.COUNT LOOP
+            IF (l_words(i) IS NULL) THEN
+                CONTINUE;
+            END IF;
+            l_rem:=160 - NVL(LENGTHB(l_excerpt),0);
+            IF (LENGTHB(l_words(i)) <= l_rem) THEN
+                l_excerpt:=l_excerpt || l_words(i) || ' ';
+            ELSE
+                l_excerpt:=RTRIM(l_excerpt);
+                EXIT;
+            END IF;
+        END LOOP;
+        
+        UPDATE article SET title=l_title, excerpt=l_excerpt, word_count=l_word_count, body_html=l_edit_text, updated_date=current_timestamp
+         WHERE id=pArticleId;
+
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
-        IF (pArticleId=0) THEN
-            APEX_JSON.write('articleId',seq_article.currval);
-        END IF;
-        apex_json.close_object;
+        APEX_JSON.write('title', l_title);
+        APEX_JSON.write('excerpt', l_excerpt);
+        APEX_JSON.write('words', l_word_count || ' words');
+        APEX_JSON.write('author', l_name);
+        APEX_JSON.write('updated', TO_CHAR(current_timestamp AT TIME ZONE l_client_TZ,'dd Mon yyyy hh24:mi:ss'));
+        APEX_JSON.close_object;
+
          
         EXCEPTION
             WHEN OTHERS THEN
@@ -1784,29 +1837,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE uploadWebVitals(pBodyText IN CLOB) IS
         l_bodytext CLOB:=pBodyText;
         l_ip_address performance.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
-        l_plist apex_t_varchar2;
-        l_offset PLS_INTEGER;
-        l_key VARCHAR2(20);
-        l_value VARCHAR2(50);
-        l_session_id core_web_vitals.session_id%type;
-        l_browser core_web_vitals.browser%type;
-        l_width core_web_vitals.width%type;
     BEGIN
-        l_plist := apex_string.split(owa_util.get_cgi_env('QUERY_STRING'), '&');
-        FOR i IN 1..l_plist.COUNT LOOP
-            l_offset := instr(l_plist(i), '=');
-            l_key:=substr(l_plist(i), 1, l_offset - 1);
-            l_value := substr(l_plist(i), l_offset + 1);
-            CASE l_key
-                WHEN 'session' THEN l_session_id:=l_value;
-                WHEN 'browser' THEN l_browser:=replace(l_value,'+',' ');
-                WHEN 'width' THEN l_width:=l_value;
-            END CASE;
-        END LOOP;
-        INSERT INTO core_web_vitals (name, value, rating, ip_address, session_id, browser, width)
-        SELECT name, value, rating, l_ip_address, l_session_id, l_browser, l_width
-        FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' COLUMNS (name, value, rating))
-        LOG ERRORS INTO core_web_vitals_err REJECT LIMIT UNLIMITED;
+        INSERT INTO core_web_vitals (id, session_id, page_id, ip_address, name, value, rating) --, browser, width)
+        SELECT seq_core_web_vitals.nextval, session_id, page_id, l_ip_address, name, value, rating --, l_session_id, l_browser, l_width
+        FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' COLUMNS (session_id, page_id,
+            NESTED '$.cwv[*]' COLUMNS (name, value, rating)))
+        LOG ERRORS INTO core_web_vitals_err REJECT LIMIT UNLIMITED;                 
     END;
 
     /*
