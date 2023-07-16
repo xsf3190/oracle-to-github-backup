@@ -123,17 +123,17 @@ const saveData = async ( data ) => {
     const word_count = document.querySelector(".ck-word-count__words").textContent;
     const title = document.querySelector(".ck > h1").textContent;
     await execProcess("article/"+gArticleId, "PUT",  {edit_text: data, title: title, word_count: word_count}).then( (data) => {
-        if (data.articleId) {
-            enable_card_zero(data.articleId);
-        }
+        update_card_elements(data);
     }).catch( (error) => console.error(error));
 }
 
-let editor;
+let editor, initialSave;
+
 ClassicEditor.create(document.querySelector("#editor"), {
         autosave: {
             waitingTime: 5000,
             save( editor ) {
+                // if(initialSave < 2) return Promise.resolve();
                 return saveData( editor.getData() );
             }
         },
@@ -145,6 +145,17 @@ ClassicEditor.create(document.querySelector("#editor"), {
     })
     .then( (newEditor) => {
         editor = newEditor;
+
+        // editor.model.document.on( 'change:data', () => {
+        //     if(initialSave < 2) initialSave++;
+        //     if(initialSave > 1) 
+        //     {
+        //         displayStatus(editor);
+        //         const statusIndicator = document.querySelector( '#editor-status' );
+        //         if(statusIndicator) statusIndicator.textContent = "Saving";
+        //     }
+        // });
+
         const wordCountPlugin = editor.plugins.get( 'WordCount' );
         const wordCountWrapper = document.getElementById( 'word-count' );
         wordCountWrapper.appendChild( wordCountPlugin.wordCountContainer );
@@ -253,75 +264,81 @@ const upload_media = (articleId) => {
 const editorDialog = document.querySelector("dialog.editor");
 
 const edit_text = (articleId,button) => {
-    gArticleId = articleId;
+    // initialSave = 0;
+    // const statusIndicator = document.querySelector( '#editor-status' );
+    // if(statusIndicator) statusIndicator.textContent = "";
+
     if (articleId === "0") {
-        editor.setData("");
-        editorDialog.showModal();
+        execProcess( "article/"+articleId,"POST",{articleid:0}).then( (data) => {
+            enable_card_zero(data.articleId);
+            editor.setData("");
+            editorDialog.showModal();
+        });
     } else {
+        gArticleId = articleId;
         execProcess( "article/"+articleId,"GET").then( (data) => {
             if (data.content) {
                 editor.setData(data.content);
             } else {
                 editor.setData("");
             }
-            
             editorDialog.showModal();
-            /*
-            const title = document.querySelector("[data-id='" + articleId + "'] .title");
-            if (title) {
-                document.querySelector("#ui-id-1").textContent = title.textContent;
-            } else {
-                document.querySelector("#ui-id-1").textContent = "Edit Text";
-            } 
-            */ 
         });
     }
 }
 
 /* 
- ** SAVE ARTICE AND CLOSE EDITOR
+ ** UPDATE CARD ELEMENTS AFTER SAVING TEXT
  */
-const save_and_exit = () => {
-    execProcess( "saveArticle", {x01: gArticleId}).then( (data) => {
-        // depending on whether any content was saved
-        // exchange <br> and <h4> with <button> and <p>
-        const li = document.querySelector("[data-id='" + gArticleId + "']"),
-              br = li.querySelector("br"),
-              button = li.querySelector("button.no-media.edit-text"),
-              h4 = li.querySelector('h4'),
-              p = li.querySelector('p');
+const update_card_elements = (data) => {
+    // depending on whether any content was saved
+    // exchange <br> and <h4> with <button> and <p>
+    const li = document.querySelector("[data-id='" + gArticleId + "']");
+    let br = li.querySelector("br"),
+        button = li.querySelector("button.no-media.edit-text"),
+        h4 = li.querySelector('h4'),
+        p = li.querySelector('p'),
+        span = li.querySelector(".word-count");
 
-        if (data.title) {
-            const span = document.createElement("span");
-            span.textContent = data.words;
-            if (h4) {
-                h4.textContent = data.title;
-                p.textContent = data.excerpt;
-                p.append(span);
-            } else {
-                const h4_ele = document.createElement("h4"),
-                      p_ele = document.createElement("p");
-                h4_ele.classList.add("title","edit-text");
-                h4_ele.textContent = data.title;
-                br.replaceWith(h4_ele);
-                p_ele.classList.add("excerpt");
-                p_ele.textContent = data.excerpt;
-                p_ele.append(span);
-                button.replaceWith(p_ele);
-            }
-        } else {
-            if (h4) {
-                const br_ele = document.createElement("br"),
-                      button_ele = document.createElement("button");
-                h4.replaceWith(br_ele);
-                button_ele.textContent = "CREATE TEXT";
-                button_ele.classList.add("edit-text","no-media");
-                p.replaceWith(button_ele);                
-            }
+    if (data.title) {
+        if (!h4) {
+            h4 = document.createElement("h4");
+            h4.classList.add("edit-text","title")
+            br.replaceWith(h4);
         }
-        li.querySelector(".updated-date").textContent = data.updated;
-        apex.theme.closeRegion("editor");      
-    });
+        h4.textContent = data.title;
+    } else {
+        if (h4) {
+            br = document.createElement("br");
+            h4.replaceWith(br);
+        }
+    }
+
+    if (data.excerpt) {
+        if (!p) {
+            p = document.createElement("p");
+            p.textContent = data.excerpt;
+            const span = document.createElement("span");
+            span.classList.add("word-count");
+            span.textContent = data.words;
+            p.append(span);
+            button.replaceWith(p);
+        } else {
+            p.textContent = data.excerpt;
+            const span = document.createElement("span");
+            span.classList.add("word-count");
+            span.textContent = data.words;
+            p.append(span);
+        }
+    } else {
+        if (p) {
+            button = document.createElement("button");
+            button.textContent = "CREATE TEXT";
+            button.classList.add("edit-text","no-media");
+            p.replaceWith(button);                
+        }
+    }
+    li.querySelector(".updated-date").textContent = data.updated; 
 };
 
 
