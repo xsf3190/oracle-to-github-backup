@@ -161,13 +161,13 @@ dialog.gallery legend {
     padding-inline-end: 0.5em;
 }
 
-dialog.preview, dialog.perftable, dialog.gallery {
+dialog.preview, dialog.perftable, dialog.gallery, dialog.editor {
     color: currentColor;
     inline-size: 100vw;
     block-size: 100vh;
 }
 
-dialog.preview > div {
+dialog.preview > div, dialog.editor > div {
   display: grid;
   grid-template-columns: minmax(1rem, 1fr) minmax(auto, var(--preview-width)) minmax(1rem, 1fr);
 }
@@ -307,11 +307,6 @@ ul.homepage>li:nth-of-type(2), ul.homepage>li:nth-of-type(4), ul.homepage>li:nth
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-ul.homepage>li:nth-of-type(2) svg{
-  height: 100%;
-/*   width: 90%; */
 }
 
 ul.homepage>li:nth-of-type(4) svg{
