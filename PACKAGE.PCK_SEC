@@ -25,8 +25,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         --l_client_tz_session users.client_tz%type:=apex_util.get_session_state('APP_CLIENT_TZ');
         l_workspace_id apex_workspaces.workspace_id%type;
     BEGIN
-        pck_cms.log('post-authentication:'||APEX_APPLICATION.G_FLOW_ID||':'||APEX_APPLICATION.G_USER||':'||APEX_APPLICATION.G_INSTANCE);
-        
         SELECT workspace_id
           INTO l_workspace_id
           FROM apex_workspaces
