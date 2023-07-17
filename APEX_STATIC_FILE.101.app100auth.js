@@ -113,25 +113,38 @@ const signout = document.querySelector(".signout");
 signout.addEventListener('click',  () => {
     execProcess("signout","DELETE").then( () => {
         history.back();
-    });
+    }).catch( ()=>history.back());
 });
 
 /* 
  ** RICH TEXT EDITOR AUTOSAVE FEATURE FUNCTION TO SEND UPDATED TEXT TO DATABASE. RETURNS data.articleId IF ARTICLE ROW WAS CREATED.
  */
+let editor_status;
+const editor_status_text = document.querySelector("#editor-status");
+
 const saveData = async ( data ) => {
+    
+    if (editor_status==="init") {
+        editor_status="ok";
+        return Promise.resolve();
+    }
+    
+    console.log("time",Date.now());
+    editor_status_text.textContent = "Saving content ...";
     const word_count = document.querySelector(".ck-word-count__words").textContent;
+    
     const title = document.querySelector(".ck > h1").textContent;
     await execProcess("article/"+gArticleId, "PUT",  {edit_text: data, title: title, word_count: word_count}).then( (data) => {
+        editor_status_text.textContent = "Saving content .." + data.words + " saved";
         update_card_elements(data);
     }).catch( (error) => console.error(error));
 }
 
-let editor, initialSave;
+let editor;
 
 ClassicEditor.create(document.querySelector("#editor"), {
         autosave: {
-            waitingTime: 5000,
+            waitingTime: 2000,
             save( editor ) {
                 // if(initialSave < 2) return Promise.resolve();
                 return saveData( editor.getData() );
@@ -159,7 +172,7 @@ ClassicEditor.create(document.querySelector("#editor"), {
         const wordCountPlugin = editor.plugins.get( 'WordCount' );
         const wordCountWrapper = document.getElementById( 'word-count' );
         wordCountWrapper.appendChild( wordCountPlugin.wordCountContainer );
-        displayStatus(editor);
+        //displayStatus(editor);
     })
     .catch(error => {
         console.error(error);
@@ -272,6 +285,8 @@ const edit_text = (articleId,button) => {
         execProcess( "article/"+articleId,"POST",{articleid:0}).then( (data) => {
             enable_card_zero(data.articleId);
             editor.setData("");
+            editor_status = "init";
+            editor_status_text.textContent = "";
             editorDialog.showModal();
         });
     } else {
@@ -282,6 +297,8 @@ const edit_text = (articleId,button) => {
             } else {
                 editor.setData("");
             }
+            editor_status = "init";
+            editor_status_text.textContent = "";
             editorDialog.showModal();
         });
     }
