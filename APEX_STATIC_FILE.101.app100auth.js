@@ -128,13 +128,15 @@ const saveData = async ( data ) => {
         editor_status="ok";
         return Promise.resolve();
     }
-    
-    console.log("time",Date.now());
+    const pendingActions = editor.plugins.get( 'PendingActions' );
+    const action = pendingActions.add( 'Saving changes' );
+
     editor_status_text.textContent = "Saving content ...";
     const word_count = document.querySelector(".ck-word-count__words").textContent;
     
     const title = document.querySelector(".ck > h1").textContent;
     await execProcess("article/"+gArticleId, "PUT",  {edit_text: data, title: title, word_count: word_count}).then( (data) => {
+        pendingActions.remove( action );
         editor_status_text.textContent = "Saving content .." + data.words + " saved";
         update_card_elements(data);
     }).catch( (error) => console.error(error));
@@ -277,10 +279,10 @@ const upload_media = (articleId) => {
 const editorDialog = document.querySelector("dialog.editor");
 
 const edit_text = (articleId,button) => {
-    // initialSave = 0;
-    // const statusIndicator = document.querySelector( '#editor-status' );
-    // if(statusIndicator) statusIndicator.textContent = "";
-
+    const pendingActions = editor.plugins.get( 'PendingActions' );
+    if ( pendingActions.hasAny ) {
+        return;
+    }
     if (articleId === "0") {
         execProcess( "article/"+articleId,"POST",{articleid:0}).then( (data) => {
             enable_card_zero(data.articleId);
@@ -290,15 +292,15 @@ const edit_text = (articleId,button) => {
             editorDialog.showModal();
         });
     } else {
-        gArticleId = articleId;
         execProcess( "article/"+articleId,"GET").then( (data) => {
+            gArticleId = articleId;
+            editor_status = "init";
+            editor_status_text.textContent = "";
             if (data.content) {
                 editor.setData(data.content);
             } else {
                 editor.setData("");
             }
-            editor_status = "init";
-            editor_status_text.textContent = "";
             editorDialog.showModal();
         });
     }
