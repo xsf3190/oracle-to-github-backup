@@ -64,6 +64,11 @@
     --preview-width: 60ch;
 }
 
+h4 {
+    margin-block-start: 0;
+    margin-block-end: 0;
+}
+
 body {
     font-family: var(--font-serif);
     font-size: var(--step-0);
@@ -286,6 +291,9 @@ ul.homepage>li:nth-of-type(2) {
   border-bottom: 10px solid black;
 }
 
+ul.homepage>li:nth-of-type(2) svg{
+  inline-size: 75%;
+}
 
 ul.homepage>li:nth-of-type(3) {
   grid-column: span 9;
@@ -310,7 +318,7 @@ ul.homepage>li:nth-of-type(2), ul.homepage>li:nth-of-type(4), ul.homepage>li:nth
 }
 
 ul.homepage>li:nth-of-type(4) svg{
-  width: 50%;
+  inline-size: 50%;
 }
 
 ul.homepage>li:nth-of-type(5) {
@@ -326,21 +334,44 @@ ul.homepage>li:nth-of-type(5) {
 }
 
 ul.homepage>li:nth-of-type(6) {
-  grid-column: span 7;
-  grid-row: span 7;
-  border-right: 7px solid black;
+    grid-column: span 7;
+    grid-row: span 7;
+    border-right: 7px solid black;
+    display: grid;
+    grid-template-areas: "overlay";
 }
 
 ul.homepage>li:nth-of-type(6) svg {
-  inline-size: 15%;
-  block-size: 15%
+    inline-size: 3ch;
+}
+
+ul.homepage>li:nth-of-type(6) h4 {
+    grid-area: overlay;
+    place-self: start center;
+    font-size: var(--step-1);
+}
+
+ul.homepage>li:nth-of-type(6) div {
+    grid-area: overlay;
+    place-self: center;
+}
+
+ul.homepage>li:nth-of-type(6) a + a {
+    margin-left: 2ch;
+}
+
+ul.homepage>li:nth-of-type(6) span {
+    grid-area: overlay;
+    place-self: end center;
+    cursor: pointer;
+    font-size: var(--step--1);
+    font-style: italic;
 }
 
 ul.homepage>li:nth-of-type(7) {
   grid-column: span 6;
   grid-row: span 7;
   border-right: 7px solid black;
-/*   display: grid; */
 }
 
 ul.homepage>li:nth-of-type(8) {
