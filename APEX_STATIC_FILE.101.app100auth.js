@@ -95,7 +95,7 @@ new Sortable(galleryList, {
     ghostClass: 'drag-in-progress',
     store: {
         set: async function (sortable) {
-            execProcess("reorderAssets",{x01: sortable.toArray().join(":")}).then( (data) => {
+            execProcess("thumbnails","PUT", {dbid_string: sortable.toArray().join(":")} ).then( (data) => {
                 if (data.url) {
                     const li = document.querySelector("[data-id='" + data.articleId + "']");
                     li.querySelector("img").src = data.url;
@@ -148,7 +148,6 @@ ClassicEditor.create(document.querySelector("#editor"), {
         autosave: {
             waitingTime: 2000,
             save( editor ) {
-                // if(initialSave < 2) return Promise.resolve();
                 return saveData( editor.getData() );
             }
         },
@@ -160,21 +159,9 @@ ClassicEditor.create(document.querySelector("#editor"), {
     })
     .then( (newEditor) => {
         editor = newEditor;
-
-        // editor.model.document.on( 'change:data', () => {
-        //     if(initialSave < 2) initialSave++;
-        //     if(initialSave > 1) 
-        //     {
-        //         displayStatus(editor);
-        //         const statusIndicator = document.querySelector( '#editor-status' );
-        //         if(statusIndicator) statusIndicator.textContent = "Saving";
-        //     }
-        // });
-
         const wordCountPlugin = editor.plugins.get( 'WordCount' );
         const wordCountWrapper = document.getElementById( 'word-count' );
         wordCountWrapper.appendChild( wordCountPlugin.wordCountContainer );
-        //displayStatus(editor);
     })
     .catch(error => {
         console.error(error);
@@ -372,9 +359,11 @@ const remove_card = (articleId) => {
 
 popupConfirm.addEventListener("click",  (e) => {
     const articleId = e.target.dataset.id,
-          process = e.target.dataset.process;
-    execProcess( process, {x01: articleId},{loadingIndicator: e.target}).then( () => {
-        if (process === "deleteArticle") {
+          template = e.target.dataset.template,
+          method = e.target.dataset.method;
+
+    execProcess( template + "/" + articleId, method).then( () => {
+        if (template === "article" && method === "DELETE") {
             remove_card(articleId);
             e.target.dataset.id = "";
         }
@@ -401,7 +390,8 @@ const delete_article = (articleId) => {
     popup.querySelector("p").textContent = "Are you sure you want to delete this card?";
     popupConfirm.style.display = "block";
     popupConfirm.dataset.id = articleId;
-    popupConfirm.dataset.process = "deleteArticle";
+    popupConfirm.dataset.template = "article";
+    popupConfirm.dataset.method = "DELETE";
     popup.showModal();
 }
 
@@ -409,7 +399,7 @@ const delete_article = (articleId) => {
  ** PUBLISH ARTICLE.
  */
 const publish_article = (articleId, button) => {
-    execProcess( "publishArticle", {x01: articleId, x02: "Y"}).then( (data) => {
+    execProcess( "publish/"+articleId, "PUT").then( (data) => {
         if (data.message) {
             popupOpen("UNABLE TO PUBLISH ARTICLE", data.message);
         } else {
@@ -424,7 +414,7 @@ const publish_article = (articleId, button) => {
  ** UNPUBLISH ARTICLE.
  */
 const unpublish_article = (articleId, button) => {
-    execProcess( "publishArticle", {x01: articleId, x02: "N"}).then( () => {
+    execProcess( "unpublish/"+articleId, "PUT").then( () => {
         button.classList.remove("unpublish");
         button.classList.add("publish");
         button.textContent = "Publish";
@@ -461,7 +451,7 @@ const cardHandlerAuth = (e) => {
  ** DELETE ASSET AND UPDATE THUMBNAIL GALLERY
  */
 const delete_asset = (dbid, button) => {
-    execProcess( "deleteAsset", {x01: dbid},{loadingIndicator:button}).then( (data) => {
+    execProcess( "asset/"+dbid, "DELETE").then( (data) => {
         if (Number(data.nb)===0) {
             location.replace(location.href);
             return;
@@ -491,7 +481,7 @@ const delete_asset = (dbid, button) => {
 const update_asset = (dbid, li) => {
     const altText = li.querySelector("#alt-text").value,
           description = li.querySelector("#description").value;
-    execProcess( "updateAsset", {x01: dbid, x02: altText, x03: description}).then( (data) => {
+    execProcess( "asset/"+dbid, "PUT", {alttext: altText, description: description}).then( (data) => {
         if (data.alt_text_updated) {
             li.querySelector("[for='alt-text'] > span").textContent = " - updated successfully";
         } else {
