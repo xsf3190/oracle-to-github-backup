@@ -4,9 +4,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE deleteAll(pUserId IN users.id%type);
     --
-    PROCEDURE deleteArticle;
+    PROCEDURE deleteArticle(pArticleId IN article.id%type);
     --
-    PROCEDURE deleteAsset;
+    PROCEDURE deleteAsset(pDbid IN VARCHAR2);
     --
     FUNCTION getPageContent RETURN CLOB;
     --
@@ -32,9 +32,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE manual_restore(pPassword IN VARCHAR2);
     --
-    PROCEDURE publishArticle;
+    PROCEDURE publishArticle(pArticleId IN article.id%type);
     --
-    PROCEDURE reorderAssets;
+    PROCEDURE reorderAssets(pBodyText IN CLOB);
     --
     PROCEDURE saveArticle;
     --
@@ -42,7 +42,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE signout;
     --
-    PROCEDURE updateAsset;
+    PROCEDURE unpublishArticle(pArticleId IN article.id%type);
+    --
+    PROCEDURE updateAsset(pBodyText IN CLOB, pDbid IN VARCHAR2);
     --
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
     --
@@ -330,14 +332,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm);
                 RAISE;
     END;
+
     
-    PROCEDURE getApexSession(pAppId IN OUT NUMBER, pSessionId IN OUT NUMBER) IS
-        l_apex_session VARCHAR2(100):=OWA_UTIL.get_cgi_env('Apex-Session');
+    PROCEDURE getApexSession(pAppId IN OUT NUMBER, pSessionId IN OUT NUMBER, pPageId IN OUT NUMBER) IS
+        l_parts apex_t_varchar2;
     BEGIN
-        pAppId:=SUBSTR(l_apex_session,1,INSTR(l_apex_session,',')-1);
-        pSessionId:=SUBSTR(l_apex_session,INSTR(l_apex_session,',')+1);
+        l_parts:=apex_string.split(OWA_UTIL.get_cgi_env('Apex-Session'),',');
+        pAppId:=l_parts(1);
+        pSessionId:=l_parts(2);
+        pPageId:=l_parts(3);
     END;
     
+    /*
+    ** Return id of authenticated user for the session as 
+    */
     FUNCTION getUserId(pSaveCookie BOOLEAN DEFAULT FALSE) RETURN users.id%type IS
         l_names owa_cookie.vc_arr;
         l_vals owa_cookie.vc_arr;
@@ -345,32 +353,40 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         
         l_app_id NUMBER;
         l_session_id users.apex_session_id%type;
+        l_page_id NUMBER;
         l_apex_cookie_value users.apex_cookie_value%type;
         l_user_id users.id%type;
-    BEGIN        
-        getApexSession(l_app_id, l_session_id);
+    BEGIN
+        l_user_id:=NULL;
         
-        BEGIN
+        getApexSession(l_app_id, l_session_id, l_page_id);
+        
+        FOR C IN (
             SELECT u.id, apex_cookie_value
-              INTO l_user_id, l_apex_cookie_value
               FROM apex_workspace_sessions s, users u
              WHERE s.apex_session_id=l_session_id
-               AND s.user_name=u.email;
-            EXCEPTION
-                WHEN NO_DATA_FOUND THEN RETURN(NULL);
-        END;
-        
-        /* Additional check that session cookie is valid */
-        owa_cookie.get_all(names => l_names, vals => l_vals, num_vals => l_num_vals);
-        FOR i IN 1..l_names.COUNT LOOP
-            IF (l_names(i)='ORA_WWV_APP_' || l_app_id) THEN
-                IF (pSaveCookie) THEN
-                    UPDATE users SET apex_cookie_value=l_vals(i) WHERE id=l_user_id;
-                ELSIF (l_apex_cookie_value<>l_vals(i)) THEN
-                    RAISE_APPLICATION_ERROR(-20000,'SESSION COOKIE VALUE HAS CHANGED');
+               AND s.user_name=u.email )
+        LOOP
+            /* We have an authenticated session */
+            l_user_id:=C.id;
+            
+            /* Additional check that session cookie is valid */
+            owa_cookie.get_all(names => l_names, vals => l_vals, num_vals => l_num_vals);
+            FOR i IN 1..l_names.COUNT LOOP
+                IF (l_names(i)='ORA_WWV_APP_' || l_app_id) THEN
+                    IF (pSaveCookie) THEN
+                        UPDATE users SET apex_cookie_value=l_vals(i) WHERE id=l_user_id;
+                    ELSIF (C.apex_cookie_value<>l_vals(i)) THEN
+                        RAISE_APPLICATION_ERROR(-20000,'SESSION COOKIE VALUE HAS CHANGED');
+                    END IF;
                 END IF;
-            END IF;
+            END LOOP;            
         END LOOP;
+        
+        IF (l_user_id IS NULL AND l_page_id=2) THEN
+            log_error(-20000,'Session Ended. Login again.',pAjax=>TRUE);
+            RAISE_APPLICATION_ERROR(-20000,'SESSION ENDED');
+        END IF;
 
         RETURN (l_user_id);
     END;    
@@ -677,8 +693,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE signout IS
         l_app_id NUMBER;
         l_session_id NUMBER;
+        l_page_id NUMBER;
     BEGIN
-        getApexSession(l_app_id, l_session_id);
+        getApexSession(l_app_id, l_session_id, l_page_id);
 
         apex_session.delete_session(p_session_id=>l_session_id);
         /*
@@ -752,7 +769,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                                     <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || g_facebook_svg ||'</a>
                                     <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || g_google_svg ||'</a>
                                 </div>
-                                <span class="button">Privacy Policy</span>
+                                <span class="privacy" data-id="19124">Privacy Policy</span>
                             </li>
                             <li class="blue"></li>
                             <li class="grey"></li>
@@ -808,7 +825,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                         --CASE WHEN apex_authentication.is_authenticated THEN
                         CASE WHEN apex_application.g_flow_step_id=2 THEN
                         '<div class="dropdown">
-                          <button type="button" class="fa fa-caret-down show-dropdown"></button>
+                          <button type="button" class="fa fa-caret-down show-dropdown">&blacktriangledown;</button>
                           <ul class="dropdown-items">
                             <li><button type="button" class="fa fa-cloud-upload upload-media">Upload</button></li>
                             <li><button type="button" class="fa fa-edit edit-text">Edit</button></li>
@@ -1017,12 +1034,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             pNbItems:=pNbItems+1;
             
             pContent:=pContent || TO_CLOB('
-                <li class="card" tabindex="0"' || CASE WHEN apex_authentication.is_authenticated THEN ' data-id="' || C.row_id || '"' END || '>
+                <li class="card" tabindex="0"' || CASE WHEN pUserId IS NOT NULL THEN ' data-id="' || C.row_id || '"' END || '>
                     <div class="button-container">
                         <span>' || C.rn || '/' || C.nb || '</span>' || 
-                        CASE WHEN apex_authentication.is_authenticated THEN
+                        CASE WHEN pUserId IS NOT NULL THEN
                         '<div class="dropdown">
-                            <button type="button" class="fa fa-caret-down show-dropdown"></button>
+                            <button type="button" class="fa fa-caret-down show-dropdown">&blacktriangledown;</button>
                             <ul class="dropdown-items">
                                 <li><button type="button" class="fa fa-refresh update-asset">Update Text</button></li>
                                 <li><button type="button" class="fa fa-id-card view-performance">Performance</button></li>
@@ -1065,11 +1082,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             pContent:=pContent || TO_CLOB('
                 <div>
                     <label for="alt-text">Alt text<span></span></label>
-                    <textarea id="alt-text" maxlength="50"' || CASE WHEN NOT apex_authentication.is_authenticated THEN ' readonly' END || '>' || C.alt_text || '</textarea>
+                    <textarea id="alt-text" maxlength="50"' || CASE WHEN pUserId IS NULL THEN ' readonly' END || '>' || C.alt_text || '</textarea>
                 </div>
                 <div>
                     <label for="description">Description<span></span></label>
-                    <textarea id="description" maxlength="500"' || CASE WHEN NOT apex_authentication.is_authenticated THEN ' readonly' END || '>' || C.description || '</textarea>                    
+                    <textarea id="description" maxlength="500"' || CASE WHEN pUserId IS NULL THEN ' readonly' END || '>' || C.description || '</textarea>                    
                 </div>');
             
             pContent:=pContent || TO_CLOB('</li>');
@@ -1077,7 +1094,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;
         
         pInstruction:=CASE WHEN apex_util.get_session_state('APP_MAXTOUCHPOINTS') > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen' || 
-                       CASE WHEN apex_authentication.is_authenticated AND pNbItems > 1 THEN 
+                       CASE WHEN pUserId IS NOT NULL AND pNbItems > 1 THEN 
                             '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover' END;
 
     END;
@@ -1448,25 +1465,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Remove article and any uploaded assets
      */   
-    PROCEDURE deleteArticle IS
-        l_article_id article.id%type:=apex_application.g_x01;
+    PROCEDURE deleteArticle(pArticleId IN article.id%type) IS
         l_clob CLOB;
         l_url VARCHAR2(500);
+        l_user_id users.id%type:=getUserId();
     BEGIN
         FOR C IN (SELECT DISTINCT a.resource_type, u.cld_cloud_name, u.cld_api_key, u.cld_api_secret 
                     FROM users u, article t, asset a
-                   WHERE t.id=l_article_id
+                   WHERE t.id=pArticleId
                      AND t.author_user_id=u.id
+                     AND u.id=l_user_id
                      AND t.id=a.article_id)
         LOOP
-            l_url:='https://api.cloudinary.com/v1_1/' || C.cld_cloud_name || '/resources/' || C.resource_type || '/tags/' || l_article_id;
+            l_url:='https://api.cloudinary.com/v1_1/' || C.cld_cloud_name || '/resources/' || C.resource_type || '/tags/' || pArticleId;
             l_clob := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'DELETE',p_username=>C.cld_api_key,p_password=>C.cld_api_secret); 
             log(l_clob);
         END LOOP;
         
-        DELETE asset WHERE article_id=l_article_id;
+        DELETE asset WHERE article_id=pArticleId;
         
-        DELETE article WHERE id=l_article_id;
+        DELETE article WHERE id=pArticleId;
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -1481,9 +1499,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Update the alt_text and description columns of a given ASSET
      */   
-    PROCEDURE updateAsset IS
-        l_asset_dbid VARCHAR2(20) := apex_application.g_x01;
-        l_rowid ROWID:=CHARTOROWID(l_asset_dbid);
+    PROCEDURE updateAsset(pBodyText IN CLOB, pDbid IN VARCHAR2) IS
+        l_rowid ROWID:=CHARTOROWID(pDbid);
         l_alt_text asset.alt_text%type := apex_application.g_x02;
         l_description asset.description%type := apex_application.g_x03;
         l_alt_text_old asset.alt_text%type := apex_application.g_x02;
@@ -1491,6 +1508,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_alt_text_updated BOOLEAN;
         l_description_updated BOOLEAN;
     BEGIN
+        SELECT alttext, description INTO l_alt_text, l_description
+          FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (alttext, description));
+        
         SELECT alt_text, description INTO l_alt_text_old,l_description_old  FROM asset WHERE ROWID=l_rowid;
         
         UPDATE asset SET alt_text=l_alt_text, description=l_description, updated_date=current_timestamp WHERE ROWID=l_rowid;
@@ -1513,10 +1533,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Delete 1 asset for a given article
      */   
-    PROCEDURE deleteAsset IS
-        pCurrentUser users.email%type;
-        l_asset_dbid VARCHAR2(20) := apex_application.g_x01;
-        l_rowid ROWID:=CHARTOROWID(l_asset_dbid);
+    PROCEDURE deleteAsset(pDbid IN VARCHAR2) IS
+        l_rowid ROWID:=CHARTOROWID(pDbid);
         l_article_id asset.article_id%type;
         l_cld_cloud_name asset.cld_cloud_name%type;
         l_public_id asset.public_id%type;
@@ -1531,6 +1549,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_clob CLOB;
         l_instruction VARCHAR2(500);
         l_updated_date VARCHAR2(20);
+        l_user_id users.id%type:=getUserId();
         n PLS_INTEGER;
     BEGIN
         SELECT a.article_id, a.cld_cloud_name, a.public_id, u.cld_api_key, u.cld_api_secret
@@ -1538,7 +1557,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
           FROM asset a, article t, users u
          WHERE a.ROWID=l_rowid
            AND a.article_id=t.id
-           AND t.author_user_id=u.id;
+           AND t.author_user_id=u.id
+           AND u.id=l_user_id;
         
         l_parm_names(1):='invalidate';
         l_parm_values(1):='true';
@@ -1576,7 +1596,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         
         l_clob:=NULL;
         
-        getThumbnailContent(l_article_id, pCurrentUser, n, l_instruction, l_clob);
+        getThumbnailContent(l_article_id, l_user_id, n, l_instruction, l_clob);
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -1620,36 +1640,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     /*
-     **  Publish / unpublish article
+     **  Publish article
      */   
-    PROCEDURE publishArticle IS
-        l_article_id article.id%type:=apex_application.g_x01;
-        l_is_public article.is_public%type:=apex_application.g_x02;
-        n PLS_INTEGER:=-1;
+    PROCEDURE publishArticle(pArticleId IN article.id%type) IS
+        n PLS_INTEGER;
+        l_user_id users.id%type:=getUserId();
     BEGIN
         /* Reject publication request if cover image does not have ALT description */
-        
+
+        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS
+        (
+            SELECT alt_text, display_order FROM
+            (
+                SELECT MIN(display_order) OVER () cover, display_order, alt_text FROM asset WHERE article_id=pArticleId 
+            )
+            WHERE display_order=cover AND alt_text IS NOT NULL
+        );
+
         apex_json.open_object; 
         
-        IF (l_is_public='Y') THEN
-            SELECT COUNT(*) INTO n FROM dual WHERE EXISTS
-            (
-                SELECT alt_text, display_order FROM
-                (
-                    SELECT MIN(display_order) OVER () cover, display_order, alt_text FROM asset WHERE article_id=l_article_id 
-                )
-                WHERE display_order=cover AND alt_text IS NOT NULL
-            );
-            IF (n=0) THEN
-                apex_json.write('message', 'Cover Image ALT TEXT must be set before article can be published');
-            END IF;
+        IF (n=0) THEN
+            apex_json.write('message', 'Cover Image ALT TEXT must be set before article can be published');
+        ELSE
+            UPDATE article SET is_public='Y', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_user_id;
         END IF;
         
-        IF (l_is_public='N' OR n=1) THEN
-            UPDATE article SET is_public=l_is_public, updated_date=current_date WHERE id=l_article_id;
-            apex_json.write('updated', fmtUpdatedDate(current_date));
-        END IF;
-        
+        apex_json.write('updated', fmtUpdatedDate(current_date));
         apex_json.write('success', TRUE);
         apex_json.close_object;        
 
@@ -1660,11 +1676,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     /*
+     **  Publish article
+     */   
+    PROCEDURE unpublishArticle(pArticleId IN article.id%type) IS
+        l_user_id users.id%type:=getUserId();
+    BEGIN
+        UPDATE article SET is_public='N', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_user_id;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.close_object;        
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                RAISE;
+    END;    
+    
+    /*
      **  Reorder assets
      */
-    PROCEDURE reorderAssets IS
+    PROCEDURE reorderAssets(pBodyText IN CLOB) IS
         l_article_id article.id%type;
-        l_dbid_string LONG:=apex_application.g_x01;
+        l_dbid_string LONG;
         l_first_dbid ROWID;
         
         TYPE t_asset IS RECORD(
@@ -1681,6 +1715,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_url VARCHAR2(500);
         l_updated_date VARCHAR2(20);
     BEGIN
+        SELECT dbid_string INTO l_dbid_string 
+          FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (dbid_string));
+
         SELECT column_value, rownum 
           BULK COLLECT INTO l_assets
           FROM TABLE(apex_string.split(l_dbid_string,':'));
