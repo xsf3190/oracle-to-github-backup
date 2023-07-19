@@ -26,7 +26,8 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       galleryFullLegend = galleryFull.querySelector("legend > span"),
       galleryFullDimensions = galleryFull.querySelectorAll("fieldset button.dimensions"),
       listPerformance = gallery.querySelector(".list-performance"),      
-      perftable = document.querySelector("dialog.perftable");
+      perftable = document.querySelector("dialog.perftable"),
+      privacy = document.querySelector(".privacy");
 
 /*
 **  CLOSE DIALOGS
@@ -192,7 +193,7 @@ const execProcess = (template, method, input) => {
     return new Promise( async (resolve,reject) => {
         try {
             const url = gRestUrl + template,
-                  session = apex_app_id + "," + apex_session;
+                  session = apex_app_id + "," + apex_session + "," + apex_page_id;
 
             let response;
             
@@ -250,6 +251,17 @@ const show_gallery = (articleId) => {
         gArticleId = articleId;
     });
 };
+
+/*
+ ** MISERABLE PRIVACY POLICY
+ */
+if (privacy) {
+    privacy.addEventListener("click", (e) => {
+        const articleId = e.target.dataset.id,
+            card = document.querySelector('[data-id="'+articleId+'"] h4');
+        card.click();
+    });
+}
 
 /*
  ** HANDLE OPENING / CLOSING DROPDOWN MENUS
