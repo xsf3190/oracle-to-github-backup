@@ -11,6 +11,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       mediaQueue = new Set(),
       cards = document.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
+      popupClose = popup.querySelector("button.close"),
       popupConfirm = popup.querySelector("button.confirm"),
       preview = document.querySelector("dialog.preview"),
       gallery = document.querySelector("dialog.gallery"),
@@ -35,6 +36,11 @@ const apex_app_id = document.querySelector("#pFlowId").value,
 document.querySelectorAll("button.close").forEach((button) => {
     button.addEventListener("click", (e) => {
         e.stopPropagation();
+        if (e.target.dataset.sqlcode) {
+            if (e.target.dataset.sqlcode === -20000) {
+                history.back();
+            }
+        }
         e.target.closest("dialog").close();
     });
 });
@@ -208,7 +214,18 @@ const execProcess = (template, method, input) => {
                 resolve(data);
             } else {
                 reject(data.sqlerrm);
-                popupOpen("FAILURE IN HANDLER PROCESS FOR "+template, data.sqlerrm);
+                let heading, message;
+                switch (data.sqlcode) {
+                    case -20000: 
+                        popupClose.dataset.sqlcode = data.sqlcode;
+                        heading = "YOUR SESSION HAS EXPIRED";
+                        message = "ALL YOUR DATA IS SAVED. CLOSE THIS WINDOW TO LOGIN AGAIN."
+                        break;
+                    default:
+                        heading = "FAILURE IN " + method + " HANDLER FOR " + template;
+                        message = data.sqlerrm;
+                }
+                popupOpen(heading, message);
             }
         } catch (e) {
             console.error("execProcess",e);
