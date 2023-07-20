@@ -8,6 +8,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE deleteAsset(pDbid IN VARCHAR2);
     --
+    PROCEDURE getContent(pCurrentUser IN VARCHAR2, pArticleId IN article.id%type);
+    --
     FUNCTION getPageContent RETURN CLOB;
     --
     PROCEDURE getCldDetails(pArticleId IN article.id%type);
@@ -384,7 +386,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;
         
         IF (l_user_id IS NULL AND l_page_id=2) THEN
-            log_error(-20000,'Session Ended. Login again.',pAjax=>TRUE);
             RAISE_APPLICATION_ERROR(-20000,'SESSION ENDED');
         END IF;
 
@@ -393,7 +394,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         
     
     PROCEDURE getCldDetails(pArticleId IN article.id%type) IS
-        l_user_id users.id%type:=getUserId();
+        l_user_id users.id%type;
         l_cld_cloud_name users.cld_cloud_name%type;
         l_cld_api_key users.cld_api_key%type;
         l_cld_api_secret users.cld_api_secret%type;
@@ -401,6 +402,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_video_max_size usage.video_max_size%type;
         l_cldapikey VARCHAR2(1);
     BEGIN      
+        l_user_id:=getUserId();
+        
         /* get Cloudinary details either of logged on user of the hosting user */
         BEGIN
             SELECT cld_cloud_name, cld_api_key, image_max_size, video_max_size
@@ -447,9 +450,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     
     PROCEDURE getCldSignature(pParamsToSign IN CLOB) IS
         l_params_to_sign clob:=pParamsToSign;
-        l_user_id users.id%type:=getUserId();
+        l_user_id users.id%type;
         l_string_to_sign varchar2(2000):=NULL; 
     BEGIN
+        l_user_id:=getUserId();
+        
         SELECT NVL2(filename_override,'filename_override='||filename_override||'&',NULL) ||
                NVL2(headers,'headers='||headers||'&',NULL) ||
                NVL2(source,'source='||source||'&',NULL) ||
@@ -1105,10 +1110,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */
     PROCEDURE getThumbnails(pArticleId IN article.id%type) IS
         l_clob CLOB;
-        l_user_id users.id%type:=getUserId();
+        l_user_id users.id%type;
         l_instruction VARCHAR2(300);
         n PLS_INTEGER;
     BEGIN
+        l_user_id:=getUserId();
+        
         getThumbnailContent(pArticleId, l_user_id, n, l_instruction, l_clob);
 
         apex_json.open_object; 
@@ -1131,11 +1138,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE uploadCldMetadata(pBodyText IN CLOB) IS
         l_article_id article.id%type;
         l_metadata clob:=pBodyText;
-        l_user_id users.id%type:=getUserId();
+        l_user_id users.id%type;
         l_start_order PLS_INTEGER;
         l_updated_date article.updated_date%type:=current_timestamp;
         nb_assets PLS_INTEGER;
     BEGIN
+        l_user_id:=getUserId();
+        
         SELECT article_id 
           INTO l_article_id
           FROM JSON_TABLE(l_metadata FORMAT JSON, '$.images[*]' COLUMNS (article_id)) WHERE ROWNUM=1;
@@ -1333,6 +1342,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);        
     END;
     
+    
+    PROCEDURE getContent(pCurrentUser IN VARCHAR2, pArticleId IN article.id%type) IS
+        l_user_id users.id%type;
+    BEGIN
+        SELECT usr.id 
+          INTO l_user_id 
+          FROM users usr, user_ords_clients oau
+         WHERE usr.email=oau.name
+           AND oau.client_id=pCurrentUser;
+           
+        
+           
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.close_object;                  
+
+        EXCEPTION
+        WHEN OTHERS THEN
+            log_error(sqlcode,sqlerrm,pAjax=>TRUE);        
+    END;
+    
     /*
      **  Get the selected article's content in HTML format
      **
@@ -1365,8 +1395,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Insert row in article table for new article text content
      */      
     PROCEDURE insertArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS 
-        l_user_id users.id%type:=getUserId();
+        l_user_id users.id%type;
     BEGIN
+        l_user_id:=getUserId();
+        
         INSERT INTO article (id, author_user_id, created_date) 
         SELECT seq_article.nextval, id, current_timestamp
           FROM users u
@@ -1382,7 +1414,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Procedure called by the autoSave feature of CKEditor
      */        
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
-        l_user_id users.id%type:=getUserId();
+        l_user_id users.id%type;
         l_article_id article.id%type;
         l_title article.title%type;
         l_excerpt varchar2(1000);
@@ -1393,6 +1425,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_words apex_t_varchar2;
         l_rem PLS_INTEGER;
     BEGIN
+        l_user_id:=getUserId();
+        
         SELECT SUBSTR(title,1,60) title, 
                REGEXP_SUBSTR(word_count,'(\d)+') word_count,
                edit_text,
@@ -1468,8 +1502,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE deleteArticle(pArticleId IN article.id%type) IS
         l_clob CLOB;
         l_url VARCHAR2(500);
-        l_user_id users.id%type:=getUserId();
+        l_user_id users.id%type;
     BEGIN
+        l_user_id:=getUserId();
+        
         FOR C IN (SELECT DISTINCT a.resource_type, u.cld_cloud_name, u.cld_api_key, u.cld_api_secret 
                     FROM users u, article t, asset a
                    WHERE t.id=pArticleId
@@ -1549,9 +1585,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_clob CLOB;
         l_instruction VARCHAR2(500);
         l_updated_date VARCHAR2(20);
-        l_user_id users.id%type:=getUserId();
+        l_user_id users.id%type;
         n PLS_INTEGER;
     BEGIN
+        l_user_id:=getUserId();
+        
         SELECT a.article_id, a.cld_cloud_name, a.public_id, u.cld_api_key, u.cld_api_secret
           INTO l_article_id, l_cld_cloud_name, l_public_id, l_cld_api_key, l_cld_api_secret
           FROM asset a, article t, users u
@@ -1644,8 +1682,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */   
     PROCEDURE publishArticle(pArticleId IN article.id%type) IS
         n PLS_INTEGER;
-        l_user_id users.id%type:=getUserId();
+        l_user_id users.id%type;
     BEGIN
+        l_user_id:=getUserId();
+        
         /* Reject publication request if cover image does not have ALT description */
 
         SELECT COUNT(*) INTO n FROM dual WHERE EXISTS
@@ -1679,8 +1719,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Publish article
      */   
     PROCEDURE unpublishArticle(pArticleId IN article.id%type) IS
-        l_user_id users.id%type:=getUserId();
+        l_user_id users.id%type;
     BEGIN
+        l_user_id:=getUserId();
+        
         UPDATE article SET is_public='N', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_user_id;
 
         apex_json.open_object; 
