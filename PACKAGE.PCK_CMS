@@ -386,7 +386,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;
         
         IF (l_user_id IS NULL AND l_page_id=2) THEN
-            RAISE_APPLICATION_ERROR(-20000,'SESSION ENDED');
+            RAISE_APPLICATION_ERROR(-20000,'YOUR SESSION HAS EXPIRED');
         END IF;
 
         RETURN (l_user_id);
@@ -1345,6 +1345,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     
     PROCEDURE getContent(pCurrentUser IN VARCHAR2, pArticleId IN article.id%type) IS
         l_user_id users.id%type;
+        l_json CLOB;
     BEGIN
         SELECT usr.id 
           INTO l_user_id 
@@ -1352,10 +1353,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
          WHERE usr.email=oau.name
            AND oau.client_id=pCurrentUser;
            
+        --log('l_user_id:'||l_user_id);
         
+        SELECT json_object(title,author_user_id,body_html returning clob) INTO l_json FROM article WHERE id=pArticleId;
            
         APEX_JSON.open_object; 
-        APEX_JSON.write('success', TRUE);
+        APEX_JSON.write(l_json);
         APEX_JSON.close_object;                  
 
         EXCEPTION
@@ -1433,7 +1436,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                u.name,
                u.client_TZ
           INTO l_title, l_word_count, l_edit_text, l_name, l_client_TZ
-          FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (title, word_count, edit_text))
+          FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (title, word_count, edit_text CLOB))
           WHERE u.id=l_user_id;
           
         apex_escape.set_html_escaping_mode('E');
