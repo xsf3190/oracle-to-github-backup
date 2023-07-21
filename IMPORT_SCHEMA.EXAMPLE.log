@@ -1,31 +1,31 @@
-19-JUL-23 20:02:06.964: Master table "ADMIN"."SCHEMA_IMPORT" successfully loaded/unloaded
-19-JUL-23 20:02:09.156: Starting "ADMIN"."SCHEMA_IMPORT":  
-19-JUL-23 20:02:09.221: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
-19-JUL-23 20:02:09.739: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
-19-JUL-23 20:02:09.931: Processing object type SCHEMA_EXPORT/TABLE/TABLE
-19-JUL-23 20:02:15.153: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
-19-JUL-23 20:02:17.082: . . imported "EXAMPLE"."ASSET"                           464.5 KB   21449 rows
-19-JUL-23 20:02:17.380: . . imported "EXAMPLE"."USER_LOGIN"                      39.65 KB    3233 rows
-19-JUL-23 20:02:17.746: . . imported "EXAMPLE"."PERFORMANCE"                     29.89 KB     946 rows
-19-JUL-23 20:02:18.062: . . imported "EXAMPLE"."CORE_WEB_VITALS"                 43.84 KB    2207 rows
-19-JUL-23 20:02:19.258: . . imported "EXAMPLE"."ARTICLE"                         99.41 KB     309 rows
-19-JUL-23 20:02:19.705: . . imported "EXAMPLE"."USAGE"                           26.00 KB     676 rows
-19-JUL-23 20:02:19.969: . . imported "EXAMPLE"."SERVERTIMING"                    15.64 KB    1903 rows
-19-JUL-23 20:02:20.247: . . imported "EXAMPLE"."LOG"                             7.757 KB     101 rows
-19-JUL-23 20:02:20.558: . . imported "EXAMPLE"."USERS"                           6.507 KB      17 rows
-19-JUL-23 20:02:20.823: . . imported "EXAMPLE"."METRICS"                         5.492 KB      22 rows
-19-JUL-23 20:02:21.262: . . imported "EXAMPLE"."CORE_WEB_VITALS_ERR"             5.101 KB       1 rows
-19-JUL-23 20:02:21.509: . . imported "EXAMPLE"."TESTIMONIAL"                     4.937 KB       1 rows
-19-JUL-23 20:02:22.008: . . imported "EXAMPLE"."FLORENT"                         7.039 KB       1 rows
-19-JUL-23 20:02:22.346: . . imported "EXAMPLE"."BLOB2FILE"                       150.8 KB       2 rows
-19-JUL-23 20:02:22.370: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
-19-JUL-23 20:02:22.488: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
-19-JUL-23 20:02:22.858: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
-19-JUL-23 20:02:23.066: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
-19-JUL-23 20:02:23.301: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
-19-JUL-23 20:02:24.313: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
-19-JUL-23 20:02:24.587: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
-19-JUL-23 20:02:25.291: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
-19-JUL-23 20:02:25.557: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
-19-JUL-23 20:02:25.753: ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_CMS" created with compilation warnings
-19-JUL-23 20:02:25.793: Job "ADMIN"."SCHEMA_IMPORT" completed with 1 error(s) at Wed Jul 19 20:02:25 2023 elapsed 0 00:00:23
+21-JUL-23 20:01:59.461: Master table "ADMIN"."SCHEMA_IMPORT" successfully loaded/unloaded
+21-JUL-23 20:02:01.656: Starting "ADMIN"."SCHEMA_IMPORT":  
+21-JUL-23 20:02:01.714: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
+21-JUL-23 20:02:02.305: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
+21-JUL-23 20:02:02.496: Processing object type SCHEMA_EXPORT/TABLE/TABLE
+21-JUL-23 20:02:08.001: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
+21-JUL-23 20:02:09.811: . . imported "EXAMPLE"."CORE_WEB_VITALS_ERR"             5.101 KB       1 rows
+21-JUL-23 20:02:11.394: . . imported "EXAMPLE"."ARTICLE"                         112.3 KB     309 rows
+21-JUL-23 20:02:11.700: . . imported "EXAMPLE"."LOG"                             10.29 KB     212 rows
+21-JUL-23 20:02:12.197: . . imported "EXAMPLE"."FLORENT"                         7.039 KB       1 rows
+21-JUL-23 20:02:12.436: . . imported "EXAMPLE"."TESTIMONIAL"                     4.937 KB       1 rows
+21-JUL-23 20:02:12.881: . . imported "EXAMPLE"."USAGE"                           26.20 KB     684 rows
+21-JUL-23 20:02:13.146: . . imported "EXAMPLE"."METRICS"                         5.546 KB      24 rows
+21-JUL-23 20:02:13.422: . . imported "EXAMPLE"."USER_LOGIN"                      39.94 KB    3250 rows
+21-JUL-23 20:02:13.807: . . imported "EXAMPLE"."PERFORMANCE"                     36.80 KB    1245 rows
+21-JUL-23 20:02:14.335: . . imported "EXAMPLE"."ASSET"                           464.5 KB   21449 rows
+21-JUL-23 20:02:14.656: . . imported "EXAMPLE"."USERS"                           6.507 KB      17 rows
+21-JUL-23 20:02:14.940: . . imported "EXAMPLE"."SERVERTIMING"                    19.81 KB    2554 rows
+21-JUL-23 20:02:15.358: . . imported "EXAMPLE"."BLOB2FILE"                       150.8 KB       2 rows
+21-JUL-23 20:02:15.738: . . imported "EXAMPLE"."CORE_WEB_VITALS"                 46.01 KB    2313 rows
+21-JUL-23 20:02:15.763: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
+21-JUL-23 20:02:15.887: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
+21-JUL-23 20:02:16.275: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
+21-JUL-23 20:02:16.520: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
+21-JUL-23 20:02:16.791: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
+21-JUL-23 20:02:17.920: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
+21-JUL-23 20:02:18.254: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
+21-JUL-23 20:02:18.856: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
+21-JUL-23 20:02:19.113: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
+21-JUL-23 20:02:19.292: ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_CMS" created with compilation warnings
+21-JUL-23 20:02:19.328: Job "ADMIN"."SCHEMA_IMPORT" completed with 1 error(s) at Fri Jul 21 20:02:19 2023 elapsed 0 00:00:25
