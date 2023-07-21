@@ -36,8 +36,10 @@ const apex_app_id = document.querySelector("#pFlowId").value,
 document.querySelectorAll("button.close").forEach((button) => {
     button.addEventListener("click", (e) => {
         e.stopPropagation();
+        console.log(e.target);
+        console.log("e.target.dataset.sqlcode",e.target.dataset.sqlcode);
         if (e.target.dataset.sqlcode) {
-            if (e.target.dataset.sqlcode === -20000) {
+            if (Number(e.target.dataset.sqlcode) === -20000) {
                 history.back();
             }
         }
@@ -218,7 +220,7 @@ const execProcess = (template, method, input) => {
                 switch (data.sqlcode) {
                     case -20000: 
                         popupClose.dataset.sqlcode = data.sqlcode;
-                        heading = "YOUR SESSION HAS EXPIRED";
+                        heading = data.sqlerrm;
                         message = "ALL YOUR DATA IS SAVED. CLOSE THIS WINDOW TO LOGIN AGAIN."
                         break;
                     default:
