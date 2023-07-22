@@ -1346,19 +1346,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE getContent(pCurrentUser IN VARCHAR2, pArticleId IN article.id%type) IS
         l_user_id users.id%type;
         l_json CLOB;
+        l_cursor SYS_REFCURSOR;
     BEGIN
         SELECT usr.id 
           INTO l_user_id 
           FROM users usr, user_ords_clients oau
          WHERE usr.email=oau.name
            AND oau.client_id=pCurrentUser;
-           
-        --log('l_user_id:'||l_user_id);
         
-        SELECT json_object(title,author_user_id,body_html returning clob) INTO l_json FROM article WHERE id=pArticleId;
+        --SELECT json_object(title,author_user_id,body_html returning clob) INTO l_json FROM article WHERE id=pArticleId;
+        
+        OPEN l_cursor FOR
+            SELECT title as "title",
+                   excerpt as "excerpt",
+                   body_html as "text"
+              FROM article 
+             WHERE id=pArticleId
+               AND author_user_id=l_user_id;    
            
         APEX_JSON.open_object; 
-        APEX_JSON.write(l_json);
+        APEX_JSON.write('content',l_cursor);
         APEX_JSON.close_object;                  
 
         EXCEPTION
