@@ -1356,21 +1356,38 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         
         --SELECT json_object(title,author_user_id,body_html returning clob) INTO l_json FROM article WHERE id=pArticleId;
         
-        OPEN l_cursor FOR
-            SELECT title as "title",
-                   excerpt as "excerpt",
-                   body_html as "text"
-              FROM article 
-             WHERE id=pArticleId
-               AND author_user_id=l_user_id;    
-           
-        APEX_JSON.open_object; 
-        APEX_JSON.write('content',l_cursor);
-        APEX_JSON.close_object;                  
-
+        --OPEN l_cursor FOR
+            SELECT JSON_OBJECT(
+                'id' VALUE article.id,
+                'title' VALUE article.title, 
+                'excerpt' VALUE article.excerpt, 
+                'text' VALUE article.body_html, 
+                'assets' VALUE 
+                    JSON_ARRAYAGG(
+                        JSON_OBJECT('public_id' VALUE asset.public_id, 'cld_cloud_name' VALUE asset.cld_cloud_name)
+                    )
+                )
+              INTO l_json
+              FROM article, asset 
+             WHERE article.id=pArticleId
+               AND article.author_user_id=l_user_id
+               AND article.id=asset.article_id
+               GROUP BY article.id
+               ; 
+               
+        owa_util.status_line(200, '', false);
+        owa_util.mime_header( 'application/json', TRUE, 'UTF-8' );
+        htp.p(NVL(l_json,'{}'));
+        
         EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            owa_util.status_line(404, '', true);
+            htp.p('{}');
+            
         WHEN OTHERS THEN
-            log_error(sqlcode,sqlerrm,pAjax=>TRUE);        
+            log_error(sqlcode,sqlerrm); 
+            owa_util.status_line(400, '', true);
+            htp.p('{"sqlcode":'||sqlcode||',"sqlerrm":"'||sqlerrm||'"}');
     END;
     
     /*
