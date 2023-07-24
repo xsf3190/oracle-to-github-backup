@@ -8,7 +8,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE deleteAsset(pDbid IN VARCHAR2);
     --
-    PROCEDURE getContent(pCurrentUser IN VARCHAR2, pArticleId IN article.id%type);
+    PROCEDURE getContent(pCurrentUser IN VARCHAR2, pIdentifier IN VARCHAR2);
     --
     FUNCTION getPageContent RETURN CLOB;
     --
@@ -1343,41 +1343,55 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     
-    PROCEDURE getContent(pCurrentUser IN VARCHAR2, pArticleId IN article.id%type) IS
+    PROCEDURE getContent(pCurrentUser IN VARCHAR2, pIdentifier IN VARCHAR2) IS
+        l_article_id article.id%type;
         l_user_id users.id%type;
-        l_json CLOB;
-        l_cursor SYS_REFCURSOR;
+        l_clob CLOB;
+        l_json JSON_OBJECT_T;
+        l_object JSON_OBJECT_T;
+        l_array JSON_ARRAY_T;
     BEGIN
+        BEGIN
+            l_article_id:=TO_NUMBER(pIdentifier);
+            EXCEPTION WHEN VALUE_ERROR THEN l_article_id:=NULL;
+        END;
+        
         SELECT usr.id 
           INTO l_user_id 
           FROM users usr, user_ords_clients oau
          WHERE usr.email=oau.name
            AND oau.client_id=pCurrentUser;
-        
-        --SELECT json_object(title,author_user_id,body_html returning clob) INTO l_json FROM article WHERE id=pArticleId;
-        
-        --OPEN l_cursor FOR
-            SELECT JSON_OBJECT(
-                'id' VALUE article.id,
-                'title' VALUE article.title, 
-                'excerpt' VALUE article.excerpt, 
-                'text' VALUE article.body_html, 
-                'assets' VALUE 
-                    JSON_ARRAYAGG(
-                        JSON_OBJECT('public_id' VALUE asset.public_id, 'cld_cloud_name' VALUE asset.cld_cloud_name)
-                    )
-                )
-              INTO l_json
-              FROM article, asset 
-             WHERE article.id=pArticleId
-               AND article.author_user_id=l_user_id
-               AND article.id=asset.article_id
-               GROUP BY article.id
-               ; 
+                   
+        l_json:= new JSON_OBJECT_T;
+        FOR C IN (SELECT id, created_date, word_count, body_html
+                    FROM article
+                   WHERE id=l_article_id )
+        LOOP
+            l_json.put('id',C.id);
+            l_json.put('created_date',TO_CHAR(C.created_date,'dd.mm.yyyy'));
+            IF (C.body_html IS NOT NULL) THEN
+                l_json.put('words',C.word_count);
+                l_json.put('text',C.body_html);
+            END IF;
+            
+            FOR C1 IN (SELECT public_id, cld_cloud_name, ROW_NUMBER() OVER (ORDER BY display_order) rn FROM asset WHERE article_id=C.id) 
+            LOOP
+                IF (C1.rn=1) THEN
+                    l_array:= new JSON_ARRAY_T;
+                    l_object:= new JSON_OBJECT_T;
+                END IF;
+                l_object.put('order',C1.rn);
+                l_object.put('public_id',C1.public_id);
+                l_object.put('cld_cloud_name',C1.cld_cloud_name);
+                l_array.append(l_object);
+            END LOOP;
+            l_json.put('assets',l_array);
+        END LOOP;
+
                
         owa_util.status_line(200, '', false);
         owa_util.mime_header( 'application/json', TRUE, 'UTF-8' );
-        htp.p(NVL(l_json,'{}'));
+        htp.p(l_json.to_clob);
         
         EXCEPTION
         WHEN NO_DATA_FOUND THEN
