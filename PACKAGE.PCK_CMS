@@ -16,6 +16,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getCldSignature(pParamsToSign IN CLOB);
     --
+    FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER) RETURN VARCHAR2;
+    --
     PROCEDURE getArticle(pArticleId IN article.id%type);
     --
     PROCEDURE getPerformance;
@@ -553,6 +555,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_arr t_arr:=t_arr(1,2,3);
             l_width INTEGER:=pWidth; 
         BEGIN
+            IF (pWidth=0) THEN
+                RETURN NULL;
+            END IF;
             l_arr(1):=pWidth*.25;
             l_arr(2):=pWidth*.625;
             l_arr(3):=pWidth;
@@ -564,7 +569,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 ELSE
                     l_left:=l_left+1;
                 END IF;
-            END LOOP;        
+            END LOOP;
+            IF (l_arr(l_left)=pWidth) THEN
+                RETURN NULL;
+            END IF;
             RETURN ',w_' || ROUND(l_arr(l_left));
         END;
     BEGIN
@@ -575,7 +583,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 CASE l_media_type
                     WHEN 'image' THEN '/q_auto,f_auto' || getwidth() || '/' || pPublicId
                     WHEN 'video' THEN '/video/upload/q_auto,f_auto' || getwidth() || '/' || pPublicId || '.jpg' -- video poster
-                    WHEN 'audio' THEN '/video/upload/q_auto,f_auto' || getwidth() || '/fl_waveform' || '/' || pPublicId || '.png'  --audio waveform
+                    WHEN 'audio' THEN '/video/upload/q_auto,f_auto,w_' || gWidthThumbnail || '/fl_waveform' || '/' || pPublicId || '.png'  --audio waveform
                 END;
                 
         RETURN (l_url);
@@ -1346,11 +1354,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE getContent(pCurrentUser IN VARCHAR2, pIdentifier IN VARCHAR2) IS
         l_article_id article.id%type;
         l_user_id users.id%type;
-        l_clob CLOB;
-        l_json JSON_OBJECT_T;
-        l_object JSON_OBJECT_T;
-        l_array JSON_ARRAY_T;
+        l_article_object JSON_OBJECT_T;
+        l_article_array JSON_ARRAY_T;
+        l_asset_object JSON_OBJECT_T;
+        l_asset_array JSON_ARRAY_T;
+        l_url_img VARCHAR2(500);
+        l_media_type VARCHAR2(5);
+        l_nb_articles INTEGER;
+        l_nb_assets INTEGER;
     BEGIN
+        /*
+        ** pIdentifier is either the number id of a requested article or identifies a collection of articles (for a website for example)
+        */
         BEGIN
             l_article_id:=TO_NUMBER(pIdentifier);
             EXCEPTION WHEN VALUE_ERROR THEN l_article_id:=NULL;
@@ -1361,44 +1376,78 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
           FROM users usr, user_ords_clients oau
          WHERE usr.email=oau.name
            AND oau.client_id=pCurrentUser;
-                   
-        l_json:= new JSON_OBJECT_T;
-        FOR C IN (SELECT id, created_date, word_count, body_html
-                    FROM article
-                   WHERE id=l_article_id )
+        
+        l_article_array:= new JSON_ARRAY_T;
+        
+        FOR C IN (SELECT a.id, a.created_date, a.word_count, a.title, a.body_html, w.name, wa.display_order, wa.path_name, wa.nav_name
+                    FROM article a, website_article wa, website w
+                   WHERE a.id=l_article_id 
+                     AND wa.website_id=w.id
+                     AND wa.article_id=a.id
+                   UNION ALL
+                  SELECT a.id, a.created_date, a.word_count, a.title, a.body_html, w.name, wa.display_order, wa.path_name, wa.nav_name
+                    FROM article a, website_article wa, website w
+                   WHERE w.name=pIdentifier
+                     AND wa.website_id=w.id
+                     AND wa.article_id=a.id
+                    ORDER BY display_order)
         LOOP
-            l_json.put('id',C.id);
-            l_json.put('created_date',TO_CHAR(C.created_date,'dd.mm.yyyy'));
-            IF (C.body_html IS NOT NULL) THEN
-                l_json.put('words',C.word_count);
-                l_json.put('text',C.body_html);
+            l_article_object:=new JSON_OBJECT_T;
+            l_article_object.put('article_id',C.id);
+            l_article_object.put('website',C.name);
+            l_article_object.put('path_name',C.path_name);
+            l_article_object.put('created',TO_CHAR(C.created_date,'dd.mm.yyyy'));
+            
+            IF (C.nav_name IS NOT NULL) THEN
+                l_article_object.put('nav_name',C.nav_name);
             END IF;
             
-            FOR C1 IN (SELECT public_id, cld_cloud_name, ROW_NUMBER() OVER (ORDER BY display_order) rn FROM asset WHERE article_id=C.id) 
+            IF (C.nav_name IS NOT NULL) THEN
+                l_article_object.put('title',C.title);
+            END IF;
+            
+            IF (C.body_html IS NOT NULL) THEN
+                l_article_object.put('words',C.word_count);
+                l_article_object.put('text',C.body_html);
+            END IF;
+            
+            
+            FOR C1 IN (SELECT rn, nb, cld_cloud_name, resource_type, public_id, format, width, alt_text 
+                         FROM
+                                (SELECT cld_cloud_name, resource_type, public_id, format, width, alt_text, display_order, ROW_NUMBER() OVER (ORDER BY display_order) rn, COUNT(*) OVER () nb
+                                   FROM asset 
+                                  WHERE article_id=C.id) 
+                        ORDER BY display_order)
             LOOP
                 IF (C1.rn=1) THEN
-                    l_array:= new JSON_ARRAY_T;
-                    l_object:= new JSON_OBJECT_T;
+                    l_asset_array:= new JSON_ARRAY_T;
+                    l_asset_object:= new JSON_OBJECT_T;
                 END IF;
-                l_object.put('order',C1.rn);
-                l_object.put('public_id',C1.public_id);
-                l_object.put('cld_cloud_name',C1.cld_cloud_name);
-                l_array.append(l_object);
+                IF (C1.alt_text IS NOT NULL) THEN
+                    l_asset_object.put('alt_text',C1.alt_text);
+                END IF;
+                l_media_type:=getMediaType(C1.resource_type, C1.format);
+                l_url_img:=getCloudinaryUrl(C1.cld_cloud_name, C1.resource_type, C1.public_id, C1.format, C1.width);
+                l_asset_object.put('media',l_media_type);
+                l_asset_object.put('url',l_url_img);
+                l_asset_array.append(l_asset_object);
+                IF (C1.rn=C1.nb) THEN
+                    l_article_object.put('assets',l_asset_array);
+                END IF;
             END LOOP;
-            l_json.put('assets',l_array);
+            l_article_array.append(l_article_object);
         END LOOP;
 
-               
-        owa_util.status_line(200, '', false);
-        owa_util.mime_header( 'application/json', TRUE, 'UTF-8' );
-        htp.p(l_json.to_clob);
-        
-        EXCEPTION
-        WHEN NO_DATA_FOUND THEN
+        l_nb_articles:=l_article_array.get_size;
+        IF (l_nb_articles=0) THEN
             owa_util.status_line(404, '', true);
-            htp.p('{}');
+        ELSE
+            owa_util.status_line(200, '', false);
+            owa_util.mime_header( 'application/json', TRUE, 'UTF-8' );
+            htp.p(l_article_array.to_clob);
+        END IF;
             
-        WHEN OTHERS THEN
+        EXCEPTION WHEN OTHERS THEN
             log_error(sqlcode,sqlerrm); 
             owa_util.status_line(400, '', true);
             htp.p('{"sqlcode":'||sqlcode||',"sqlerrm":"'||sqlerrm||'"}');
