@@ -145,6 +145,9 @@ const saveData = async ( data ) => {
 let editor;
 
 ClassicEditor.create(document.querySelector("#editor"), {
+        link: {
+            addTargetToExternalLinks: true
+        },
         autosave: {
             waitingTime: 2000,
             save( editor ) {
