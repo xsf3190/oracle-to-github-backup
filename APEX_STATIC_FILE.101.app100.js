@@ -36,8 +36,6 @@ const apex_app_id = document.querySelector("#pFlowId").value,
 document.querySelectorAll("button.close").forEach((button) => {
     button.addEventListener("click", (e) => {
         e.stopPropagation();
-        console.log(e.target);
-        console.log("e.target.dataset.sqlcode",e.target.dataset.sqlcode);
         if (e.target.dataset.sqlcode) {
             if (Number(e.target.dataset.sqlcode) === -20000) {
                 history.back();
