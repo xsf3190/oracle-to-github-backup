@@ -396,7 +396,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         RETURN (l_user_id);
     END;
     
-    
     /*
     ** Deploy website to Netlify via Github
     */    
@@ -406,20 +405,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_repo_id INTEGER;
         l_template_names VARCHAR2(1000);
         l_deploy_key_id VARCHAR2(40);
-        NETLIFY_INSTALLATION_ID CONSTANT INTEGER:=23838228;
         l_json JSON_OBJECT_T;
         l_repo JSON_OBJECT_T;
+        l_action JSON_OBJECT_T;
         l_site clob;
     BEGIN
         /* Check user is authenticated first */
         --l_user_id:=getUserId();
         
-        /* Get the only admin user - i.e. the one user with both Netlify and Github tokens */
-        SELECT id INTO l_user_id FROM users WHERE github_repos_owner IS NOT NULL AND github_token IS NOT NULL AND netlify_token IS NOT NULL;
+        /* Get the only authenticated user - i.e. the one user with both Netlify and Github tokens */
+        SELECT id INTO l_user_id FROM users WHERE github_repos_owner IS NOT NULL AND github_token IS NOT NULL AND netlify_token IS NOT NULL AND netlify_installation_id IS NOT NULL;
         
         
-        FOR C IN (SELECT github_repos_owner, github_repos_owner||'/DEPLOY' deploy_repo, github_token, netlify_token FROM users WHERE id=l_user_id) 
+        FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, u.netlify_token, u.netlify_installation_id, w.name, w.template, w.netlify_site_id 
+                    FROM users u, website w
+                   WHERE u.id=l_user_id
+                     AND w.id=pWebsiteId) 
         LOOP
+            /*
+            ** 1. Create Netlify Site with deployment id if not already exists
+            ** 2. Trigger Github action build
+            */
             apex_web_service.g_request_headers(1).name := 'Accept';
             apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
             apex_web_service.g_request_headers(2).name := 'Authorization';
@@ -427,34 +433,30 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_web_service.g_request_headers(3).name := 'User-Agent';
             apex_web_service.g_request_headers(3).value := C.github_repos_owner;
             
-            /* get id of DEPLOY repository */
-            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo ,p_http_method=>'GET');
-            FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
-                l_repo_id:=C1.id;
-            END LOOP;
-            
-            /* get template names */
-            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo||'/contents/TEMPLATES',p_http_method=>'GET');
-            FOR C1 IN (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name))) LOOP
-                l_template_names:=l_template_names || C1.name;
-            END LOOP;
-            
-            /* get netlify deploy id */
-            apex_web_service.clear_request_headers;
-            
-            apex_web_service.g_request_headers(1).name := 'Authorization';
-            apex_web_service.g_request_headers(1).value := 'Bearer ' || C.netlify_token;       
-            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/deploy_keys',p_http_method=>'POST');
-            FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
-                l_deploy_key_id:=C1.id;
-            END LOOP;
-            
-            l_deploy_key_id:='64c28d781f07de0a3f027ab6';
-            
-            /* Create netlify site */
-            FOR C1 IN (SELECT name FROM website WHERE id=2 /*pWebsiteId*/) LOOP
+            IF (C.netlify_site_id IS NULL) THEN
+                /* get id of the common DEPLOY repository */
+                l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo ,p_http_method=>'GET');
+                FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
+                    l_repo_id:=C1.id;
+                END LOOP;
+
+                /* Setup connect to Netlify */
+                apex_web_service.clear_request_headers;
+                
+                apex_web_service.g_request_headers(1).name := 'Authorization';
+                apex_web_service.g_request_headers(1).value := 'Bearer ' || C.netlify_token;   
+                apex_web_service.g_request_headers(2).name := 'Content-Type';
+                apex_web_service.g_request_headers(2).value := 'application/json';
+                
+                /* get netlify deploy id */
+                l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/deploy_keys',p_http_method=>'POST');
+                FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
+                    l_deploy_key_id:=C1.id;
+                END LOOP;
+                
+                /* create JSON payload for new Netlify site */
                 l_json:=new JSON_OBJECT_T;
-                l_json.put('name', C1.name);
+                l_json.put('name', C.name);
                 
                 l_repo:=new JSON_OBJECT_T;
                 l_repo.put('provider', 'github');
@@ -464,18 +466,44 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_repo.put('repo_branch', 'main');
                 l_repo.put('private', FALSE);
                 l_repo.put('deploy_key_id', l_deploy_key_id);
-                l_repo.put('installation_id', NETLIFY_INSTALLATION_ID);
-                l_repo.put('base', C1.name);
-                
+                l_repo.put('installation_id', C.netlify_installation_id);
+                l_repo.put('base', C.name);   
                 l_json.put('repo', l_repo);
-                
                 l_site:=l_json.to_clob;
-                log(l_site);
                 
+                /* Create Netlify site and store the site_id in website table */
                 l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites', p_http_method=>'POST', p_body=>l_site);
-                log(l_clob);
-        
+                FOR C1 IN (SELECT site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id))) LOOP
+                    UPDATE website SET netlify_site_id = C1.site_id WHERE id=pWebsiteId;
+                END LOOP;
+
+                apex_web_service.g_request_headers(1).name := 'Accept';
+                apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
+                apex_web_service.g_request_headers(2).name := 'Authorization';
+                apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
+                apex_web_service.g_request_headers(3).name := 'User-Agent';
+                apex_web_service.g_request_headers(3).value := C.github_repos_owner;
+            END IF;
+            
+            /* trigger the deployment using Githib actions */          
+            l_json:=new JSON_OBJECT_T;
+            l_json.put('event_type', 'trigger_build');
+            
+            l_action:=new JSON_OBJECT_T;
+            l_action.put('build_path', C.name);
+            l_action.put('template', C.template);
+            l_json.put('client_payload', l_action);
+            
+            l_site:=l_json.to_clob;
+            log(l_site);
+            
+            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_site);
+            
+            /*
+            FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
+                l_repo_id:=C1.id;
             END LOOP;
+            */
             
         END LOOP;
     END;    
@@ -858,6 +886,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <button type="button" class="signout">SIGN OUT</button>
                  </nav>');
             END LOOP;
+            
+            /* get Deployment  names */
+            /*
+            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo||'/contents/TEMPLATES',p_http_method=>'GET');
+            FOR C1 IN (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name))) LOOP
+                l_template_names:=l_template_names || C1.name;
+            END LOOP;
+            */
         ELSE
             FOR C IN (SELECT body_html FROM article WHERE id=1) 
             LOOP
@@ -1628,6 +1664,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         FOR i IN 1..l_words.COUNT LOOP
             IF (l_words(i) IS NULL) THEN
                 CONTINUE;
+            END IF;
+            IF (LENGTHB(l_words(i))>25) THEN
+                l_excerpt:=l_excerpt || SUBSTR(l_words(i),1,25);
+                EXIT;
             END IF;
             l_rem:=160 - NVL(LENGTHB(l_excerpt),0);
             IF (LENGTHB(l_words(i)) <= l_rem) THEN
