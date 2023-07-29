@@ -298,13 +298,13 @@ window.onclick = (e) => {
  ** CARD HANDLER FOR READ-ONLY ACTIONS 
  */
 const cardHandler = (e) => {
-    
     const card = e.srcElement.closest(".card");
+
     if (!card) return;
 
     const articleId = card.dataset.id;
-
-     if (e.target.matches(".show-gallery")) {
+    console.log("e.target",e.target);
+    if (e.target.matches(".show-gallery")) {
         show_gallery(articleId);                     
     } else if (e.target.matches(".preview")) {
         preview_article(articleId, e.srcElement);                  
