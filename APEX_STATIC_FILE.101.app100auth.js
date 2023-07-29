@@ -241,6 +241,16 @@ add_card.addEventListener('click',  e => {
 });
 
 /* 
+ ** DEPLOY WEBSITE
+ */
+const deploy_website = document.querySelector(".deploy-website");
+deploy_website.addEventListener('click',  e => {
+    execProcess("deploy/103","POST").then( (data) => {
+        popupOpen("Website is being deployed","... will take about 30 seconds?");
+    });
+});
+
+/* 
  ** UPLOAD MEDIA. PROMPT FOR CLOUDINARY API KEY IF NON-SUBSCRIBER
  */
 const upload_media = (articleId) => {
@@ -256,7 +266,6 @@ const upload_media = (articleId) => {
             dialog.onclose = resolve;
         });
         promise.then(function(response) {
-            console.log("response",response);
             widget.open();
             widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
         });
