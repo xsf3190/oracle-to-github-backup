@@ -243,10 +243,11 @@ add_card.addEventListener('click',  e => {
 /* 
  ** DEPLOY WEBSITE
  */
-const deploy_website = document.querySelector(".deploy-website");
-deploy_website.addEventListener('click',  e => {
-    execProcess("deploy/103","POST").then( (data) => {
-        popupOpen("Website is being deployed","... will take about 30 seconds?");
+document.querySelectorAll(".deploy-website").forEach(button => {
+    button.addEventListener('click',  e => {
+        execProcess("deploy/" + e.target.dataset.id,"POST").then( (data) => {
+            popupOpen("Website is being deployed","... will take about 30 seconds?");
+        });
     });
 });
 
