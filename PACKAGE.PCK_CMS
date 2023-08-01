@@ -1530,13 +1530,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_website_object:= new JSON_OBJECT_T;
         l_article_array:= new JSON_ARRAY_T;
 
-        FOR C IN (SELECT id, name, favicon_url, image_dimension
+        FOR C IN (SELECT id, name, favicon_url, image_dimension, contact_email, trade_name, affiliation_link_img, affiliation_link_url
                     FROM website
                    WHERE id=pWebsiteId)
         LOOP
             l_website_object.put('id',C.id);
             l_website_object.put('name',C.name);
             l_website_object.put('favicon_url',C.favicon_url);
+            l_website_object.put('contact_email',C.contact_email);
+            l_website_object.put('trade_name',C.trade_name);
+            l_website_object.put('affiliation_link_img',C.affiliation_link_img);
+            l_website_object.put('affiliation_link_url',C.affiliation_link_url);
             l_json.put('website',l_website_object);
         
             FOR C1 IN (SELECT a.id, a.created_date, a.word_count, a.title, a.body_html, wa.display_order, wa.path_name, wa.nav_name
@@ -1547,6 +1551,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             LOOP
                 l_article_object:=new JSON_OBJECT_T;
                 l_article_object.put('article_id',C.id);
+                l_article_object.put('display_order',C1.display_order);
                 l_article_object.put('path_name',C1.path_name);
                 l_article_object.put('created',TO_CHAR(C1.created_date,'dd.mm.yyyy'));
                 
