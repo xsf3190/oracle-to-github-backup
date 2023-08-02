@@ -111,9 +111,13 @@ new Sortable(galleryList, {
  */
 const signout = document.querySelector(".signout");
 signout.addEventListener('click',  () => {
+    if (gExpiredSession) {
+        window.location.href = gHomeUrl;
+        return;
+    }
     execProcess("signout","DELETE").then( () => {
-        history.back();
-    }).catch( ()=>history.back());
+        window.location.href = gHomeUrl;
+    }).catch( ()=>window.location.href = gHomeUrl);
 });
 
 /* 
