@@ -2,7 +2,9 @@ let gArticleId,
     gBrowser,
     gConnectionType,
     gFullImage,
-    gRestUrl;
+    gRestUrl,
+    gHomeUrl
+    gExpiredSession = false;
 
 const apex_app_id = document.querySelector("#pFlowId").value,
       apex_page_id = document.querySelector("#pFlowStepId").value,
@@ -38,7 +40,7 @@ document.querySelectorAll("button.close").forEach((button) => {
         e.stopPropagation();
         if (e.target.dataset.sqlcode) {
             if (Number(e.target.dataset.sqlcode) === -20000) {
-                history.back();
+                window.location.href = gHomeUrl;
             }
         }
         e.target.closest("dialog").close();
@@ -217,6 +219,7 @@ const execProcess = (template, method, input) => {
                 let heading, message;
                 switch (data.sqlcode) {
                     case -20000: 
+                        gExpiredSession = true;
                         popupClose.dataset.sqlcode = data.sqlcode;
                         heading = data.sqlerrm;
                         message = "ALL YOUR DATA IS SAVED. CLOSE THIS WINDOW TO LOGIN AGAIN."
