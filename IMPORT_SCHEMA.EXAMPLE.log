@@ -1,32 +1,32 @@
-01-AUG-23 20:02:04.495: Master table "ADMIN"."SCHEMA_IMPORT" successfully loaded/unloaded
-01-AUG-23 20:02:06.740: Starting "ADMIN"."SCHEMA_IMPORT":  
-01-AUG-23 20:02:06.807: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
-01-AUG-23 20:02:07.428: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
-01-AUG-23 20:02:07.598: Processing object type SCHEMA_EXPORT/TABLE/TABLE
-01-AUG-23 20:02:19.061: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
-01-AUG-23 20:02:21.425: . . imported "EXAMPLE"."ASSET"                           469.1 KB   21457 rows
-01-AUG-23 20:02:21.862: . . imported "EXAMPLE"."PERFORMANCE"                     61.00 KB    2222 rows
-01-AUG-23 20:02:22.165: . . imported "EXAMPLE"."USER_LOGIN"                      41.88 KB    3304 rows
-01-AUG-23 20:02:22.531: . . imported "EXAMPLE"."CORE_WEB_VITALS"                 54.05 KB    2716 rows
-01-AUG-23 20:02:22.856: . . imported "EXAMPLE"."SERVERTIMING"                    31.12 KB    4659 rows
-01-AUG-23 20:02:23.354: . . imported "EXAMPLE"."USAGE"                           27.25 KB     728 rows
-01-AUG-23 20:02:23.956: . . imported "EXAMPLE"."ARTICLE"                         90.42 KB     318 rows
-01-AUG-23 20:02:24.326: . . imported "EXAMPLE"."LOG"                             11.25 KB     169 rows
-01-AUG-23 20:02:24.665: . . imported "EXAMPLE"."USERS"                           6.632 KB      17 rows
-01-AUG-23 20:02:24.950: . . imported "EXAMPLE"."METRICS"                         5.867 KB      35 rows
-01-AUG-23 20:02:25.249: . . imported "EXAMPLE"."WEBSITE"                          5.25 KB       1 rows
-01-AUG-23 20:02:25.719: . . imported "EXAMPLE"."CORE_WEB_VITALS_ERR"             5.101 KB       1 rows
-01-AUG-23 20:02:25.967: . . imported "EXAMPLE"."WEBSITE_ARTICLE"                 4.906 KB       7 rows
-01-AUG-23 20:02:26.222: . . imported "EXAMPLE"."TESTIMONIAL"                     4.937 KB       1 rows
-01-AUG-23 20:02:26.249: . . imported "EXAMPLE"."BLOB2FILE"                           0 KB       0 rows
-01-AUG-23 20:02:26.275: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
-01-AUG-23 20:02:26.425: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
-01-AUG-23 20:02:26.821: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
-01-AUG-23 20:02:27.072: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
-01-AUG-23 20:02:27.400: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
-01-AUG-23 20:02:28.591: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
-01-AUG-23 20:02:28.869: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
-01-AUG-23 20:02:29.565: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
-01-AUG-23 20:02:29.876: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
-01-AUG-23 20:02:30.079: ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_CMS" created with compilation warnings
-01-AUG-23 20:02:30.145: Job "ADMIN"."SCHEMA_IMPORT" completed with 1 error(s) at Tue Aug 1 20:02:30 2023 elapsed 0 00:00:31
+02-AUG-23 20:02:23.857: Master table "ADMIN"."SCHEMA_IMPORT" successfully loaded/unloaded
+02-AUG-23 20:02:25.945: Starting "ADMIN"."SCHEMA_IMPORT":  
+02-AUG-23 20:02:26.009: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
+02-AUG-23 20:02:26.509: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
+02-AUG-23 20:02:26.673: Processing object type SCHEMA_EXPORT/TABLE/TABLE
+02-AUG-23 20:02:37.385: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
+02-AUG-23 20:02:39.368: . . imported "EXAMPLE"."ASSET"                           469.1 KB   21457 rows
+02-AUG-23 20:02:39.782: . . imported "EXAMPLE"."PERFORMANCE"                     61.12 KB    2224 rows
+02-AUG-23 20:02:40.115: . . imported "EXAMPLE"."USER_LOGIN"                      42.10 KB    3317 rows
+02-AUG-23 20:02:40.465: . . imported "EXAMPLE"."CORE_WEB_VITALS"                 55.75 KB    2800 rows
+02-AUG-23 20:02:40.741: . . imported "EXAMPLE"."SERVERTIMING"                    31.14 KB    4663 rows
+02-AUG-23 20:02:41.193: . . imported "EXAMPLE"."USAGE"                           27.35 KB     732 rows
+02-AUG-23 20:02:41.807: . . imported "EXAMPLE"."ARTICLE"                         90.44 KB     318 rows
+02-AUG-23 20:02:42.157: . . imported "EXAMPLE"."LOG"                             12.75 KB     222 rows
+02-AUG-23 20:02:42.514: . . imported "EXAMPLE"."USERS"                           6.625 KB      17 rows
+02-AUG-23 20:02:42.795: . . imported "EXAMPLE"."METRICS"                         5.898 KB      36 rows
+02-AUG-23 20:02:43.075: . . imported "EXAMPLE"."WEBSITE"                         5.367 KB       1 rows
+02-AUG-23 20:02:43.475: . . imported "EXAMPLE"."CORE_WEB_VITALS_ERR"             5.101 KB       1 rows
+02-AUG-23 20:02:43.735: . . imported "EXAMPLE"."WEBSITE_ARTICLE"                 4.906 KB       7 rows
+02-AUG-23 20:02:43.981: . . imported "EXAMPLE"."TESTIMONIAL"                     4.937 KB       1 rows
+02-AUG-23 20:02:44.007: . . imported "EXAMPLE"."BLOB2FILE"                           0 KB       0 rows
+02-AUG-23 20:02:44.032: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
+02-AUG-23 20:02:44.165: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
+02-AUG-23 20:02:44.560: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
+02-AUG-23 20:02:44.908: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
+02-AUG-23 20:02:45.163: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
+02-AUG-23 20:02:46.096: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
+02-AUG-23 20:02:46.376: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
+02-AUG-23 20:02:47.045: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
+02-AUG-23 20:02:47.353: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
+02-AUG-23 20:02:47.535: ORA-39082: Object type PACKAGE BODY:"EXAMPLE"."PCK_CMS" created with compilation warnings
+02-AUG-23 20:02:47.571: Job "ADMIN"."SCHEMA_IMPORT" completed with 1 error(s) at Wed Aug 2 20:02:47 2023 elapsed 0 00:00:28
