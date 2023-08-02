@@ -429,7 +429,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         SELECT id INTO l_user_id FROM users WHERE github_repos_owner IS NOT NULL AND github_token IS NOT NULL AND netlify_token IS NOT NULL AND netlify_installation_id IS NOT NULL;
         
         
-        FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, u.netlify_token, u.netlify_installation_id, w.name, w.template, w.netlify_site_id 
+        FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, u.netlify_token, u.netlify_installation_id, 
+                         w.name, w.template, w.netlify_site_id, w.aws_gateway_url
                     FROM users u, website w
                    WHERE u.id=l_user_id
                      AND w.id=pWebsiteId) 
@@ -510,12 +511,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_action.put('build_path', C.name);
             l_action.put('template', C.template);
             l_action.put('fetch_url', getRestUrl() || 'content/' || pWebsiteId);
+            l_action.put('aws_gateway_url', C.aws_gateway_url);
             l_json.put('client_payload', l_action);
             
             log('JSON for dispatching Github Action:'||l_json.stringify);
             
             l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_json.stringify);
-            log('Response from POST api.github.com/repos/'|| C.deploy_repo || '/dispatches:'||TO_CHAR(l_clob));
         END LOOP;
         
         apex_json.open_object; 
@@ -884,6 +885,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_clob CLOB;
         l_css_file_urls APEX_APPLICATION_PAGES.css_file_urls%type;
         l_javascript_file_urls APEX_APPLICATION_PAGES.javascript_file_urls%type;
+        n PLS_INTEGER:=0;
     BEGIN
         SELECT NVL(css_file_urls,' '), NVL(javascript_file_urls,' ')
           INTO l_css_file_urls, l_javascript_file_urls
@@ -901,14 +903,45 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         IF (apex_application.g_flow_step_id=2) THEN
             l_clob:=l_clob || TO_CLOB(
                 '<nav>
-                    <button type="button" class="add-card">NEW CONTENT</button>');
-            FOR C IN (SELECT w.id, w.name FROM website w, users u WHERE u.email=apex_application.g_user AND w.user_id=u.id) LOOP
+                    <button type="button" class="add-card">NEW CONTENT</button>
+                    <button type="button" class="add-website">NEW WEBSITE</button>');
+                    
+            FOR C IN (SELECT w.id, w.name
+                        FROM website w, users u 
+                       WHERE u.email=apex_application.g_user 
+                         AND w.user_id=u.id
+                       ORDER BY COALESCE(w.updated_date, w.created_date) DESC) 
+            LOOP
+                n:=n+1;
+                IF (n=1) THEN
+                    l_clob:=l_clob || TO_CLOB(
+                        '<button type="button" class="edit-website" data-id="' || C.id || '">' || C.name || '</button>');
+                    CONTINUE;
+                ELSIF (n=2) THEN
+                    l_clob:=l_clob || TO_CLOB(
+                    '<div class="dropdown">
+                      <button type="button" class="fa fa-caret-down show-dropdown">&blacktriangledown;</button>
+                      <ul class="dropdown-items">');
+                END IF;
                 l_clob:=l_clob || TO_CLOB(
-                   '<button type="button" class="deploy-website" data-id="' || C.id || '">DEPLOY ' || C.name || '</button>');
+                            '<button type="button" class="edit-website" data-id="' || C.id || '"' || C.name || '</button>');
+                   --'<button type="button" class="deploy-website" data-id="' || C.id || '">DEPLOY ' || C.name || '</button>');
             END LOOP;
+            IF (n>1) THEN
+                l_clob:=l_clob || TO_CLOB(
+                    '</ul>
+                    </div>');
+            END IF;
+            
             l_clob:=l_clob || TO_CLOB(
-                    '<span>' || apex_application.g_user || '</span>
-                    <button type="button" class="signout">SIGN OUT</button>
+                    '<div class="dropdown">
+                        <button type="button class="show-dropdown">' || apex_application.g_user || '</button>
+                        <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                        <ul class="dropdown-items">
+                            <li><button type="button" class="signout">SIGN OUT</button></li>
+                            <li><button type="button" class="delete-me">Delete all content</button></li>
+                        </ul>
+                    </div>
                  </nav>');
             
             /* get Deployment TEMPLATE names */
@@ -1122,6 +1155,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             <script type="module">
               import {onCLS, onFID, onLCP} from ''https://unpkg.com/web-vitals?module'';
               gRestUrl = "' || getRestUrl() || '";
+              gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home' || '";
               onCLS(addToVitalsQueue);
               onFID(addToVitalsQueue);
               onLCP(addToVitalsQueue);
@@ -1516,6 +1550,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_nb_articles INTEGER;
         l_nb_assets INTEGER;
         
+        /* If title missing remove the empty <h1></h1> tag */
         FUNCTION stripHeading(pTitle IN VARCHAR2, pBodyHtml IN OUT NOCOPY CLOB) RETURN CLOB IS
         BEGIN
             IF (TRIM(pTitle) IS NOT NULL) THEN
