@@ -924,7 +924,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                       <ul class="dropdown-items">');
                 END IF;
                 l_clob:=l_clob || TO_CLOB(
-                            '<button type="button" class="edit-website" data-id="' || C.id || '"' || C.name || '</button>');
+                            '<button type="button" class="fa edit-website" data-id="' || C.id || '"' || C.name || '</button>');
                    --'<button type="button" class="deploy-website" data-id="' || C.id || '">DEPLOY ' || C.name || '</button>');
             END LOOP;
             IF (n>1) THEN
@@ -935,11 +935,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             
             l_clob:=l_clob || TO_CLOB(
                     '<div class="dropdown">
-                        <button type="button class="show-dropdown">' || apex_application.g_user || '</button>
+                        <button type="button class="show-dropdown" disabled>' || apex_application.g_user || '</button>
                         <button type="button" class="show-dropdown">&blacktriangledown;</button>
                         <ul class="dropdown-items">
-                            <li><button type="button" class="signout">SIGN OUT</button></li>
-                            <li><button type="button" class="delete-me">Delete all content</button></li>
+                            <li><button type="button" class="fa signout">Sign out</button></li>
+                            <li><button type="button" class="fa delete-me">Delete all content</button></li>
                         </ul>
                     </div>
                  </nav>');
@@ -1168,44 +1168,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm);
                 RAISE;
     END;
-  
-    /*
-    ** Build HTML for public home page. Main content maintained in article id = 1
-    
-        
-        FOR C IN (
-            WITH 
-            metric AS
-            (
-                SELECT nb_assets,bytes,nb_articles,word_count,total_credits,credits_remaining,total_used,max_size
-                FROM
-                (
-                SELECT id, MAX(id) OVER () max_id, nb_assets,bytes,nb_articles,word_count,total_credits,credits_remaining,total_used,max_size
-                FROM metrics
-                )
-                WHERE id=max_id
-            )
-            SELECT art.body_html, 
-                   met.nb_assets, met.bytes, met.nb_articles, met.word_count, met.total_credits, met.credits_remaining, met.total_used, met.max_size
-              FROM article art, metric met
-             WHERE art.id=1) 
-        LOOP
-        -- <img class="hero-img" src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" alt="' || C.alt_text || '">
-            l_clob:=l_clob || TO_CLOB('
-                        <table>
-                            <tr><td></td><td>HOSTING</td><td>CAPACITY USED</td></tr>
-                            <tr>
-                                <td>CLOUDINARY</td>
-                                <td style="line-height:1.5">' || TO_CHAR(C.nb_assets,'9,999,999') || ' media files<br>(' || apex_string_util.to_display_filesize(C.bytes) || ')</td>
-                                <td style="text-align: center">' || ROUND((C.total_credits - C.credits_remaining)*100 / C.total_credits) || '%</td>
-                                </tr>
-                            <tr>
-                                <td>ORACLE</td>
-                                <td style="line-height:1.5">' || C.nb_articles || ' articles<br>(' || TO_CHAR(C.word_count,'fm999,999') || ' words)</td>
-                                <td style="text-align: center">' || ROUND(C.total_used*100/C.max_size) || '%</td>
-                            </tr>
-                        </table>
-*/
     
 
     PROCEDURE getThumbnailContent(pArticleId IN article.id%type, pUserId IN users.id%type, pNbItems IN OUT PLS_INTEGER, pInstruction IN OUT NOCOPY VARCHAR2, pContent IN OUT NOCOPY CLOB) 
