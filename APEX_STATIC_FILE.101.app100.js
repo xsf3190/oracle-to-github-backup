@@ -33,7 +33,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       privacy = document.querySelector(".privacy");
 
 /*
-**  CLOSE DIALOGS
+**  CLOSE ALL DIALOGS
 */
 document.querySelectorAll("button.close").forEach((button) => {
     button.addEventListener("click", (e) => {
@@ -297,6 +297,7 @@ window.onclick = (e) => {
         e.target.nextElementSibling.classList.toggle("visible");
     }
 }
+
 /*
  ** CARD HANDLER FOR READ-ONLY ACTIONS 
  */
