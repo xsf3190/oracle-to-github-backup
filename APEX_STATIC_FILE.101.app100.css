@@ -232,6 +232,11 @@ dialog legend > button {
     vertical-align: text-bottom;
 }
 
+
+/* *************** */
+/* DEFAUKT BUTTON  */
+/* *************** */
+
 button {
     min-height: 54px;
     min-width: 54px;
@@ -247,6 +252,11 @@ button {
     align-items: center;
     justify-content: center;
     gap: 0.5em;
+}
+
+
+button.fa {
+    padding: 0.25em 0.4em;
 }
 
 
@@ -392,6 +402,52 @@ ul.homepage>li:nth-of-type(8) {
   background-color: #044281;
 }
 
+
+/* *************** */
+/* DROPDOWN STYLES */
+/* *************** */
+
+.dropdown {
+  position: relative;
+}
+
+.dropdown .dropdown-items {
+    display: none;
+    /*opacity: 0;*/
+    transition: opacity 400ms;
+    transition-delay: 300ms;
+    position: absolute;
+    z-index: 1;
+    right: 0;
+    background-color: white;
+    color: var(--color-button);
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+    border-left: var(--color-button) solid 1px;
+    border-top: var(--color-button) solid 1px;
+}
+
+.dropdown .dropdown-items.visible {
+  display: block;
+  /*opacity: 1;*/
+  transition: opacity 100ms;
+  transition-delay: 0ms;
+}
+
+.dropdown-items button {
+  background-color: var(--color-background-pale);
+  color: var(--color-button);
+  width: 100%;
+  border-bottom: solid 1px var(--color-button);
+}
+
+.dropdown-items button:hover {
+  background-color: var(--color-button);
+  color: var(--color-light-glare);
+}
+
+
 /* *************** */
 /* CARD STYLES */
 /* *************** */
@@ -445,16 +501,6 @@ nav button {
   cursor: pointer;
 }
 
-nav button.fa {
-  padding: 0.25em 0.4em;
-  font-size: 1.6em;
-}
-
-.card button.fa {
-  padding: 0.25em 0.4em;
-  font-size: 1.3em;
-}
-
 .card button:not(.fa) {
     display: inline-block;
     inline-size: 100%;
@@ -464,50 +510,9 @@ nav button.fa {
     border-radius: 0.7em;
 }
 
-
 .card button:has(.fa) {
     font-size: var(--step--1);
     line-height: 1.4;
-}
-
-.card .dropdown {
-  position: relative;
-}
-
-.card .dropdown .dropdown-items {
-    display: none;
-    /*opacity: 0;*/
-    transition: opacity 400ms;
-    transition-delay: 300ms;
-    position: absolute;
-    z-index: 1;
-    right: 0;
-    background-color: white;
-    color: var(--color-button);
-    margin: 0;
-    padding: 0;
-    list-style-type: none;
-    border-left: var(--color-button) solid 1px;
-    border-radius: 1em;
-}
-
-.card .dropdown .dropdown-items.visible {
-  display: block;
-  /*opacity: 1;*/
-  transition: opacity 100ms;
-  transition-delay: 0ms;
-}
-
-.card .dropdown-items button {
-  background-color: var(--color-background-pale);
-  color: var(--color-button);
-  width: 100%;
-  border-bottom: solid 1px var(--color-button);
-}
-
-.card .dropdown-items button:hover {
-  background-color: var(--color-button);
-  color: var(--color-light-glare);
 }
 
 .card .title {
