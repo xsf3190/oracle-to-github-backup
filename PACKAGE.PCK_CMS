@@ -6,7 +6,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE deleteArticle(pArticleId IN article.id%type);
     --
-    PROCEDURE deleteAsset(pDbid IN VARCHAR2);
+    PROCEDURE deleteAsset(pId IN asset.id%type);
     --
     PROCEDURE deployWebsite(pWebsiteId IN website.id%type);
     --
@@ -28,6 +28,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getUsage(pUserId IN users.id%type DEFAULT NULL, pUsageDate IN DATE DEFAULT NULL);
     --
+    PROCEDURE getWebsite(pWebsiteId IN website.id%type);
+    --
     PROCEDURE insertArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
     --
     PROCEDURE log(pMsg IN VARCHAR2);
@@ -48,7 +50,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE unpublishArticle(pArticleId IN article.id%type);
     --
-    PROCEDURE updateAsset(pBodyText IN CLOB, pDbid IN VARCHAR2);
+    PROCEDURE updateAsset(pBodyText IN CLOB, pId IN asset.id%type);
     --
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
     --
@@ -670,7 +672,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         ELSIF (pResourceType='video' AND pFormat IN ('m4a','wav')) THEN
             RETURN('audio');
         ELSE
-            RAISE_APPLICATION_ERROR(-20001,'Media type not supported - ' || pFormat);
+            RETURN (NULL);
         END IF;
     END;
 
@@ -680,7 +682,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2 
     IS
         l_url VARCHAR2(500);
-        l_media_type VARCHAR(5):=getMediaType(pResourceType, pFormat);
+        l_media_type VARCHAR(5);
         
         FUNCTION getWidth RETURN VARCHAR2 IS
             l_left PLS_INTEGER:=1;
@@ -720,6 +722,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         /* 
          ** Return best-fit thumbnail url of Cloudinary asset
          */
+        l_media_type:=getMediaType(pResourceType, pFormat);
+        
         l_url:='https://res.cloudinary.com/' || pCloudname ||
                 CASE l_media_type
                     WHEN 'image' THEN '/q_auto,f_auto' || getwidth() || '/' || pPublicId
@@ -870,6 +874,63 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
     
+    FUNCTION buildArticle(pAppPageNo IN NUMBER, 
+                            pId IN article.id%type, 
+                            pNbAssets IN article.nb_assets%type, 
+                            pIsPublic IN article.is_public%type, 
+                            pTitle IN article.title%type, 
+                            pExcerpt IN article.excerpt%type, 
+                            pWordCount IN VARCHAR2, 
+                            pUpdatedDate IN article.updated_date%type,
+                            pCldCloudName IN asset.cld_cloud_name%type, 
+                            pResourceType IN asset.resource_type%type, 
+                            pPublicId IN asset.public_id%type, 
+                            pFormat IN asset.format%type, 
+                            pWidth IN asset.width%type,
+                            pName IN users.name%type) RETURN VARCHAR2 
+   IS
+        l_element LONG;
+    BEGIN
+        l_element:=
+        '<li class="card" tabindex="0" data-id="' || pId || '">
+            <div class="button-container">
+                <button type="button" class="fa show-gallery"' || CASE WHEN pNbAssets=0 THEN ' disabled' END || '>&blacktriangleright;' || 
+                                                                  CASE WHEN pNbAssets=0 THEN '0' ELSE '1' END || '/' || pNbAssets || '</button>' ||
+                CASE WHEN pAppPageNo=2 THEN
+                '<div class="dropdown">
+                  <button type="button" class="fa fa-caret-down show-dropdown">&blacktriangledown;</button>
+                  <ul class="dropdown-items">
+                    <li><button type="button" class="fa fa-cloud-upload upload-media">Upload</button></li>
+                    <li><button type="button" class="fa fa-edit edit-text">Edit</button></li>
+                    <li><button type="button" class="fa fa-newspaper-o preview"' || CASE WHEN pId<0 OR COALESCE(pTitle,pExcerpt) IS NULL THEN ' disabled' END || '>Preview</button></li>' ||
+                    CASE 
+                      WHEN pIsPublic='Y' THEN 
+                        '<li><button type="button" class="fa fa-share2 unpublish">Unpublish</button></li>'
+                      ELSE 
+                        '<li><button type="button" class="fa fa-share2 publish"' || CASE WHEN pId<0 THEN ' disabled' END || '>Publish</button></li>'
+                    END 
+                    || '
+                    <li><button type="button" class="fa fa-trash delete"' || CASE WHEN pId=1 THEN ' disabled' END || '>Delete</button></li>
+                    <li><button type="button" class="fa fa-id-card">' || pId || '</button></li>
+                </div>'
+                END ||'
+            </div>' ||
+            CASE WHEN pNbAssets=0 
+                THEN '<button type="button" class="no-media upload-media">UPLOAD MEDIA</button>' 
+                ELSE '<img class="show-gallery" src="' || getCloudinaryUrl(pCldCloudName, pResourceType, pPublicId, pFormat, pWidth) || '">' 
+            END ||
+            CASE WHEN COALESCE(pTitle,pExcerpt) IS NULL 
+                THEN '<br>
+                      <button type="button" class="no-media edit-text">CREATE TEXT</button>'
+                ELSE '<h4 class="title ' || CASE WHEN pAppPageNo=2 THEN 'edit-text' ELSE 'preview' END || '">' || pTitle || '</h4>
+                      <p class="excerpt">' || pExcerpt || '<span class="word-count">' || pWordCount || '</span></p>'
+            END || '   
+            <footer>' || pName || ', <span class="updated-date">' || fmtUpdatedDate(pUpdatedDate)  || '</span></footer>
+        </li>';
+        
+        RETURN (l_element);
+        END;
+    
     /*
      **  Construct Home page HTML of qualifying blog articles
      **
@@ -984,75 +1045,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             
         /* Create cards as <li> elements for each article */
         FOR C IN (
-            WITH covers AS
-            (
-                SELECT article_id, alt_text, nb_assets, cld_cloud_name, resource_type, public_id, format, DECODE(width,0,gWidthThumbnail,width) width
-                FROM
-                (
-                SELECT article_id, alt_text, cld_cloud_name, resource_type, public_id, width, format, display_order,  
-                       MIN(display_order) OVER (PARTITION BY article_id) min_display_order, 
-                       COUNT(*) OVER (PARTITION BY article_id) nb_assets
-                FROM asset
-                WHERE NVL(asset.format,'N/A')<>'clt'
-                ) 
-                WHERE display_order=min_display_order
-            )
             SELECT a.id,
                    a.is_public,
                    c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
                    c.alt_text,
-                   NVL2(c.nb_assets,1,0) first_asset,
-                   NVL(c.nb_assets,0) nb_assets,
+                   NVL2(a.nb_assets,1,0) first_asset,
+                   NVL(a.nb_assets,0) nb_assets,
                    a.title, 
                    a.excerpt,
                    CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
                    u.name,
                    NVL(a.updated_date, a.created_date) updated_date
-              FROM article a, users u, covers c
+              FROM article a, users u, asset c
              WHERE u.email=CASE WHEN apex_application.g_user='nobody' THEN u.email ELSE apex_application.g_user END
                AND a.author_user_id=u.id
                AND a.is_public=CASE WHEN apex_application.g_user='nobody' THEN 'Y' ELSE a.is_public END
-               AND c.article_id(+)=a.id
+               AND a.cover_asset_id=c.id(+)
              UNION ALL
              SELECT -1, null, null, null, null,null,null,null,0,0,null,null,null,CASE WHEN apex_application.g_user='nobody' THEN null ELSE apex_application.g_user END,systimestamp from dual
              ORDER BY updated_date DESC) 
         LOOP
             l_clob:=l_clob || TO_CLOB(
-                '<li class="card" tabindex="0" data-id="' || C.id || '">
-                    <div class="button-container">
-                        <button type="button" class="fa show-gallery"' || CASE WHEN C.first_asset=0 THEN ' disabled' END || '>&blacktriangleright;' || C.first_asset || '/' || C.nb_assets || '</button>' ||
-                        --CASE WHEN apex_authentication.is_authenticated THEN
-                        CASE WHEN apex_application.g_flow_step_id=2 THEN
-                        '<div class="dropdown">
-                          <button type="button" class="fa fa-caret-down show-dropdown">&blacktriangledown;</button>
-                          <ul class="dropdown-items">
-                            <li><button type="button" class="fa fa-cloud-upload upload-media">Upload</button></li>
-                            <li><button type="button" class="fa fa-edit edit-text">Edit</button></li>
-                            <li><button type="button" class="fa fa-newspaper-o preview"' || CASE WHEN C.id<0 OR COALESCE(C.title,C.excerpt) IS NULL THEN ' disabled' END || '>Preview</button></li>' ||
-                            CASE 
-                              WHEN C.is_public='Y' THEN 
-                                '<li><button type="button" class="fa fa-share2 unpublish">Unpublish</button></li>'
-                              ELSE 
-                                '<li><button type="button" class="fa fa-share2 publish"' || CASE WHEN C.id<0 THEN ' disabled' END || '>Publish</button></li>'
-                            END 
-                            || '
-                            <li><button type="button" class="fa fa-trash delete"' || CASE WHEN C.id=1 THEN ' disabled' END || '>Delete</button></li>
-                            <li><button type="button" class="fa fa-id-card">' || C.id || '</button></li>
-                        </div>'
-                        END ||'
-                    </div>' ||
-                    CASE WHEN C.first_asset=0 
-                        THEN '<button type="button" class="no-media upload-media">UPLOAD MEDIA</button>' 
-                        ELSE '<img class="show-gallery" src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" alt="' || C.alt_text || '">' 
-                    END ||
-                    CASE WHEN COALESCE(C.title,C.excerpt) IS NULL 
-                        THEN '<br>
-                              <button type="button" class="no-media edit-text">CREATE TEXT</button>'
-                        ELSE '<h4 class="title ' || CASE WHEN apex_application.g_flow_step_id=2 THEN 'edit-text' ELSE 'preview' END || '">' || C.title || '</h4>
-                              <p class="excerpt">' || C.excerpt || '<span class="word-count">' || C.word_count || '</span></p>'
-                    END || '   
-                    <footer>' || C.name || ', <span class="updated-date">' || fmtUpdatedDate(C.updated_date)  || '</span></footer>
-                </li>');
+                buildArticle(
+                    apex_application.g_flow_step_id, 
+                    C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width, 
+                    C.name));
         END LOOP;
         l_clob:=l_clob || TO_CLOB('</ul>');
         l_clob:=l_clob || TO_CLOB(
@@ -1081,7 +1098,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                             <div id="word-count"></div>
                         </div>
                     </div>
-                    <button type="button" class="close" autofocus>&times;</button>
+                    <!--<button type="button" class="close">&times;</button>-->
                 </div>
             </dialog>            
             <dialog class="gallery">
@@ -1169,28 +1186,80 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 RAISE;
     END;
     
+    /*
+    ** GET ARTICLE (PAGE) CONTENT FOR WEBSITE
+    */
+    PROCEDURE getWebsite(pWebsiteId IN website.id%type) IS
+        l_user_id users.id%type;
+        l_user_name users.name%type;
+        l_clob CLOB;
+    BEGIN
+        l_user_id:=getUserId();
+        SELECT name INTO l_user_name FROM users WHERE id=l_user_id;
+        
+        FOR C IN (
+            SELECT a.id,
+                   a.is_public,
+                   c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
+                   NVL(a.nb_assets,0) nb_assets,
+                   a.title, 
+                   a.excerpt,
+                   CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
+                   NVL(a.updated_date, a.created_date) updated_date,
+                   wa.display_order display_order
+              FROM article a, website_article wa, asset c
+             WHERE wa.website_id=pWebsiteId
+               AND a.id=wa.article_id
+               AND a.cover_asset_id=c.id(+)
+             UNION ALL
+             SELECT -1, null, null, null, null,null,null,0,null,null,null,systimestamp,-1 from dual
+             ORDER BY display_order) 
+        LOOP
+            l_clob:=l_clob || TO_CLOB(
+                buildArticle(
+                    2, 
+                    C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width, 
+                    l_user_name));
+        END LOOP;
+        
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('content', l_clob);
+        apex_json.close_object;
+         
+        EXCEPTION
+            WHEN OTHERS THEN
+                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+    END;
+    
 
-    PROCEDURE getThumbnailContent(pArticleId IN article.id%type, pUserId IN users.id%type, pNbItems IN OUT PLS_INTEGER, pInstruction IN OUT NOCOPY VARCHAR2, pContent IN OUT NOCOPY CLOB) 
+    PROCEDURE getThumbnailContent(pArticleId IN article.id%type, pUserId IN users.id%type, pNbAssets IN OUT article.nb_assets%type, pInstruction IN OUT NOCOPY VARCHAR2, pContent IN OUT NOCOPY CLOB) 
     IS
         l_url_image VARCHAR2(300);
         l_media_type VARCHAR2(5);   
     BEGIN
-        pNbItems:=0;
         FOR C IN (
-            SELECT a.rowid row_id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
+            SELECT a.id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
                    DECODE(a.width,0,gWidthThumbnail,a.width) width, DECODE(a.height,0,gWidthThumbnail,a.height) height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format,
-                   COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY a.display_order) rn
-              FROM asset a, article t
+                   COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY a.display_order) rn,
+                   t.nb_assets, NVL(u.maxtouchpoints,0) maxtouchpoints
+              FROM asset a, article t, users u
              WHERE t.id=pArticleId
                AND a.article_id=t.id
                AND t.author_user_id=NVL(pUserId, t.author_user_id)
+               AND u.id=t.author_user_id
                AND NVL(a.format,'N/A')<>'clt'
              ORDER BY a.display_order )
         LOOP
-            pNbItems:=pNbItems+1;
-            
+            IF (C.rn=1) THEN
+                pNbAssets:=C.nb_assets;
+                pInstruction:=CASE WHEN C.maxtouchpoints > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen' || 
+                       CASE WHEN pUserId IS NOT NULL AND C.nb_assets > 1 THEN 
+                            '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover' END;
+            END IF;
+
             pContent:=pContent || TO_CLOB('
-                <li class="card" tabindex="0"' || CASE WHEN pUserId IS NOT NULL THEN ' data-id="' || C.row_id || '"' END || '>
+                <li class="card" tabindex="0"' || CASE WHEN pUserId IS NOT NULL THEN ' data-id="' || C.id || '"' END || '>
                     <div class="button-container">
                         <span>' || C.rn || '/' || C.nb || '</span>' || 
                         CASE WHEN pUserId IS NOT NULL THEN
@@ -1248,10 +1317,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             pContent:=pContent || TO_CLOB('</li>');
             
         END LOOP;
-        
-        pInstruction:=CASE WHEN apex_util.get_session_state('APP_MAXTOUCHPOINTS') > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen' || 
-                       CASE WHEN pUserId IS NOT NULL AND pNbItems > 1 THEN 
-                            '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover' END;
 
     END;
     
@@ -1313,10 +1378,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
           FROM JSON_TABLE(l_metadata FORMAT JSON, '$.images[*]' COLUMNS (article_id, public_id, width, height, bytes, resource_type, format, cld_cloud_name));
 
         /* Return upload details to calling Javascript process in order to update front-end */
-        FOR C IN (SELECT cld_cloud_name, resource_type, public_id, format, width, nb_assets
+        FOR C IN (SELECT id, cld_cloud_name, resource_type, public_id, format, width, nb_assets
                     FROM
                     (
-                    SELECT cld_cloud_name, resource_type, public_id, format, width, display_order, 
+                    SELECT id, cld_cloud_name, resource_type, public_id, format, width, display_order, 
                             MIN(display_order) OVER () min_display_order, 
                             COUNT(*) OVER () nb_assets
                     FROM asset 
@@ -1324,10 +1389,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     )
                     WHERE display_order=min_display_order)
         LOOP
+            UPDATE article SET cover_asset_id=C.id, nb_assets=C.nb_assets WHERE id=l_article_id;
             APEX_JSON.open_object; 
             APEX_JSON.write('success', TRUE);
             APEX_JSON.write('articleId',l_article_id);
-            APEX_JSON.write('nbAssets',C.nb_assets);
+            APEX_JSON.write('nbAssets','&blacktriangleright;1/' || C.nb_assets);
             APEX_JSON.write('imgurl',getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width));
             APEX_JSON.write('updated', fmtUpdatedDate(l_updated_date));
             APEX_JSON.close_object;
@@ -1787,8 +1853,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Update the alt_text and description columns of a given ASSET
      */   
-    PROCEDURE updateAsset(pBodyText IN CLOB, pDbid IN VARCHAR2) IS
-        l_rowid ROWID:=CHARTOROWID(pDbid);
+    PROCEDURE updateAsset(pBodyText IN CLOB, pId IN asset.id%type) IS
         l_alt_text asset.alt_text%type := apex_application.g_x02;
         l_description asset.description%type := apex_application.g_x03;
         l_alt_text_old asset.alt_text%type := apex_application.g_x02;
@@ -1799,9 +1864,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         SELECT alttext, description INTO l_alt_text, l_description
           FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (alttext, description));
         
-        SELECT alt_text, description INTO l_alt_text_old,l_description_old  FROM asset WHERE ROWID=l_rowid;
+        SELECT alt_text, description INTO l_alt_text_old,l_description_old  FROM asset WHERE id=pId;
         
-        UPDATE asset SET alt_text=l_alt_text, description=l_description, updated_date=current_timestamp WHERE ROWID=l_rowid;
+        UPDATE asset SET alt_text=l_alt_text, description=l_description, updated_date=current_timestamp WHERE id=pId;
         
         l_alt_text_updated:=NVL(l_alt_text,'x') != NVL(l_alt_text_old,'x');
         l_description_updated:=NVL(l_description,'x') != NVL(l_description_old,'x');
@@ -1821,13 +1886,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Delete 1 asset for a given article
      */   
-    PROCEDURE deleteAsset(pDbid IN VARCHAR2) IS
-        l_rowid ROWID:=CHARTOROWID(pDbid);
+    PROCEDURE deleteAsset(pId IN asset.id%type) IS
         l_article_id asset.article_id%type;
         l_cld_cloud_name asset.cld_cloud_name%type;
         l_public_id asset.public_id%type;
         l_cld_api_key users.cld_api_key%type;
         l_cld_api_secret users.cld_api_secret%type;
+        l_nb_assets article.nb_assets%type;
         l_parm_names apex_application_global.VC_ARR2;
         l_parm_values apex_application_global.VC_ARR2;
         l_timestamp NUMBER:=trunc((cast(current_timestamp at time zone 'UTC' as date) - to_date('01-jan-1970','dd-mon-yyyy')) * (86400));
@@ -1838,14 +1903,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_instruction VARCHAR2(500);
         l_updated_date VARCHAR2(20);
         l_user_id users.id%type;
-        n PLS_INTEGER;
     BEGIN
         l_user_id:=getUserId();
         
         SELECT a.article_id, a.cld_cloud_name, a.public_id, u.cld_api_key, u.cld_api_secret
           INTO l_article_id, l_cld_cloud_name, l_public_id, l_cld_api_key, l_cld_api_secret
           FROM asset a, article t, users u
-         WHERE a.ROWID=l_rowid
+         WHERE a.id=pId
            AND a.article_id=t.id
            AND t.author_user_id=u.id
            AND u.id=l_user_id;
@@ -1880,20 +1944,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             RAISE_APPLICATION_ERROR(-20001, l_error_message);
         END IF;
         
-        DELETE asset WHERE ROWID=l_rowid;
-        
-        UPDATE article SET updated_date=current_date WHERE id=l_article_id;
+        DELETE asset WHERE id=pId;
         
         l_clob:=NULL;
+        getThumbnailContent(l_article_id, l_user_id, l_nb_assets, l_instruction, l_clob);
         
-        getThumbnailContent(l_article_id, l_user_id, n, l_instruction, l_clob);
+        UPDATE article SET updated_date=current_date, nb_assets=l_nb_assets WHERE id=l_article_id;
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('articleId', l_article_id);
         apex_json.write('updated', fmtUpdatedDate(current_date));
         apex_json.write('content', l_clob);
-        apex_json.write('nb', n);
+        apex_json.write('nb', l_nb_assets);
         apex_json.write('instruction', l_instruction);
 
         apex_json.close_object;
@@ -1993,10 +2056,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE reorderAssets(pBodyText IN CLOB) IS
         l_article_id article.id%type;
         l_dbid_string LONG;
-        l_first_dbid ROWID;
+        l_first_dbid asset.id%type;
         
         TYPE t_asset IS RECORD(
-            rid ROWID,
+            id asset.id%type,
             display_order asset.display_order%type);
         TYPE tt_asset IS TABLE OF t_asset;
         l_assets tt_asset; 
@@ -2006,9 +2069,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_format asset.format%type; 
         l_width asset.width%type;
         
+        l_user_id users.id%type;
         l_url VARCHAR2(500);
-        l_updated_date VARCHAR2(20);
+        l_clob CLOB;
+        l_na_number NUMBER;
+        l_na_varchar VARCHAR2(500);
     BEGIN
+        l_user_id:=getUserId();
+        
         SELECT dbid_string INTO l_dbid_string 
           FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (dbid_string));
 
@@ -2018,36 +2086,35 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
           
         /* get the article id from first asset */
         SELECT article_id INTO l_article_id
-          FROM asset WHERE ROWID=l_assets(1).rid;
+          FROM asset WHERE id=l_assets(1).id;
         
-        /* ... and get rowid of first asset as this may have been replaced */
-        SELECT rid 
-        INTO l_first_dbid 
-        FROM 
-        (
-            SELECT ROWID rid, display_order, MIN(display_order) OVER () min_display_order
-            FROM asset 
-            WHERE article_id=l_article_id
-        )
-        WHERE display_order=min_display_order;
+        /* ... and get id of first asset as this may have been replaced */
+        SELECT cover_asset_id 
+          INTO l_first_dbid 
+          FROM article 
+         WHERE id=l_article_id;
         
         FORALL i IN l_assets.first .. l_assets.last
-        UPDATE asset SET display_order=l_assets(i).display_order WHERE ROWID  = l_assets(i).rid;
+        UPDATE asset SET display_order=l_assets(i).display_order WHERE id  = l_assets(i).id;
         
-        IF (l_assets(1).rid<>l_first_dbid) THEN
+        IF (l_assets(1).id<>l_first_dbid) THEN
             SELECT cld_cloud_name, resource_type, public_id, format, width
               INTO l_cld_cloud_name, l_resource_type, l_public_id, l_format, l_width
               FROM asset 
-              WHERE ROWID=l_assets(1).rid;
+              WHERE id=l_assets(1).id;
             l_url:=getCloudinaryUrl(l_cld_cloud_name, l_resource_type, l_public_id, l_format, l_width);
-            UPDATE article SET updated_date=current_date WHERE id=l_article_id;
-            l_updated_date:=fmtUpdatedDate(current_date);
+            UPDATE article SET updated_date=current_date, cover_asset_id=l_assets(1).id WHERE id=l_article_id;
         END IF;
+        
+        l_clob:=NULL;
+        getThumbnailContent(l_article_id, l_user_id, l_na_number, l_na_varchar, l_clob);
+        
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('articleId', l_article_id);
         apex_json.write('url', l_url);
-        apex_json.write('updated', l_updated_date);
+        apex_json.write('content', l_clob);
+        apex_json.write('updated', fmtUpdatedDate(current_date));
         apex_json.close_object;
         
         EXCEPTION
