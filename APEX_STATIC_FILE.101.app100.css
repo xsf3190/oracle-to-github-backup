@@ -62,6 +62,9 @@
 
     --gallery-width: 15rem;
     --preview-width: 60ch;
+
+    --ck-z-default: 100;
+    --ck-z-modal: calc( var(--ck-z-default) + 999 );
 }
 
 h4, ul {
@@ -568,6 +571,7 @@ nav button {
 /* ******************************** */
 /* OVERRIDE CKEDITOR DEFAULT STYLES */
 /* ******************************** */
+
 .ck-content {
     height: 90vh;
 }
