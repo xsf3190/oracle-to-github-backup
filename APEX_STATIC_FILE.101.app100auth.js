@@ -79,7 +79,7 @@ const widget=cloudinary.createUploadWidget(
                     img.src = data.imgurl;
                     nomedia.replaceWith(img);
                 }
-                li.querySelector(".show-gallery").textContent = "1/" + data.nbAssets;
+                li.querySelector(".show-gallery").innerHTML = data.nbAssets;
                 li.querySelector(".show-gallery").disabled = false;
                 li.querySelector(".updated-date").textContent = data.updated;
             });
@@ -101,6 +101,8 @@ new Sortable(galleryList, {
                     li.querySelector("img").src = data.url;
                     li.querySelector(".updated-date").textContent = data.updated;
                 }
+                galleryList.replaceChildren();
+                galleryList.insertAdjacentHTML('afterbegin',data.content);
             });
         }
     }
@@ -146,12 +148,11 @@ const saveData = async ( data ) => {
     }).catch( (error) => console.error(error));
 }
 
+
 let editor;
 
 ClassicEditor.create(document.querySelector("#editor"), {
-        link: {
-            addTargetToExternalLinks: true
-        },
+        toolbar: [ 'heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote','insertImage','codeBlock' ],
         autosave: {
             waitingTime: 2000,
             save( editor ) {
@@ -169,23 +170,18 @@ ClassicEditor.create(document.querySelector("#editor"), {
         const wordCountPlugin = editor.plugins.get( 'WordCount' );
         const wordCountWrapper = document.getElementById( 'word-count' );
         wordCountWrapper.appendChild( wordCountPlugin.wordCountContainer );
+
+        const imgFileSelector = document.querySelector("input[type=file]");
+        const imgBtn = imgFileSelector.previousElementSibling;
+        imgBtn.disabled=true;
+        editor.ui.focusTracker.on( 'change:isFocused', ( evt, data, isFocused ) => {
+            console.log( `The editor is focused: ${ isFocused }.` );
+        } );
     })
     .catch(error => {
         console.error(error);
     });
 
-const displayStatus = ( editor ) => {
-    const pendingActions = editor.plugins.get( 'PendingActions' );
-    const statusIndicator = document.querySelector( '#editor-status' );
-
-    pendingActions.on( 'change:hasAny', ( evt, propertyName, newValue ) => {
-        if ( newValue ) {
-            statusIndicator.textContent = "Saving";
-        } else {
-            statusIndicator.textContent = "Saved Successfully";
-        }
-    } );
-}    
 
 window.addEventListener("DOMContentLoaded", () => {
     if (navigator.maxTouchPoints > 1) {
@@ -242,6 +238,18 @@ add_card.addEventListener('click',  e => {
     first_card.insertAdjacentElement('beforebegin',clone);
     first_card.dataset.id = "0";
     first_card.querySelector(".fa-id-card").textContent = "0";
+});
+
+/* 
+ ** EDIT WEBSITE
+ */
+document.querySelectorAll(".edit-website").forEach(button => {
+    button.addEventListener('click',  e => {
+        execProcess("website/" + e.target.dataset.id,"GET").then( (data) => {
+            cards.replaceChildren();
+            cards.insertAdjacentHTML('afterbegin',data.content);
+        });
+    });
 });
 
 /* 
@@ -467,8 +475,8 @@ const cardHandlerAuth = (e) => {
 /* 
  ** DELETE ASSET AND UPDATE THUMBNAIL GALLERY
  */
-const delete_asset = (dbid, button) => {
-    execProcess( "asset/"+dbid, "DELETE").then( (data) => {
+const delete_asset = (id, button) => {
+    execProcess( "asset/"+id, "DELETE").then( (data) => {
         if (Number(data.nb)===0) {
             location.replace(location.href);
             return;
@@ -495,10 +503,10 @@ const delete_asset = (dbid, button) => {
 /* 
  ** DELETE ASSET AND UPDATE THUMBNAIL GALLERY
  */
-const update_asset = (dbid, li) => {
+const update_asset = (id, li) => {
     const altText = li.querySelector("#alt-text").value,
           description = li.querySelector("#description").value;
-    execProcess( "asset/"+dbid, "PUT", {alttext: altText, description: description}).then( (data) => {
+    execProcess( "asset/"+id, "PUT", {alttext: altText, description: description}).then( (data) => {
         if (data.alt_text_updated) {
             li.querySelector("[for='alt-text'] > span").textContent = " - updated successfully";
         } else {
@@ -520,12 +528,12 @@ const assetHandlerAuth = (e) => {
     const item = e.target.closest(".card");
     if (!item) return;
 
-    const dbid = item.dataset.id;
+    const id = item.dataset.id;
 
     if (e.target.matches(".delete-asset")) {
-        delete_asset(dbid, e.target);                                 
+        delete_asset(id, e.target);                                 
     } else if (e.target.matches(".update-asset")) {
-        update_asset(dbid, item); 
+        update_asset(id, item); 
     }
 }
 
