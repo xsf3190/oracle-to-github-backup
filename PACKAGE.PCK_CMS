@@ -925,7 +925,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 ELSE '<h4 class="title ' || CASE WHEN pAppPageNo=2 THEN 'edit-text' ELSE 'preview' END || '">' || pTitle || '</h4>
                       <p class="excerpt">' || pExcerpt || '<span class="word-count">' || pWordCount || '</span></p>'
             END || '   
-            <footer>' || pName || ', <span class="updated-date">' || fmtUpdatedDate(pUpdatedDate)  || '</span></footer>
+            <footer class="button-container"><span>' || pName || '</span><span class="updated-date">' || fmtUpdatedDate(pUpdatedDate)  || '</span></footer>
         </li>';
         
         RETURN (l_element);
