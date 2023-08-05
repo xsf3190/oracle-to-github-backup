@@ -70,6 +70,8 @@
 h4, ul {
     margin-block-start: 0;
     margin-block-end: 0;
+    padding-inline-start: 0;
+    padding-inline-end: 0;
 }
 
 body {
@@ -98,6 +100,7 @@ img {
 
 nav {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   background-color: var(--color-dark);
   color: var(--color-light-glare);
@@ -551,9 +554,8 @@ nav button {
 }
 
 .card footer {
-  place-self: start;
-  font-style: italic;
-  font-size: calc(var(--step--2)*.80);
+    font-style: italic;
+    font-size: calc(var(--step--2)*.80);
 }
 
 /*
