@@ -64,7 +64,8 @@ const widget=cloudinary.createUploadWidget(
                         "height": item.uploadInfo.height,
                         "format": item.uploadInfo.format,
                         "cld_cloud_name": item.uploadInfo.url.split("/")[3],
-                        "article_id": item.uploadInfo.tags[0]
+                        "article_id": item.uploadInfo.tags[0],
+                        "website_id": cards.dataset.websiteid
                     });
                 }
             });
@@ -245,7 +246,8 @@ add_card.addEventListener('click',  e => {
  */
 document.querySelectorAll(".edit-website").forEach(button => {
     button.addEventListener('click',  e => {
-        execProcess("website/" + e.target.dataset.id,"GET").then( (data) => {
+        execProcess("website/" + e.target.dataset.websiteid,"GET").then( (data) => {
+            cards.dataset.websiteid = e.target.dataset.websiteid;
             cards.replaceChildren();
             cards.insertAdjacentHTML('afterbegin',data.content);
         });
@@ -257,7 +259,7 @@ document.querySelectorAll(".edit-website").forEach(button => {
  */
 document.querySelectorAll(".deploy-website").forEach(button => {
     button.addEventListener('click',  e => {
-        execProcess("deploy/" + e.target.dataset.id,"POST").then( (data) => {
+        execProcess("deploy/" + e.target.dataset.websiteid,"POST").then( (data) => {
             popupOpen("Website is being deployed","... will take about 30 seconds?");
         });
     });
@@ -296,7 +298,7 @@ const edit_text = (articleId,button) => {
         return;
     }
     if (articleId === "0") {
-        execProcess( "article/"+articleId,"POST",{articleid:0}).then( (data) => {
+        execProcess( "article/"+articleId,"POST",{websiteid:cards.dataset.websiteid}).then( (data) => {
             enable_card_zero(data.articleId);
             editor.setData("");
             editor_status = "init";
@@ -387,7 +389,7 @@ popupConfirm.addEventListener("click",  (e) => {
           template = e.target.dataset.template,
           method = e.target.dataset.method;
 
-    execProcess( template + "/" + articleId, method).then( () => {
+    execProcess( template + "/" + articleId, method, {websiteid:cards.dataset.websiteid}).then( () => {
         if (template === "article" && method === "DELETE") {
             remove_card(articleId);
             e.target.dataset.id = "";
