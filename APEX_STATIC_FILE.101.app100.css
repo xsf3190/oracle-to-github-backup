@@ -240,7 +240,7 @@ dialog legend > button {
 
 
 /* *************** */
-/* DEFAUKT BUTTON  */
+/* DEFAULT BUTTON  */
 /* *************** */
 
 button {
@@ -253,16 +253,11 @@ button {
     color: var(--color-button-text);
     font-size: var(--step-0);
     font-weight: bold;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5em;
 }
 
 
-button.fa {
-    padding: 0.25em 0.4em;
+button:enabled {
+    cursor: pointer;
 }
 
 
@@ -458,7 +453,7 @@ ul.homepage>li:nth-of-type(8) {
 /* CARD STYLES */
 /* *************** */
 
-nav button:not(.fa):hover {
+nav button:not(.show-dropdown):hover {
     text-decoration: overline;
 }
 
@@ -491,12 +486,6 @@ nav button {
   display: grid;
   grid-template-rows: max-content max-content max-content 1fr;
   gap: 0.75em;
-}
-
-.card button:not(.fa-caret-down) {
-    display: inline-flex;
-    gap: 1em;
-    justify-content: space-between;
 }
 
 .card img {
