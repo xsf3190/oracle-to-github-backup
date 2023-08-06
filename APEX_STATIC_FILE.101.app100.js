@@ -205,10 +205,14 @@ const execProcess = (template, method, input) => {
 
             let response;
             
-            if (method==="GET" || method==="DELETE") {
+            if (method==="GET") {
                 response = await fetch(url, {method: method, headers: {"Apex-Session": session}});
             } else {
                 response = await fetch(url, {method: method, headers: {"Apex-Session": session}, body: JSON.stringify(input)});
+            }
+
+            if (!response.ok) {
+                throw new Error("Network response was not OK");
             }
 
             const data = await response.json();
