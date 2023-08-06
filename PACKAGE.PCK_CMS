@@ -4,7 +4,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE deleteAll(pUserId IN users.id%type);
     --
-    PROCEDURE deleteArticle(pArticleId IN article.id%type);
+    PROCEDURE deleteArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
     --
     PROCEDURE deleteAsset(pId IN asset.id%type);
     --
@@ -150,7 +150,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
     PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2, pAjax IN BOOLEAN) IS
     BEGIN
-        log(pCode || '-' || pErrMsg || '-' || dbms_utility.format_error_stack||dbms_utility.format_error_backtrace);
+        log_error(pCode, pErrMsg);
+        --log(pCode || '-' || pErrMsg || '-' || dbms_utility.format_error_stack||dbms_utility.format_error_backtrace);
         IF (pAjax) THEN
             apex_json.open_object; 
             apex_json.write('success', FALSE); 
@@ -722,15 +723,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         /* 
          ** Return best-fit thumbnail url of Cloudinary asset
          */
-        l_media_type:=getMediaType(pResourceType, pFormat);
-        
-        l_url:='https://res.cloudinary.com/' || pCloudname ||
-                CASE l_media_type
-                    WHEN 'image' THEN '/q_auto,f_auto' || getwidth() || '/' || pPublicId
-                    WHEN 'video' THEN '/video/upload/q_auto,f_auto' || getwidth() || '/' || pPublicId || '.jpg' -- video poster
-                    WHEN 'audio' THEN '/video/upload/q_auto,f_auto,w_' || gWidthThumbnail || '/fl_waveform' || '/' || pPublicId || '.png'  --audio waveform
-                END;
-                
+        IF (pResourceType IS NOT NULL) THEN
+            l_media_type:=getMediaType(pResourceType, pFormat);
+            l_url:='https://res.cloudinary.com/' || pCloudname ||
+                    CASE l_media_type
+                        WHEN 'image' THEN '/q_auto,f_auto' || getwidth() || '/' || pPublicId
+                        WHEN 'video' THEN '/video/upload/q_auto,f_auto' || getwidth() || '/' || pPublicId || '.jpg' -- video poster
+                        WHEN 'audio' THEN '/video/upload/q_auto,f_auto,w_' || gWidthThumbnail || '/fl_waveform' || '/' || pPublicId || '.png'  --audio waveform
+                    END;
+        END IF;        
         RETURN (l_url);
     END;
     
@@ -882,11 +883,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                             pExcerpt IN article.excerpt%type, 
                             pWordCount IN VARCHAR2, 
                             pUpdatedDate IN article.updated_date%type,
-                            pCldCloudName IN asset.cld_cloud_name%type, 
-                            pResourceType IN asset.resource_type%type, 
-                            pPublicId IN asset.public_id%type, 
-                            pFormat IN asset.format%type, 
-                            pWidth IN asset.width%type,
+                            pCloudinaryUrl IN VARCHAR2, 
                             pName IN users.name%type) RETURN VARCHAR2 
    IS
         l_element LONG;
@@ -917,7 +914,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             </div>' ||
             CASE WHEN pNbAssets=0 
                 THEN '<button type="button" class="no-media upload-media">UPLOAD MEDIA</button>' 
-                ELSE '<img class="show-gallery" src="' || getCloudinaryUrl(pCldCloudName, pResourceType, pPublicId, pFormat, pWidth) || '">' 
+                ELSE '<img class="show-gallery" src="' || pCloudinaryUrl || '">' 
             END ||
             CASE WHEN COALESCE(pTitle,pExcerpt) IS NULL 
                 THEN '<br>
@@ -946,6 +943,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_clob CLOB;
         l_css_file_urls APEX_APPLICATION_PAGES.css_file_urls%type;
         l_javascript_file_urls APEX_APPLICATION_PAGES.javascript_file_urls%type;
+        l_user_id users.id%type;
+        l_user_name users.name%type;
         n PLS_INTEGER:=0;
     BEGIN
         SELECT NVL(css_file_urls,' '), NVL(javascript_file_urls,' ')
@@ -960,32 +959,35 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END LOOP;
         END IF;
         
-        --IF (apex_authentication.is_authenticated) THEN
         IF (apex_application.g_flow_step_id=2) THEN
+            SELECT id, name 
+              INTO l_user_id, l_user_name
+              FROM users
+             WHERE email=apex_application.g_user;
+             
             l_clob:=l_clob || TO_CLOB(
                 '<nav>
                     <button type="button" class="add-card">NEW CONTENT</button>
                     <button type="button" class="add-website">NEW WEBSITE</button>');
                     
-            FOR C IN (SELECT w.id, w.name
-                        FROM website w, users u 
-                       WHERE u.email=apex_application.g_user 
-                         AND w.user_id=u.id
-                       ORDER BY COALESCE(w.updated_date, w.created_date) DESC) 
+            FOR C IN (SELECT id, name
+                        FROM website
+                       WHERE user_id=l_user_id
+                       ORDER BY COALESCE(updated_date, created_date) DESC) 
             LOOP
                 n:=n+1;
                 IF (n=1) THEN
                     l_clob:=l_clob || TO_CLOB(
-                        '<button type="button" class="edit-website" data-id="' || C.id || '">' || C.name || '</button>');
+                        '<button type="button" class="edit-website" data-websiteid="' || C.id || '">' || C.name || '</button>');
                     CONTINUE;
                 ELSIF (n=2) THEN
                     l_clob:=l_clob || TO_CLOB(
                     '<div class="dropdown">
-                      <button type="button" class="fa fa-caret-down show-dropdown">&blacktriangledown;</button>
+                      <button type="button" class="show-dropdown">&blacktriangledown;</button>
                       <ul class="dropdown-items">');
                 END IF;
                 l_clob:=l_clob || TO_CLOB(
-                            '<button type="button" class="fa edit-website" data-id="' || C.id || '"' || C.name || '</button>');
+                            '<button type="button" class="fa edit-website" data-websiteid="' || C.id || '"' || C.name || '</button>');
                    --'<button type="button" class="deploy-website" data-id="' || C.id || '">DEPLOY ' || C.name || '</button>');
             END LOOP;
             IF (n>1) THEN
@@ -996,7 +998,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             
             l_clob:=l_clob || TO_CLOB(
                     '<div class="dropdown">
-                        <button type="button class="show-dropdown" disabled>' || apex_application.g_user || '</button>
+                        <button type="button" class="show-dropdown" disabled>' || apex_application.g_user || '</button>
                         <button type="button" class="show-dropdown">&blacktriangledown;</button>
                         <ul class="dropdown-items">
                             <li><button type="button" class="fa signout">Sign out</button></li>
@@ -1054,22 +1056,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                    a.title, 
                    a.excerpt,
                    CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
-                   u.name,
                    NVL(a.updated_date, a.created_date) updated_date
-              FROM article a, users u, asset c
-             WHERE u.email=CASE WHEN apex_application.g_user='nobody' THEN u.email ELSE apex_application.g_user END
-               AND a.author_user_id=u.id
+              FROM article a, asset c
+             WHERE a.author_user_id=NVL(l_user_id,a.author_user_id)
                AND a.is_public=CASE WHEN apex_application.g_user='nobody' THEN 'Y' ELSE a.is_public END
                AND a.cover_asset_id=c.id(+)
              UNION ALL
-             SELECT -1, null, null, null, null,null,null,null,0,0,null,null,null,CASE WHEN apex_application.g_user='nobody' THEN null ELSE apex_application.g_user END,systimestamp from dual
+             SELECT -1, null, null, null, null,null,null,null,0,0,null,null,null,systimestamp from dual
              ORDER BY updated_date DESC) 
         LOOP
             l_clob:=l_clob || TO_CLOB(
                 buildArticle(
                     apex_application.g_flow_step_id, 
-                    C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width, 
-                    C.name));
+                    C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), l_user_name));
         END LOOP;
         l_clob:=l_clob || TO_CLOB('</ul>');
         l_clob:=l_clob || TO_CLOB(
@@ -1160,7 +1159,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name='app100.js') LOOP
                 l_clob:=l_clob || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
             END LOOP;
-            --IF (apex_authentication.is_authenticated) THEN
             IF (apex_application.g_flow_step_id=2) THEN
                 FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name='app100auth.js') LOOP
                     l_clob:=l_clob || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
@@ -1218,7 +1216,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_clob:=l_clob || TO_CLOB(
                 buildArticle(
                     2, 
-                    C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width, 
+                    C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), 
                     l_user_name));
         END LOOP;
         
@@ -1353,23 +1351,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */       
     PROCEDURE uploadCldMetadata(pBodyText IN CLOB) IS
         l_article_id article.id%type;
+        l_website_id website.id%type;
         l_metadata clob:=pBodyText;
         l_user_id users.id%type;
         l_start_order PLS_INTEGER;
+        l_start_order_website PLS_INTEGER;
         l_updated_date article.updated_date%type:=current_timestamp;
         nb_assets PLS_INTEGER;
     BEGIN
         l_user_id:=getUserId();
         
-        SELECT article_id 
-          INTO l_article_id
-          FROM JSON_TABLE(l_metadata FORMAT JSON, '$.images[*]' COLUMNS (article_id)) WHERE ROWNUM=1;
+        SELECT article_id, website_id
+          INTO l_article_id, l_website_id
+          FROM JSON_TABLE(l_metadata FORMAT JSON, '$.images[*]' COLUMNS (article_id, website_id)) WHERE ROWNUM=1;
         
         MERGE INTO article t
         USING (SELECT l_article_id article_id FROM dual) s
            ON (t.id=s.article_id)
          WHEN MATCHED THEN UPDATE SET updated_date=current_timestamp
          WHEN NOT MATCHED THEN INSERT (id, author_user_id, created_date) VALUES (s.article_id, l_user_id, current_timestamp);
+         
+        /* create row in website_article table if we are in a website */
+        IF (l_website_id IS NOT NULL) THEN
+            SELECT NVL(MAX(display_order),0)+1 INTO l_start_order_website FROM website_article WHERE website_id=l_website_id;
+            INSERT INTO website_article(article_id, website_id, display_order) VALUES (l_article_id, l_website_id, l_start_order_website);
+        END IF;
         
         SELECT NVL(MAX(display_order),0) INTO l_start_order FROM asset WHERE article_id=l_article_id;
 
@@ -1710,7 +1716,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */      
     PROCEDURE insertArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS 
         l_user_id users.id%type;
+        l_website_id website_article.website_id%type;
+        l_display_order website_article.display_order%type;
     BEGIN
+    
         l_user_id:=getUserId();
         
         INSERT INTO article (id, author_user_id, created_date) 
@@ -1718,10 +1727,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
           FROM users u
          WHERE id=l_user_id;
         
+        FOR C IN (SELECT websiteid FROM JSON_TABLE(pBodyText, '$' COLUMNS (websiteid))) LOOP
+            SELECT NVL(MAX(display_order),0)+1 INTO l_display_order FROM website_article WHERE website_id=C.websiteid;
+            INSERT INTO website_article(article_id, website_id, display_order) VALUES (seq_article.currval, C.websiteid, l_display_order);
+        END LOOP;
+        
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
         APEX_JSON.write('articleId',seq_article.currval);
         apex_json.close_object;
+        
+        EXCEPTION
+            WHEN OTHERS THEN
+                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     /*
@@ -1784,7 +1802,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         APEX_JSON.write('updated', TO_CHAR(current_timestamp AT TIME ZONE l_client_TZ,'dd Mon yyyy hh24:mi:ss'));
         APEX_JSON.close_object;
 
-         
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
@@ -1817,28 +1834,45 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Remove article and any uploaded assets
      */   
-    PROCEDURE deleteArticle(pArticleId IN article.id%type) IS
+    PROCEDURE deleteArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
         l_clob CLOB;
         l_url VARCHAR2(500);
         l_user_id users.id%type;
+        l_website_id website_article.website_id%type;
+        n PLS_INTEGER;
     BEGIN
         l_user_id:=getUserId();
         
-        FOR C IN (SELECT DISTINCT a.resource_type, u.cld_cloud_name, u.cld_api_key, u.cld_api_secret 
-                    FROM users u, article t, asset a
-                   WHERE t.id=pArticleId
-                     AND t.author_user_id=u.id
-                     AND u.id=l_user_id
-                     AND t.id=a.article_id)
-        LOOP
-            l_url:='https://api.cloudinary.com/v1_1/' || C.cld_cloud_name || '/resources/' || C.resource_type || '/tags/' || pArticleId;
-            l_clob := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'DELETE',p_username=>C.cld_api_key,p_password=>C.cld_api_secret); 
-            log(l_clob);
+        FOR C IN (SELECT websiteid FROM JSON_TABLE(pBodyText, '$' COLUMNS (websiteid))) LOOP
+            log('C.websiteid:'||C.websiteid);
+            l_website_id:=C.websiteid;
         END LOOP;
         
-        DELETE asset WHERE article_id=pArticleId;
+        IF (l_website_id IS NOT NULL) THEN
+            DELETE website_article WHERE article_id=pArticleId AND website_id=l_website_id;
+        END IF;
         
-        DELETE article WHERE id=pArticleId;
+        /* delete article if not in any website */
+        
+        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_article WHERE article_id=pArticleId);
+        
+        IF (n=0) THEN
+            DELETE asset WHERE article_id=pArticleId;
+            
+            DELETE article WHERE id=pArticleId;
+            
+            FOR C IN (SELECT DISTINCT a.resource_type, u.cld_cloud_name, u.cld_api_key, u.cld_api_secret 
+                        FROM users u, article t, asset a
+                       WHERE t.id=pArticleId
+                         AND t.author_user_id=u.id
+                         AND u.id=l_user_id
+                         AND t.id=a.article_id)
+            LOOP
+                l_url:='https://api.cloudinary.com/v1_1/' || C.cld_cloud_name || '/resources/' || C.resource_type || '/tags/' || pArticleId;
+                l_clob := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'DELETE',p_username=>C.cld_api_key,p_password=>C.cld_api_secret); 
+                log(l_clob);
+            END LOOP;
+        END IF;
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
