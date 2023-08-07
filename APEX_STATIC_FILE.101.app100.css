@@ -99,13 +99,17 @@ img {
 }
 
 nav {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  background-color: var(--color-dark);
-  color: var(--color-light-glare);
-  padding: var(--space-xs);
-  margin-block-end: var(--space-s);
+    position: sticky;
+    top: 0;
+    inline-size: 97%;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    background-color: var(--color-dark);
+    color: var(--color-light-glare);
+    padding: var(--space-xs);
+    margin-block-end: var(--space-s);
 }
 
 label {
