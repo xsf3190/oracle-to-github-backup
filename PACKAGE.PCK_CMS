@@ -945,7 +945,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_javascript_file_urls APEX_APPLICATION_PAGES.javascript_file_urls%type;
         l_user_id users.id%type;
         l_user_name users.name%type;
-        n PLS_INTEGER:=0;
+        l_current_website website.id%type;
     BEGIN
         SELECT NVL(css_file_urls,' '), NVL(javascript_file_urls,' ')
           INTO l_css_file_urls, l_javascript_file_urls
@@ -970,31 +970,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <button type="button" class="add-card">NEW CONTENT</button>
                     <button type="button" class="add-website">NEW WEBSITE</button>');
                     
-            FOR C IN (SELECT id, name
-                        FROM website
-                       WHERE user_id=l_user_id
-                       ORDER BY COALESCE(updated_date, created_date) DESC) 
+            FOR C IN (SELECT id, name, rn, nb 
+                        FROM
+                        ( SELECT id, name, ROW_NUMBER() OVER (ORDER BY COALESCE(updated_date, created_date) DESC) rn, COUNT(*) OVER () nb
+                            FROM website
+                           WHERE user_id=l_user_id
+                        ) 
+                        ORDER BY rn)
             LOOP
-                n:=n+1;
-                IF (n=1) THEN
-                    l_clob:=l_clob || TO_CLOB(
-                        '<button type="button" class="edit-website" data-websiteid="' || C.id || '">' || C.name || '</button>');
-                    CONTINUE;
-                ELSIF (n=2) THEN
+                IF (C.rn=1) THEN
+                    l_current_website:=C.id;
                     l_clob:=l_clob || TO_CLOB(
                     '<div class="dropdown">
-                      <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                      <ul class="dropdown-items">');
+                        <button type="button" class="show-dropdown" disabled data-websiteid="' || C.id || '">' || C.name || '</button>
+                        <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                        <ul class="dropdown-items">
+                            <li><button type="button" class="deploy-website" data-websiteid="' || C.id || '">DEPLOY WEBSITE</button></li>
+                            <li><button type="button" class="delete-website" data-websiteid="' || C.id || '">DELETE WEBSITE</button></li>');
                 END IF;
-                l_clob:=l_clob || TO_CLOB(
-                            '<button type="button" class="fa edit-website" data-websiteid="' || C.id || '"' || C.name || '</button>');
-                   --'<button type="button" class="deploy-website" data-id="' || C.id || '">DEPLOY ' || C.name || '</button>');
-            END LOOP;
-            IF (n>1) THEN
-                l_clob:=l_clob || TO_CLOB(
-                    '</ul>
+                IF (C.rn>1) THEN
+                    l_clob:=l_clob || TO_CLOB(
+                            '<li><button type="button" class="edit-website" data-websiteid="' || C.id || '">' || C.name || '</button></li>');
+                END IF;
+                IF (C.rn=C.nb) THEN
+                    l_clob:=l_clob || TO_CLOB(
+                        '</ul>
                     </div>');
-            END IF;
+                END IF;
+            END LOOP;
             
             l_clob:=l_clob || TO_CLOB(
                     '<div class="dropdown">
@@ -1039,38 +1042,68 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                         <div class="ck-content">' || C.body_html || '
                         </div>
                     </div>
-                    <h2>PUBLISHED ARTICLES</h2>');
+                    <!--<h2>PUBLISHED ARTICLES</h2>-->');
             END LOOP;
         END IF;
         
-        l_clob:=l_clob || TO_CLOB('<ul class="cards" role="list">');
-            
-        /* Create cards as <li> elements for each article */
-        FOR C IN (
-            SELECT a.id,
-                   a.is_public,
-                   c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
-                   c.alt_text,
-                   NVL2(a.nb_assets,1,0) first_asset,
-                   NVL(a.nb_assets,0) nb_assets,
-                   a.title, 
-                   a.excerpt,
-                   CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
-                   NVL(a.updated_date, a.created_date) updated_date
-              FROM article a, asset c
-             WHERE a.author_user_id=NVL(l_user_id,a.author_user_id)
-               AND a.is_public=CASE WHEN apex_application.g_user='nobody' THEN 'Y' ELSE a.is_public END
-               AND a.cover_asset_id=c.id(+)
-             UNION ALL
-             SELECT -1, null, null, null, null,null,null,null,0,0,null,null,null,systimestamp from dual
-             ORDER BY updated_date DESC) 
-        LOOP
-            l_clob:=l_clob || TO_CLOB(
-                buildArticle(
-                    apex_application.g_flow_step_id, 
-                    C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), l_user_name));
-        END LOOP;
+        IF (apex_application.g_flow_step_id=2) THEN
+            l_clob:=l_clob || TO_CLOB('<ul class="cards" data-websiteid="' || l_current_website || '" role="list">');
+                
+            IF (l_current_website IS NOT NULL) THEN
+                FOR C IN (
+                    SELECT a.id,
+                           a.is_public,
+                           c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
+                           c.alt_text,
+                           NVL2(a.nb_assets,1,0) first_asset,
+                           NVL(a.nb_assets,0) nb_assets,
+                           a.title, 
+                           a.excerpt,
+                           CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
+                           NVL(a.updated_date, a.created_date) updated_date
+                      FROM article a, asset c, website_article wa
+                     WHERE a.author_user_id=l_user_id
+                       AND a.cover_asset_id=c.id(+)
+                       AND a.id=wa.article_id
+                       AND wa.website_id=l_current_website
+                     UNION ALL
+                     SELECT -1, null, null, null, null,null,null,null,0,0,null,null,null,systimestamp from dual
+                     ORDER BY updated_date DESC) 
+                LOOP
+                    l_clob:=l_clob || TO_CLOB(
+                        buildArticle(
+                            apex_application.g_flow_step_id, 
+                            C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), l_user_name));
+                END LOOP;
+            ELSE
+                FOR C IN (
+                    SELECT a.id,
+                           a.is_public,
+                           c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
+                           c.alt_text,
+                           NVL2(a.nb_assets,1,0) first_asset,
+                           NVL(a.nb_assets,0) nb_assets,
+                           a.title, 
+                           a.excerpt,
+                           CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
+                           NVL(a.updated_date, a.created_date) updated_date
+                      FROM article a, asset c
+                     WHERE a.author_user_id=l_user_id
+                       AND a.cover_asset_id=c.id(+)
+                       AND NOT EXISTS (SELECT null FROM website_article WHERE article_id=a.id)
+                     UNION ALL
+                     SELECT -1, null, null, null, null,null,null,null,0,0,null,null,null,systimestamp from dual
+                     ORDER BY updated_date DESC) 
+                LOOP
+                    l_clob:=l_clob || TO_CLOB(
+                        buildArticle(
+                            apex_application.g_flow_step_id, 
+                            C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), l_user_name));
+                END LOOP;            
+            END IF;
+        END IF;
         l_clob:=l_clob || TO_CLOB('</ul>');
+        
         l_clob:=l_clob || TO_CLOB(
             '<dialog class="popup">
                 <div>
@@ -1097,7 +1130,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                             <div id="word-count"></div>
                         </div>
                     </div>
-                    <!--<button type="button" class="close">&times;</button>-->
+                    <button type="button" class="close">&times;</button>
                 </div>
             </dialog>            
             <dialog class="gallery">
@@ -1154,6 +1187,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 </div>
             </dialog> 
             ');
+            
+        l_clob:=l_clob || TO_CLOB('
+            <input type="hidden" name="p_flow_id" value="' || apex_application.g_flow_id ||'" id="pFlowId">
+            <input type="hidden" name="p_flow_step_id" value="' || apex_application.g_flow_step_id ||'" id="pFlowStepId">
+            <input type="hidden" name="p_instance" value="' || APEX_CUSTOM_AUTH.GET_SESSION_ID ||'" id="pInstance">');            
  
         IF (INSTR(l_javascript_file_urls,'app100.min.js')=0) THEN
             FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name='app100.js') LOOP
