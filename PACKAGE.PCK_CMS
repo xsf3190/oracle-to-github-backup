@@ -14,6 +14,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getContent(pWebsiteId IN website.id%type);
     --
+    PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type);
+    --
     FUNCTION getPageContent RETURN CLOB;
     --
     PROCEDURE getCldDetails(pArticleId IN article.id%type);
@@ -39,6 +41,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB);
     --
     PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2);
+    --
+    PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type);
     --
     PROCEDURE manual_restore(pPassword IN VARCHAR2);
     --
@@ -132,7 +136,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
         k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);
     BEGIN
-        INSERT INTO log(procedure_name, message) VALUES (k_calling_package || '.' || k_calling_subprog, pMsg);
+        INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, k_calling_package || '.' || k_calling_subprog, pMsg);
         COMMIT;
     END;
     
@@ -140,7 +144,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
         k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);    
     BEGIN
-        INSERT INTO log(procedure_name, message) VALUES (k_calling_package || '.' || k_calling_subprog, pMsg);
+        INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, k_calling_package || '.' || k_calling_subprog, pMsg);
         COMMIT;
     END;
     
@@ -450,7 +454,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_json.put('event_type', 'trigger_build_infra');
             
             l_action:=new JSON_OBJECT_T;
-            l_action.put('from_email', 'automatic@m93.nl');
+            l_action.put('from_email', 'funnyface@markrussellbrown.com');
             l_action.put('public_key', C.public_key);
             l_action.put('terraform_token', C.terraform_token);
             l_json.put('client_payload', l_action);
@@ -493,6 +497,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
            AND private_key IS NOT NULL 
            AND public_key IS NOT NULL;
         
+        DELETE website_deploy WHERE website_id=pWebsiteId;
+        COMMIT;
         
         FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, u.netlify_token, u.netlify_installation_id, 
                          w.name, w.template, w.netlify_site_id, w.contact_email
@@ -513,7 +519,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_web_service.g_request_headers(3).value := C.github_repos_owner;
             
             IF (C.netlify_site_id IS NULL) THEN
-                log('Creating Netlify site for '||C.name);
+                logDeployment('{"status":"Creating Netlify website"}',pWebsiteId);
                 /* get id of the common DEPLOY repository */
                 l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo ,p_http_method=>'GET');
                 FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
@@ -534,7 +540,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
                     l_deploy_key_id:=C1.id;
                 END LOOP;
-                log('l_deploy_key_id:'||l_deploy_key_id);
                 
                 /* create JSON payload for new Netlify site */
                 l_json:=new JSON_OBJECT_T;
@@ -551,15 +556,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_repo.put('installation_id', C.netlify_installation_id);
                 l_repo.put('base', C.name);   
                 l_json.put('repo', l_repo);
-                --l_site:=l_json.to_clob;
                 
                 /* Create Netlify site and store the site_id in website table */
                 log('l_site:'||l_json.stringify);
                 l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites', p_http_method=>'POST', p_body=>l_json.stringify);
                 log('Response from POST api.netlify.com/api/v1/sites:'||TO_CHAR(l_clob));
                 FOR C1 IN (SELECT site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id))) LOOP
-                    UPDATE website SET netlify_site_id = C1.site_id WHERE id=pWebsiteId;
+                    UPDATE website 
+                       SET netlify_site_id = C1.site_id, 
+                           netlify_deploy_id =  l_deploy_key_id
+                     WHERE id=pWebsiteId;
                 END LOOP;
+                logDeployment('{"status":"Netlify website created and linked to github"}',pWebsiteId);
 
                 apex_web_service.g_request_headers(1).name := 'Accept';
                 apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
@@ -576,7 +584,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_action:=new JSON_OBJECT_T;
             l_action.put('build_path', C.name);
             l_action.put('template', C.template);
-            l_action.put('fetch_url', getRestUrl() || 'content/' || pWebsiteId);               
+            l_action.put('fetch_url', getRestUrl() || 'content/' || pWebsiteId);  
+            l_action.put('log_url', getRestUrl() || 'deploy-status/' || pWebsiteId);
             l_json.put('client_payload', l_action);
             
             log('JSON for dispatching Github Action:'||l_json.stringify);
@@ -594,36 +603,69 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     /*
-     **  Insert row in article table for new article text content
+     **  Insert row in website_deploy logging table
      */      
-    PROCEDURE insertDeployment(pBodyText IN CLOB, pId IN article.id%type) IS 
-        l_user_id users.id%type;
-        l_website_id website_article.website_id%type;
-        l_display_order website_article.display_order%type;
+    PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type) IS 
     BEGIN
-    
-        l_user_id:=getUserId();
         
-        INSERT INTO article (id, author_user_id, created_date) 
-        SELECT seq_article.nextval, id, current_timestamp
-          FROM users u
-         WHERE id=l_user_id;
-        
-        FOR C IN (SELECT websiteid FROM JSON_TABLE(pBodyText, '$' COLUMNS (websiteid))) LOOP
-            SELECT NVL(MAX(display_order),0)+1 INTO l_display_order FROM website_article WHERE website_id=C.websiteid;
-            INSERT INTO website_article(article_id, website_id, display_order) VALUES (seq_article.currval, C.websiteid, l_display_order);
+        FOR C IN (SELECT status FROM JSON_TABLE(pBodyText, '$' COLUMNS (status))) LOOP
+            INSERT INTO website_deploy(id, website_id, status) VALUES (seq_log.nextval, pWebsiteId, C.status);
+            COMMIT;
         END LOOP;
-        
-        APEX_JSON.open_object; 
-        APEX_JSON.write('success', TRUE);
-        APEX_JSON.write('articleId',seq_article.currval);
-        apex_json.close_object;
         
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                log_error(sqlcode,sqlerrm);
     END;    
         
+
+    /*
+     **  Get deployment status from website_deploy logging table
+     */      
+    PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type) IS 
+        l_status CLOB;
+        l_clob CLOB;
+        l_ssl_url VARCHAR2(100);
+        n PLS_INTEGER;
+    BEGIN
+        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_deploy WHERE website_id=pWebsiteId AND status='github build completed');
+        IF (n=1) THEN
+            FOR C IN (SELECT u.netlify_token, w.netlify_site_id, w.netlify_deploy_id FROM users u, website w WHERE w.id=pWebsiteId AND u.netlify_token IS NOT NULL) LOOP
+                apex_web_service.clear_request_headers;
+                apex_web_service.g_request_headers(1).name := 'Authorization';
+                apex_web_service.g_request_headers(1).value := 'Bearer ' || C.netlify_token;   
+                apex_web_service.g_request_headers(2).name := 'Content-Type';
+                apex_web_service.g_request_headers(2).value := 'application/json';
+                l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites/' || C.netlify_site_id || '/deploys/' || C.netlify_deploy_id, p_http_method=>'GET');
+                log(l_clob);
+                FOR C1 IN (SELECT state, ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS (state, ssl_url))) LOOP
+                    IF (C1.state='ready') THEN
+                        l_ssl_url:=C1.ssl_url;
+                    END IF;
+                    INSERT INTO website_deploy(status) VALUES (C1.state);
+                END LOOP;
+            END LOOP;
+        END IF;
+        
+        FOR C IN (SELECT status FROM website_deploy WHERE website_id=pWebsiteId ORDER BY id) 
+        LOOP
+            l_status:=l_status || TO_CLOB('<span>' || C.status || '<span>');
+        END LOOP;
+        
+        IF (l_ssl_url IS NOT NULL) THEN
+            l_status:=l_status || TO_CLOB('<a target="_blank" href="' || l_ssl_url || '">' || l_ssl_url || '<a>');
+        END IF;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('status', l_status);
+        apex_json.close_object;
+            
+        EXCEPTION
+            WHEN OTHERS THEN
+                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+    END;  
+    
     
     PROCEDURE getCldDetails(pArticleId IN article.id%type) IS
         l_user_id users.id%type;
@@ -1063,6 +1105,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <button type="button" class="add-card">NEW CONTENT</button>
                     <button type="button" class="add-website">NEW WEBSITE</button>');
                     
+                    
             FOR C IN (SELECT id, name, rn, nb 
                         FROM
                         ( SELECT id, name, ROW_NUMBER() OVER (ORDER BY COALESCE(updated_date, created_date) DESC) rn, COUNT(*) OVER () nb
@@ -1087,7 +1130,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 END IF;
                 IF (C.rn=C.nb) THEN
                     l_clob:=l_clob || TO_CLOB(
-                        '</ul>
+                        '<li><button type="button" class="edit-website" data-websiteid="0">ORPHAN CONTENT</button></li>
+                        </ul>
                     </div>');
                 END IF;
             END LOOP;
