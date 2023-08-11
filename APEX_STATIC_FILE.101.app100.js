@@ -37,6 +37,9 @@ const apex_app_id = document.querySelector("#pFlowId").value,
 */
 document.querySelectorAll("button.close").forEach((button) => {
     button.addEventListener("click", (e) => {
+        if (gIntervalId) {
+            clearInterval(gIntervalId);
+        }
         e.stopPropagation();
         if (e.target.dataset.sqlcode) {
             if (Number(e.target.dataset.sqlcode) === -20000) {
