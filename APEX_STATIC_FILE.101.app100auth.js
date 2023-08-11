@@ -257,13 +257,32 @@ document.querySelectorAll(".edit-website").forEach(button => {
 /* 
  ** DEPLOY WEBSITE
  */
+let gIntervalId;
+
 document.querySelectorAll(".deploy-website").forEach(button => {
     button.addEventListener('click',  e => {
         execProcess("deploy/" + e.target.dataset.websiteid,"POST").then( (data) => {
-            popupOpen("Website is being deployed","... will take about 30 seconds?");
+            popupOpen("Website deployment",data.status);
+            if (gIntervalId) {
+                clearInterval(gIntervalId);
+            }
+            gIntervalId = setInterval(getDeploymentStatus,2000,e.target.dataset.websiteid);
         });
     });
 });
+
+getDeploymentStatus = (websiteid) => {
+    const status = popup.querySelector("p");
+    execProcess("deploy-status/" + websiteid,"GET").then( (data) => {
+        if (data.status) {
+            status.replaceChildren();
+            status.insertAdjacentHTML('afterbegin',data.status);
+            if (data.completed) {
+                clearInterval(gIntervalId);
+            }
+        }
+    });
+}
 
 /* 
  ** UPLOAD MEDIA. PROMPT FOR CLOUDINARY API KEY IF NON-SUBSCRIBER
