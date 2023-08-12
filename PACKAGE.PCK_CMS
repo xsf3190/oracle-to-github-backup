@@ -532,7 +532,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
                     l_repo_id:=C1.id;
                 END LOOP;
-                log('l_repo_id:'||l_repo_id);
 
                 /* Setup connect to Netlify */
                 apex_web_service.clear_request_headers;
@@ -565,7 +564,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_json.put('repo', l_repo);
                 
                 /* Create Netlify site and store the site_id in website table */
-                log('l_site:'||l_json.stringify);
                 l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites', p_http_method=>'POST', p_body=>l_json.stringify);
                 log('Response from POST api.netlify.com/api/v1/sites:'||TO_CHAR(l_clob));
                 FOR C1 IN (SELECT site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id))) LOOP
@@ -575,32 +573,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                      WHERE id=pWebsiteId;
                 END LOOP;
                 logDeployment('{"status":"Netlify website created and linked to github"}',pWebsiteId);
-
-                apex_web_service.g_request_headers(1).name := 'Accept';
-                apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
-                apex_web_service.g_request_headers(2).name := 'Authorization';
-                apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
-                apex_web_service.g_request_headers(3).name := 'User-Agent';
-                apex_web_service.g_request_headers(3).value := C.github_repos_owner;
-            ELSE
-                apex_web_service.clear_request_headers;
-                
-                apex_web_service.g_request_headers(1).name := 'Authorization';
-                apex_web_service.g_request_headers(1).value := 'Bearer ' || C.netlify_token;   
-                apex_web_service.g_request_headers(2).name := 'Content-Type';
-                apex_web_service.g_request_headers(2).value := 'application/json';
-                
-                /* get netlify deploy id */
-                l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/deploy_keys',p_http_method=>'POST');
-                FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
-                    l_deploy_key_id:=C1.id;
-                END LOOP;
-                UPDATE website 
-                   SET  netlify_deploy_id =  l_deploy_key_id
-                WHERE id=pWebsiteId;
             END IF;
             
-            /* trigger the deployment using Githib actions */          
+            /* trigger the deployment by dispatching Github action */          
             l_json:=new JSON_OBJECT_T;
             l_json.put('event_type', 'trigger_build');
             
@@ -653,34 +628,38 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_clob CLOB;
         l_ssl_url VARCHAR2(100);
         l_deployment_complete BOOLEAN:=FALSE;
-        n PLS_INTEGER;
     BEGIN
-        SELECT COUNT(*) 
-          INTO n 
-          FROM dual 
-         WHERE EXISTS (SELECT null FROM website_deploy WHERE website_id=pWebsiteId AND status='github action completed');
-         
-        IF (n=1) THEN
-            FOR C IN (SELECT u.netlify_token, w.netlify_site_id, w.netlify_deploy_id FROM users u, website w WHERE w.id=pWebsiteId AND u.netlify_token IS NOT NULL) LOOP
-                apex_web_service.clear_request_headers;
-                apex_web_service.g_request_headers(1).name := 'Authorization';
-                apex_web_service.g_request_headers(1).value := 'Bearer ' || C.netlify_token;   
-                apex_web_service.g_request_headers(2).name := 'Content-Type';
-                apex_web_service.g_request_headers(2).value := 'application/json';
-                l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites/' || C.netlify_site_id || '/deploys/' || C.netlify_deploy_id, p_http_method=>'GET');
-                FOR C1 IN (SELECT state, ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS (state, ssl_url))) LOOP
+        /* If github action completed get latest Netlify deployment status and add this to the website_deploy table */
+
+        FOR C IN (SELECT u.netlify_token, w.netlify_site_id, w.netlify_deploy_id, wd.log_time
+                    FROM users u, website w, website_deploy wd
+                   WHERE w.id=pWebsiteId 
+                     AND wd.website_id=w.id
+                     AND wd.status='github action completed'
+                     AND u.netlify_token IS NOT NULL) 
+        LOOP
+            apex_web_service.clear_request_headers;
+            apex_web_service.g_request_headers(1).name := 'Authorization';
+            apex_web_service.g_request_headers(1).value := 'Bearer ' || C.netlify_token;   
+            apex_web_service.g_request_headers(2).name := 'Content-Type';
+            apex_web_service.g_request_headers(2).value := 'application/json';
+            
+            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites/' || C.netlify_site_id || '/deploys', p_http_method=>'GET');
+            FOR C1 IN (SELECT state, ssl_url, error_message, created_at
+                         FROM JSON_TABLE(l_clob, '$[0]' COLUMNS (state, ssl_url, created_at, error_message))) 
+            LOOP
+                IF (to_timestamp(C1.created_at,'yyyy-mm-dd"T"hh24:mi:ss.ff3"Z"') >= C.log_time) THEN
                     IF (C1.state='ready') THEN
                         l_deployment_complete:=TRUE;
                         l_ssl_url:=C1.ssl_url;
                     END IF;
-                    SELECT COUNT(*) INTO n FROM website_deploy WHERE website_id=pWebsiteId AND INSTR(status,C1.state)=0;
-                    IF (n=0) THEN
-                        logDeployment('{"status":"' || C1.state || '"}',pWebsiteId);
-                    END IF;
-                END LOOP;
+                    DELETE website_deploy WHERE website_id=pWebsiteId AND status='Netlify ' || C1.state;
+                    logDeployment('{"status":"Netlify ' || C1.state || '"}',pWebsiteId);
+                END IF;
             END LOOP;
-        END IF;
+        END LOOP;
         
+        /* return list of all deployment status to client */
         FOR C IN (SELECT id, status, ROUND((next_log_time - log_time)*86400) ela_sec
                     FROM 
                         (
