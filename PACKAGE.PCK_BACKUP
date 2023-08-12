@@ -34,7 +34,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
         k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);
     BEGIN
-        INSERT INTO log(procedure_name, message) VALUES (k_calling_package || '.' || k_calling_subprog, pMsg);
+        INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, k_calling_package || '.' || k_calling_subprog, pMsg);
         COMMIT;
     END;
     
@@ -42,7 +42,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
         k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);    
     BEGIN
-        INSERT INTO log(procedure_name, message) VALUES (k_calling_package || '.' || k_calling_subprog, pMsg);
+        INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, k_calling_package || '.' || k_calling_subprog, pMsg);
         COMMIT;
     END;
     
