@@ -419,7 +419,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     /*
-    ** Build and deploy infrastructure through Terraform by submitting Github action. Do this once and each time recycle our public key that signs a website's contact email
+    ** Build and deploy infrastructure through Terraform by submitting Github action. 
+    ** Do this once and each time we recycle the public key that is used to sign a website's contact email
     */    
     PROCEDURE deployInfrastructure IS
         l_clob CLOB;
@@ -432,14 +433,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         SELECT id INTO l_admin_user_id 
           FROM users 
          WHERE github_repos_owner IS NOT NULL 
-           AND github_token IS NOT NULL 
-           AND private_key IS NOT NULL 
-           AND public_key IS NOT NULL;
+           AND github_token IS NOT NULL;
         
         
-        FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, u.terraform_token,
-                         replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(public_key))),chr(13)||chr(10),null) public_key
-                    FROM users u
+        FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, t.token,
+                         replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(t.public_key))),chr(13)||chr(10),null) public_key
+                    FROM users u, terraform t
                    WHERE u.id=l_admin_user_id) 
         LOOP
             apex_web_service.g_request_headers(1).name := 'Accept';
@@ -456,7 +455,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_action:=new JSON_OBJECT_T;
             l_action.put('from_email', 'funnyface@markrussellbrown.com');
             l_action.put('public_key', C.public_key);
-            l_action.put('terraform_token', C.terraform_token);
+            l_action.put('terraform_token', C.token);
             l_json.put('client_payload', l_action);
             
             log('deployInfrastructure - JSON for dispatching Github Action:'||l_json.stringify);
@@ -493,9 +492,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
          WHERE github_repos_owner IS NOT NULL 
            AND github_token IS NOT NULL 
            AND netlify_token IS NOT NULL 
-           AND netlify_installation_id IS NOT NULL
-           AND private_key IS NOT NULL 
-           AND public_key IS NOT NULL;
+           AND netlify_installation_id IS NOT NULL;
         
         DELETE website_deploy WHERE website_id=pWebsiteId;
         logDeployment('{"status":"Starting Deployment"}',pWebsiteId);
@@ -594,7 +591,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_web_service.g_request_headers(3).name := 'User-Agent';
             apex_web_service.g_request_headers(3).value := C.github_repos_owner;
 
-            
             l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_json.stringify);
         END LOOP;
 
@@ -608,12 +604,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */      
     PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type) IS 
     BEGIN
-        
         FOR C IN (SELECT status FROM JSON_TABLE(pBodyText, '$' COLUMNS (status))) LOOP
             INSERT INTO website_deploy(id, website_id, status) VALUES (seq_log.nextval, pWebsiteId, C.status);
             COMMIT;
         END LOOP;
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm);
@@ -1767,7 +1762,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     **    website: {},
     **    articles: [{},{},..{}]
     ** }
-    */    
+    */ 
+    
     PROCEDURE getContent(pWebsiteId IN website.id%type) IS
         l_json JSON_OBJECT_T;
         l_website_object JSON_OBJECT_T;
@@ -1793,6 +1789,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     dbms_lob.getlength (pBodyHtml),
                     dbms_lob.instr(pBodyHtml,'</h1>')+5));
         END;
+        
+        FUNCTION getTerraformInvokeUrl RETURN VARCHAR2 IS
+            l_clob CLOB;
+            l_invoke_url VARCHAR2(200);
+        BEGIN
+            FOR C IN (SELECT organization_name, workspace_name, token FROM terraform) LOOP
+                apex_web_service.clear_request_headers;
+                apex_web_service.g_request_headers(1).name := 'Authorization';
+                apex_web_service.g_request_headers(1).value := 'Bearer ' || C.token;   
+                apex_web_service.g_request_headers(2).name := 'Content-Type';
+                apex_web_service.g_request_headers(2).value := 'application/json';
+                
+                l_clob := apex_web_service.make_rest_request(p_url=>'https://app.terraform.io/api/v2/organizations/ ' || C.organization_name || '/workspaces/' || C.workspace_name, p_http_method=>'GET');
+                
+                FOR C1 IN (SELECT outputs_url FROM JSON_TABLE(l_clob, '$.data.relationships.outputs.links.related' COLUMNS (outputs_url)))
+                LOOP
+                    l_clob := apex_web_service.make_rest_request(p_url=>C1.outputs_url, p_http_method=>'GET');
+                    SELECT value || '/' 
+                      INTO l_invoke_url
+                      FROM JSON_TABLE(l_clob, '$.data[*]' COLUMNS (name PATH '$.attributes.name', value PATH '$.attributes.value')) 
+                     WHERE name='invoke_url';
+                END LOOP;
+            END LOOP;
+            
+            RETURN (l_invoke_url);
+        END; 
+        
     BEGIN
         l_json:= new JSON_OBJECT_T;
         l_website_object:= new JSON_OBJECT_T;
@@ -1804,14 +1827,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
          WHERE github_repos_owner IS NOT NULL 
            AND github_token IS NOT NULL 
            AND netlify_token IS NOT NULL 
-           AND netlify_installation_id IS NOT NULL
-           AND private_key IS NOT NULL 
-           AND public_key IS NOT NULL;
+           AND netlify_installation_id IS NOT NULL;
            
         FOR C IN (SELECT w.id, w.name, w.favicon_url, w.image_dimension, w.contact_email, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, 
-                         utl_i18n.string_to_raw(regexp_replace(u.private_key,'(-+((BEGIN|END) (RSA )?(PUBLIC|PRIVATE) KEY)-+\s?|\s)','')) private_key,
-                         u.terraform_token
-                    FROM website w, users u
+                         utl_i18n.string_to_raw(regexp_replace(t.private_key,'(-+((BEGIN|END) (RSA )?(PUBLIC|PRIVATE) KEY)-+\s?|\s)','')) private_key
+                    FROM website w, users u, terraform t
                    WHERE w.id=pWebsiteId
                      AND u.id=l_admin_user_id)
         LOOP
@@ -1821,28 +1841,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_website_object.put('contact_email',C.contact_email);
             l_website_object.put('trade_name',C.trade_name);
             l_website_object.put('affiliation_link_img',C.affiliation_link_img);
-            l_website_object.put('affiliation_link_url',C.affiliation_link_url);
+            l_website_object.put('affiliation_link_url',C.affiliation_link_url);            
+            l_website_object.put('aws_gateway_url',getTerraformInvokeUrl());
             
-            /* get the invoke_url from terraform api */
-            apex_web_service.clear_request_headers;
-            apex_web_service.g_request_headers(1).name := 'Authorization';
-            apex_web_service.g_request_headers(1).value := 'Bearer ' || C.terraform_token;   
-            apex_web_service.g_request_headers(2).name := 'Content-Type';
-            apex_web_service.g_request_headers(2).value := 'application/json';
-            
-            l_clob := apex_web_service.make_rest_request(p_url=>'https://app.terraform.io/api/v2/workspaces/ws-o8qtzg2z8L4AsGC9/current-state-version-outputs',p_http_method=>'GET');
-            
-            FOR C IN (SELECT name, value FROM JSON_TABLE(l_clob, '$.data[*]' COLUMNS (name PATH '$.attributes.name', value PATH '$.attributes.value')) WHERE name='invoke_url')
-            LOOP
-                l_website_object.put('aws_gateway_url',C.value || '/');
-            END LOOP;
-            
-            /* sign the contact_email */
+            /* sign the contact_email for the website */
             l_signed_data:=DBMS_CRYPTO.SIGN(
                src =>utl_i18n.string_to_raw(C.contact_email),
                prv_key =>C.private_key,
                pubkey_alg =>dbms_crypto.KEY_TYPE_RSA,
                sign_alg =>dbms_crypto.SIGN_SHA256_RSA);
+            
             l_website_object.put('signatureContactEmail', utl_i18n.raw_to_char(utl_encode.base64_encode(l_signed_data)));
 
             l_json.put('website',l_website_object);
