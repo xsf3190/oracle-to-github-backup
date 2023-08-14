@@ -146,7 +146,6 @@ dialog {
 
 dialog.popup > div {
     display: grid;
-    gap: 2em;
     place-items: center;
 }
 
@@ -212,6 +211,7 @@ dialog h2 {
 
 dialog p {
     line-height: 1.5;
+    margin: 0;
 }
 
 dialog a {
