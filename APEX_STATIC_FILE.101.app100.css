@@ -180,9 +180,18 @@ dialog.preview, dialog.perftable, dialog.gallery, dialog.editor {
     block-size: 100vh;
 }
 
-dialog.preview > div, dialog.editor > div {
+dialog.preview > div, dialog.website > div, dialog.editor > div {
   display: grid;
   grid-template-columns: minmax(1rem, 1fr) minmax(auto, var(--preview-width)) minmax(1rem, 1fr);
+}
+
+dialog.website form, dialog.website label, dialog.website form  button, dialog.website input[type="submit"]   {
+    margin-block-start: 2ch;
+}
+
+dialog.website input {
+    font-family: var(--font-serif);
+    font-size: 2ex;
 }
 
 dialog.preview .details {
@@ -233,6 +242,7 @@ dialog button.close {
     font-size: var(--step-4);
     color: var(--color-button);
     outline: 0;
+    margin-inline-start: 2ch;
 }
 
 dialog legend > button {
