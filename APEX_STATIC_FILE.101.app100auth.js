@@ -255,6 +255,27 @@ document.querySelectorAll(".edit-website").forEach(button => {
 });
 
 /* 
+ ** CREATE NEW WEBSITE
+ */
+document.querySelectorAll(".add-website").forEach(button => {
+    button.addEventListener('click',  e => {
+        website.showModal();
+    });
+});
+
+/* 
+ ** CHARACTER COUNTER FOR FORM INPUT ELEMENTS
+ */
+document.querySelectorAll("input").forEach(input => {
+    input.addEventListener('input',  e => {
+        console.log(e);
+        const maxchars = e.target.getAttribute("maxlength");
+        const count = e.target.nextElementSibling;
+        count.textContent = maxchars + " characters";
+    });
+});
+
+/* 
  ** DEPLOY WEBSITE
  */
 let gIntervalId;
