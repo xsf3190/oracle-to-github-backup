@@ -185,14 +185,49 @@ dialog.preview > div, dialog.website > div, dialog.editor > div {
   grid-template-columns: minmax(1rem, 1fr) minmax(auto, var(--preview-width)) minmax(1rem, 1fr);
 }
 
-dialog.website form, dialog.website label, dialog.website form  button, dialog.website input[type="submit"]   {
+/* ************** */
+/* WEBSITE DIALOG */
+/* ************** */
+
+dialog.website form {
+    font-size: var(--step--1);
+    font-family: var(--font-serif);
+}
+
+dialog.website form > * + *   {
     margin-block-start: 2ch;
 }
 
 dialog.website input {
-    font-family: var(--font-serif);
-    font-size: 2ex;
+    font-size: var(--step-0);
 }
+
+dialog.website input[type="text"] + span {
+    font-size: 70%;
+    margin-inline-start: 1ch;
+}
+
+dialog.website input[type="radio"] {
+    appearance: none;
+    border-radius: 50%;
+    inline-size: 2ch;
+    block-size: 2ch;
+    border: 1ch solid var(--color-pale);
+    transition: 0.2s all linear;
+}
+
+dialog.website input[type="radio"]:checked {
+    border: 1ch solid var(--color-button);
+}
+
+dialog.website .cluster {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: flex-start;
+    align-items: center;
+}
+
 
 dialog.preview .details {
     display: flex;
@@ -256,7 +291,7 @@ dialog legend > button {
 /* DEFAULT BUTTON  */
 /* *************** */
 
-button {
+button, input[type="submit"] {
     min-height: 54px;
     min-width: 54px;
     border: none;
@@ -269,7 +304,7 @@ button {
 }
 
 
-button:enabled {
+button:enabled, input[type="submit"] {
     cursor: pointer;
 }
 
