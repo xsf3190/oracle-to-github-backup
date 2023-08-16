@@ -266,12 +266,12 @@ document.querySelectorAll(".add-website").forEach(button => {
 /* 
  ** CHARACTER COUNTER FOR FORM INPUT ELEMENTS
  */
-document.querySelectorAll("input").forEach(input => {
+document.querySelectorAll("input[type='text'").forEach(input => {
     input.addEventListener('input',  e => {
-        console.log(e);
         const maxchars = e.target.getAttribute("maxlength");
-        const count = e.target.nextElementSibling;
-        count.textContent = maxchars + " characters";
+        const counter = e.target.nextElementSibling;
+        let numOfEnteredChars = e.target.value.length;
+        counter.textContent = numOfEnteredChars + "/" + maxchars;
     });
 });
 
