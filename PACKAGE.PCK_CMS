@@ -1099,7 +1099,38 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         </li>';
         
         RETURN (l_element);
-        END;
+    END;
+    
+    FUNCTION buildTemplates RETURN VARCHAR2 IS
+        l_clob CLOB;
+        l_cluster CLOB;
+        l_url VARCHAR2(200);
+    BEGIN
+        FOR C IN (SELECT github_repos_owner, github_deploy_repos, github_token FROM github) LOOP
+            apex_web_service.g_request_headers(1).name := 'Accept';
+            apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
+            apex_web_service.g_request_headers(2).name := 'Authorization';
+            apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
+            apex_web_service.g_request_headers(3).name := 'User-Agent';
+            apex_web_service.g_request_headers(3).value := C.github_repos_owner;
+            
+            l_url:='https://api.github.com/repos/'|| C.github_repos_owner || '/' || C.github_deploy_repos || '/contents/TEMPLATES';
+            l_clob := apex_web_service.make_rest_request(p_url=>l_url,p_http_method=>'GET');
+            
+            FOR C1 IN (SELECT message FROM JSON_TABLE(l_clob, '$' COLUMNS (message))) LOOP
+                IF (C1.message IS NOT NULL) THEN
+                    RETURN('<p>ERROR calling ' || l_url || ' - ' || C1.message || '</p>');
+                END IF;
+            END LOOP;
+                
+            FOR C1 IN (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name))) LOOP
+                l_cluster:=l_cluster || 
+                '<input type="radio" id="template-' || LOWER(C1.name) || '" name="template" value="' || C1.name || '"></input>
+                 <label for="template-' || LOWER(C1.name) || '">' || C1.name || '</label>';
+            END LOOP;
+        END LOOP;
+        RETURN (l_cluster);
+    END;
     
     /*
      **  Construct Home page HTML of qualifying blog articles
@@ -1160,6 +1191,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                         <button type="button" class="show-dropdown">&blacktriangledown;</button>
                         <ul class="dropdown-items">
                             <li><button type="button" class="deploy-website" data-websiteid="' || C.id || '">DEPLOY WEBSITE</button></li>
+                            <li><button type="button" class="edit-website" data-websiteid="' || C.id || '">EDIT WEBSITE</button></li>
                             <li><button type="button" class="delete-website" data-websiteid="' || C.id || '">DELETE WEBSITE</button></li>');
                 END IF;
                 IF (C.rn>1) THEN
@@ -1168,8 +1200,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 END IF;
                 IF (C.rn=C.nb) THEN
                     l_clob:=l_clob || TO_CLOB(
-                        '<li><button type="button" class="edit-website" data-websiteid="0">ORPHAN CONTENT</button></li>
-                        </ul>
+                        '</ul>
                     </div>');
                 END IF;
             END LOOP;
@@ -1184,14 +1215,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                         </ul>
                     </div>
                  </nav>');
-            
-            /* get Deployment TEMPLATE names */
-            /*
-            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo||'/contents/TEMPLATES',p_http_method=>'GET');
-            FOR C1 IN (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name))) LOOP
-                l_template_names:=l_template_names || C1.name;
-            END LOOP;
-            */
         ELSE
             FOR C IN (SELECT body_html FROM article WHERE id=1) 
             LOOP
@@ -1292,14 +1315,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 <div>
                     <div></div> <!-- empty div for grid -->
                     <form>
-                        <fieldset>
-                            <legend>Website Details</legend>
+                        <div>
                             <label for="name">Domain name</label>
-                            <input type="text" id="name" maxlength="30" required style="inline-size:30ch"></input>
-                            <span></span>
-                            <label for="contact-name">Contact Name</label>
-                            <input type="text" id="contact-name" maxlength="50" style="inline-size:50ch"></input>
-                            <span></span>
+                            <input type="text" id="name" maxlength="30" required style="inline-size:30ch"></input><span></span>
+                        </div>
+                        <div>
+                            <label for="contact-name">Contact Email Address</label>
+                            <input type="text" id="contact-name" maxlength="50" style="inline-size:50ch"></input><span></span>
+                        </div>
+                        <fieldset>
+                            <legend>Default Image Dimension</legend>
+                            <div class="cluster">
+                                <input type="radio" id="image-dimension-s" name="image-dimension" value="0.25" checked></input>
+                                <label for="image-dimension-s">Small</label>
+                                <input type="radio" id="image-dimension-m" name="image-dimension" value="0.625"></input>
+                                <label for="image-dimension-m">Medium</label>
+                                <input type="radio" id="image-dimension-l" name="image-dimension" value="1"></input>
+                                <label for="image-dimension-l">Large</label>
+                            </div>
+                        </fieldset>
+                        <fieldset>
+                            <legend>Website Template</legend>
+                            <div class="cluster">' || buildTemplates() || '
+                            </div>
                         </fieldset>
                         <input type="submit" value="APPLY CHANGES">
                     </form>
