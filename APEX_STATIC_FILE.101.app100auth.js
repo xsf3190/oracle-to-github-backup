@@ -242,14 +242,29 @@ add_card.addEventListener('click',  e => {
 });
 
 /* 
- ** EDIT WEBSITE
+ ** SHOW WEBSITE ARTILES
  */
-document.querySelectorAll(".edit-website").forEach(button => {
+document.querySelectorAll(".show-website").forEach(button => {
     button.addEventListener('click',  e => {
         execProcess("website/" + e.target.dataset.websiteid,"GET").then( (data) => {
             cards.dataset.websiteid = e.target.dataset.websiteid;
             cards.replaceChildren();
             cards.insertAdjacentHTML('afterbegin',data.content);
+        });
+    });
+});
+
+/* 
+ ** EDIT WEBSITE
+ */
+document.querySelectorAll(".edit-website").forEach(button => {
+    button.addEventListener('click',  e => {
+        execProcess("website/" + e.target.dataset.websiteid,"GET").then( (data) => {
+            document.getElementById("domain-name").value=data.domain_name;
+            document.getElementById("contact-email").value=data.contact_email;
+            document.getElementById(data.image_dimension).checked=true;
+            document.getElementById(data.template).checked=true;
+            website.showModal();
         });
     });
 });
