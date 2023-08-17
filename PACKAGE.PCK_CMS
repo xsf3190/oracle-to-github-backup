@@ -503,7 +503,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.close_object;
         
         FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, u.netlify_token, u.netlify_installation_id, 
-                         w.name, w.template, w.netlify_site_id, w.contact_email
+                         w.domain_name, w.template, w.netlify_site_id, w.contact_email
                     FROM users u, website w
                    WHERE u.id=l_admin_user_id
                      AND w.id=pWebsiteId
@@ -546,7 +546,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 
                 /* create JSON payload for new Netlify site */
                 l_json:=new JSON_OBJECT_T;
-                l_json.put('name', C.name);
+                l_json.put('name', C.domain_name);
                 
                 l_repo:=new JSON_OBJECT_T;
                 l_repo.put('provider', 'github');
@@ -557,7 +557,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_repo.put('private', FALSE);
                 l_repo.put('deploy_key_id', l_deploy_key_id);
                 l_repo.put('installation_id', C.netlify_installation_id);
-                l_repo.put('base', C.name);   
+                l_repo.put('base', C.domain_name);   
                 l_json.put('repo', l_repo);
                 
                 /* Create Netlify site and store the site_id in website table */
@@ -577,7 +577,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_json.put('event_type', 'trigger_build');
             
             l_action:=new JSON_OBJECT_T;
-            l_action.put('build_path', C.name);
+            l_action.put('build_path', C.domain_name);
             l_action.put('template', C.template);
             l_action.put('fetch_url', getRestUrl() || 'content/' || pWebsiteId);  
             l_action.put('log_url', getRestUrl() || 'deploy-status/' || pWebsiteId);
@@ -1175,9 +1175,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <button type="button" class="add-website">NEW WEBSITE</button>');
                     
                     
-            FOR C IN (SELECT id, name, rn, nb 
+            FOR C IN (SELECT id, domain_name, rn, nb 
                         FROM
-                        ( SELECT id, name, ROW_NUMBER() OVER (ORDER BY COALESCE(updated_date, created_date) DESC) rn, COUNT(*) OVER () nb
+                        ( SELECT id, domain_name, ROW_NUMBER() OVER (ORDER BY COALESCE(updated_date, created_date) DESC) rn, COUNT(*) OVER () nb
                             FROM website
                            WHERE user_id=l_user_id
                         ) 
@@ -1187,7 +1187,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     l_current_website:=C.id;
                     l_clob:=l_clob || TO_CLOB(
                     '<div class="dropdown">
-                        <button type="button" class="show-dropdown" disabled data-websiteid="' || C.id || '">' || C.name || '</button>
+                        <button type="button" class="show-dropdown" disabled data-websiteid="' || C.id || '">' || C.domain_name || '</button>
                         <button type="button" class="show-dropdown">&blacktriangledown;</button>
                         <ul class="dropdown-items">
                             <li><button type="button" class="deploy-website" data-websiteid="' || C.id || '">DEPLOY WEBSITE</button></li>
@@ -1196,7 +1196,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 END IF;
                 IF (C.rn>1) THEN
                     l_clob:=l_clob || TO_CLOB(
-                            '<li><button type="button" class="edit-website" data-websiteid="' || C.id || '">' || C.name || '</button></li>');
+                            '<li><button type="button" class="edit-website" data-websiteid="' || C.id || '">' || C.domain_name || '</button></li>');
                 END IF;
                 IF (C.rn=C.nb) THEN
                     l_clob:=l_clob || TO_CLOB(
@@ -1316,12 +1316,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <div></div> <!-- empty div for grid -->
                     <form>
                         <div>
-                            <label for="name">Domain name</label>
-                            <input type="text" id="name" maxlength="30" required style="inline-size:30ch"></input><span></span>
+                            <label for="domain-name">Domain name</label>
+                            <input type="text" id="domain-name" maxlength="30" required style="inline-size:30ch"></input><span></span>
                         </div>
                         <div>
-                            <label for="contact-name">Contact Email Address</label>
-                            <input type="text" id="contact-name" maxlength="50" style="inline-size:50ch"></input><span></span>
+                            <label for="contact-email">Contact Email Address</label>
+                            <input type="text" id="contact-email" maxlength="50" style="inline-size:50ch"></input><span></span>
                         </div>
                         <fieldset>
                             <legend>Default Image Dimension</legend>
@@ -1452,11 +1452,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm);
                 RAISE;
     END;
-    
+
     /*
     ** GET ARTICLE (PAGE) CONTENT FOR WEBSITE
     */
     PROCEDURE getWebsite(pWebsiteId IN website.id%type) IS
+        l_user_id users.id%type;
+    BEGIN
+        l_user_id:=getUserId();
+        
+        apex_json.open_object;
+        
+        FOR C IN (
+            SELECT domain_name, contact_email, DECODE(image_dimension,0.25,'s',0.625,'m',1,'l') image_dimension, template, favicon_url, trade_name,affiliation_link_img,affiliation_link_url
+              FROM website 
+             WHERE id=pWebsiteId
+               AND user_id=l_user_id) 
+        LOOP
+            apex_json.write('domain_name', C.domain_name);
+            apex_json.write('contact_email', C.contact_email);
+            apex_json.write('image_dimension', 'image-dimension-' || C.image_dimension);
+            apex_json.write('template', 'template-' || LOWER(C.template));
+        END LOOP;
+        
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+         
+        EXCEPTION
+            WHEN OTHERS THEN
+                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+    END;
+    
+    /*
+    ** GET ARTICLE (PAGE) CONTENT FOR WEBSITE
+    */
+    PROCEDURE getWebsiteArticles(pWebsiteId IN website.id%type) IS
         l_user_id users.id%type;
         l_user_name users.name%type;
         l_clob CLOB;
@@ -1916,14 +1946,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
            AND netlify_token IS NOT NULL 
            AND netlify_installation_id IS NOT NULL;
            
-        FOR C IN (SELECT w.id, w.name, w.favicon_url, w.image_dimension, w.contact_email, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, 
+        FOR C IN (SELECT w.id, w.domain_name, w.favicon_url, w.image_dimension, w.contact_email, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, 
                          utl_i18n.string_to_raw(regexp_replace(t.private_key,'(-+((BEGIN|END) (RSA )?(PUBLIC|PRIVATE) KEY)-+\s?|\s)','')) private_key
                     FROM website w, users u, terraform t
                    WHERE w.id=pWebsiteId
                      AND u.id=l_admin_user_id)
         LOOP
             l_website_object.put('id',C.id);
-            l_website_object.put('name',C.name);
+            l_website_object.put('name',C.domain_name);
             l_website_object.put('favicon_url',C.favicon_url);
             l_website_object.put('contact_email',C.contact_email);
             l_website_object.put('trade_name',C.trade_name);
