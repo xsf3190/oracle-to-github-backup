@@ -124,6 +124,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
     g_google_svg LONG:='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 186.69 190.5" xmlns:v="https://vecta.io/nano"><g transform="translate(1184.583 765.171)"><path clip-path="none" mask="none" d="M-1089.333-687.239v36.888h51.262c-2.251 11.863-9.006 21.908-19.137 28.662l30.913 23.986c18.011-16.625 28.402-41.044 28.402-70.052 0-6.754-.606-13.249-1.732-19.483z" fill="#4285f4"/><path clip-path="none" mask="none" d="M-1142.714-651.791l-6.972 5.337-24.679 19.223h0c15.673 31.086 47.796 52.561 85.03 52.561 25.717 0 47.278-8.486 63.038-23.033l-30.913-23.986c-8.486 5.715-19.31 9.179-32.125 9.179-24.765 0-45.806-16.712-53.34-39.226z" fill="#34a853"/><path clip-path="none" mask="none" d="M-1174.365-712.61c-6.494 12.815-10.217 27.276-10.217 42.689s3.723 29.874 10.217 42.689c0 .086 31.693-24.592 31.693-24.592-1.905-5.715-3.031-11.776-3.031-18.098s1.126-12.383 3.031-18.098z" fill="#fbbc05"/><path d="M-1089.333-727.244c14.028 0 26.497 4.849 36.455 14.201l27.276-27.276c-16.539-15.413-38.013-24.852-63.731-24.852-37.234 0-69.359 21.388-85.032 52.561l31.692 24.592c7.533-22.514 28.575-39.226 53.34-39.226z" fill="#ea4335" clip-path="none" mask="none"/></g></svg>';
     
+    g_netlify_svg LONG:='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 209" fill="none" aria-hidden="true">
+    <style type="text/css">
+	.spark{fill:#05bdba;}
+	.text{fill:#014847;}
+</style>
+    <g clip-path="url(#clip0_235_8)">
+      <path d="M117.436 207.036V154.604L118.529 153.51H129.452L130.545 154.604V207.036L129.452 208.13H118.529L117.436 207.036Z" class="spark"></path>
+      <path d="M117.436 53.5225V1.09339L118.529 0H129.452L130.545 1.09339V53.5225L129.452 54.6159H118.529L117.436 53.5225Z" class="spark"></path>
+      <path d="M69.9539 169.238H68.4094L60.6869 161.512V159.967L78.7201 141.938L86.8976 141.942L87.9948 143.031V151.209L69.9539 169.238Z" class="spark"></path>
+      <path d="M69.9462 38.8917H68.4017L60.6792 46.6181V48.1626L78.7124 66.192L86.8899 66.1882L87.9871 65.0986V56.9212L69.9462 38.8917Z" class="spark"></path>
+      <path d="M1.09339 97.5104H75.3711L76.4645 98.6038V109.526L75.3711 110.62H1.09339L0 109.526V98.6038L1.09339 97.5104Z" class="spark"></path>
+      <path d="M440.999 97.5104H510.91L512.004 98.6038V109.526L510.91 110.62H436.633L435.539 109.526L439.905 98.6038L440.999 97.5104Z" class="spark"></path>
+      <path d="M212.056 108.727L210.963 109.821H177.079L175.986 110.914C175.986 113.101 178.173 119.657 186.916 119.657C190.196 119.657 193.472 118.564 194.566 116.377L195.659 115.284H208.776L209.869 116.377C208.776 122.934 203.313 132.774 186.916 132.774C168.336 132.774 159.589 119.657 159.589 104.357C159.589 89.0576 168.332 75.9408 185.822 75.9408C203.313 75.9408 212.056 89.0576 212.056 104.357V108.731V108.727ZM195.659 97.7971C195.659 96.7037 194.566 89.0538 185.822 89.0538C177.079 89.0538 175.986 96.7037 175.986 97.7971L177.079 98.8905H194.566L195.659 97.7971Z" class="text"></path>
+      <path d="M242.66 115.284C242.66 117.47 243.753 118.564 245.94 118.564H255.776L256.87 119.657V130.587L255.776 131.681H245.94C236.103 131.681 227.36 127.307 227.36 115.284V91.2368L226.266 90.1434H218.617L217.523 89.05V78.1199L218.617 77.0265H226.266L227.36 75.9332V66.0965L228.453 65.0031H241.57L242.663 66.0965V75.9332L243.757 77.0265H255.78L256.874 78.1199V89.05L255.78 90.1434H243.757L242.663 91.2368V115.284H242.66Z" class="text"></path>
+      <path d="M283.1 131.681H269.983L268.889 130.587V56.2636L269.983 55.1702H283.1L284.193 56.2636V130.587L283.1 131.681Z" class="text"></path>
+      <path d="M312.61 68.2871H299.493L298.399 67.1937V56.2636L299.493 55.1702H312.61L313.703 56.2636V67.1937L312.61 68.2871ZM312.61 131.681H299.493L298.399 130.587V78.1237L299.493 77.0304H312.61L313.703 78.1237V130.587L312.61 131.681Z" class="text"></path>
+      <path d="M363.98 56.2636V67.1937L362.886 68.2871H353.05C350.863 68.2871 349.769 69.3805 349.769 71.5672V75.9408L350.863 77.0342H361.793L362.886 78.1276V89.0576L361.793 90.151H350.863L349.769 91.2444V130.591L348.676 131.684H335.559L334.466 130.591V91.2444L333.372 90.151H325.723L324.629 89.0576V78.1276L325.723 77.0342H333.372L334.466 75.9408V71.5672C334.466 59.5438 343.209 55.1702 353.046 55.1702H362.882L363.976 56.2636H363.98Z" class="text"></path>
+      <path d="M404.42 132.774C400.046 143.704 395.677 150.261 380.373 150.261H374.906L373.813 149.167V138.237L374.906 137.144H380.373C385.836 137.144 386.929 136.05 388.023 132.77V131.677L370.536 89.05V78.1199L371.63 77.0265H381.466L382.56 78.1199L395.677 115.284H396.77L409.887 78.1199L410.98 77.0265H420.817L421.91 78.1199V89.05L404.424 132.77L404.42 132.774Z" class="text"></path>
+      <path d="M135.454 131.681L134.361 130.587L134.368 98.9172C134.368 93.4541 132.22 89.2182 125.625 89.0806C122.234 88.9926 118.354 89.0729 114.209 89.2488L113.59 89.8834L113.598 130.587L112.504 131.681H99.3913L98.2979 130.587V77.5388L99.3913 76.4454L128.901 76.1778C143.685 76.1778 149.668 86.3356 149.668 97.8009V130.587L148.575 131.681H135.454Z" class="text"></path>
+    </g>
+    <defs>
+      <clipPath id="clip0_235_8">
+        <rect width="512" height="208.126" fill="white"></rect>
+      </clipPath>
+    </defs>
+  </svg>';
     
     /*
      ** CLOB and VARCHAR2 signatures for log procedure
@@ -1133,15 +1159,101 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
     
     /*
-     **  Construct Home page HTML of qualifying blog articles
+     **  Login page
+     */
+    FUNCTION buildLoginPage RETURN CLOB IS
+    BEGIN
+        FOR C IN (SELECT body_html FROM article WHERE id=1) 
+        LOOP
+            RETURN TO_CLOB('
+                <ul class="homepage">
+                    <li class="red"></li>
+                    <li class="grey">
+                        <p>Login</p>
+                        <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || g_facebook_svg ||'</a>
+                        <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || g_google_svg ||'</a>
+                    </li>
+                    <li class="grey">' || g_oracle_svg || '</li>
+                    <li class="grey">' || g_cloudinary_svg || g_netlify_svg || '</li>
+                    <li class="yellow">ALWAYS FREE</li>
+                    <li class="grey">
+                        
+                        <span class="privacy" data-id="19124">Privacy Policy</span>
+                    </li>
+                    <li class="blue"></li>
+                    <li class="grey"></li>
+                    <li class="grey"></li>
+                </ul>');
+        END LOOP;
+    END;
+
+    /*
+     **  Build authenticated page
+     */
+    FUNCTION buildAuthPage RETURN CLOB IS
+        l_clob CLOB;
+        l_user_id users.id%type;
+        l_user_name users.name%type;
+        l_current_website website.id%type;    
+    BEGIN
+       SELECT id, name 
+          INTO l_user_id, l_user_name
+          FROM users
+         WHERE email=apex_application.g_user;
+             
+        l_clob:=l_clob || TO_CLOB(
+            '<nav>
+                <button type="button" class="add-website">NEW WEBSITE</button>');
+                
+                
+        FOR C IN (SELECT id, domain_name, rn, nb 
+                    FROM
+                    ( SELECT id, domain_name, ROW_NUMBER() OVER (ORDER BY COALESCE(updated_date, created_date) DESC) rn, COUNT(*) OVER () nb
+                        FROM website
+                       WHERE user_id=l_user_id
+                    ) 
+                    ORDER BY rn)
+        LOOP
+            IF (C.rn=1) THEN
+                l_current_website:=C.id;
+                l_clob:=l_clob || TO_CLOB(
+                '<div class="dropdown">
+                    <button type="button" class="show-dropdown" disabled data-websiteid="' || C.id || '">' || C.domain_name || '</button>
+                    <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                    <ul class="dropdown-items">
+                        <li><button type="button" class="deploy-website" data-websiteid="' || C.id || '">DEPLOY WEBSITE</button></li>
+                        <li><button type="button" class="edit-website" data-websiteid="' || C.id || '">EDIT WEBSITE</button></li>
+                        <li><button type="button" class="delete-website" data-websiteid="' || C.id || '">DELETE WEBSITE</button></li>');
+            END IF;
+            IF (C.rn>1) THEN
+                l_clob:=l_clob || TO_CLOB(
+                        '<li><button type="button" class="edit-website" data-websiteid="' || C.id || '">' || C.domain_name || '</button></li>');
+            END IF;
+            IF (C.rn=C.nb) THEN
+                l_clob:=l_clob || TO_CLOB(
+                    '</ul>
+                </div>');
+            END IF;
+        END LOOP;
+        
+        l_clob:=l_clob || TO_CLOB(
+                '<div class="dropdown">
+                    <button type="button" class="show-dropdown" disabled>' || apex_application.g_user || '</button>
+                    <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                    <ul class="dropdown-items">
+                        <li><button type="button" class="fa signout">Sign out</button></li>
+                        <li><button type="button" class="fa delete-me">Delete all content</button></li>
+                    </ul>
+                </div>
+             </nav>');
+             
+        RETURN l_clob;
+    END;
+    
+    /*
+     **  Unauthenticated user - login page
      **
-     **  Unauthenticated user (i.e. HOME page)
-     **    - articles where PUBLIC=Y
-     **
-     **  Authenticated user -
-     **    - articles authored by user
-     **    - first card is for creatng a new article
-     **    - create menu and buttons to manage article
+     **  Authenticated user - websites and articles authored by user
      */
     FUNCTION getPageContent RETURN CLOB IS
         l_clob CLOB;
@@ -1150,6 +1262,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_user_id users.id%type;
         l_user_name users.name%type;
         l_current_website website.id%type;
+        l_page_css APEX_APPLICATION_STATIC_FILES.file_name%type;
+        l_page_js APEX_APPLICATION_STATIC_FILES.file_name%type;
     BEGIN
         SELECT NVL(css_file_urls,' '), NVL(javascript_file_urls,' ')
           INTO l_css_file_urls, l_javascript_file_urls
@@ -1157,94 +1271,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
          WHERE application_id=apex_application.g_flow_id
            AND page_id=apex_application.g_flow_step_id;
         
-        IF (INSTR(l_css_file_urls,'app100.min.css')=0) THEN
-            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name='app100.css') LOOP
+        l_page_css:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.css';
+        log(l_page_css);
+        IF (INSTR(l_css_file_urls,l_page_css)=0) THEN
+            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name=REPLACE(l_page_css,'.min')) LOOP
                 l_clob:=l_clob || '<style>' || apex_util.blob_to_clob(C.file_content) || '</style>';
             END LOOP;
         END IF;
         
-        IF (apex_application.g_flow_step_id=2) THEN
-            SELECT id, name 
-              INTO l_user_id, l_user_name
-              FROM users
-             WHERE email=apex_application.g_user;
-             
-            l_clob:=l_clob || TO_CLOB(
-                '<nav>
-                    <button type="button" class="add-card">NEW CONTENT</button>
-                    <button type="button" class="add-website">NEW WEBSITE</button>');
-                    
-                    
-            FOR C IN (SELECT id, domain_name, rn, nb 
-                        FROM
-                        ( SELECT id, domain_name, ROW_NUMBER() OVER (ORDER BY COALESCE(updated_date, created_date) DESC) rn, COUNT(*) OVER () nb
-                            FROM website
-                           WHERE user_id=l_user_id
-                        ) 
-                        ORDER BY rn)
-            LOOP
-                IF (C.rn=1) THEN
-                    l_current_website:=C.id;
-                    l_clob:=l_clob || TO_CLOB(
-                    '<div class="dropdown">
-                        <button type="button" class="show-dropdown" disabled data-websiteid="' || C.id || '">' || C.domain_name || '</button>
-                        <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                        <ul class="dropdown-items">
-                            <li><button type="button" class="deploy-website" data-websiteid="' || C.id || '">DEPLOY WEBSITE</button></li>
-                            <li><button type="button" class="edit-website" data-websiteid="' || C.id || '">EDIT WEBSITE</button></li>
-                            <li><button type="button" class="delete-website" data-websiteid="' || C.id || '">DELETE WEBSITE</button></li>');
-                END IF;
-                IF (C.rn>1) THEN
-                    l_clob:=l_clob || TO_CLOB(
-                            '<li><button type="button" class="edit-website" data-websiteid="' || C.id || '">' || C.domain_name || '</button></li>');
-                END IF;
-                IF (C.rn=C.nb) THEN
-                    l_clob:=l_clob || TO_CLOB(
-                        '</ul>
-                    </div>');
-                END IF;
-            END LOOP;
-            
-            l_clob:=l_clob || TO_CLOB(
-                    '<div class="dropdown">
-                        <button type="button" class="show-dropdown" disabled>' || apex_application.g_user || '</button>
-                        <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                        <ul class="dropdown-items">
-                            <li><button type="button" class="fa signout">Sign out</button></li>
-                            <li><button type="button" class="fa delete-me">Delete all content</button></li>
-                        </ul>
-                    </div>
-                 </nav>');
-        ELSE
-            FOR C IN (SELECT body_html FROM article WHERE id=1) 
-            LOOP
-                l_clob:=l_clob || TO_CLOB('
-                    <div>
-                        <ul class="homepage">
-                            <li class="red"></li>
-                            <li class="grey">' || g_oracle_svg || '</li>
-                            <li class="grey"></li>
-                            <li class="grey">' || g_cloudinary_svg || '</li>
-                            <li class="yellow">ALWAYS FREE</li>
-                            <li class="grey">
-                                <h4>Login CMS</h4>
-                                <div>
-                                    <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || g_facebook_svg ||'</a>
-                                    <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || g_google_svg ||'</a>
-                                </div>
-                                <span class="privacy" data-id="19124">Privacy Policy</span>
-                            </li>
-                            <li class="blue"></li>
-                            <li class="grey"></li>
-                        </ul>
-                        <div class="ck-content">' || C.body_html || '
-                        </div>
-                    </div>
-                    <!--<h2>PUBLISHED ARTICLES</h2>-->');
-            END LOOP;
-        END IF;
+        CASE apex_application.g_flow_step_id
+            WHEN 1 THEN l_clob:=l_clob || buildLoginPage;
+            WHEN 2 THEN l_clob:=l_clob || buildAuthPage;
+        END CASE;
         
-        IF (apex_application.g_flow_step_id=2) THEN
+        /*
             l_clob:=l_clob || TO_CLOB('<ul class="cards" data-websiteid="' || l_current_website || '" role="list">');
                 
             IF (l_current_website IS NOT NULL) THEN
@@ -1298,8 +1338,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                             apex_application.g_flow_step_id, 
                             C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), l_user_name));
                 END LOOP;            
-            END IF;
-        END IF;
+
         l_clob:=l_clob || TO_CLOB('</ul>');
         
         l_clob:=l_clob || TO_CLOB(
@@ -1418,6 +1457,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 </div>
             </dialog> 
             ');
+        */
             
         l_clob:=l_clob || TO_CLOB('
             <input type="hidden" name="p_flow_id" value="' || apex_application.g_flow_id ||'" id="pFlowId">
