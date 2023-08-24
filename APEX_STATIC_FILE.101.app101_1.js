@@ -4,8 +4,8 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       apex_page_id = document.querySelector("#pFlowStepId").value,
       apex_session = document.querySelector("#pInstance").value,
       vitalsQueue = new Set(),
-      popup = document.querySelector("dialog.popup"),
-      privacy = document.querySelector(".privacy");
+      popup = document.querySelector("dialog"),
+      privacy = document.querySelector("#privacy-policy");
 
 /*
 **  CLOSE DIALOGS
@@ -86,10 +86,10 @@ const execProcess = (template, method, input) => {
  ** MISERABLE PRIVACY POLICY
  */
 privacy.addEventListener("click", (e) => {
-    const articleId = e.target.dataset.id;
+    console.log(e.currentTarget);
+    const articleId = e.currentTarget.dataset.id;
     execProcess( "article/"+articleId,"GET").then( (data) => {
-        const content = popup.querySelector(".content");
-        content.innerHTML = data.content;
+        popup.querySelector(".content").innerHTML = data.content;
         popup.showModal();
     });
 });
