@@ -71,111 +71,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
-    
-    g_cloudinary_svg LONG:='<svg id="cld-main-logo" viewBox="0 0 500 96.77">
-      <title>Cloudinary Logo</title>
-      <defs>
-        <style>
-          .cls-1 {
-            fill: #3448c5;
-          }
-        </style>
-      </defs>
-      <g id="Layer_2" data-name="Layer 2">
-        <g id="Layer_1-2" data-name="Layer 1">
-          <path class="cls-1" d="M160.53,30.41a17.14,17.14,0,0,1,13.56,6.7.69.69,0,0,0,1,.11l5.71-4.55a.71.71,0,0,0,.11-1,26,26,0,0,0-20.61-10.13c-14.91,0-27,12.85-27,28.65s12.13,28.65,27,28.65A25.85,25.85,0,0,0,180.9,68.72a.69.69,0,0,0-.12-1l-5.7-4.5a.71.71,0,0,0-1,.11A17.26,17.26,0,0,1,160.53,70c-10.19,0-18.16-8.7-18.16-19.79S150.34,30.41,160.53,30.41Z"></path>
-          <path class="cls-1" d="M188.27,19.91h7.16a.71.71,0,0,1,.71.71V77.4a.7.7,0,0,1-.7.7h-7.16a.71.71,0,0,1-.71-.71V20.62A.7.7,0,0,1,188.27,19.91Z"></path>
-          <path class="cls-1" d="M220.54,39.55c-9.49,0-19.09,6.72-19.09,19.57,0,11.29,8.21,19.81,19.09,19.81s19.17-8.52,19.17-19.81S231.47,39.55,220.54,39.55Zm10.53,19.57c0,6.52-4.53,11.44-10.53,11.44S210.1,65.64,210.1,59.12s4.49-11.2,10.44-11.2S231.07,52.73,231.07,59.12Z"></path>
-          <path class="cls-1" d="M278.3,40.37h-7.16a.7.7,0,0,0-.71.7v19c0,7.42-5.12,10.05-9.51,10.05-3.88,0-7.79-2.93-7.79-9.48V41.07a.7.7,0,0,0-.71-.7h-7.16a.7.7,0,0,0-.7.7v20.5c0,11.25,5.09,17.44,14.34,17.44,3.36,0,8.8-1.93,10.84-6.19l.69.14V77.4a.71.71,0,0,0,.71.71h7.16a.71.71,0,0,0,.71-.71V41.07A.7.7,0,0,0,278.3,40.37Z"></path>
-          <path class="cls-1" d="M322.27,19.91H315.1a.7.7,0,0,0-.7.71V46l-.44-.7c-2.18-3.51-6.87-5.78-11.95-5.78-8.76,0-17.62,6.75-17.62,19.65,0,11.25,7.61,19.73,17.69,19.73,3.84,0,9.25-1.54,11.88-5.86l.44-.72V77.4a.7.7,0,0,0,.7.71h7.17a.7.7,0,0,0,.7-.71V20.62A.7.7,0,0,0,322.27,19.91Zm-8,39.21a11,11,0,0,1-10.75,11.36c-5.86,0-10.45-5-10.45-11.36s4.59-11.2,10.45-11.2A11,11,0,0,1,314.24,59.12Z"></path>
-          <path class="cls-1" d="M333,40.37h7.16a.7.7,0,0,1,.7.7V77.4a.7.7,0,0,1-.7.7H333a.71.71,0,0,1-.71-.71V41.07A.71.71,0,0,1,333,40.37Z"></path>
-          <path class="cls-1" d="M336.61,21.06a5.57,5.57,0,0,0-5.69,5.57,5.64,5.64,0,0,0,5.69,5.58,5.54,5.54,0,0,0,5.61-5.58A5.48,5.48,0,0,0,336.61,21.06Z"></path>
-          <path class="cls-1" d="M370.35,39.55c-3.14,0-8.72,1.69-10.85,6.19l-.69-.14V41.07a.7.7,0,0,0-.71-.7h-7.16a.7.7,0,0,0-.7.7V77.4a.7.7,0,0,0,.7.71h7.16a.71.71,0,0,0,.71-.71v-19c0-7.36,5.12-10,9.51-10,3.88,0,7.79,2.91,7.79,9.4V77.4a.71.71,0,0,0,.71.71H384a.71.71,0,0,0,.71-.71V56.91C384.69,45.72,379.59,39.55,370.35,39.55Z"></path>
-          <path class="cls-1" d="M427.48,40.37h-7.16a.7.7,0,0,0-.71.7v5l-.43-.7c-2.19-3.51-6.88-5.78-12-5.78-8.75,0-17.62,6.75-17.62,19.65,0,11.25,7.61,19.73,17.7,19.73,3.83,0,9.24-1.54,11.88-5.86l.43-.72V77.4a.71.71,0,0,0,.71.71h7.16a.7.7,0,0,0,.7-.71V41.07A.7.7,0,0,0,427.48,40.37Zm-8,18.75A11,11,0,0,1,408.7,70.48c-5.86,0-10.44-5-10.44-11.36s4.58-11.2,10.44-11.2A11,11,0,0,1,419.46,59.12Z"></path>
-          <path class="cls-1" d="M460.15,40.5a13.66,13.66,0,0,0-5.14-1c-4.76,0-8.22,2.85-10,8.25l-.64-.09V41.07a.7.7,0,0,0-.71-.7h-7.16a.7.7,0,0,0-.71.7V77.4a.71.71,0,0,0,.71.71h7.24a.7.7,0,0,0,.7-.71V65c0-14.8,5.91-17,9.44-17a11,11,0,0,1,4.33.9.72.72,0,0,0,.61,0,.7.7,0,0,0,.36-.48l1.42-7.11A.71.71,0,0,0,460.15,40.5Z"></path>
-          <path class="cls-1" d="M499.88,40.68a.69.69,0,0,0-.59-.31h-7.71a.72.72,0,0,0-.66.45L481.59,65l-9.42-24.18a.72.72,0,0,0-.66-.45h-7.86a.69.69,0,0,0-.58.31.7.7,0,0,0-.07.66l14,34.38-7.73,20.09a.71.71,0,0,0,.66,1h7.5a.69.69,0,0,0,.65-.45l21.86-55A.69.69,0,0,0,499.88,40.68Z"></path>
-          <path class="cls-1" d="M97.91,28.11A40.38,40.38,0,0,0,59.73,0,39.62,39.62,0,0,0,24.6,20.87a29.88,29.88,0,0,0-7.21,56.56l.75.34h.05v-8.5a22.29,22.29,0,0,1,9.29-41.16l2.1-.22L30.5,26A32.15,32.15,0,0,1,59.73,7.57a32.7,32.7,0,0,1,31.55,25L92,35.43l3,0a18.53,18.53,0,0,1,18.15,18.46c0,7.05-4.07,12.82-11,15.74v8.06l.5-.16c11.14-3.65,18.06-12.71,18.06-23.64A26.19,26.19,0,0,0,97.91,28.11Z"></path>
-          <path class="cls-1" d="M45.07,76.79l1.66,1.66a.33.33,0,0,1-.23.56H33.4a6,6,0,0,1-6-6V47.57a.33.33,0,0,0-.33-.33H24.27a.33.33,0,0,1-.24-.56L35.15,35.56a.33.33,0,0,1,.47,0L46.73,46.68a.33.33,0,0,1-.23.56H43.66a.34.34,0,0,0-.34.33v25A6,6,0,0,0,45.07,76.79Z"></path>
-          <path class="cls-1" d="M69.64,76.79l1.67,1.66a.33.33,0,0,1-.24.56H58a6,6,0,0,1-6-6V54a.34.34,0,0,0-.33-.34H48.84a.33.33,0,0,1-.23-.56L59.72,42a.33.33,0,0,1,.47,0L71.31,53.08a.33.33,0,0,1-.24.56H68.23a.34.34,0,0,0-.33.34V72.57A6,6,0,0,0,69.64,76.79Z"></path>
-          <path class="cls-1" d="M94.22,76.79l1.66,1.66a.33.33,0,0,1-.23.56H82.54a6,6,0,0,1-6-6V60.38a.33.33,0,0,0-.33-.33H73.41a.33.33,0,0,1-.23-.57L84.3,48.37a.32.32,0,0,1,.46,0L95.88,59.48a.33.33,0,0,1-.23.57H92.8a.33.33,0,0,0-.33.33V72.57A6,6,0,0,0,94.22,76.79Z"></path>
-        </g>
-      </g>
-    </svg>';
- 
-     g_oracle_svg LONG:='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 231 30" preserveAspectRatio="xMinYMid"><path 
-     d="M99.61,19.52h15.24l-8.05-13L92,30H85.27l18-28.17a4.29,4.29,0,0,1,7-.05L128.32,30h-6.73l-3.17-5.25H103l-3.36-5.23m69.93,5.23V0.28h-5.72V27.16a2.76,2.76,0,0,0,.85,2,2.89,2.89,0,0,0,2.08.87h26l3.39-5.25H169.54M75,20.38A10,10,0,0,0,75,.28H50V30h5.71V5.54H74.65a4.81,4.81,0,0,1,0,9.62H58.54L75.6,30h8.29L72.43,20.38H75M14.88,30H32.15a14.86,14.86,0,0,0,0-29.71H14.88a14.86,14.86,0,1,0,0,29.71m16.88-5.23H15.26a9.62,9.62,0,0,1,0-19.23h16.5a9.62,9.62,0,1,1,0,19.23M140.25,30h17.63l3.34-5.23H140.64a9.62,9.62,0,1,1,0-19.23h16.75l3.38-5.25H140.25a14.86,14.86,0,1,0,0,29.71m69.87-5.23a9.62,9.62,0,0,1-9.26-7h24.42l3.36-5.24H200.86a9.61,9.61,0,0,1,9.26-7h16.76l3.35-5.25h-20.5a14.86,14.86,0,0,0,0,29.71h17.63l3.35-5.23h-20.6" 
-     transform="translate(-0.02 0)" style="fill:#C74634"/></svg>';
-     
-     g_github_svg LONG:='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-    <g fill="#181616">
-        <path fill-rule="evenodd" d="M64 1.512c-23.493 0-42.545 19.047-42.545 42.545 0 18.797 12.19 34.745 29.095 40.37 2.126.394 2.907-.923 2.907-2.047 0-1.014-.04-4.366-.058-7.92-11.837 2.573-14.334-5.02-14.334-5.02-1.935-4.918-4.724-6.226-4.724-6.226-3.86-2.64.29-2.586.29-2.586 4.273.3 6.523 4.385 6.523 4.385 3.794 6.504 9.953 4.623 12.38 3.536.383-2.75 1.485-4.628 2.702-5.69-9.45-1.075-19.384-4.724-19.384-21.026 0-4.645 1.662-8.44 4.384-11.42-.442-1.072-1.898-5.4.412-11.26 0 0 3.572-1.142 11.7 4.363 3.395-.943 7.035-1.416 10.65-1.432 3.616.017 7.258.49 10.658 1.432 8.12-5.504 11.688-4.362 11.688-4.362 2.316 5.86.86 10.187.418 11.26 2.728 2.978 4.378 6.774 4.378 11.42 0 16.34-9.953 19.938-19.427 20.99 1.526 1.32 2.886 3.91 2.886 7.88 0 5.692-.048 10.273-.048 11.674 0 1.13.766 2.458 2.922 2.04 16.896-5.632 29.07-21.574 29.07-40.365C106.545 20.56 87.497 1.512 64 1.512z" clip-rule="evenodd"></path>
-        <path d="M37.57 62.596c-.095.212-.428.275-.73.13-.31-.14-.482-.427-.382-.64.09-.216.424-.277.733-.132.31.14.486.43.38.642zm-.524-.388M39.293 64.52c-.203.187-.6.1-.87-.198-.278-.297-.33-.694-.124-.884.208-.188.593-.1.87.197.28.3.335.693.123.884zm-.406-.437M40.97 66.968c-.26.182-.687.012-.95-.367-.262-.377-.262-.83.005-1.013.264-.182.684-.018.95.357.262.385.262.84-.005 1.024zm0 0M43.268 69.336c-.233.257-.73.188-1.093-.163-.372-.343-.475-.83-.242-1.087.237-.257.736-.185 1.102.163.37.342.482.83.233 1.086zm0 0M46.44 70.71c-.104.334-.582.485-1.064.344-.482-.146-.796-.536-.7-.872.1-.336.582-.493 1.067-.342.48.144.795.53.696.87zm0 0M49.92 70.965c.013.35-.396.642-.902.648-.508.012-.92-.272-.926-.618 0-.354.4-.642.908-.65.506-.01.92.272.92.62zm0 0M53.16 70.414c.06.342-.29.694-.793.787-.494.092-.95-.12-1.014-.46-.06-.35.297-.7.79-.792.503-.088.953.118 1.017.466zm0 0"></path>
-    </g>
-    <path fill="#100E0F" d="M24.855 108.302h-10.7a.5.5 0 0 0-.5.5v5.232a.5.5 0 0 0 .5.5h4.173v6.5s-.937.32-3.53.32c-3.056 0-7.327-1.116-7.327-10.508 0-9.393 4.448-10.63 8.624-10.63 3.614 0 5.17.636 6.162.943.31.094.6-.216.6-.492l1.193-5.055a.468.468 0 0 0-.192-.39c-.403-.288-2.857-1.66-9.058-1.66-7.144 0-14.472 3.038-14.472 17.65 0 14.61 8.39 16.787 15.46 16.787 5.854 0 9.405-2.502 9.405-2.502.146-.08.162-.285.162-.38v-16.316a.5.5 0 0 0-.5-.5zM79.506 94.81H73.48a.5.5 0 0 0-.498.503l.002 11.644h-9.392V95.313a.5.5 0 0 0-.497-.503H57.07a.5.5 0 0 0-.498.503v31.53c0 .277.224.503.498.503h6.025a.5.5 0 0 0 .497-.504v-13.486h9.392l-.016 13.486c0 .278.224.504.5.504h6.038a.5.5 0 0 0 .497-.504v-31.53c0-.278-.22-.502-.497-.502zM32.34 95.527c-2.144 0-3.884 1.753-3.884 3.923 0 2.167 1.74 3.925 3.884 3.925 2.146 0 3.885-1.758 3.885-3.925 0-2.17-1.74-3.923-3.885-3.923zM35.296 105.135H29.29c-.276 0-.522.284-.522.56v20.852c0 .613.382.795.876.795h5.41c.595 0 .74-.292.74-.805v-6.346-14.553a.5.5 0 0 0-.498-.502zM102.902 105.182h-5.98a.5.5 0 0 0-.496.504v15.46s-1.52 1.11-3.675 1.11-2.727-.977-2.727-3.088v-13.482a.5.5 0 0 0-.497-.504h-6.068a.502.502 0 0 0-.498.504v14.502c0 6.27 3.495 7.804 8.302 7.804 3.944 0 7.124-2.18 7.124-2.18s.15 1.15.22 1.285c.07.136.247.273.44.273l3.86-.017a.502.502 0 0 0 .5-.504l-.003-21.166a.504.504 0 0 0-.5-.502zM119.244 104.474c-3.396 0-5.706 1.515-5.706 1.515V95.312a.5.5 0 0 0-.497-.503H107a.5.5 0 0 0-.5.503v31.53a.5.5 0 0 0 .5.503h4.192c.19 0 .332-.097.437-.268.103-.17.254-1.454.254-1.454s2.47 2.34 7.148 2.34c5.49 0 8.64-2.784 8.64-12.502s-5.03-10.988-8.428-10.988zm-2.36 17.764c-2.073-.063-3.48-1.004-3.48-1.004v-9.985s1.388-.85 3.09-1.004c2.153-.193 4.228.458 4.228 5.594 0 5.417-.935 6.486-3.837 6.398zM53.195 122.12c-.263 0-.937.107-1.63.107-2.22 0-2.973-1.032-2.973-2.368v-8.866h4.52a.5.5 0 0 0 .5-.504v-4.856a.5.5 0 0 0-.5-.502h-4.52l-.007-5.97c0-.227-.116-.34-.378-.34h-6.16c-.238 0-.367.106-.367.335v6.17s-3.087.745-3.295.805a.5.5 0 0 0-.36.48v3.877a.5.5 0 0 0 .497.503h3.158v9.328c0 6.93 4.86 7.61 8.14 7.61 1.497 0 3.29-.48 3.586-.59.18-.067.283-.252.283-.453l.004-4.265a.51.51 0 0 0-.5-.502z"></path></svg>';
-  
-    g_facebook_svg LONG:='<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="0 0 40 40" style="enable-background:new 0 0 40 40;" xml:space="preserve">
-     <title>Logon with Facebook</title>
-<style type="text/css">
-	.st0{fill:url(#SVGID_1_);}
-	.st1{fill:#FFFFFF;}
-</style>
-<linearGradient id="SVGID_1_" gradientUnits="userSpaceOnUse" x1="-277.375" y1="406.6018" x2="-277.375" y2="407.5726" gradientTransform="matrix(40 0 0 -39.7778 11115.001 16212.334)">
-	<stop  offset="0" style="stop-color:#0062E0"/>
-	<stop  offset="1" style="stop-color:#19AFFF"/>
-</linearGradient>
-<path class="st0" d="M16.7,39.8C7.2,38.1,0,29.9,0,20C0,9,9,0,20,0s20,9,20,20c0,9.9-7.2,18.1-16.7,19.8l-1.1-0.9h-4.4L16.7,39.8z"
-	/>
-<path class="st1" d="M27.8,25.6l0.9-5.6h-5.3v-3.9c0-1.6,0.6-2.8,3-2.8h2.6V8.2c-1.4-0.2-3-0.4-4.4-0.4c-4.6,0-7.8,2.8-7.8,7.8V20
-	h-5v5.6h5v14.1c1.1,0.2,2.2,0.3,3.3,0.3c1.1,0,2.2-0.1,3.3-0.3V25.6H27.8z"/>
-</svg>';
 
-    g_google_svg LONG:='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 186.69 190.5" xmlns:v="https://vecta.io/nano">
-    <title>Logon with Google</title>
-    <g transform="translate(1184.583 765.171)">
-    <path clip-path="none" mask="none" d="M-1089.333-687.239v36.888h51.262c-2.251 11.863-9.006 21.908-19.137 28.662l30.913 23.986c18.011-16.625 28.402-41.044 28.402-70.052 0-6.754-.606-13.249-1.732-19.483z" fill="#4285f4"/><path clip-path="none" mask="none" d="M-1142.714-651.791l-6.972 5.337-24.679 19.223h0c15.673 31.086 47.796 52.561 85.03 52.561 25.717 0 47.278-8.486 63.038-23.033l-30.913-23.986c-8.486 5.715-19.31 9.179-32.125 9.179-24.765 0-45.806-16.712-53.34-39.226z" fill="#34a853"/><path clip-path="none" mask="none" d="M-1174.365-712.61c-6.494 12.815-10.217 27.276-10.217 42.689s3.723 29.874 10.217 42.689c0 .086 31.693-24.592 31.693-24.592-1.905-5.715-3.031-11.776-3.031-18.098s1.126-12.383 3.031-18.098z" fill="#fbbc05"/><path d="M-1089.333-727.244c14.028 0 26.497 4.849 36.455 14.201l27.276-27.276c-16.539-15.413-38.013-24.852-63.731-24.852-37.234 0-69.359 21.388-85.032 52.561l31.692 24.592c7.533-22.514 28.575-39.226 53.34-39.226z" fill="#ea4335" clip-path="none" mask="none"/></g></svg>';
-    
-    g_netlify_svg LONG:='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 209" fill="none" aria-hidden="true">
-    <style type="text/css">
-	.spark{fill:#05bdba;}
-	.text{fill:#014847;}
-</style>
-    <g clip-path="url(#clip0_235_8)">
-      <path d="M117.436 207.036V154.604L118.529 153.51H129.452L130.545 154.604V207.036L129.452 208.13H118.529L117.436 207.036Z" class="spark"></path>
-      <path d="M117.436 53.5225V1.09339L118.529 0H129.452L130.545 1.09339V53.5225L129.452 54.6159H118.529L117.436 53.5225Z" class="spark"></path>
-      <path d="M69.9539 169.238H68.4094L60.6869 161.512V159.967L78.7201 141.938L86.8976 141.942L87.9948 143.031V151.209L69.9539 169.238Z" class="spark"></path>
-      <path d="M69.9462 38.8917H68.4017L60.6792 46.6181V48.1626L78.7124 66.192L86.8899 66.1882L87.9871 65.0986V56.9212L69.9462 38.8917Z" class="spark"></path>
-      <path d="M1.09339 97.5104H75.3711L76.4645 98.6038V109.526L75.3711 110.62H1.09339L0 109.526V98.6038L1.09339 97.5104Z" class="spark"></path>
-      <path d="M440.999 97.5104H510.91L512.004 98.6038V109.526L510.91 110.62H436.633L435.539 109.526L439.905 98.6038L440.999 97.5104Z" class="spark"></path>
-      <path d="M212.056 108.727L210.963 109.821H177.079L175.986 110.914C175.986 113.101 178.173 119.657 186.916 119.657C190.196 119.657 193.472 118.564 194.566 116.377L195.659 115.284H208.776L209.869 116.377C208.776 122.934 203.313 132.774 186.916 132.774C168.336 132.774 159.589 119.657 159.589 104.357C159.589 89.0576 168.332 75.9408 185.822 75.9408C203.313 75.9408 212.056 89.0576 212.056 104.357V108.731V108.727ZM195.659 97.7971C195.659 96.7037 194.566 89.0538 185.822 89.0538C177.079 89.0538 175.986 96.7037 175.986 97.7971L177.079 98.8905H194.566L195.659 97.7971Z" class="text"></path>
-      <path d="M242.66 115.284C242.66 117.47 243.753 118.564 245.94 118.564H255.776L256.87 119.657V130.587L255.776 131.681H245.94C236.103 131.681 227.36 127.307 227.36 115.284V91.2368L226.266 90.1434H218.617L217.523 89.05V78.1199L218.617 77.0265H226.266L227.36 75.9332V66.0965L228.453 65.0031H241.57L242.663 66.0965V75.9332L243.757 77.0265H255.78L256.874 78.1199V89.05L255.78 90.1434H243.757L242.663 91.2368V115.284H242.66Z" class="text"></path>
-      <path d="M283.1 131.681H269.983L268.889 130.587V56.2636L269.983 55.1702H283.1L284.193 56.2636V130.587L283.1 131.681Z" class="text"></path>
-      <path d="M312.61 68.2871H299.493L298.399 67.1937V56.2636L299.493 55.1702H312.61L313.703 56.2636V67.1937L312.61 68.2871ZM312.61 131.681H299.493L298.399 130.587V78.1237L299.493 77.0304H312.61L313.703 78.1237V130.587L312.61 131.681Z" class="text"></path>
-      <path d="M363.98 56.2636V67.1937L362.886 68.2871H353.05C350.863 68.2871 349.769 69.3805 349.769 71.5672V75.9408L350.863 77.0342H361.793L362.886 78.1276V89.0576L361.793 90.151H350.863L349.769 91.2444V130.591L348.676 131.684H335.559L334.466 130.591V91.2444L333.372 90.151H325.723L324.629 89.0576V78.1276L325.723 77.0342H333.372L334.466 75.9408V71.5672C334.466 59.5438 343.209 55.1702 353.046 55.1702H362.882L363.976 56.2636H363.98Z" class="text"></path>
-      <path d="M404.42 132.774C400.046 143.704 395.677 150.261 380.373 150.261H374.906L373.813 149.167V138.237L374.906 137.144H380.373C385.836 137.144 386.929 136.05 388.023 132.77V131.677L370.536 89.05V78.1199L371.63 77.0265H381.466L382.56 78.1199L395.677 115.284H396.77L409.887 78.1199L410.98 77.0265H420.817L421.91 78.1199V89.05L404.424 132.77L404.42 132.774Z" class="text"></path>
-      <path d="M135.454 131.681L134.361 130.587L134.368 98.9172C134.368 93.4541 132.22 89.2182 125.625 89.0806C122.234 88.9926 118.354 89.0729 114.209 89.2488L113.59 89.8834L113.598 130.587L112.504 131.681H99.3913L98.2979 130.587V77.5388L99.3913 76.4454L128.901 76.1778C143.685 76.1778 149.668 86.3356 149.668 97.8009V130.587L148.575 131.681H135.454Z" class="text"></path>
-    </g>
-    <defs>
-      <clipPath id="clip0_235_8">
-        <rect width="512" height="208.126" fill="white"></rect>
-      </clipPath>
-    </defs>
-  </svg>';
-  
-  g_privacy_svg LONG:='<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 116.42 122.88">
-    <defs>
-        <style>.cls-1{fill-rule:evenodd;}</style>
-    </defs>
-    <title>privacy-policy</title>
-    <path class="cls-1" d="M88.08,60.79c10.53,6.67,20,9.83,28.22,9.09,1.42,28.85-9.23,45.89-28.11,53-18.24-6.66-29-23-28.23-53.44a40.39,40.39,0,0,0,28.12-8.65ZM62.9,12.13l20.72,19.4H62.9V12.13ZM21.27,56H63.14c2.74,0,3.1,3.75,1.32,5-.83.15-1.65.28-2.48.39H21.3c-3.22,0-3.22-5.33,0-5.38Zm0,16.74H50.46c.08,1.84.21,3.63.37,5.38H21.3c-3.24,0-3.2-5.38,0-5.38Zm0,16.74H52.48c.38,1.85.81,3.65,1.29,5.38H21.3c-3.24,0-3.2-5.38,0-5.38Zm0-50.22H45.36c3.24,0,3.2,5.37,0,5.37H21.3c-3.24,0-3.21-5.37,0-5.37Zm0-15.57H34.52c3.19,0,3.23,5.37,0,5.37H21.3c-3.24,0-3.2-5.37,0-5.37ZM95.15,34.32A3.44,3.44,0,0,0,92.64,31L62.12,1.27A3.43,3.43,0,0,0,59.45,0H6.2A6.2,6.2,0,0,0,0,6.2V112.35a6.21,6.21,0,0,0,6.2,6.2H66a51.93,51.93,0,0,1-5.08-6.93h-54V6.89H56V35a3.47,3.47,0,0,0,3.47,3.48H88.22V50.33q3.52,2.22,6.93,4.05V34.32ZM88.3,70.66c7.19,4.55,13.68,6.71,19.25,6.2,1,19.68-6.3,31.3-19.17,36.14a2.34,2.34,0,0,1-.24-.09V70.79l.16-.13Zm-.21-6.31c9.32,5.91,17.75,8.71,25,8.05,1.26,25.54-8.17,40.62-24.89,46.91C72,113.42,62.49,99,63.2,72a35.74,35.74,0,0,0,24.89-7.66Z"/>
-</svg>';    
-    
     /*
      ** CLOB and VARCHAR2 signatures for log procedure
      */
-     
+
      gWidthThumbnail CONSTANT INTEGER:=360;
-     
+
 
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB) IS PRAGMA AUTONOMOUS_TRANSACTION;
         k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
@@ -184,7 +86,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, k_calling_package || '.' || k_calling_subprog, pMsg);
         COMMIT;
     END;
-    
+
     PROCEDURE log(pMsg IN VARCHAR2) IS PRAGMA AUTONOMOUS_TRANSACTION;
         k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
         k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);    
@@ -192,7 +94,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, k_calling_package || '.' || k_calling_subprog, pMsg);
         COMMIT;
     END;
-    
+
     PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2) IS
     BEGIN
         ROLLBACK;
@@ -211,14 +113,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.close_object;
         END IF;
     END;
-    
+
     /*
     ** Run restore process manually. Need to specify the last data pump export schema encryption password.
     */
     PROCEDURE manual_restore(pPassword IN VARCHAR2)  IS 
         l_restore_files varchar2(1000):='GRANT.OBJECT_GRANT:GRANT.SYSTEM_GRANT:EXPORT_SCHEMA.EXAMPLE.dmp:APEX_APPLICATION.100';
     BEGIN
-        
+
         FOR C IN (SELECT github_token, github_repos_owner, github_repos, u.email, w.workspace_name 
               FROM users u, apex_workspace_developers w 
              WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
@@ -243,7 +145,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm);
                 RAISE;
     END;
-    
+
     /*
     ** Generate random 16 character password string. Used in order to create encrypted schema export dumpfile
     */
@@ -295,10 +197,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         FROM   DUAL
         CONNECT BY LEVEL <= no_of_special_characters
         );
-    
+
         RETURN password;
     END;    
-    
+
     /*
     **  Daily job run by dbms_scheduler
     */
@@ -317,36 +219,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         ** 1. Get Cloudinary usage for all subscribers 
         */
         getUsage;
-        
+
         /*
         **  2. Backup to Github
         **     Github token and repository details are maintained in USERS table
         **     Email address of Apex Admin user must match for this to work
         **     Complex password auto-generated to encrypt schema export dump file
         */
-       
+
         SELECT github_token, github_repos_owner, github_repos, u.email, w.workspace_name 
           INTO l_github_token, l_github_repos_owner, l_github_repos, l_email, l_workspace_name
           FROM users u, apex_workspace_developers w 
          WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
            AND w.is_admin='Yes'
            AND w.email=u.email;
-           
+
         SELECT email 
           INTO l_email_sender
           FROM users 
          WHERE approved_sender_ind='Y';
-        
+
         l_password:=generate_password();
         pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email_sender, l_email, l_password, l_restore_files);
-    
+
         /*
         **  3. Restore from Github into Restore database, where a workspace with same name as current schema must exist.
         **     We use dynamic sql for this so that this package compiles after being restored - nb: DB LINKs are not included in any schema export
         **     To avoid ORA-02074 we submit job on restore database remotely using database link
         **     "l_restore_files" is separated list of github file names to be restored
         */
-        
+
         log('About to submit job on restore server to import Github backup files - ' || l_restore_files);
         EXECUTE IMMEDIATE q'{
             BEGIN pck_restore.submit_job@RESTORE_LINK(
@@ -359,7 +261,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pEmail=>:B7,
                 pWorkspace=>:B8,
                 pSchema=>:B9); END;}' USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email_sender, l_email, l_workspace_name,sys_context('userenv','current_schema');
-                
+
         INSERT INTO metrics (id,log_date,nb_assets,bytes,nb_articles,word_count,total_credits,credits_remaining,total_used,max_size)
         WITH metrics AS 
             (
@@ -382,16 +284,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             )            
         SELECT SEQ_METRICS.nextval as id, current_timestamp as log_date, met.nb_assets, met.bytes, met.nb_articles, met.word_count, cr.total_credits, cr.credits_remaining, db1.total_used, db2.max_size
           FROM metrics met, credits cr, db1, db2;
-          
+
         COMMIT;
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm);
                 RAISE;
     END;
 
-    
+
     PROCEDURE getApexSession(pAppId IN OUT NUMBER, pSessionId IN OUT NUMBER, pPageId IN OUT NUMBER) IS
         l_parts apex_t_varchar2;
     BEGIN
@@ -400,7 +302,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         pSessionId:=l_parts(2);
         pPageId:=l_parts(3);
     END;
-    
+
     /*
     ** Return id of authenticated user for the session as 
     */
@@ -408,7 +310,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_names owa_cookie.vc_arr;
         l_vals owa_cookie.vc_arr;
         l_num_vals INTEGER;
-        
+
         l_app_id NUMBER;
         l_session_id users.apex_session_id%type;
         l_page_id NUMBER;
@@ -416,9 +318,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_user_id users.id%type;
     BEGIN
         l_user_id:=NULL;
-        
+
         getApexSession(l_app_id, l_session_id, l_page_id);
-        
+
         FOR C IN (
             SELECT u.id, apex_cookie_value
               FROM apex_workspace_sessions s, users u
@@ -427,7 +329,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         LOOP
             /* We have an authenticated session */
             l_user_id:=C.id;
-            
+
             /* Additional check that session cookie is valid */
             owa_cookie.get_all(names => l_names, vals => l_vals, num_vals => l_num_vals);
             FOR i IN 1..l_names.COUNT LOOP
@@ -440,14 +342,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 END IF;
             END LOOP;            
         END LOOP;
-        
+
         IF (l_user_id IS NULL AND l_page_id=2) THEN
             RAISE_APPLICATION_ERROR(-20000,'YOUR SESSION HAS EXPIRED');
         END IF;
 
         RETURN (l_user_id);
     END;
-    
+
     /*
     ** Return RESTful API url
     */
@@ -459,10 +361,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
           FROM user_ords_schemas s, user_ords_modules m
          WHERE s.parsing_schema=sys_context('userenv','current_schema')
            AND m.name='public';
-           
+
         RETURN (l_rest_url);
     END;
-    
+
     /*
     ** Build and deploy infrastructure through Terraform by submitting Github action. 
     ** Do this once and each time we recycle the public key that is used to sign a website's contact email
@@ -473,14 +375,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_json JSON_OBJECT_T;
         l_action JSON_OBJECT_T;
     BEGIN
-        
+
         /* Get the admin user with Github token and the public key required to verify signed contact email addresses */
         SELECT id INTO l_admin_user_id 
           FROM users 
          WHERE github_repos_owner IS NOT NULL 
            AND github_token IS NOT NULL;
-        
-        
+
+
         FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, t.token,
                          replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(t.public_key))),chr(13)||chr(10),null) public_key
                     FROM users u, terraform t
@@ -492,19 +394,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
             apex_web_service.g_request_headers(3).name := 'User-Agent';
             apex_web_service.g_request_headers(3).value := C.github_repos_owner;
-            
+
             /* trigger the deployment using Githib actions */          
             l_json:=new JSON_OBJECT_T;
             l_json.put('event_type', 'trigger_build_infra');
-            
+
             l_action:=new JSON_OBJECT_T;
             l_action.put('from_email', 'funnyface@markrussellbrown.com');
             l_action.put('public_key', C.public_key);
             l_action.put('terraform_token', C.token);
             l_json.put('client_payload', l_action);
-            
+
             log('deployInfrastructure - JSON for dispatching Github Action:'||l_json.stringify);
-            
+
             l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_json.stringify);
         END LOOP;
 
@@ -513,7 +415,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm);
                 RAISE;
     END;    
-    
+
     /*
     ** Build and deploy website to Netlify by submitting Github action
     */    
@@ -530,7 +432,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         /* get authenticated user that owns website to be deployed */
         l_website_user_id:=getUserId();
-        
+
         /* Get the admin user with Netlify and Github tokens as well as private key required to sign the contact_email for the website */
         SELECT id INTO l_admin_user_id 
           FROM users 
@@ -538,15 +440,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
            AND github_token IS NOT NULL 
            AND netlify_token IS NOT NULL 
            AND netlify_installation_id IS NOT NULL;
-        
+
         DELETE website_deploy WHERE website_id=pWebsiteId;
         logDeployment('{"status":"Starting Deployment"}',pWebsiteId);
-        
+
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('status', 'Starting Deployment');
         apex_json.close_object;
-        
+
         FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, u.netlify_token, u.netlify_installation_id, 
                          w.domain_name, w.template, w.netlify_site_id, w.contact_email
                     FROM users u, website w
@@ -558,9 +460,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             ** 1. Create Netlify Site with deployment id if not already exists
             ** 2. Trigger Github action build
             */
-            
+
             IF (C.netlify_site_id IS NULL) THEN
-            
+
                 logDeployment('{"status":"Creating Netlify website"}',pWebsiteId);
                 /* get id of the common DEPLOY repository */
                 apex_web_service.g_request_headers(1).name := 'Accept';
@@ -577,22 +479,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
                 /* Setup connect to Netlify */
                 apex_web_service.clear_request_headers;
-                
+
                 apex_web_service.g_request_headers(1).name := 'Authorization';
                 apex_web_service.g_request_headers(1).value := 'Bearer ' || C.netlify_token;   
                 apex_web_service.g_request_headers(2).name := 'Content-Type';
                 apex_web_service.g_request_headers(2).value := 'application/json';
-                
+
                 /* get netlify deploy id */
                 l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/deploy_keys',p_http_method=>'POST');
                 FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
                     l_deploy_key_id:=C1.id;
                 END LOOP;
-                
+
                 /* create JSON payload for new Netlify site */
                 l_json:=new JSON_OBJECT_T;
                 l_json.put('name', C.domain_name);
-                
+
                 l_repo:=new JSON_OBJECT_T;
                 l_repo.put('provider', 'github');
                 l_repo.put('repo_type', 'git');
@@ -604,7 +506,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_repo.put('installation_id', C.netlify_installation_id);
                 l_repo.put('base', C.domain_name);   
                 l_json.put('repo', l_repo);
-                
+
                 /* Create Netlify site and store the site_id in website table */
                 l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites', p_http_method=>'POST', p_body=>l_json.stringify);
                 log('Response from POST api.netlify.com/api/v1/sites:'||TO_CHAR(l_clob));
@@ -616,18 +518,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 END LOOP;
                 logDeployment('{"status":"Netlify website created and linked to github"}',pWebsiteId);
             END IF;
-            
+
             /* trigger the deployment by dispatching Github action */          
             l_json:=new JSON_OBJECT_T;
             l_json.put('event_type', 'trigger_build');
-            
+
             l_action:=new JSON_OBJECT_T;
             l_action.put('build_path', C.domain_name);
             l_action.put('template', C.template);
             l_action.put('fetch_url', getRestUrl() || 'content/' || pWebsiteId);  
             l_action.put('log_url', getRestUrl() || 'deploy-status/' || pWebsiteId);
             l_json.put('client_payload', l_action);
-            
+
             apex_web_service.clear_request_headers;
             apex_web_service.g_request_headers(1).name := 'Accept';
             apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
@@ -643,7 +545,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
+
     /*
      **  Insert row in website_deploy logging table
      **  1) Invoked via curl from Github Action
@@ -658,7 +560,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
           FROM JSON_TABLE(pBodyText, '$' COLUMNS (status));
 
         l_exitcode:=owa_util.get_cgi_env('QUERY_STRING');
-        
+
         IF (l_exitcode IS NOT NULL) THEN
             IF (l_exitcode=0) THEN
                 l_status:=l_status || ' - OK';
@@ -666,7 +568,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_status:=l_status || ' - NOK';
             END IF;
         END IF;
-        
+
         INSERT INTO website_deploy(id, website_id, status) VALUES (seq_log.nextval, pWebsiteId, l_status );
         COMMIT;
 
@@ -674,7 +576,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm);
     END;    
-        
+
 
     /*
      **  Get deployment status from website_deploy logging table
@@ -700,7 +602,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_web_service.g_request_headers(1).value := 'Bearer ' || C.netlify_token;   
             apex_web_service.g_request_headers(2).name := 'Content-Type';
             apex_web_service.g_request_headers(2).value := 'application/json';
-            
+
             l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites/' || C.netlify_site_id || '/deploys', p_http_method=>'GET');
             FOR C1 IN (SELECT state, ssl_url, error_message, created_at
                          FROM JSON_TABLE(l_clob, '$[0]' COLUMNS (state, ssl_url, created_at, error_message))) 
@@ -716,7 +618,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 END IF;
             END LOOP;
         END LOOP;
-        
+
         /* return list of all deployment status to client */
         FOR C IN (SELECT id, status, ROUND((next_log_time - log_time)*86400) ela_sec
                     FROM 
@@ -733,7 +635,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 EXIT;
             END IF;
         END LOOP;
-        
+
         IF (l_ssl_url IS NOT NULL) THEN
             l_status:=l_status || TO_CLOB('<a target="_blank" href="' || l_ssl_url || '">' || l_ssl_url || '<a>');
         END IF;
@@ -743,13 +645,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('completed', l_deployment_complete);
         apex_json.write('status', l_status);
         apex_json.close_object;
-            
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;  
-    
-    
+
+
     PROCEDURE getCldDetails(pArticleId IN article.id%type) IS
         l_user_id users.id%type;
         l_cld_cloud_name users.cld_cloud_name%type;
@@ -760,7 +662,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_cldapikey VARCHAR2(1);
     BEGIN      
         l_user_id:=getUserId();
-        
+
         /* get Cloudinary details either of logged on user of the hosting user */
         BEGIN
             SELECT cld_cloud_name, cld_api_key, image_max_size, video_max_size
@@ -774,7 +676,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     ) 
              WHERE rn=1;
              l_cldapikey:='Y';
-             
+
             EXCEPTION
                 WHEN NO_DATA_FOUND THEN
                     SELECT cld_cloud_name, cld_api_key, image_max_size, video_max_size
@@ -799,19 +701,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('cldapikey', l_cldapikey);
             apex_json.write('articleId', CASE WHEN pArticleId=0 THEN seq_article.nextval ELSE pArticleId END);
             apex_json.close_object;
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
+
     PROCEDURE getCldSignature(pParamsToSign IN CLOB) IS
         l_params_to_sign clob:=pParamsToSign;
         l_user_id users.id%type;
         l_string_to_sign varchar2(2000):=NULL; 
     BEGIN
         l_user_id:=getUserId();
-        
+
         SELECT NVL2(filename_override,'filename_override='||filename_override||'&',NULL) ||
                NVL2(headers,'headers='||headers||'&',NULL) ||
                NVL2(source,'source='||source||'&',NULL) ||
@@ -822,7 +724,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
           FROM JSON_TABLE(l_params_to_sign FORMAT JSON, '$'
             COLUMNS filename_override,headers,source,tags,timestamp,use_filename                 
             );
-        
+
         /* get Cloudinary details either of logged on user OR the hosting Cloudinary user */
         FOR C IN (SELECT NVL(u1.cld_cloud_name,u2.cld_cloud_name) cld_cloud_name, NVL(u1.cld_api_key, u2.cld_api_key) cld_api_key, NVL(u1.cld_api_secret,u2.cld_api_secret) cld_api_secret
                     FROM users u1, users u2
@@ -834,12 +736,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('signature', dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign || C.cld_api_secret), dbms_crypto.HASH_SH1));
             apex_json.close_object;
         END LOOP;
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
+
     /*
      ** Set Time Zone according to client device. Procedure called on DOMContentLoaded event
      */
@@ -850,23 +752,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_user_id users.id%type;
     BEGIN
         l_user_id:=getUserId(pSaveCookie=>TRUE);
-        
+
         IF (l_user_id IS NOT NULL) THEN
             SELECT timezone, maxtouchpoints
               INTO l_client_TZ, l_maxtouchpoints
               FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' COLUMNS (timezone, maxtouchpoints));
             UPDATE users SET client_tz=l_client_TZ, maxtouchpoints=l_maxtouchpoints, updated_date=current_timestamp WHERE id=l_user_id;          
         END IF;
-        
+
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.close_object;
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
+
     /*
      **  Format timestamp according to user's current time zone
      */
@@ -880,7 +782,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             RETURN ( TO_CHAR(pTimestamp, 'dd Mon yyyy'));
         END IF;
     END;
-    
+
     FUNCTION getMediaType(pResourceType IN VARCHAR2, pFormat IN VARCHAR2) RETURN VARCHAR2 
     IS
     BEGIN
@@ -902,7 +804,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     IS
         l_url VARCHAR2(500);
         l_media_type VARCHAR(5);
-        
+
         FUNCTION getWidth RETURN VARCHAR2 IS
             l_left PLS_INTEGER:=1;
             l_right PLS_INTEGER:=3;
@@ -952,7 +854,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END IF;        
         RETURN (l_url);
     END;
-    
+
     /*
      **  Respond to user clicking "Save & Exit" in Rich Text Editor.
      **  Parse text and extract title and excerpt for the artile.
@@ -976,7 +878,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_excerpt_more  VARCHAR2(3);
         l_excerpt_words VARCHAR2(15);
         --l_extra_link_attributes apex_t_varchar2('target', '_blank');
-        
+
         PROCEDURE split2(pInput IN VARCHAR2, pMaxLen1 IN INTEGER, pOutput1 IN OUT VARCHAR2, pMore1 IN OUT VARCHAR2, 
                                              pMaxLen2 IN INTEGER, pOutput2 IN OUT VARCHAR2, pMore2 IN OUT VARCHAR2) IS
             l_words     apex_t_varchar2;
@@ -999,10 +901,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     EXIT;
                 END IF;
             END LOOP;
-            
+
             IF (pMaxLen2=0) THEN RETURN; END IF;
 
-    
+
             FOR i IN l_start2..l_words.COUNT LOOP
                 IF (l_words(i) IS NULL) THEN
                     CONTINUE;
@@ -1017,13 +919,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 END IF;
             END LOOP;        
         END;
-        
+
     BEGIN
         SELECT MAX(DECODE(column_name,'TITLE',data_length)), MAX(DECODE(column_name,'EXCERPT',data_length))
         INTO title_len, excerpt_len
         FROM user_tab_columns 
         WHERE table_name='ARTICLE';
-    
+
         FOR C IN (SELECT dbms_lob.getlength(body) len, body
                     FROM article 
                    WHERE id=l_article_id) 
@@ -1043,7 +945,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 split2(l_plain_text,title_len,l_title,l_title_more,excerpt_len,l_excerpt,l_excerpt_more);
             END IF;
         END LOOP;
-        
+
         UPDATE article SET title=l_title, title_more=l_title_more, excerpt=l_excerpt, excerpt_more=l_excerpt_more, body_html=l_body_html 
          WHERE id=l_article_id 
          RETURNING word_count, updated_date INTO l_word_count, l_updated_date;
@@ -1051,7 +953,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         IF (l_word_count>0 AND l_excerpt IS NOT NULL) THEN
             l_excerpt_words:=' ' || l_word_count || ' word' || CASE WHEN l_word_count>1 THEN 's' END;
         END IF;
-        
+
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('words', l_excerpt_words);
@@ -1059,7 +961,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('excerpt', l_excerpt || l_excerpt_more);
         apex_json.write('updated', fmtUpdatedDate(l_updated_date)); 
         apex_json.close_object;
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
@@ -1087,12 +989,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.close_object;
-         
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
+
     FUNCTION buildArticle(pAppPageNo IN NUMBER, 
                             pId IN article.id%type, 
                             pNbAssets IN article.nb_assets%type, 
@@ -1142,10 +1044,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END || '   
             <footer class="button-container"><span>' || pName || '</span><span class="updated-date">' || fmtUpdatedDate(pUpdatedDate)  || '</span></footer>
         </li>';
-        
+
         RETURN (l_element);
     END;
-    
+
     FUNCTION buildTemplates RETURN VARCHAR2 IS
         l_clob CLOB;
         l_cluster CLOB;
@@ -1158,16 +1060,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
             apex_web_service.g_request_headers(3).name := 'User-Agent';
             apex_web_service.g_request_headers(3).value := C.github_repos_owner;
-            
+
             l_url:='https://api.github.com/repos/'|| C.github_repos_owner || '/' || C.github_deploy_repos || '/contents/TEMPLATES';
             l_clob := apex_web_service.make_rest_request(p_url=>l_url,p_http_method=>'GET');
-            
+
             FOR C1 IN (SELECT message FROM JSON_TABLE(l_clob, '$' COLUMNS (message))) LOOP
                 IF (C1.message IS NOT NULL) THEN
                     RETURN('<p>ERROR calling ' || l_url || ' - ' || C1.message || '</p>');
                 END IF;
             END LOOP;
-                
+
             FOR C1 IN (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name))) LOOP
                 l_cluster:=l_cluster || 
                 '<input type="radio" id="template-' || LOWER(C1.name) || '" name="template" value="' || C1.name || '"></input>
@@ -1176,7 +1078,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;
         RETURN (l_cluster);
     END;
-    
+
     /*
      **  Login page
      */
@@ -1189,16 +1091,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <li class="red"></li>
                     <li class="grey">
                         <p>Login</p>
-                        <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || g_facebook_svg ||'</a>
-                        <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || g_google_svg ||'</a>
+                        <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_facebook_svg ||'</a>
+                        <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_google_svg ||'</a>
                     </li>
-                    <li class="grey">' || g_oracle_svg || g_github_svg || '</li>
-                    <li class="grey">' || g_cloudinary_svg || g_netlify_svg || '</li>
+                    <li class="grey">' || pck_icons.g_oracle_svg || pck_icons.g_github_svg || '</li>
+                    <li class="grey">' || pck_icons.g_cloudinary_svg || pck_icons.g_netlify_svg || '</li>
                     <li class="yellow">ALWAYS FREE</li>
                     <li class="grey"></li>
                     <li class="blue"></li>
                     <li class="grey">
-                        <button type="button">' || g_privacy_svg ||'</button>
+                        <button type="button" data-id="19124" id="privacy-policy">' || pck_icons.g_privacy_svg ||'</button>
                     </li>
                     <li class="grey"></li>
                 </ul>');
@@ -1218,12 +1120,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
           INTO l_user_id, l_user_name
           FROM users
          WHERE email=apex_application.g_user;
-             
+
         l_clob:=l_clob || TO_CLOB(
             '<nav>
                 <button type="button" class="add-website">NEW WEBSITE</button>');
-                
-                
+
+
         FOR C IN (SELECT id, domain_name, rn, nb 
                     FROM
                     ( SELECT id, domain_name, ROW_NUMBER() OVER (ORDER BY COALESCE(updated_date, created_date) DESC) rn, COUNT(*) OVER () nb
@@ -1253,7 +1155,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 </div>');
             END IF;
         END LOOP;
-        
+
         l_clob:=l_clob || TO_CLOB(
                 '<div class="dropdown">
                     <button type="button" class="show-dropdown" disabled>' || apex_application.g_user || '</button>
@@ -1264,10 +1166,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     </ul>
                 </div>
              </nav>');
-             
+
         RETURN l_clob;
     END;
-    
+
     /*
      **  Unauthenticated user - login page
      **
@@ -1288,23 +1190,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
           FROM APEX_APPLICATION_PAGES 
          WHERE application_id=apex_application.g_flow_id
            AND page_id=apex_application.g_flow_step_id;
-        
+
         l_page_css:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.css';
-        log(l_page_css);
+
         IF (INSTR(l_css_file_urls,l_page_css)=0) THEN
             FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name=REPLACE(l_page_css,'.min')) LOOP
-                l_clob:=l_clob || '<style>' || apex_util.blob_to_clob(C.file_content) || '</style>';
+                l_clob:=l_clob || chr(10) || '<style>' || apex_util.blob_to_clob(C.file_content) || '</style>';
             END LOOP;
         END IF;
-        
+
         CASE apex_application.g_flow_step_id
             WHEN 1 THEN l_clob:=l_clob || buildLoginPage;
             WHEN 2 THEN l_clob:=l_clob || buildAuthPage;
         END CASE;
-        
+
         /*
             l_clob:=l_clob || TO_CLOB('<ul class="cards" data-websiteid="' || l_current_website || '" role="list">');
-                
+
             IF (l_current_website IS NOT NULL) THEN
                 FOR C IN (
                     SELECT a.id,
@@ -1358,7 +1260,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 END LOOP;            
 
         l_clob:=l_clob || TO_CLOB('</ul>');
-        
+
         l_clob:=l_clob || TO_CLOB(
             '<dialog class="popup">
                 <div>
@@ -1476,28 +1378,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             </dialog> 
             ');
         */
-            
+
         l_clob:=l_clob || TO_CLOB('
             <input type="hidden" name="p_flow_id" value="' || apex_application.g_flow_id ||'" id="pFlowId">
             <input type="hidden" name="p_flow_step_id" value="' || apex_application.g_flow_step_id ||'" id="pFlowStepId">
             <input type="hidden" name="p_instance" value="' || APEX_CUSTOM_AUTH.GET_SESSION_ID ||'" id="pInstance">');            
- 
-        IF (INSTR(l_javascript_file_urls,'app100.min.js')=0) THEN
-            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name='app100.js') LOOP
-                l_clob:=l_clob || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
+
+        l_page_js:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.js';
+
+        IF (INSTR(l_javascript_file_urls,l_page_js)=0) THEN
+            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name=REPLACE(l_page_js,'.min')) LOOP
+                l_clob:=l_clob || chr(10) || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
             END LOOP;
-            IF (apex_application.g_flow_step_id=2) THEN
-                FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name='app100auth.js') LOOP
-                    l_clob:=l_clob || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
-                END LOOP;            
-            END IF;
         END IF;
-        
+
+        l_clob:=l_clob || chr(10) || TO_CLOB('
+        <script>
+            gRestUrl = "' || getRestUrl() || '";');
+        IF (apex_application.g_flow_step_id=2) THEN
+            l_clob:=l_clob || chr(10) || TO_CLOB('
+            gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home";');
+        END IF;
+        l_clob:=l_clob || chr(10) || TO_CLOB('
+        </script>');
+
         l_clob:=l_clob || TO_CLOB('
             <script type="module">
               import {onCLS, onFID, onLCP} from ''https://unpkg.com/web-vitals?module'';
-              gRestUrl = "' || getRestUrl() || '";
-              gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home' || '";
               onCLS(addToVitalsQueue);
               onFID(addToVitalsQueue);
               onLCP(addToVitalsQueue);
@@ -1518,9 +1425,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_user_id users.id%type;
     BEGIN
         l_user_id:=getUserId();
-        
+
         apex_json.open_object;
-        
+
         FOR C IN (
             SELECT domain_name, contact_email, DECODE(image_dimension,0.25,'s',0.625,'m',1,'l') image_dimension, template, favicon_url, trade_name,affiliation_link_img,affiliation_link_url
               FROM website 
@@ -1532,15 +1439,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('image_dimension', 'image-dimension-' || C.image_dimension);
             apex_json.write('template', 'template-' || LOWER(C.template));
         END LOOP;
-        
+
         apex_json.write('success', TRUE);
         apex_json.close_object;
-         
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
+
     /*
     ** GET ARTICLE (PAGE) CONTENT FOR WEBSITE
     */
@@ -1551,7 +1458,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_user_id:=getUserId();
         SELECT name INTO l_user_name FROM users WHERE id=l_user_id;
-        
+
         FOR C IN (
             SELECT a.id,
                    a.is_public,
@@ -1576,17 +1483,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), 
                     l_user_name));
         END LOOP;
-        
+
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('content', l_clob);
         apex_json.close_object;
-         
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
+
 
     PROCEDURE getThumbnailContent(pArticleId IN article.id%type, pUserId IN users.id%type, pNbAssets IN OUT article.nb_assets%type, pInstruction IN OUT NOCOPY VARCHAR2, pContent IN OUT NOCOPY CLOB) 
     IS
@@ -1627,24 +1534,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                             </ul>
                         </div>' END || '
                     </div>');
-            
+
             l_url_image:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
             l_media_type:=getMediaType(C.resource_type, C.format);
-            
+
             pContent:=pContent || TO_CLOB('<img data-dimensions="'  || 
                                             ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || 
                                             ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':' || 
                                             C.width || 'x' || C.height || '" src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>');
-            
+
             CASE l_media_type
-                                            
+
                 WHEN 'video' THEN
                     pContent:=pContent || TO_CLOB(
                     '<video controls preload="metadata" poster="' || l_url_image || '">
                         <source src="' || REPLACE(l_url_image,'.jpg','.webm') || '" type="video/webm"></source>
                         <source src="' || REPLACE(l_url_image,'.jpg','.mp4') || '" type="video/mp4"></source>
                     </video>');
-                    
+
                 WHEN 'audio' THEN
                     l_url_image:=REGEXP_REPLACE(l_url_image,',w_(\d)+\/fl_waveform',NULL);
                     pContent:=pContent || TO_CLOB(
@@ -1654,11 +1561,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                         <source src="' || REPLACE(l_url_image,'.png','.mp3') || '" type="audio/mpeg"></source>
                         <source src="' || REPLACE(l_url_image,'.png','.wav') || '" type="audio/wav"></source>
                     </audio>');
-                    
+
                 ELSE NULL;
-        
+
             END CASE;
-            
+
             pContent:=pContent || TO_CLOB('
                 <div>
                     <label for="alt-text">Alt text<span></span></label>
@@ -1668,13 +1575,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <label for="description">Description<span></span></label>
                     <textarea id="description" maxlength="500"' || CASE WHEN pUserId IS NULL THEN ' readonly' END || '>' || C.description || '</textarea>                    
                 </div>');
-            
+
             pContent:=pContent || TO_CLOB('</li>');
-            
+
         END LOOP;
 
     END;
-    
+
     /*
      **  Build gallery of thumbnail images from ASSET table 
      **  Executed in response to user requesting gallery of media assets for a given article
@@ -1686,21 +1593,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         n PLS_INTEGER;
     BEGIN
         l_user_id:=getUserId();
-        
+
         getThumbnailContent(pArticleId, l_user_id, n, l_instruction, l_clob);
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('content', l_clob);
         apex_json.write('instruction', l_instruction);
-                            
+
         apex_json.close_object;
-         
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
+
     /*
      **  Load metadata after media uploaded to Cloudinary.
      **  Insert uploaded asset metadata into ASSETS table
@@ -1718,17 +1625,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         n PLS_INTEGER;
     BEGIN
         l_user_id:=getUserId();
-        
+
         SELECT article_id, website_id
           INTO l_article_id, l_website_id
           FROM JSON_TABLE(l_metadata FORMAT JSON, '$.images[*]' COLUMNS (article_id, website_id)) WHERE ROWNUM=1;
-        
+
         MERGE INTO article t
         USING (SELECT l_article_id article_id FROM dual) s
            ON (t.id=s.article_id)
          WHEN MATCHED THEN UPDATE SET updated_date=current_timestamp
          WHEN NOT MATCHED THEN INSERT (id, author_user_id, created_date) VALUES (s.article_id, l_user_id, current_timestamp);
-         
+
         /* create row in website_article table if we are in a website */
         IF (l_website_id IS NOT NULL) THEN
             SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_article WHERE article_id=l_article_id AND website_id=l_website_id);
@@ -1737,7 +1644,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 INSERT INTO website_article(article_id, website_id, display_order) VALUES (l_article_id, l_website_id, l_start_order_website);
             END IF;
         END IF;
-        
+
         SELECT NVL(MAX(display_order),0) INTO l_start_order FROM asset WHERE article_id=l_article_id;
 
         INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, created_date, display_order)
@@ -1765,12 +1672,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             APEX_JSON.write('updated', fmtUpdatedDate(l_updated_date));
             APEX_JSON.close_object;
         END LOOP;
-               
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;  
-    
+
     /*
      **  Upload Performance data from entries accumulated by Javascript Performance API
      */       
@@ -1793,7 +1700,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
          WHERE j.cld_cloud_name=a.cld_cloud_name
            AND j.resource_type=a.resource_type
            AND j.public_id=a.public_id;
-        
+
         INSERT /*+ ignore_row_on_dupkey_index ( servertiming (performance_id, seq)) */ 
           INTO servertiming(performance_id, seq, name, duration, description)
         WITH json AS 
@@ -1808,16 +1715,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
          WHERE p.session_id=j.session_id
            AND p.url=j.url
            AND j.seq IS NOT NULL;        
-        
+
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
         APEX_JSON.close_object; 
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
+
     /*
     ** Write HTML table of media download performance for the article
     */
@@ -1836,9 +1743,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         ELSE
             l_ip_address:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
         END IF;
-        
+
         /* 
-        
+
         FOR C IN (SELECT  COUNT(*) OVER (PARTITION BY a.cld_cloud_name, a.resource_type, a.public_id) nb_rows, 
                           ROW_NUMBER() OVER (PARTITION BY a.display_order,a.cld_cloud_name, a.resource_type, a.public_id ORDER BY p.capture_date DESC) rn, 
                           a.cld_cloud_name, a.resource_type, a.public_id, a.format, a.width, a.bytes, apex_util.get_since(a.created_date) created_date, apex_util.get_since(p.capture_date) capture_date, 
@@ -1869,13 +1776,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     <tbody>
                 ');
             END IF;
-            
+
             IF (C.nb_rows=C.rn) THEN
                 l_content:=l_content || to_clob('<tr class="last-tr">');
             ELSE
                 l_content:=l_content || to_clob('<tr>');
             END IF;
-                
+
             IF (C.rn=1) THEN 
                 l_content:=l_content || to_clob(
                 '<td rowspan="' || C.nb_rows || '">
@@ -1886,7 +1793,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                             || '<br><span class="label">Uploaded: </span>' || C.created_date || '
                     </figcaption></figure></td>');
             END IF;
-            
+
             l_url_parts:=apex_string.split(C.url,'/');
             IF (C.resource_type='image') THEN
                 l_transformation:=l_url_parts(5);
@@ -1899,33 +1806,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     l_transformation:=NULL;
                 END IF;
             END IF;
-            
+
             l_content:=l_content || to_clob('
                 <td class="align-center">' || C.capture_date || '<br>' || C.ip_address || CASE WHEN C.connection_type IS NOT NULL THEN ' (' || C.connection_type || ')' END || '<br>' || C.browser || ' (' || C.window_innerwidth || ' px)</td>
                 <td>' || l_transformation || '</td>
                 <td class="align-center">' || apex_string_util.to_display_filesize(C.transfersize) || '<br>' || C.duration || ' ms<br>' || C.content_type|| '</td>
                 <td>' || REPLACE(C.servertiming,'|','<br>') || '</td>
             </tr>');
-                
+
         END LOOP;
-        
+
         IF (n>0) THEN
             l_content:=l_content || to_clob('</tbody></table>');
         ELSE
             l_content:= to_clob('<p>All media for your session was retrieved from Cache</p>');
         END IF;
         */
-        
+
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
         APEX_JSON.write('content', l_content);
         APEX_JSON.close_object;          
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);        
     END;
-    
+
     /*
     ** Fetched from Eleventy to retrieve website content and array of articles
     ** {
@@ -1933,7 +1840,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     **    articles: [{},{},..{}]
     ** }
     */ 
-    
+
     PROCEDURE getContent(pWebsiteId IN website.id%type) IS
         l_json JSON_OBJECT_T;
         l_website_object JSON_OBJECT_T;
@@ -1948,7 +1855,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_admin_user_id users.id%type;
         l_signed_data RAW(4000);
         l_clob CLOB;
-        
+
         /* If title missing remove the empty <h1></h1> tag */
         FUNCTION stripHeading(pTitle IN VARCHAR2, pBodyHtml IN OUT NOCOPY CLOB) RETURN CLOB IS
         BEGIN
@@ -1959,7 +1866,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     dbms_lob.getlength (pBodyHtml),
                     dbms_lob.instr(pBodyHtml,'</h1>')+5));
         END;
-        
+
         FUNCTION getTerraformInvokeUrl RETURN VARCHAR2 IS
             l_clob CLOB;
             l_terraform_url VARCHAR2(200);
@@ -1971,14 +1878,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 apex_web_service.g_request_headers(1).value := 'Bearer ' || C.token;   
                 apex_web_service.g_request_headers(2).name := 'Content-Type';
                 apex_web_service.g_request_headers(2).value := 'application/json';
-                
+
                 l_terraform_url:='https://app.terraform.io/api/v2/organizations/' || C.organization_name || '/workspaces/' || C.workspace_name;                
                 l_clob := apex_web_service.make_rest_request(p_url=>l_terraform_url, p_http_method=>'GET');
-                
+
                 SELECT 'https://app.terraform.io' || related 
                   INTO l_terraform_url
                   FROM JSON_TABLE(l_clob, '$.data.relationships.outputs.links' COLUMNS (related));
-                  
+
                 l_clob := apex_web_service.make_rest_request(p_url=>l_terraform_url, p_http_method=>'GET');
                 FOR C1 IN (SELECT name, value FROM JSON_TABLE(l_clob, '$.data[*]' COLUMNS (name PATH '$.attributes.name', value PATH '$.attributes.value')))
                 LOOP
@@ -1990,7 +1897,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END LOOP;
             RETURN (l_invoke_url);
         END;  
-        
+
     BEGIN
         l_json:= new JSON_OBJECT_T;
         l_website_object:= new JSON_OBJECT_T;
@@ -2003,7 +1910,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
            AND github_token IS NOT NULL 
            AND netlify_token IS NOT NULL 
            AND netlify_installation_id IS NOT NULL;
-           
+
         FOR C IN (SELECT w.id, w.domain_name, w.favicon_url, w.image_dimension, w.contact_email, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, 
                          utl_i18n.string_to_raw(regexp_replace(t.private_key,'(-+((BEGIN|END) (RSA )?(PUBLIC|PRIVATE) KEY)-+\s?|\s)','')) private_key
                     FROM website w, users u, terraform t
@@ -2018,18 +1925,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_website_object.put('affiliation_link_img',C.affiliation_link_img);
             l_website_object.put('affiliation_link_url',C.affiliation_link_url);            
             l_website_object.put('aws_gateway_url',getTerraformInvokeUrl());
-            
+
             /* sign the contact_email for the website */
             l_signed_data:=DBMS_CRYPTO.SIGN(
                src =>utl_i18n.string_to_raw(C.contact_email),
                prv_key =>C.private_key,
                pubkey_alg =>dbms_crypto.KEY_TYPE_RSA,
                sign_alg =>dbms_crypto.SIGN_SHA256_RSA);
-            
+
             l_website_object.put('signatureContactEmail', utl_i18n.raw_to_char(utl_encode.base64_encode(l_signed_data)));
 
             l_json.put('website',l_website_object);
-        
+
             FOR C1 IN (SELECT a.id, a.created_date, a.word_count, a.title, a.body_html, wa.display_order, wa.path_name, wa.nav_name
                         FROM article a, website_article wa
                        WHERE wa.website_id=C.id
@@ -2041,21 +1948,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_article_object.put('display_order',C1.display_order);
                 l_article_object.put('path_name',C1.path_name);
                 l_article_object.put('created',TO_CHAR(C1.created_date,'dd.mm.yyyy'));
-                
+
                 IF (C1.nav_name IS NOT NULL) THEN
                     l_article_object.put('nav_name',C1.nav_name);
                 END IF;
-                
+
                 IF (C1.title IS NOT NULL) THEN
                     l_article_object.put('title',C1.title);
                 END IF;
-                
+
                 IF (C1.body_html IS NOT NULL) THEN
                     l_article_object.put('words',C1.word_count);
                     l_article_object.put('text',stripHeading(C1.title, C1.body_html));
                 END IF;
-                
-                
+
+
                 FOR C2 IN (SELECT rn, nb, cld_cloud_name, resource_type, public_id, format, width, alt_text 
                              FROM
                                 (
@@ -2094,13 +2001,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             owa_util.mime_header( 'application/json', TRUE, 'UTF-8' );
             htp.p(l_json.to_clob);
         END IF;
-            
+
         EXCEPTION WHEN OTHERS THEN
             log_error(sqlcode,sqlerrm); 
             owa_util.status_line(400, '', true);
             htp.p('{"sqlcode":'||sqlcode||',"sqlerrm":"'||sqlerrm||'"}');
     END;
-    
+
     /*
      **  Get the selected article's content in HTML format
      **
@@ -2123,12 +2030,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('details','<div class="details"><span>' || C.name || '</span><span>-</span><span>' || C.created || '</span><span>-</span><span>' || C.minutes || '</span></div>');
             apex_json.close_object;
         END LOOP;
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm, pAjax=>TRUE);
     END;  
-    
+
     /*
      **  Insert row in article table for new article text content
      */      
@@ -2137,24 +2044,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_website_id website_article.website_id%type;
         l_display_order website_article.display_order%type;
     BEGIN
-    
+
         l_user_id:=getUserId();
-        
+
         INSERT INTO article (id, author_user_id, created_date) 
         SELECT seq_article.nextval, id, current_timestamp
           FROM users u
          WHERE id=l_user_id;
-        
+
         FOR C IN (SELECT websiteid FROM JSON_TABLE(pBodyText, '$' COLUMNS (websiteid))) LOOP
             SELECT NVL(MAX(display_order),0)+1 INTO l_display_order FROM website_article WHERE website_id=C.websiteid;
             INSERT INTO website_article(article_id, website_id, display_order) VALUES (seq_article.currval, C.websiteid, l_display_order);
         END LOOP;
-        
+
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
         APEX_JSON.write('articleId',seq_article.currval);
         apex_json.close_object;
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
@@ -2176,7 +2083,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_rem PLS_INTEGER;
     BEGIN
         l_user_id:=getUserId();
-        
+
         SELECT SUBSTR(title,1,60) title, 
                REGEXP_SUBSTR(word_count,'(\d)+') word_count,
                edit_text,
@@ -2185,10 +2092,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
           INTO l_title, l_word_count, l_edit_text, l_name, l_client_TZ
           FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (title, word_count, edit_text CLOB))
           WHERE u.id=l_user_id;
-          
+
         apex_escape.set_html_escaping_mode('E');
         l_excerpt:=dbms_lob.substr(utl_i18n.unescape_reference(apex_escape.striphtml(l_edit_text)),200,NVL(LENGTHB(l_title),0)+1);
-        
+
         l_words:=apex_string.split(REPLACE(l_excerpt,CHR(10),' '),' ');
         l_excerpt:=NULL;
         FOR i IN 1..l_words.COUNT LOOP
@@ -2207,7 +2114,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 EXIT;
             END IF;
         END LOOP;
-        
+
         UPDATE article SET title=l_title, excerpt=l_excerpt, word_count=l_word_count, body_html=l_edit_text, updated_date=current_timestamp
          WHERE id=pArticleId;
 
@@ -2224,7 +2131,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
+
     /*
      **  Delete all Cloudinary assets uploaded for a given article
      */   
@@ -2248,7 +2155,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;
         RETURN(nb_deleted);
     END;    
-    
+
     /*
      **  Remove article and any uploaded assets
      */   
@@ -2260,25 +2167,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         n PLS_INTEGER;
     BEGIN
         l_user_id:=getUserId();
-        
+
         FOR C IN (SELECT websiteid FROM JSON_TABLE(pBodyText, '$' COLUMNS (websiteid))) LOOP
             log('C.websiteid:'||C.websiteid);
             l_website_id:=C.websiteid;
         END LOOP;
-        
+
         IF (l_website_id IS NOT NULL) THEN
             DELETE website_article WHERE article_id=pArticleId AND website_id=l_website_id;
         END IF;
-        
+
         /* delete article if not in any website */
-        
+
         SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_article WHERE article_id=pArticleId);
-        
+
         IF (n=0) THEN
             DELETE asset WHERE article_id=pArticleId;
-            
+
             DELETE article WHERE id=pArticleId;
-            
+
             FOR C IN (SELECT DISTINCT a.resource_type, u.cld_cloud_name, u.cld_api_key, u.cld_api_secret 
                         FROM users u, article t, asset a
                        WHERE t.id=pArticleId
@@ -2291,17 +2198,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log(l_clob);
             END LOOP;
         END IF;
-        
+
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.close_object;
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
-    
+
+
     /*
      **  Update the alt_text and description columns of a given ASSET
      */   
@@ -2315,26 +2222,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         SELECT alttext, description INTO l_alt_text, l_description
           FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (alttext, description));
-        
+
         SELECT alt_text, description INTO l_alt_text_old,l_description_old  FROM asset WHERE id=pId;
-        
+
         UPDATE asset SET alt_text=l_alt_text, description=l_description, updated_date=current_timestamp WHERE id=pId;
-        
+
         l_alt_text_updated:=NVL(l_alt_text,'x') != NVL(l_alt_text_old,'x');
         l_description_updated:=NVL(l_description,'x') != NVL(l_description_old,'x');
-        
+
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('updated', fmtUpdatedDate(current_timestamp)); 
         apex_json.write('alt_text_updated',l_alt_text_updated);
         apex_json.write('description_updated',l_description_updated);
         apex_json.close_object;
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
+
     /*
      **  Delete 1 asset for a given article
      */   
@@ -2357,7 +2264,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_user_id users.id%type;
     BEGIN
         l_user_id:=getUserId();
-        
+
         SELECT a.article_id, a.cld_cloud_name, a.public_id, u.cld_api_key, u.cld_api_secret
           INTO l_article_id, l_cld_cloud_name, l_public_id, l_cld_api_key, l_cld_api_secret
           FROM asset a, article t, users u
@@ -2365,14 +2272,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
            AND a.article_id=t.id
            AND t.author_user_id=u.id
            AND u.id=l_user_id;
-        
+
         l_parm_names(1):='invalidate';
         l_parm_values(1):='true';
         l_parm_names(2):='public_id';
         l_parm_values(2):=l_public_id;        
         l_parm_names(3):='timestamp';    
         l_parm_values(3):=l_timestamp;                
-        
+
         l_string_to_sign:=NULL;
         FOR i IN 1..3 LOOP
             l_string_to_sign:=l_string_to_sign || l_parm_names(i) || '=' || l_parm_values(i) || '&';
@@ -2382,7 +2289,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_parm_values(4):=dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign), dbms_crypto.HASH_SH1);   
         l_parm_names(5):='api_key';
         l_parm_values(5):=l_cld_api_key;            
-        
+
         l_clob := apex_web_service.make_rest_request(
             p_url=>'https://api.cloudinary.com/v1_1/' || l_cld_cloud_name || '/image/destroy', 
             p_http_method=>'POST',
@@ -2390,18 +2297,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             p_parm_value=>l_parm_values); 
 
         SELECT error_message INTO l_error_message FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS error_message VARCHAR2(500) PATH '$.error.message');
-        
+
         IF (l_error_message IS NOT NULL) THEN
             log(l_clob);
             RAISE_APPLICATION_ERROR(-20001, l_error_message);
         END IF;
-        
+
         DELETE asset WHERE id=pId;
         UPDATE article SET nb_assets = nb_assets-1, updated_date=current_date WHERE id=l_article_id;
-        
+
         l_clob:=NULL;
         getThumbnailContent(l_article_id, l_user_id, l_nb_assets, l_instruction, l_clob);
-        
+
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('articleId', l_article_id);
@@ -2416,7 +2323,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
-    
+
     /*
      **  Remove user and all articles, assets,grants etc. Runs as a background job 
      */   
@@ -2432,17 +2339,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         DELETE article WHERE author_user_id=pUserId;
         nb_articles:=SQL%ROWCOUNT;
-        
+
         DELETE users WHERE id=pUserId;
 
         log('Deleted ' || nb_articles || ' articles and ' || nb_assets || ' images/videos.');
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm);
                 RAISE;        
     END;
-    
+
     /*
      **  Publish article
      */   
@@ -2451,7 +2358,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_user_id users.id%type;
     BEGIN
         l_user_id:=getUserId();
-        
+
         /* Reject publication request if cover image does not have ALT description */
 
         SELECT COUNT(*) INTO n FROM dual WHERE EXISTS
@@ -2464,13 +2371,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         );
 
         apex_json.open_object; 
-        
+
         IF (n=0) THEN
             apex_json.write('message', 'Cover Image ALT TEXT must be set before article can be published');
         ELSE
             UPDATE article SET is_public='Y', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_user_id;
         END IF;
-        
+
         apex_json.write('updated', fmtUpdatedDate(current_date));
         apex_json.write('success', TRUE);
         apex_json.close_object;        
@@ -2480,7 +2387,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
                 RAISE;
     END;
-    
+
     /*
      **  Publish article
      */   
@@ -2488,7 +2395,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_user_id users.id%type;
     BEGIN
         l_user_id:=getUserId();
-        
+
         UPDATE article SET is_public='N', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_user_id;
 
         apex_json.open_object; 
@@ -2500,7 +2407,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
                 RAISE;
     END;    
-    
+
     /*
      **  Reorder assets
      */
@@ -2508,7 +2415,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_article_id article.id%type;
         l_dbid_string LONG;
         l_first_dbid asset.id%type;
-        
+
         TYPE t_asset IS RECORD(
             id asset.id%type,
             display_order asset.display_order%type);
@@ -2519,7 +2426,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_public_id asset.public_id%type; 
         l_format asset.format%type; 
         l_width asset.width%type;
-        
+
         l_user_id users.id%type;
         l_url VARCHAR2(500);
         l_clob CLOB;
@@ -2527,27 +2434,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_na_varchar VARCHAR2(500);
     BEGIN
         l_user_id:=getUserId();
-        
+
         SELECT dbid_string INTO l_dbid_string 
           FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (dbid_string));
 
         SELECT column_value, rownum 
           BULK COLLECT INTO l_assets
           FROM TABLE(apex_string.split(l_dbid_string,':'));
-          
+
         /* get the article id from first asset */
         SELECT article_id INTO l_article_id
           FROM asset WHERE id=l_assets(1).id;
-        
+
         /* ... and get id of first asset as this may have been replaced */
         SELECT cover_asset_id 
           INTO l_first_dbid 
           FROM article 
          WHERE id=l_article_id;
-        
+
         FORALL i IN l_assets.first .. l_assets.last
         UPDATE asset SET display_order=l_assets(i).display_order WHERE id  = l_assets(i).id;
-        
+
         IF (l_assets(1).id<>l_first_dbid) THEN
             SELECT cld_cloud_name, resource_type, public_id, format, width
               INTO l_cld_cloud_name, l_resource_type, l_public_id, l_format, l_width
@@ -2556,10 +2463,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_url:=getCloudinaryUrl(l_cld_cloud_name, l_resource_type, l_public_id, l_format, l_width);
             UPDATE article SET updated_date=current_date, cover_asset_id=l_assets(1).id WHERE id=l_article_id;
         END IF;
-        
+
         l_clob:=NULL;
         getThumbnailContent(l_article_id, l_user_id, l_na_number, l_na_varchar, l_clob);
-        
+
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('articleId', l_article_id);
@@ -2567,13 +2474,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('content', l_clob);
         apex_json.write('updated', fmtUpdatedDate(current_date));
         apex_json.close_object;
-        
+
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
-    
+
     /**
      **    Update user's record  with Cloudinary API details. Submit background job to transfer users's Cloudinary assets.
      */
@@ -2594,23 +2501,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_url VARCHAR2(500);
     BEGIN
         log('Start transfer process for user id:' || l_user_id|| ' P2_CLD_API_ENV:' || l_cld_api);
-        
+
         IF (l_cld_api IS NULL) THEN
             l_error_message:='Cloudinary API Environment variable empty.'; 
         ELSE
             l_p1:=INSTR(l_cld_api,'/',-1);
             l_p2:=INSTR(l_cld_api,':',-1);
             l_p3:=INSTR(l_cld_api,'@');
-    
+
             l_cld_cloud_name:=SUBSTR(l_cld_api,l_p3+1);
             l_cld_api_key:=SUBSTR(l_cld_api,l_p1+1,l_p2-l_p1-1); 
             l_cld_api_secret:=SUBSTR(l_cld_api,l_p2+1,l_p3-l_p2-1);
-            
+
             IF (l_cld_cloud_name IS NULL OR l_cld_api_key IS NULL OR l_cld_api_secret IS NULL) THEN
                 l_error_message:='Cloudinary API Environment invalid.';
             END IF;
         END IF;
-        
+
         IF (l_error_message IS NULL) THEN
             l_url:='https://api.cloudinary.com/v1_1/' || l_cld_cloud_name || '/usage';
             l_clob := apex_web_service.make_rest_request(
@@ -2620,7 +2527,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 p_password=>l_cld_api_secret);
             SELECT plan, error_message INTO l_cld_plan, l_error_message FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS plan VARCHAR2(50) PATH '$.plan', error_message VARCHAR2(100) PATH '$.error.message');  
         END IF;
-        
+
         IF (l_error_message IS NOT NULL) THEN
             apex_util.set_session_state('P2_PLSQL_STATUS','nok',p_commit=>false);
             apex_application.g_x01 := l_error_message;
@@ -2639,24 +2546,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                cld_plan=l_cld_plan,
                updated_date=current_timestamp
          WHERE id=l_user_id;
-        
+
         apex_util.set_session_state('APP_CLD_API_KEY',l_cld_api_key,p_commit=>false);
         apex_util.set_session_state('APP_CLD_CLOUD_NAME',l_cld_cloud_name,p_commit=>false);
-        
+
         l_job_name:='TRANSFER_USER_ASSETS_'||l_user_id;
-        
+
         dbms_scheduler.create_job(
             job_name =>  l_job_name,
             program_name => 'P_TRANSFER_ASSETS',
             enabled =>    FALSE );
-            
+
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
             argument_name => 'PUSERID',
             argument_value => l_user_id);
-        
+
         dbms_scheduler.enable(l_job_name);
-        
+
         apex_util.set_session_state('P2_PLSQL_STATUS','ok',p_commit=>false);
         apex_application.g_x01:='Successfully configured a ' || l_cld_plan || ' Cloudinary plan.';
         apex_application.g_x02:='Starting transfer of all assets to your new Cloudinary account.';
@@ -2667,7 +2574,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 log_error(sqlcode,sqlerrm);
                 RAISE;
     END;
-    
+
     /*
      **  Upload Core Web Vitals uploaded through navigator.beacon - hence no response sent.
      */      
