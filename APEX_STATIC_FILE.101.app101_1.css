@@ -17,7 +17,7 @@ ul {
     padding: 0;
 }
 
-ul {
+ul.login {
     aspect-ratio: 1/1;
     block-size: 95vh;
     list-style-type: none;
@@ -27,14 +27,14 @@ ul {
 }
 
 
-ul>li:nth-of-type(1) {
+ul.login>li:nth-of-type(1) {
   grid-column: span 9;
   grid-row: span 8;
   border-right: 0.5ch solid black;
   border-bottom: 0.75ch solid black;
 }
 
-ul>li:nth-of-type(2) {
+ul.login>li:nth-of-type(2) {
     grid-column: span 11;
     grid-row: span 8;
     border-bottom: 0.75ch solid black;
@@ -44,29 +44,29 @@ ul>li:nth-of-type(2) {
     padding: 2ch;
 }
 
-ul>li:nth-of-type(2) p {
+ul.login>li:nth-of-type(2) p {
     margin: 0;
     line-height: var(--min-btn-size);
 }
 
-ul>li:nth-of-type(2) a {
+ul.login>li:nth-of-type(2) a {
     min-inline-size: var(--min-btn-size);
 }
 
-ul>li:nth-of-type(3) {
+ul.login>li:nth-of-type(3) {
     grid-column: span 9;
     grid-row: span 5;
     border-right: 0.5ch solid black;
     border-bottom: 0.75ch solid black;
 }
 
-ul>li:nth-of-type(4) {
+ul.login>li:nth-of-type(4) {
     grid-column: span 11;
     grid-row: span 5;
     border-bottom: 0.75ch solid black;
 }
 
-ul>li:nth-of-type(3), ul>li:nth-of-type(4) {
+ul.login>li:nth-of-type(3), ul>li:nth-of-type(4) {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -74,7 +74,7 @@ ul>li:nth-of-type(3), ul>li:nth-of-type(4) {
     padding: 2ch;
 }
 
-ul>li:nth-of-type(5) {
+ul.login>li:nth-of-type(5) {
     grid-column: span 2;
     grid-row: span 7;
     border-right: 0.5ch solid black;
@@ -87,50 +87,68 @@ ul>li:nth-of-type(5) {
     font-family: monospace;
 }
 
-ul>li:nth-of-type(6) {
+ul.login>li:nth-of-type(6) {
     grid-column: span 7;
     grid-row: span 7;
     border-right: 0.5ch solid black;
 }
 
-ul>li:nth-of-type(7) {
+ul.login>li:nth-of-type(7) {
   grid-column: span 6;
   grid-row: span 6;
   border-right: 0.5ch solid black;
 }
 
-ul>li:nth-of-type(8) {
+ul.login>li:nth-of-type(8) {
     grid-column: span 5;
     grid-row: span 7;
     display:flex;
     justify-content: flex-end;
 }
 
-ul>li:nth-of-type(8)>button {
+ul.login>li:nth-of-type(8)>button {
     min-inline-size: var(--min-btn-size);
     background-color: transparent;
     border: none;
     align-self: flex-end;
+    cursor: pointer;
 }
 
-ul>li:nth-of-type(9) {
-  grid-column: span 6;
-  grid-row: span 1;
-  border-right: 0.5ch solid black;
+ul.login>li:nth-of-type(9) {
+    grid-column: span 6;
+    grid-row: span 1;
+    border-right: 0.5ch solid black;
 }
 
 .red { 
-  background-color: #ca5020;
+    background-color: #ca5020;
 }
 
 .grey { 
-  background-color: #e8e8e8;
+    background-color: #e8e8e8;
 }
 
 .yellow { 
-  background-color: #ffed91;
+    background-color: #ffed91;
 }
 
 .blue { 
-  background-color: #044281;
+    background-color: #044281;
+}
+
+dialog > div {
+    display: grid;
+    grid-template-columns: minmax(1rem, 1fr) minmax(auto, 75ch) minmax(1rem, 1fr);
+}
+
+dialog button.close {
+    place-self: start end;
+    min-inline-size: var(--min-btn-size);
+    min-block-size: var(--min-btn-size);
+    background-color: transparent;
+    color: currentColor;
+    border: none;
+    font-size: 200%;
+    margin-inline-start: 2ch;
+    cursor: pointer;
 }
