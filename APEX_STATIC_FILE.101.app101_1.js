@@ -1,5 +1,3 @@
-let gRestUrl;
-
 const apex_app_id = document.querySelector("#pFlowId").value,
       apex_page_id = document.querySelector("#pFlowStepId").value,
       apex_session = document.querySelector("#pInstance").value,
@@ -86,9 +84,7 @@ const execProcess = (template, method, input) => {
  ** MISERABLE PRIVACY POLICY
  */
 privacy.addEventListener("click", (e) => {
-    console.log(e.currentTarget);
-    const articleId = e.currentTarget.dataset.id;
-    execProcess( "article/"+articleId,"GET").then( (data) => {
+    execProcess( "article/"+e.currentTarget.dataset.id,"GET").then( (data) => {
         popup.querySelector(".content").innerHTML = data.content;
         popup.showModal();
     });
