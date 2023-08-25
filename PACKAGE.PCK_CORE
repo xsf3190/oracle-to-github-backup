@@ -288,7 +288,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_clob CLOB;
         l_user_id users.id%type;
         l_user_name users.name%type;
-        l_current_website website.id%type;    
+        l_current_website website.id%type;
+        TYPE t_domain IS RECORD(
+            id website.id%type,
+            domain_name website.domain_name%type);
+        TYPE tt_domain IS TABLE OF t_domain;
+        l_domains tt_domain;     
     BEGIN
        SELECT id, name 
           INTO l_user_id, l_user_name
@@ -296,50 +301,66 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
          WHERE email=apex_application.g_user;
 
         l_clob:=l_clob || TO_CLOB(
-            '<nav>
-                <button type="button" class="add-website">NEW WEBSITE</button>');
+        '<nav>
+            <button type="button" class="add-website">NEW WEBSITE</button>');
 
+        SELECT id, domain_name
+          BULK COLLECT INTO l_domains
+          FROM website
+         WHERE user_id=l_user_id
+         ORDER BY updated_date DESC;
 
-        FOR C IN (SELECT id, domain_name, rn, nb 
-                    FROM
-                    ( SELECT id, domain_name, ROW_NUMBER() OVER (ORDER BY COALESCE(updated_date, created_date) DESC) rn, COUNT(*) OVER () nb
-                        FROM website
-                       WHERE user_id=l_user_id
-                    ) 
-                    ORDER BY rn)
-        LOOP
-            IF (C.rn=1) THEN
-                l_current_website:=C.id;
+        IF (l_domains.COUNT>1) THEN
+            l_clob:=l_clob || TO_CLOB(
+            '<div class="dropdown">
+                <button type="button" class="show-dropdown" disabled>' || l_domains(1).domain_name || '</button>
+                <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                <ul class="dropdown-items">');
+            FOR i IN 1..l_domains.COUNT LOOP
                 l_clob:=l_clob || TO_CLOB(
-                '<div class="dropdown">
-                    <button type="button" class="show-dropdown" disabled data-websiteid="' || C.id || '">' || C.domain_name || '</button>
-                    <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                    <ul class="dropdown-items">
-                        <li><button type="button" class="deploy-website" data-websiteid="' || C.id || '">DEPLOY WEBSITE</button></li>
-                        <li><button type="button" class="edit-website" data-websiteid="' || C.id || '">EDIT WEBSITE</button></li>
-                        <li><button type="button" class="delete-website" data-websiteid="' || C.id || '">DELETE WEBSITE</button></li>');
-            END IF;
-            IF (C.rn>1) THEN
-                l_clob:=l_clob || TO_CLOB(
-                        '<li><button type="button" class="edit-website" data-websiteid="' || C.id || '">' || C.domain_name || '</button></li>');
-            END IF;
-            IF (C.rn=C.nb) THEN
-                l_clob:=l_clob || TO_CLOB(
-                    '</ul>
-                </div>');
-            END IF;
-        END LOOP;
+                '<li><button type="button" class="edit-website" data-websiteid="' || l_domains(i).id || '">' || l_domains(i).domain_name || '</button></li>');
+            END LOOP;
+            l_clob:=l_clob || TO_CLOB(
+                '</ul>
+            </div>');
+        END IF;
 
         l_clob:=l_clob || TO_CLOB(
-                '<div class="dropdown">
-                    <button type="button" class="show-dropdown" disabled>' || apex_application.g_user || '</button>
-                    <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                    <ul class="dropdown-items">
-                        <li><button type="button" class="fa signout">Sign out</button></li>
-                        <li><button type="button" class="fa delete-me">Delete all content</button></li>
-                    </ul>
-                </div>
-             </nav>');
+            '<div class="dropdown">
+                <button type="button" class="show-dropdown" disabled>' || apex_application.g_user || '</button>
+                <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                <ul class="dropdown-items">
+                    <li><button type="button" class="signout">Sign out</button></li>
+                    <li><button type="button" class="delete-user">Delete all content</button></li>
+                </ul>
+            </div>
+        </nav>');
+
+        IF (l_domains.COUNT>0) THEN
+            FOR C IN (
+                SELECT domain_name, contact_email, template, favicon_url, trade_name, affiliation_link_img, affiliation_link_url
+                FROM website 
+                WHERE id=l_domains(1).id
+                AND user_id=l_user_id) LOOP
+                l_clob:=l_clob || TO_CLOB('
+                <form>
+                    <div>
+                        <label for="domain-name">Domain name</label>
+                        <input type="text" id="domain-name" maxlength="30" required style="inline-size:30ch" value="' || C.domain_name || '"></input><span></span>
+                    </div>
+                    <div>
+                        <label for="contact-email">Contact Email Address</label>
+                        <input type="text" id="contact-email" maxlength="50" style="inline-size:50ch" value="' || C.contact_email|| '""></input><span></span>
+                    </div>
+                    <fieldset>
+                        <legend>Website Template</legend>
+                        <div class="cluster">' || buildTemplates() || '
+                        </div>
+                    </fieldset>
+                    <input type="submit" value="APPLY CHANGES">
+                </form>');
+            END LOOP;
+        END IF;
 
         RETURN l_clob;
     END;
@@ -558,6 +579,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <input type="hidden" name="p_flow_step_id" value="' || apex_application.g_flow_step_id ||'" id="pFlowStepId">
             <input type="hidden" name="p_instance" value="' || APEX_CUSTOM_AUTH.GET_SESSION_ID ||'" id="pInstance">');            
 
+        l_clob:=l_clob || chr(10) || TO_CLOB('
+        <script>
+            const gRestUrl = "' || getRestUrl() || '";');
+        IF (apex_application.g_flow_step_id=2) THEN
+            l_clob:=l_clob || chr(10) || TO_CLOB('
+            const gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home";');
+        END IF;
+        l_clob:=l_clob || chr(10) || TO_CLOB('
+        </script>');
+
         l_page_js:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.js';
 
         IF (INSTR(l_javascript_file_urls,l_page_js)=0) THEN
@@ -565,16 +596,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 l_clob:=l_clob || chr(10) || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
             END LOOP;
         END IF;
-
-        l_clob:=l_clob || chr(10) || TO_CLOB('
-        <script>
-            gRestUrl = "' || getRestUrl() || '";');
-        IF (apex_application.g_flow_step_id=2) THEN
-            l_clob:=l_clob || chr(10) || TO_CLOB('
-            gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home";');
-        END IF;
-        l_clob:=l_clob || chr(10) || TO_CLOB('
-        </script>');
 
         l_clob:=l_clob || TO_CLOB('
             <script type="module">
