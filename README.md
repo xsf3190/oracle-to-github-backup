@@ -1,15 +1,9 @@
 # oracle-to-github-backup
-Automatic backup of selected objects from an ORACLE Autonomous database (ADB) to a designated GITHUB repository.
+Automatic backup of an ORACLE schema plus Apex appplications and ORDS metadata to a designated GITHUB repository.
 
-Includes schema export dump and log files, Apex application exports, ORDS metadata, object and system grants, TABLE and PACKAGE definitions.
-
-Schema export dump files containing row data are encrypted with a generated random password.
+Schema export dump files are encrypted with a randomly generated password sent by email to the Apex Administrator.
 
 Optional restore procedure imports schema and Apex applications from GITHUB into a target ADB identified by DB LINK.
-
-ORDS metadata export scripts have to be manually imported as ADB does not support running scripts from PLSQL.
-
-All files in this repository are created/updated by a scheduled Oracle job running daily at 8pm GMT.
 
 ## Pre-requisites
 1. Obtain GITHUB Personal access token (classic) - https://github.com/settings/tokens
