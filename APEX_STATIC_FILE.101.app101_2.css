@@ -186,28 +186,29 @@ dialog.preview > div, dialog.website > div, dialog.editor > div {
 }
 
 /* ************** */
-/* WEBSITE DIALOG */
+/* WEBSITE FORM   */
 /* ************** */
 
-dialog.website form {
+form {
     font-size: var(--step--1);
     font-family: var(--font-serif);
+    margin: auto;
 }
 
-dialog.website form > * + *   {
+form > * + *   {
     margin-block-start: 2ch;
 }
 
-dialog.website input {
+input {
     font-size: var(--step-0);
 }
 
-dialog.website input[type="text"] + span {
+input[type="text"] + span {
     font-size: 70%;
     margin-inline-start: 1ch;
 }
 
-dialog.website input[type="radio"] {
+input[type="radio"] {
     appearance: none;
     border-radius: 50%;
     inline-size: 2ch;
@@ -216,11 +217,11 @@ dialog.website input[type="radio"] {
     transition: 0.2s all linear;
 }
 
-dialog.website input[type="radio"]:checked {
+input[type="radio"]:checked {
     border: 1ch solid var(--color-button);
 }
 
-dialog.website .cluster {
+.cluster {
     display: flex;
     flex-wrap: wrap;
     gap: 1rem;
