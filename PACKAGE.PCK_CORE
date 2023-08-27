@@ -8,6 +8,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2);
     --
+    FUNCTION getUserId(pSaveCookie BOOLEAN DEFAULT FALSE) RETURN users.id%type;
+    --
+    FUNCTION getRestUrl RETURN VARCHAR2;
+    --
     FUNCTION getPageContent RETURN CLOB;
     --
 END;
@@ -162,26 +166,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END IF;
     END;    
 
-    FUNCTION buildArticle(pAppPageNo IN NUMBER, 
-                            pId IN article.id%type, 
+    FUNCTION buildArticle(pId IN article.id%type, 
                             pNbAssets IN article.nb_assets%type, 
                             pIsPublic IN article.is_public%type, 
                             pTitle IN article.title%type, 
                             pExcerpt IN article.excerpt%type, 
                             pWordCount IN VARCHAR2, 
                             pUpdatedDate IN article.updated_date%type,
-                            pCloudinaryUrl IN VARCHAR2, 
-                            pName IN users.name%type) RETURN VARCHAR2 
-   IS
+                            pCloudinaryUrl IN VARCHAR2) RETURN VARCHAR2 
+    IS
         l_element LONG;
     BEGIN
         l_element:=
         '<li class="card" tabindex="0" data-id="' || pId || '">
             <div class="button-container">
                 <button type="button" class="fa show-gallery"' || CASE WHEN pNbAssets=0 THEN ' disabled' END || '>&blacktriangleright;' || 
-                                                                  CASE WHEN pNbAssets=0 THEN '0' ELSE '1' END || '/' || pNbAssets || '</button>' ||
-                CASE WHEN pAppPageNo=2 THEN
-                '<div class="dropdown">
+                                                                  CASE WHEN pNbAssets=0 THEN '0' ELSE '1' END || '/' || pNbAssets || '</button>
+                <div class="dropdown">
                   <button type="button" class="fa fa-caret-down show-dropdown">&blacktriangledown;</button>
                   <ul class="dropdown-items">
                     <li><button type="button" class="fa fa-cloud-upload upload-media">Upload</button></li>
@@ -196,8 +197,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     || '
                     <li><button type="button" class="fa fa-trash delete"' || CASE WHEN pId=1 THEN ' disabled' END || '>Delete</button></li>
                     <li><button type="button" class="fa fa-id-card">' || pId || '</button></li>
-                </div>'
-                END ||'
+                </div>
             </div>' ||
             CASE WHEN pNbAssets=0 
                 THEN '<button type="button" class="no-media upload-media">UPLOAD MEDIA</button>' 
@@ -206,10 +206,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             CASE WHEN COALESCE(pTitle,pExcerpt) IS NULL 
                 THEN '<br>
                       <button type="button" class="no-media edit-text">CREATE TEXT</button>'
-                ELSE '<h4 class="title ' || CASE WHEN pAppPageNo=2 THEN 'edit-text' ELSE 'preview' END || '">' || pTitle || '</h4>
+                ELSE '<h4 class="title edit-text">' || pTitle || '</h4>
                       <p class="excerpt">' || pExcerpt || '<span class="word-count">' || pWordCount || '</span></p>'
             END || '   
-            <footer class="button-container"><span>' || pName || '</span><span class="updated-date">' || fmtUpdatedDate(pUpdatedDate)  || '</span></footer>
+            <footer class="button-container"><span></span><span class="updated-date">' || fmtUpdatedDate(pUpdatedDate)  || '</span></footer>
         </li>';
 
         RETURN (l_element);
@@ -246,6 +246,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_cluster);
     END;
 
+    FUNCTION buildPrivacyPage RETURN CLOB IS
+    BEGIN
+        FOR C IN (SELECT body_html FROM article WHERE id=19124)  -- the miserable privacy policy
+        LOOP
+            RETURN C.body_html;
+        END LOOP;
+    END;
+
     /*
      **  Login page
      */
@@ -279,338 +287,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     </div>
                 </dialog>');
         END LOOP;
-    END;
-
-    /*
-     **  Build authenticated page
-     */
-    FUNCTION buildAuthPage RETURN CLOB IS
-        l_clob CLOB;
-        l_user_id users.id%type;
-        l_user_name users.name%type;
-        l_current_website website.id%type;
-        TYPE t_domain IS RECORD(
-            id website.id%type,
-            domain_name website.domain_name%type);
-        TYPE tt_domain IS TABLE OF t_domain;
-        l_domains tt_domain;     
-    BEGIN
-       SELECT id, name 
-          INTO l_user_id, l_user_name
-          FROM users
-         WHERE email=apex_application.g_user;
-
-        l_clob:=l_clob || TO_CLOB(
-        '<nav>
-            <button type="button" class="add-website">NEW WEBSITE</button>');
-
-        SELECT id, domain_name
-          BULK COLLECT INTO l_domains
-          FROM website
-         WHERE user_id=l_user_id
-         ORDER BY updated_date DESC;
-
-        IF (l_domains.COUNT>1) THEN
-            l_clob:=l_clob || TO_CLOB(
-            '<div class="dropdown">
-                <button type="button" class="show-dropdown" disabled>' || l_domains(1).domain_name || '</button>
-                <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                <ul class="dropdown-items">');
-            FOR i IN 1..l_domains.COUNT LOOP
-                l_clob:=l_clob || TO_CLOB(
-                '<li><button type="button" class="edit-website" data-websiteid="' || l_domains(i).id || '">' || l_domains(i).domain_name || '</button></li>');
-            END LOOP;
-            l_clob:=l_clob || TO_CLOB(
-                '</ul>
-            </div>');
-        END IF;
-
-        l_clob:=l_clob || TO_CLOB(
-            '<div class="dropdown">
-                <button type="button" class="show-dropdown" disabled>' || apex_application.g_user || '</button>
-                <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                <ul class="dropdown-items">
-                    <li><button type="button" class="signout">Sign out</button></li>
-                    <li><button type="button" class="delete-user">Delete all content</button></li>
-                </ul>
-            </div>
-        </nav>');
-
-        IF (l_domains.COUNT>0) THEN
-            FOR C IN (
-                SELECT domain_name, contact_email, template, favicon_url, trade_name, affiliation_link_img, affiliation_link_url
-                FROM website 
-                WHERE id=l_domains(1).id
-                AND user_id=l_user_id) LOOP
-                l_clob:=l_clob || TO_CLOB('
-                <form>
-                    <div>
-                        <label for="domain-name">Domain name</label>
-                        <input type="text" id="domain-name" maxlength="30" required style="inline-size:30ch" value="' || C.domain_name || '"></input><span></span>
-                    </div>
-                    <div>
-                        <label for="contact-email">Contact Email Address</label>
-                        <input type="text" id="contact-email" maxlength="50" style="inline-size:50ch" value="' || C.contact_email|| '""></input><span></span>
-                    </div>
-                    <fieldset>
-                        <legend>Website Template</legend>
-                        <div class="cluster">' || buildTemplates() || '
-                        </div>
-                    </fieldset>
-                    <input type="submit" value="APPLY CHANGES">
-                </form>');
-            END LOOP;
-        END IF;
-
-        RETURN l_clob;
-    END;
-
-    /*
-     **  Unauthenticated user - login page
-     **
-     **  Authenticated user - websites and articles authored by user
-     */
-    FUNCTION getPageContent RETURN CLOB IS
-        l_clob CLOB;
-        l_css_file_urls APEX_APPLICATION_PAGES.css_file_urls%type;
-        l_javascript_file_urls APEX_APPLICATION_PAGES.javascript_file_urls%type;
-        l_user_id users.id%type;
-        l_user_name users.name%type;
-        l_current_website website.id%type;
-        l_page_css APEX_APPLICATION_STATIC_FILES.file_name%type;
-        l_page_js APEX_APPLICATION_STATIC_FILES.file_name%type;
-    BEGIN
-        SELECT NVL(css_file_urls,' '), NVL(javascript_file_urls,' ')
-          INTO l_css_file_urls, l_javascript_file_urls
-          FROM APEX_APPLICATION_PAGES 
-         WHERE application_id=apex_application.g_flow_id
-           AND page_id=apex_application.g_flow_step_id;
-
-        l_page_css:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.css';
-
-        IF (INSTR(l_css_file_urls,l_page_css)=0) THEN
-            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name=REPLACE(l_page_css,'.min')) LOOP
-                l_clob:=l_clob || chr(10) || '<style>' || apex_util.blob_to_clob(C.file_content) || '</style>';
-            END LOOP;
-        END IF;
-
-        CASE apex_application.g_flow_step_id
-            WHEN 1 THEN l_clob:=l_clob || buildLoginPage;
-            WHEN 2 THEN l_clob:=l_clob || buildAuthPage;
-        END CASE;
-
-        /*
-            l_clob:=l_clob || TO_CLOB('<ul class="cards" data-websiteid="' || l_current_website || '" role="list">');
-
-            IF (l_current_website IS NOT NULL) THEN
-                FOR C IN (
-                    SELECT a.id,
-                           a.is_public,
-                           c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
-                           c.alt_text,
-                           NVL2(a.nb_assets,1,0) first_asset,
-                           NVL(a.nb_assets,0) nb_assets,
-                           a.title, 
-                           a.excerpt,
-                           CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
-                           NVL(a.updated_date, a.created_date) updated_date
-                      FROM article a, asset c, website_article wa
-                     WHERE a.author_user_id=l_user_id
-                       AND a.cover_asset_id=c.id(+)
-                       AND a.id=wa.article_id
-                       AND wa.website_id=l_current_website
-                     UNION ALL
-                     SELECT -1, null, null, null, null,null,null,null,0,0,null,null,null,systimestamp from dual
-                     ORDER BY updated_date DESC) 
-                LOOP
-                    l_clob:=l_clob || TO_CLOB(
-                        buildArticle(
-                            apex_application.g_flow_step_id, 
-                            C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), l_user_name));
-                END LOOP;
-            ELSE
-                FOR C IN (
-                    SELECT a.id,
-                           a.is_public,
-                           c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
-                           c.alt_text,
-                           NVL2(a.nb_assets,1,0) first_asset,
-                           NVL(a.nb_assets,0) nb_assets,
-                           a.title, 
-                           a.excerpt,
-                           CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
-                           NVL(a.updated_date, a.created_date) updated_date
-                      FROM article a, asset c
-                     WHERE a.author_user_id=l_user_id
-                       AND a.cover_asset_id=c.id(+)
-                       AND NOT EXISTS (SELECT null FROM website_article WHERE article_id=a.id)
-                     UNION ALL
-                     SELECT -1, null, null, null, null,null,null,null,0,0,null,null,null,systimestamp from dual
-                     ORDER BY updated_date DESC) 
-                LOOP
-                    l_clob:=l_clob || TO_CLOB(
-                        buildArticle(
-                            apex_application.g_flow_step_id, 
-                            C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), l_user_name));
-                END LOOP;            
-
-        l_clob:=l_clob || TO_CLOB('</ul>');
-
-        l_clob:=l_clob || TO_CLOB(
-            '<dialog class="popup">
-                <div>
-                    <button type="button" class="close">&times;</button>
-                    <h2></h2>
-                    <p></p>
-                    <button type="button" class="confirm">CONFIRM</button>
-                </div>
-            </dialog>
-            <dialog class="website">
-                <div>
-                    <div></div> <!-- empty div for grid -->
-                    <form>
-                        <div>
-                            <label for="domain-name">Domain name</label>
-                            <input type="text" id="domain-name" maxlength="30" required style="inline-size:30ch"></input><span></span>
-                        </div>
-                        <div>
-                            <label for="contact-email">Contact Email Address</label>
-                            <input type="text" id="contact-email" maxlength="50" style="inline-size:50ch"></input><span></span>
-                        </div>
-                        <fieldset>
-                            <legend>Default Image Dimension</legend>
-                            <div class="cluster">
-                                <input type="radio" id="image-dimension-s" name="image-dimension" value="0.25" checked></input>
-                                <label for="image-dimension-s">Small</label>
-                                <input type="radio" id="image-dimension-m" name="image-dimension" value="0.625"></input>
-                                <label for="image-dimension-m">Medium</label>
-                                <input type="radio" id="image-dimension-l" name="image-dimension" value="1"></input>
-                                <label for="image-dimension-l">Large</label>
-                            </div>
-                        </fieldset>
-                        <fieldset>
-                            <legend>Website Template</legend>
-                            <div class="cluster">' || buildTemplates() || '
-                            </div>
-                        </fieldset>
-                        <input type="submit" value="APPLY CHANGES">
-                    </form>
-                    <button type="button" class="close">&times;</button>
-                </div>
-            </dialog>            
-            <dialog class="preview">
-                <div>
-                    <div></div> <!-- empty div for preview grid -->
-                    <div class="content ck-content"></div>
-                    <button type="button" class="close" autofocus>&times;</button>
-                </div>
-            </dialog>
-            <dialog class="editor">
-                <div>
-                    <div></div>
-                    <div>
-                        <div id="editor"></div>
-                        <div class="button-container">
-                            <div id="editor-status"></div>
-                            <div id="word-count"></div>
-                        </div>
-                    </div>
-                    <button type="button" class="close">&times;</button>
-                </div>
-            </dialog>            
-            <dialog class="gallery">
-                <div>
-                    <button type="button" class="close" autofocus>&times;</button>
-                    <nav>
-                        <div>
-                            <button type="button" class="thumbs-minus fa">&minus;</button>
-                            <button type="button" class="thumbs-plus fa">&plus;</button>
-                        </div>
-                        <button type="button" class="list-performance">PERFORMANCE</button>
-                    </nav>
-                    <div class="gallery-container" role="region" aria-label="gallery">
-                        <p class="instruction"></p>
-                        <ul></ul>
-                    </div>
-                    <div class="gallery-overlay">
-                        <img src="">
-                        <fieldset>
-                            <legend><span></span><button class="close-fieldset" type="button">&times;</button></legend>
-                            <button type="button" class="dimensions"></button>
-                            <button type="button" class="copy-url" disabled>&boxbox;</button>
-                            <button type="button" class="dimensions"></button>
-                            <button type="button" class="copy-url" disabled>&boxbox;</button>
-                            <button type="button" class="dimensions"></button>
-                            <button type="button" class="copy-url" disabled>&boxbox;</button>
-                        </fieldset>
-                        <span class="counter"></span>
-                        <button type="button" class="close-fullscreen">&times;</button>
-                        <button type="button" class="prev">&lt;</button>
-                        <button type="button" class="next">&gt;</button>
-                    </div>
-                </div>
-            </dialog>            
-            <dialog class="perftable">
-                <div>
-                    <button type="button" class="close">&times;</button>
-                    <div class="content"></div>
-                </div>
-            </dialog>
-            <dialog class="cldapikey">
-                <div>
-                    <button type="button" class="close">&times;</button>
-                    <p>Subscribe to a free <a href="https://cloudinary.com/users/register_free">Cloudinary plan</a> and enter your API key in the field below</p>
-                    <p>Alternatively click "Continue as guest" for limited access</p>
-                    <fieldset>
-                        <legend>Cloudinary API Environment variable</legend>
-                        <input type="text" id="cldapikey">
-                    </fieldset>
-                    <div class="button-container">
-                        <button type="button" class="save">Save Changes</button>
-                        <button type="button" class="guest">Continue as guest</button>
-                    </div>
-                </div>
-            </dialog> 
-            ');
-        */
-
-        l_clob:=l_clob || TO_CLOB('
-            <input type="hidden" name="p_flow_id" value="' || apex_application.g_flow_id ||'" id="pFlowId">
-            <input type="hidden" name="p_flow_step_id" value="' || apex_application.g_flow_step_id ||'" id="pFlowStepId">
-            <input type="hidden" name="p_instance" value="' || APEX_CUSTOM_AUTH.GET_SESSION_ID ||'" id="pInstance">');            
-
-        l_clob:=l_clob || chr(10) || TO_CLOB('
-        <script>
-            const gRestUrl = "' || getRestUrl() || '";');
-        IF (apex_application.g_flow_step_id=2) THEN
-            l_clob:=l_clob || chr(10) || TO_CLOB('
-            const gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home";');
-        END IF;
-        l_clob:=l_clob || chr(10) || TO_CLOB('
-        </script>');
-
-        l_page_js:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.js';
-
-        IF (INSTR(l_javascript_file_urls,l_page_js)=0) THEN
-            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name=REPLACE(l_page_js,'.min')) LOOP
-                l_clob:=l_clob || chr(10) || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
-            END LOOP;
-        END IF;
-
-        l_clob:=l_clob || TO_CLOB('
-            <script type="module">
-              import {onCLS, onFID, onLCP} from ''https://unpkg.com/web-vitals?module'';
-              onCLS(addToVitalsQueue);
-              onFID(addToVitalsQueue);
-              onLCP(addToVitalsQueue);
-            </script>');
-
-        RETURN (l_clob);
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm);
-                RAISE;
     END;
 
     FUNCTION getMediaType(pResourceType IN VARCHAR2, pFormat IN VARCHAR2) RETURN VARCHAR2 
@@ -683,51 +359,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     END;
         END IF;        
         RETURN (l_url);
-    END;
+    END;    
 
-    /*
-    ** GET ARTICLE (PAGE) CONTENT FOR WEBSITE
-    */
-    PROCEDURE getWebsite(pWebsiteId IN website.id%type) IS
-        l_user_id users.id%type;
-    BEGIN
-        l_user_id:=getUserId();
-
-        apex_json.open_object;
-
-        FOR C IN (
-            SELECT domain_name, contact_email, DECODE(image_dimension,0.25,'s',0.625,'m',1,'l') image_dimension, template, favicon_url, trade_name,affiliation_link_img,affiliation_link_url
-              FROM website 
-             WHERE id=pWebsiteId
-               AND user_id=l_user_id) 
-        LOOP
-            apex_json.write('domain_name', C.domain_name);
-            apex_json.write('contact_email', C.contact_email);
-            apex_json.write('image_dimension', 'image-dimension-' || C.image_dimension);
-            apex_json.write('template', 'template-' || LOWER(C.template));
-        END LOOP;
-
-        apex_json.write('success', TRUE);
-        apex_json.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-    END;
-
-    /*
-    ** GET ARTICLE (PAGE) CONTENT FOR WEBSITE
-    */
-    PROCEDURE getWebsiteArticles(pWebsiteId IN website.id%type) IS
-        l_user_id users.id%type;
-        l_user_name users.name%type;
+    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type) RETURN CLOB IS
         l_clob CLOB;
     BEGIN
-        l_user_id:=getUserId();
-        SELECT name INTO l_user_name FROM users WHERE id=l_user_id;
-
-        FOR C IN (
-            SELECT a.id,
+        FOR C IN (SELECT a.id,
                    a.is_public,
                    c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
                    NVL(a.nb_assets,0) nb_assets,
@@ -742,136 +379,242 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                AND a.cover_asset_id=c.id(+)
              UNION ALL
              SELECT -1, null, null, null, null,null,null,0,null,null,null,systimestamp,-1 from dual
-             ORDER BY display_order) 
+             ORDER BY display_order)
         LOOP
             l_clob:=l_clob || TO_CLOB(
-                buildArticle(
-                    2, 
-                    C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), 
-                    l_user_name));
+            buildArticle(
+                    C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width)));
         END LOOP;
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('content', l_clob);
-        apex_json.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-    END;
-
-    PROCEDURE getThumbnailContent(pArticleId IN article.id%type, pUserId IN users.id%type, pNbAssets IN OUT article.nb_assets%type, pInstruction IN OUT NOCOPY VARCHAR2, pContent IN OUT NOCOPY CLOB) 
-    IS
-        l_url_image VARCHAR2(300);
-        l_media_type VARCHAR2(5);   
-    BEGIN
-        FOR C IN (
-            SELECT a.id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
-                   DECODE(a.width,0,gWidthThumbnail,a.width) width, DECODE(a.height,0,gWidthThumbnail,a.height) height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format,
-                   COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY a.display_order) rn,
-                   t.nb_assets, NVL(u.maxtouchpoints,0) maxtouchpoints
-              FROM asset a, article t, users u
-             WHERE t.id=pArticleId
-               AND a.article_id=t.id
-               AND t.author_user_id=NVL(pUserId, t.author_user_id)
-               AND u.id=t.author_user_id
-               AND NVL(a.format,'N/A')<>'clt'
-             ORDER BY a.display_order )
-        LOOP
-            IF (C.rn=1) THEN
-                pNbAssets:=C.nb_assets;
-                pInstruction:=CASE WHEN C.maxtouchpoints > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen' || 
-                       CASE WHEN pUserId IS NOT NULL AND C.nb_assets > 1 THEN 
-                            '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover' END;
-            END IF;
-
-            pContent:=pContent || TO_CLOB('
-                <li class="card" tabindex="0"' || CASE WHEN pUserId IS NOT NULL THEN ' data-id="' || C.id || '"' END || '>
-                    <div class="button-container">
-                        <span>' || C.rn || '/' || C.nb || '</span>' || 
-                        CASE WHEN pUserId IS NOT NULL THEN
-                        '<div class="dropdown">
-                            <button type="button" class="fa fa-caret-down show-dropdown">&blacktriangledown;</button>
-                            <ul class="dropdown-items">
-                                <li><button type="button" class="fa fa-refresh update-asset">Update Text</button></li>
-                                <li><button type="button" class="fa fa-id-card view-performance">Performance</button></li>
-                                <li><button type="button" class="fa fa-trash delete-asset">Delete</button></li>
-                            </ul>
-                        </div>' END || '
-                    </div>');
-
-            l_url_image:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
-            l_media_type:=getMediaType(C.resource_type, C.format);
-
-            pContent:=pContent || TO_CLOB('<img data-dimensions="'  || 
-                                            ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || 
-                                            ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':' || 
-                                            C.width || 'x' || C.height || '" src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>');
-
-            CASE l_media_type
-
-                WHEN 'video' THEN
-                    pContent:=pContent || TO_CLOB(
-                    '<video controls preload="metadata" poster="' || l_url_image || '">
-                        <source src="' || REPLACE(l_url_image,'.jpg','.webm') || '" type="video/webm"></source>
-                        <source src="' || REPLACE(l_url_image,'.jpg','.mp4') || '" type="video/mp4"></source>
-                    </video>');
-
-                WHEN 'audio' THEN
-                    l_url_image:=REGEXP_REPLACE(l_url_image,',w_(\d)+\/fl_waveform',NULL);
-                    pContent:=pContent || TO_CLOB(
-                    '<audio preload="metadata" controls>
-                        <source src="' || REPLACE(l_url_image,'.png','.aac') || '" type="audio/aac"></source>
-                        <source src="' || REPLACE(l_url_image,'.png','.ogg') || '" type="audio/ogg"></source>
-                        <source src="' || REPLACE(l_url_image,'.png','.mp3') || '" type="audio/mpeg"></source>
-                        <source src="' || REPLACE(l_url_image,'.png','.wav') || '" type="audio/wav"></source>
-                    </audio>');
-
-                ELSE NULL;
-
-            END CASE;
-
-            pContent:=pContent || TO_CLOB('
-                <div>
-                    <label for="alt-text">Alt text<span></span></label>
-                    <textarea id="alt-text" maxlength="50"' || CASE WHEN pUserId IS NULL THEN ' readonly' END || '>' || C.alt_text || '</textarea>
-                </div>
-                <div>
-                    <label for="description">Description<span></span></label>
-                    <textarea id="description" maxlength="500"' || CASE WHEN pUserId IS NULL THEN ' readonly' END || '>' || C.description || '</textarea>                    
-                </div>');
-
-            pContent:=pContent || TO_CLOB('</li>');
-
-        END LOOP;
-
+        RETURN l_clob;
     END;
 
     /*
-     **  Build gallery of thumbnail images from ASSET table 
-     **  Executed in response to user requesting gallery of media assets for a given article
+     **  Build authenticated page
      */
-    PROCEDURE getThumbnails(pArticleId IN article.id%type) IS
+    FUNCTION buildAuthPage RETURN CLOB IS
         l_clob CLOB;
         l_user_id users.id%type;
-        l_instruction VARCHAR2(300);
-        n PLS_INTEGER;
+        l_user_name users.name%type;
+        l_current_website website.id%type;
+        TYPE t_domain IS RECORD(
+            id website.id%type,
+            domain_name website.domain_name%type);
+        TYPE tt_domain IS TABLE OF t_domain;
+        l_domains tt_domain;     
     BEGIN
-        l_user_id:=getUserId();
+       SELECT id, name 
+          INTO l_user_id, l_user_name
+          FROM users
+         WHERE email=apex_application.g_user;
 
-        getThumbnailContent(pArticleId, l_user_id, n, l_instruction, l_clob);
+        l_clob:=l_clob || TO_CLOB(
+        '<nav class="full-width">
+            <button type="button" class="add-website">NEW WEBSITE</button>');
 
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('content', l_clob);
-        apex_json.write('instruction', l_instruction);
+        SELECT id, domain_name
+          BULK COLLECT INTO l_domains
+          FROM website
+         WHERE user_id=l_user_id
+         ORDER BY updated_date DESC;
 
-        apex_json.close_object;
+        IF (l_domains.COUNT>1) THEN
+            l_clob:=l_clob || TO_CLOB(
+            '<div class="dropdown">
+                <button type="button" class="show-dropdown" disabled>' || l_domains(1).domain_name || '</button>
+                <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                <ul class="dropdown-items">');
+            FOR i IN 1..l_domains.COUNT LOOP
+                l_clob:=l_clob || TO_CLOB(
+                '<li><button type="button" class="edit-website" data-websiteid="' || l_domains(i).id || '">' || l_domains(i).domain_name || '</button></li>');
+            END LOOP;
+            l_clob:=l_clob || TO_CLOB(
+                '</ul>
+            </div>');
+        END IF;
+
+        l_clob:=l_clob || TO_CLOB(
+            '<div class="dropdown">
+                <button type="button" class="show-dropdown" disabled>' || apex_application.g_user || '</button>
+                <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                <ul class="dropdown-items">
+                    <li><button type="button" class="signout">Sign out</button></li>
+                    <li><button type="button" class="delete-user">Delete all content</button></li>
+                </ul>
+            </div>
+        </nav>');
+
+        IF (l_domains.COUNT>0) THEN
+            FOR C IN (
+                SELECT domain_name, contact_email, template, favicon_url, trade_name, affiliation_link_img, affiliation_link_url
+                FROM website 
+                WHERE id=l_domains(1).id
+                AND user_id=l_user_id) 
+            LOOP
+                l_clob:=l_clob || TO_CLOB('
+                    <form>
+                        <div>
+                            <label for="domain-name">Domain name</label>
+                            <input type="text" id="domain-name" maxlength="30" required style="inline-size:30ch" value="' || C.domain_name || '"></input><span></span>
+                        </div>
+                        <div>
+                            <label for="contact-email">Contact Email Address</label>
+                            <input type="text" id="contact-email" maxlength="50" style="inline-size:50ch" value="' || C.contact_email|| '""></input><span></span>
+                        </div>
+                        <fieldset>
+                            <legend>Website Template</legend>
+                            <div class="cluster">' || buildTemplates() || '
+                            </div>
+                        </fieldset>
+                        <div class="button-container">
+                            <input type="submit" value="DEPLOY">
+                            <button type="button" class="delete-website">DELETE WEBSITE</button>
+                        </div>
+                    </form>
+                    <hr>
+                    <div class="button-container full-width">
+                        <button type="button" class="add-content">NEW CONTENT</button>
+                        <button type="button" class="list-view">&#9776;</button>
+                    </div>
+                    <ul class="cards" style="display:grid">' || buildWebsiteArticles(l_domains(1).id) || '
+                    </ul>
+                    <figure class="list" style="display:none">
+                        <table>
+                            <thead>
+                                <tr><th>head1</th></tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </figure>');
+            END LOOP;
+        END IF;
+
+        l_clob:=l_clob || TO_CLOB(
+        '<dialog class="popup">
+            <div>
+                <button type="button" class="close">&times;</button>
+                <h2></h2>
+                <p></p>
+                <button type="button" class="confirm">CONFIRM</button>
+            </div>
+        </dialog>
+        <dialog class="editor">
+            <div>
+                <div></div>
+                <div>
+                    <div id="editor"></div>
+                    <div class="button-container">
+                        <div id="editor-status"></div>
+                        <div id="word-count"></div>
+                    </div>
+                </div>
+                <button type="button" class="close">&times;</button>
+            </div>
+        </dialog>            
+        <dialog class="gallery">
+            <div>
+                <button type="button" class="close" autofocus>&times;</button>
+                <nav>
+                    <div>
+                        <button type="button" class="thumbs-minus fa">&minus;</button>
+                        <button type="button" class="thumbs-plus fa">&plus;</button>
+                    </div>
+                    <button type="button" class="list-performance">PERFORMANCE</button>
+                </nav>
+                <div class="gallery-container" role="region" aria-label="gallery">
+                    <p class="instruction"></p>
+                    <ul></ul>
+                </div>
+                <div class="gallery-overlay">
+                    <img src="">
+                    <fieldset>
+                        <legend><span></span><button class="close-fieldset" type="button">&times;</button></legend>
+                        <button type="button" class="dimensions"></button>
+                        <button type="button" class="copy-url" disabled>&boxbox;</button>
+                        <button type="button" class="dimensions"></button>
+                        <button type="button" class="copy-url" disabled>&boxbox;</button>
+                        <button type="button" class="dimensions"></button>
+                        <button type="button" class="copy-url" disabled>&boxbox;</button>
+                    </fieldset>
+                    <span class="counter"></span>
+                    <button type="button" class="close-fullscreen">&times;</button>
+                    <button type="button" class="prev">&lt;</button>
+                    <button type="button" class="next">&gt;</button>
+                </div>
+            </div>
+        </dialog>');
+
+        RETURN l_clob;
+    END;
+
+    /*
+     **  Unauthenticated user - login page
+     **
+     **  Authenticated user - websites and articles authored by user
+     */
+    FUNCTION getPageContent RETURN CLOB IS
+        l_clob CLOB;
+        l_css_file_urls APEX_APPLICATION_PAGES.css_file_urls%type;
+        l_javascript_file_urls APEX_APPLICATION_PAGES.javascript_file_urls%type;
+        l_user_id users.id%type;
+        l_user_name users.name%type;
+        l_current_website website.id%type;
+        l_page_css APEX_APPLICATION_STATIC_FILES.file_name%type;
+        l_page_js APEX_APPLICATION_STATIC_FILES.file_name%type;
+    BEGIN
+        SELECT NVL(css_file_urls,' '), NVL(javascript_file_urls,' ')
+          INTO l_css_file_urls, l_javascript_file_urls
+          FROM APEX_APPLICATION_PAGES 
+         WHERE application_id=apex_application.g_flow_id
+           AND page_id=apex_application.g_flow_step_id;
+
+        l_page_css:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.css';
+
+        IF (INSTR(l_css_file_urls,l_page_css)=0) THEN
+            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name=REPLACE(l_page_css,'.min')) LOOP
+                l_clob:=l_clob || chr(10) || '<style>' || apex_util.blob_to_clob(C.file_content) || '</style>';
+            END LOOP;
+        END IF;
+
+        CASE apex_application.g_flow_step_id
+            WHEN 1 THEN l_clob:=l_clob || buildLoginPage;
+            WHEN 2 THEN l_clob:=l_clob || buildAuthPage;
+            WHEN 3 THEN l_clob:=l_clob || buildPrivacyPage;
+        END CASE;
+
+        l_clob:=l_clob || TO_CLOB('
+            <input type="hidden" name="p_flow_id" value="' || apex_application.g_flow_id ||'" id="pFlowId">
+            <input type="hidden" name="p_flow_step_id" value="' || apex_application.g_flow_step_id ||'" id="pFlowStepId">
+            <input type="hidden" name="p_instance" value="' || APEX_CUSTOM_AUTH.GET_SESSION_ID ||'" id="pInstance">');            
+
+        l_clob:=l_clob || chr(10) || TO_CLOB('
+        <script>
+            const gRestUrl = "' || getRestUrl() || '";' || CASE WHEN apex_application.g_flow_step_id=2 THEN '
+            const gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home";' END || '
+        </script>');
+
+        l_page_js:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.js';
+
+        IF (INSTR(l_javascript_file_urls,l_page_js)=0) THEN
+            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name=REPLACE(l_page_js,'.min')) LOOP
+                l_clob:=l_clob || chr(10) || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
+            END LOOP;
+        END IF;
+
+        l_clob:=l_clob || TO_CLOB('
+            <script type="module">
+              import {onCLS, onFID, onLCP} from ''https://unpkg.com/web-vitals?module'';
+              onCLS(addToVitalsQueue);
+              onFID(addToVitalsQueue);
+              onLCP(addToVitalsQueue);
+            </script>');
+
+        RETURN (l_clob);
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                log_error(sqlcode,sqlerrm);
+                RAISE;
     END;
 
 END;
