@@ -8,12 +8,35 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2);
     --
+    PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2, pAjax IN BOOLEAN);
+    --
     FUNCTION getUserId(pSaveCookie BOOLEAN DEFAULT FALSE) RETURN users.id%type;
     --
     FUNCTION getRestUrl RETURN VARCHAR2;
     --
     FUNCTION getPageContent RETURN CLOB;
     --
+    FUNCTION fmtUpdatedDate(pTimestamp IN article.updated_date%type) RETURN VARCHAR2;
+    --
+    FUNCTION getMediaType(pResourceType IN VARCHAR2, pFormat IN VARCHAR2) RETURN VARCHAR2;
+    --
+    FUNCTION getCloudinaryUrl(
+        pCloudname IN VARCHAR2, 
+        pResourceType IN VARCHAR2, 
+        pPublicId IN VARCHAR2, 
+        pFormat IN VARCHAR2, 
+        pWidth IN INTEGER, 
+        pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
+    --
+    FUNCTION buildArticle(
+        pId IN article.id%type, 
+        pNbAssets IN article.nb_assets%type, 
+        pIsPublic IN article.is_public%type, 
+        pTitle IN article.title%type, 
+        pExcerpt IN article.excerpt%type, 
+        pWordCount IN VARCHAR2, 
+        pUpdatedDate IN article.updated_date%type,
+        pCloudinaryUrl IN VARCHAR2) RETURN VARCHAR2;
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
@@ -455,6 +478,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         <div>
                             <label for="domain-name">Domain name</label>
                             <input type="text" id="domain-name" maxlength="30" required style="inline-size:30ch" value="' || C.domain_name || '"></input><span></span>
+                            <input type="hidden" id="domain-id" name="domain-id" value="' || l_domains(1).id || '">
                         </div>
                         <div>
                             <label for="contact-email">Contact Email Address</label>
@@ -466,21 +490,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             </div>
                         </fieldset>
                         <div class="button-container">
-                            <input type="submit" value="DEPLOY">
+                            <button type="button" class="deploy-website">DEPLOY</button>
                             <button type="button" class="delete-website">DELETE WEBSITE</button>
                         </div>
                     </form>
                     <hr>
                     <div class="button-container full-width">
                         <button type="button" class="add-content">NEW CONTENT</button>
-                        <button type="button" class="list-view">&#9776;</button>
+                        <button type="button" class="list-view" title="SEO titles and descriptions">&#9776;</button>
                     </div>
                     <ul class="cards" style="display:grid">' || buildWebsiteArticles(l_domains(1).id) || '
                     </ul>
                     <figure class="list" style="display:none">
                         <table>
                             <thead>
-                                <tr><th>head1</th></tr>
+                                <tr>
+                                    <th></th>
+                                    <th>Navigation label</th>
+                                    <th>Page Title (SEO)</th>
+                                    <th>Page Description (SEO)</th>
+                                </tr>
                             </thead>
                             <tbody>
                             </tbody>
