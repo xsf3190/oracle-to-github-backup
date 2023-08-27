@@ -1,28 +1,16 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
-    PROCEDURE daily_job;
-    --
     PROCEDURE deleteAll(pUserId IN users.id%type);
     --
     PROCEDURE deleteArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
     --
     PROCEDURE deleteAsset(pId IN asset.id%type);
     --
-    PROCEDURE deployInfrastructure;
-    --
-    PROCEDURE deployWebsite(pWebsiteId IN website.id%type);
-    --
     PROCEDURE getContent(pWebsiteId IN website.id%type);
-    --
-    PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type);
-    --
-    FUNCTION getPageContent RETURN CLOB;
     --
     PROCEDURE getCldDetails(pArticleId IN article.id%type);
     --
     PROCEDURE getCldSignature(pParamsToSign IN CLOB);
-    --
-    FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
     --
     PROCEDURE getArticle(pArticleId IN article.id%type);
     --
@@ -30,29 +18,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getThumbnails(pArticleId IN article.id%type);
     --
-    PROCEDURE getUsage(pUserId IN users.id%type DEFAULT NULL, pUsageDate IN DATE DEFAULT NULL);
-    --
     PROCEDURE getWebsite(pWebsiteId IN website.id%type);
     --
+    PROCEDURE getWebsiteList(pWebsiteId IN website.id%type);
+    --
     PROCEDURE insertArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
-    --
-    PROCEDURE log(pMsg IN VARCHAR2);
-    --
-    PROCEDURE log(pMsg IN OUT NOCOPY CLOB);
-    --
-    PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2);
-    --
-    PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type);
-    --
-    PROCEDURE manual_restore(pPassword IN VARCHAR2);
     --
     PROCEDURE publishArticle(pArticleId IN article.id%type);
     --
     PROCEDURE reorderAssets(pBodyText IN CLOB);
     --
     PROCEDURE setClientInfo(pBodyText IN CLOB);
-    --
-    PROCEDURE signout;
     --
     PROCEDURE unpublishArticle(pArticleId IN article.id%type);
     --
@@ -67,590 +43,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     PROCEDURE uploadPerformance(pBodyText IN CLOB);
     --
     PROCEDURE updateUser;
-    --    
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
-
-    /*
-     ** CLOB and VARCHAR2 signatures for log procedure
-     */
-
-     gWidthThumbnail CONSTANT INTEGER:=360;
-
-
-    PROCEDURE log(pMsg IN OUT NOCOPY CLOB) IS PRAGMA AUTONOMOUS_TRANSACTION;
-        k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
-        k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);
-    BEGIN
-        INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, k_calling_package || '.' || k_calling_subprog, pMsg);
-        COMMIT;
-    END;
-
-    PROCEDURE log(pMsg IN VARCHAR2) IS PRAGMA AUTONOMOUS_TRANSACTION;
-        k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
-        k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);    
-    BEGIN
-        INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, k_calling_package || '.' || k_calling_subprog, pMsg);
-        COMMIT;
-    END;
-
-    PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2) IS
-    BEGIN
-        ROLLBACK;
-        log(pCode || '-' || pErrMsg || '-' || dbms_utility.format_error_stack||dbms_utility.format_error_backtrace);
-    END;
-
-    PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2, pAjax IN BOOLEAN) IS
-    BEGIN
-        log_error(pCode, pErrMsg);
-        --log(pCode || '-' || pErrMsg || '-' || dbms_utility.format_error_stack||dbms_utility.format_error_backtrace);
-        IF (pAjax) THEN
-            apex_json.open_object; 
-            apex_json.write('success', FALSE); 
-            apex_json.write('sqlcode', sqlcode); 
-            apex_json.write('sqlerrm', sqlerrm); 
-            apex_json.close_object;
-        END IF;
-    END;
-
-    /*
-    ** Run restore process manually. Need to specify the last data pump export schema encryption password.
-    */
-    PROCEDURE manual_restore(pPassword IN VARCHAR2)  IS 
-        l_restore_files varchar2(1000):='GRANT.OBJECT_GRANT:GRANT.SYSTEM_GRANT:EXPORT_SCHEMA.EXAMPLE.dmp:APEX_APPLICATION.100';
-    BEGIN
-
-        FOR C IN (SELECT github_token, github_repos_owner, github_repos, u.email, w.workspace_name 
-              FROM users u, apex_workspace_developers w 
-             WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
-               AND w.is_admin='Yes'
-               AND w.email=u.email) 
-        LOOP
-            EXECUTE IMMEDIATE q'{
-                BEGIN pck_restore.submit_job@RESTORE_LINK(
-                    pGithub_files=>:B1, 
-                    pGithub_token=>:B2, 
-                    pGithub_repos_owner=>:B3, 
-                    pGithub_repos=>:B4,
-                    pPassword=>:B5,
-                    pEmail=>:B6,
-                    pWorkspace=>:B7,
-                    pSchema=>:B8); END;}' 
-                USING l_restore_files, C.github_token, C.github_repos_owner, C.github_repos, pPassword, C.email, C.workspace_name, sys_context('userenv','current_schema');
-        END LOOP;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm);
-                RAISE;
-    END;
-
-    /*
-    ** Generate random 16 character password string. Used in order to create encrypted schema export dumpfile
-    */
-    FUNCTION generate_password(
-        no_of_digits             in number DEFAULT 5,
-        no_of_special_characters in number DEFAULT 3,
-        no_of_lower              in number DEFAULT 4,
-        no_of_upper              in number DEFAULT 4
-        ) return varchar2
-    IS
-        password VARCHAR2(4000);
-        digits   CONSTANT VARCHAR2(10) := '0123456789';
-        lower    CONSTANT VARCHAR2(26) := 'abcdefghijklmnopqrstuvwxyz';
-        upper    CONSTANT VARCHAR2(26) := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        special  CONSTANT VARCHAR2(30) := '!"£$%^*()-_=+{}[]<>,\|/?;:@#';
-    BEGIN
-        SELECT LISTAGG(letter, NULL) WITHIN GROUP (ORDER BY DBMS_RANDOM.VALUE)
-        INTO   password
-        FROM   (
-        SELECT SUBSTR(
-                 digits,
-                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(digits) + 1)),
-                 1
-               ) AS letter
-        FROM   DUAL
-        CONNECT BY LEVEL <= no_of_digits
-        UNION ALL
-        SELECT SUBSTR(
-                 lower,
-                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(lower) + 1)),
-                 1
-               ) AS letter
-        FROM   DUAL
-        CONNECT BY LEVEL <= no_of_lower
-        UNION ALL
-        SELECT SUBSTR(
-                 upper,
-                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(upper) + 1)),
-                 1
-               ) AS letter
-        FROM   DUAL
-        CONNECT BY LEVEL <= no_of_upper
-        UNION ALL
-        SELECT SUBSTR(
-                 special,
-                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(special) + 1)),
-                 1
-               ) AS letter
-        FROM   DUAL
-        CONNECT BY LEVEL <= no_of_special_characters
-        );
-
-        RETURN password;
-    END;    
-
-    /*
-    **  Daily job run by dbms_scheduler
-    */
-    PROCEDURE daily_job IS 
-        l_github_token users.github_token%type; 
-        l_github_repos_owner users.github_repos_owner%type;
-        l_github_repos users.github_repos%type;
-        l_email users.email%type;
-        l_email_sender users.email%type;
-        l_password VARCHAR2(20);
-        l_github_filename VARCHAR2(100);
-        l_workspace_name apex_workspace_developers.workspace_name%type;
-        l_restore_files VARCHAR2(4000);
-    BEGIN
-        /*
-        ** 1. Get Cloudinary usage for all subscribers 
-        */
-        getUsage;
-
-        /*
-        **  2. Backup to Github
-        **     Github token and repository details are maintained in USERS table
-        **     Email address of Apex Admin user must match for this to work
-        **     Complex password auto-generated to encrypt schema export dump file
-        */
-
-        SELECT github_token, github_repos_owner, github_repos, u.email, w.workspace_name 
-          INTO l_github_token, l_github_repos_owner, l_github_repos, l_email, l_workspace_name
-          FROM users u, apex_workspace_developers w 
-         WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
-           AND w.is_admin='Yes'
-           AND w.email=u.email;
-
-        SELECT email 
-          INTO l_email_sender
-          FROM users 
-         WHERE approved_sender_ind='Y';
-
-        l_password:=generate_password();
-        pck_backup.github_backup(l_github_token, l_github_repos_owner, l_github_repos, l_email_sender, l_email, l_password, l_restore_files);
-
-        /*
-        **  3. Restore from Github into Restore database, where a workspace with same name as current schema must exist.
-        **     We use dynamic sql for this so that this package compiles after being restored - nb: DB LINKs are not included in any schema export
-        **     To avoid ORA-02074 we submit job on restore database remotely using database link
-        **     "l_restore_files" is separated list of github file names to be restored
-        */
-
-        log('About to submit job on restore server to import Github backup files - ' || l_restore_files);
-        EXECUTE IMMEDIATE q'{
-            BEGIN pck_restore.submit_job@RESTORE_LINK(
-                pGithub_files=>:B1, 
-                pGithub_token=>:B2, 
-                pGithub_repos_owner=>:B3, 
-                pGithub_repos=>:B4,
-                pPassword=>:B5,
-                pEmailSender=>:B6,
-                pEmail=>:B7,
-                pWorkspace=>:B8,
-                pSchema=>:B9); END;}' USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email_sender, l_email, l_workspace_name,sys_context('userenv','current_schema');
-
-        INSERT INTO metrics (id,log_date,nb_assets,bytes,nb_articles,word_count,total_credits,credits_remaining,total_used,max_size)
-        WITH metrics AS 
-            (
-                SELECT nb_assets, bytes, nb_articles, word_count  
-                  FROM (SELECT COUNT(*) nb_assets, SUM(bytes) bytes FROM asset), (SELECT COUNT(*) nb_articles, SUM(word_count) word_count FROM article)
-            ),
-            credits AS
-            (
-                SELECT SUM(credits_limit) total_credits, SUM(credits_limit - (credits_limit*(used_percent/100))) credits_remaining
-                FROM usage 
-                WHERE usage_date=(SELECT MAX(usage_date) FROM usage)
-            ),
-            db1 AS
-            (
-                SELECT total_used_adb1+total_used_adb2 total_used FROM (SELECT SUM(bytes) total_used_adb1 FROM dba_segments WHERE tablespace_name<>'SAMPLESCHEMA'), (SELECT SUM(bytes) total_used_adb2 FROM dba_segments@restore_link WHERE tablespace_name<>'SAMPLESCHEMA')
-            ),
-            db2 AS
-            (
-                SELECT max_size_adb1+max_size_adb2 max_size FROM (SELECT max_size max_size_adb1 FROM v$pdbs), (SELECT max_size max_size_adb2 FROM v$pdbs@restore_link)
-            )            
-        SELECT SEQ_METRICS.nextval as id, current_timestamp as log_date, met.nb_assets, met.bytes, met.nb_articles, met.word_count, cr.total_credits, cr.credits_remaining, db1.total_used, db2.max_size
-          FROM metrics met, credits cr, db1, db2;
-
-        COMMIT;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm);
-                RAISE;
-    END;
-
-
-    PROCEDURE getApexSession(pAppId IN OUT NUMBER, pSessionId IN OUT NUMBER, pPageId IN OUT NUMBER) IS
-        l_parts apex_t_varchar2;
-    BEGIN
-        l_parts:=apex_string.split(OWA_UTIL.get_cgi_env('Apex-Session'),',');
-        pAppId:=l_parts(1);
-        pSessionId:=l_parts(2);
-        pPageId:=l_parts(3);
-    END;
-
-    /*
-    ** Return id of authenticated user for the session as 
-    */
-    FUNCTION getUserId(pSaveCookie BOOLEAN DEFAULT FALSE) RETURN users.id%type IS
-        l_names owa_cookie.vc_arr;
-        l_vals owa_cookie.vc_arr;
-        l_num_vals INTEGER;
-
-        l_app_id NUMBER;
-        l_session_id users.apex_session_id%type;
-        l_page_id NUMBER;
-        l_apex_cookie_value users.apex_cookie_value%type;
-        l_user_id users.id%type;
-    BEGIN
-        l_user_id:=NULL;
-
-        getApexSession(l_app_id, l_session_id, l_page_id);
-
-        FOR C IN (
-            SELECT u.id, apex_cookie_value
-              FROM apex_workspace_sessions s, users u
-             WHERE s.apex_session_id=l_session_id
-               AND s.user_name=u.email )
-        LOOP
-            /* We have an authenticated session */
-            l_user_id:=C.id;
-
-            /* Additional check that session cookie is valid */
-            owa_cookie.get_all(names => l_names, vals => l_vals, num_vals => l_num_vals);
-            FOR i IN 1..l_names.COUNT LOOP
-                IF (l_names(i)='ORA_WWV_APP_' || l_app_id) THEN
-                    IF (pSaveCookie) THEN
-                        UPDATE users SET apex_cookie_value=l_vals(i) WHERE id=l_user_id;
-                    ELSIF (C.apex_cookie_value<>l_vals(i)) THEN
-                        RAISE_APPLICATION_ERROR(-20000,'SESSION COOKIE VALUE HAS CHANGED');
-                    END IF;
-                END IF;
-            END LOOP;            
-        END LOOP;
-
-        IF (l_user_id IS NULL AND l_page_id=2) THEN
-            RAISE_APPLICATION_ERROR(-20000,'YOUR SESSION HAS EXPIRED');
-        END IF;
-
-        RETURN (l_user_id);
-    END;
-
-    /*
-    ** Return RESTful API url
-    */
-    FUNCTION getRestUrl RETURN VARCHAR2 IS
-        l_rest_url VARCHAR2(200);
-    BEGIN
-        SELECT apex_util.host_url() || '/ords/' || s.pattern || m.uri_prefix
-          INTO l_rest_url
-          FROM user_ords_schemas s, user_ords_modules m
-         WHERE s.parsing_schema=sys_context('userenv','current_schema')
-           AND m.name='public';
-
-        RETURN (l_rest_url);
-    END;
-
-    /*
-    ** Build and deploy infrastructure through Terraform by submitting Github action. 
-    ** Do this once and each time we recycle the public key that is used to sign a website's contact email
-    */    
-    PROCEDURE deployInfrastructure IS
-        l_clob CLOB;
-        l_admin_user_id users.id%type;
-        l_json JSON_OBJECT_T;
-        l_action JSON_OBJECT_T;
-    BEGIN
-
-        /* Get the admin user with Github token and the public key required to verify signed contact email addresses */
-        SELECT id INTO l_admin_user_id 
-          FROM users 
-         WHERE github_repos_owner IS NOT NULL 
-           AND github_token IS NOT NULL;
-
-
-        FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, t.token,
-                         replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(t.public_key))),chr(13)||chr(10),null) public_key
-                    FROM users u, terraform t
-                   WHERE u.id=l_admin_user_id) 
-        LOOP
-            apex_web_service.g_request_headers(1).name := 'Accept';
-            apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
-            apex_web_service.g_request_headers(2).name := 'Authorization';
-            apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
-            apex_web_service.g_request_headers(3).name := 'User-Agent';
-            apex_web_service.g_request_headers(3).value := C.github_repos_owner;
-
-            /* trigger the deployment using Githib actions */          
-            l_json:=new JSON_OBJECT_T;
-            l_json.put('event_type', 'trigger_build_infra');
-
-            l_action:=new JSON_OBJECT_T;
-            l_action.put('from_email', 'funnyface@markrussellbrown.com');
-            l_action.put('public_key', C.public_key);
-            l_action.put('terraform_token', C.token);
-            l_json.put('client_payload', l_action);
-
-            log('deployInfrastructure - JSON for dispatching Github Action:'||l_json.stringify);
-
-            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_json.stringify);
-        END LOOP;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm);
-                RAISE;
-    END;    
-
-    /*
-    ** Build and deploy website to Netlify by submitting Github action
-    */    
-    PROCEDURE deployWebsite(pWebsiteId IN website.id%type) IS
-        l_clob CLOB;
-        l_website_user_id website.user_id%type;
-        l_admin_user_id users.id%type;
-        l_repo_id INTEGER;
-        l_deploy_key_id VARCHAR2(40);
-        l_json JSON_OBJECT_T;
-        l_repo JSON_OBJECT_T;
-        l_action JSON_OBJECT_T;
-        l_site clob;
-    BEGIN
-        /* get authenticated user that owns website to be deployed */
-        l_website_user_id:=getUserId();
-
-        /* Get the admin user with Netlify and Github tokens as well as private key required to sign the contact_email for the website */
-        SELECT id INTO l_admin_user_id 
-          FROM users 
-         WHERE github_repos_owner IS NOT NULL 
-           AND github_token IS NOT NULL 
-           AND netlify_token IS NOT NULL 
-           AND netlify_installation_id IS NOT NULL;
-
-        DELETE website_deploy WHERE website_id=pWebsiteId;
-        logDeployment('{"status":"Starting Deployment"}',pWebsiteId);
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('status', 'Starting Deployment');
-        apex_json.close_object;
-
-        FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, u.netlify_token, u.netlify_installation_id, 
-                         w.domain_name, w.template, w.netlify_site_id, w.contact_email
-                    FROM users u, website w
-                   WHERE u.id=l_admin_user_id
-                     AND w.id=pWebsiteId
-                     AND w.user_id=l_website_user_id) 
-        LOOP
-            /*
-            ** 1. Create Netlify Site with deployment id if not already exists
-            ** 2. Trigger Github action build
-            */
-
-            IF (C.netlify_site_id IS NULL) THEN
-
-                logDeployment('{"status":"Creating Netlify website"}',pWebsiteId);
-                /* get id of the common DEPLOY repository */
-                apex_web_service.g_request_headers(1).name := 'Accept';
-                apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
-                apex_web_service.g_request_headers(2).name := 'Authorization';
-                apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
-                apex_web_service.g_request_headers(3).name := 'User-Agent';
-                apex_web_service.g_request_headers(3).value := C.github_repos_owner;
-
-                l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo ,p_http_method=>'GET');
-                FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
-                    l_repo_id:=C1.id;
-                END LOOP;
-
-                /* Setup connect to Netlify */
-                apex_web_service.clear_request_headers;
-
-                apex_web_service.g_request_headers(1).name := 'Authorization';
-                apex_web_service.g_request_headers(1).value := 'Bearer ' || C.netlify_token;   
-                apex_web_service.g_request_headers(2).name := 'Content-Type';
-                apex_web_service.g_request_headers(2).value := 'application/json';
-
-                /* get netlify deploy id */
-                l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/deploy_keys',p_http_method=>'POST');
-                FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
-                    l_deploy_key_id:=C1.id;
-                END LOOP;
-
-                /* create JSON payload for new Netlify site */
-                l_json:=new JSON_OBJECT_T;
-                l_json.put('name', C.domain_name);
-
-                l_repo:=new JSON_OBJECT_T;
-                l_repo.put('provider', 'github');
-                l_repo.put('repo_type', 'git');
-                l_repo.put('repo_id', l_repo_id);
-                l_repo.put('repo', C.deploy_repo);
-                l_repo.put('repo_branch', 'main');
-                l_repo.put('private', FALSE);
-                l_repo.put('deploy_key_id', l_deploy_key_id);
-                l_repo.put('installation_id', C.netlify_installation_id);
-                l_repo.put('base', C.domain_name);   
-                l_json.put('repo', l_repo);
-
-                /* Create Netlify site and store the site_id in website table */
-                l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites', p_http_method=>'POST', p_body=>l_json.stringify);
-                log('Response from POST api.netlify.com/api/v1/sites:'||TO_CHAR(l_clob));
-                FOR C1 IN (SELECT site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id))) LOOP
-                    UPDATE website 
-                       SET netlify_site_id = C1.site_id, 
-                           netlify_deploy_id =  l_deploy_key_id
-                     WHERE id=pWebsiteId;
-                END LOOP;
-                logDeployment('{"status":"Netlify website created and linked to github"}',pWebsiteId);
-            END IF;
-
-            /* trigger the deployment by dispatching Github action */          
-            l_json:=new JSON_OBJECT_T;
-            l_json.put('event_type', 'trigger_build');
-
-            l_action:=new JSON_OBJECT_T;
-            l_action.put('build_path', C.domain_name);
-            l_action.put('template', C.template);
-            l_action.put('fetch_url', getRestUrl() || 'content/' || pWebsiteId);  
-            l_action.put('log_url', getRestUrl() || 'deploy-status/' || pWebsiteId);
-            l_json.put('client_payload', l_action);
-
-            apex_web_service.clear_request_headers;
-            apex_web_service.g_request_headers(1).name := 'Accept';
-            apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
-            apex_web_service.g_request_headers(2).name := 'Authorization';
-            apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
-            apex_web_service.g_request_headers(3).name := 'User-Agent';
-            apex_web_service.g_request_headers(3).value := C.github_repos_owner;
-
-            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_json.stringify);
-        END LOOP;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-    END;
-
-    /*
-     **  Insert row in website_deploy logging table
-     **  1) Invoked via curl from Github Action
-     **  2) called internally within this package to log Netlify actions
-     */      
-    PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type) IS 
-        l_exitcode PLS_INTEGER;
-        l_status website_deploy.status%type;
-    BEGIN
-        SELECT status 
-          INTO l_status
-          FROM JSON_TABLE(pBodyText, '$' COLUMNS (status));
-
-        l_exitcode:=owa_util.get_cgi_env('QUERY_STRING');
-
-        IF (l_exitcode IS NOT NULL) THEN
-            IF (l_exitcode=0) THEN
-                l_status:=l_status || ' - OK';
-            ELSE
-                l_status:=l_status || ' - NOK';
-            END IF;
-        END IF;
-
-        INSERT INTO website_deploy(id, website_id, status) VALUES (seq_log.nextval, pWebsiteId, l_status );
-        COMMIT;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm);
-    END;    
-
-
-    /*
-     **  Get deployment status from website_deploy logging table
-     */      
-    PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type) IS 
-        l_status CLOB;
-        l_clob CLOB;
-        l_ssl_url VARCHAR2(100);
-        l_deployment_complete BOOLEAN:=FALSE;
-        l_netlify_status website_deploy.status%type;
-    BEGIN
-        /* If github action completed get latest Netlify deployment status and add this to the website_deploy table */
-
-        FOR C IN (SELECT u.netlify_token, w.netlify_site_id, w.netlify_deploy_id, wd.log_time
-                    FROM users u, website w, website_deploy wd
-                   WHERE w.id=pWebsiteId 
-                     AND wd.website_id=w.id
-                     AND wd.status='Github action completed - OK'
-                     AND u.netlify_token IS NOT NULL) 
-        LOOP
-            apex_web_service.clear_request_headers;
-            apex_web_service.g_request_headers(1).name := 'Authorization';
-            apex_web_service.g_request_headers(1).value := 'Bearer ' || C.netlify_token;   
-            apex_web_service.g_request_headers(2).name := 'Content-Type';
-            apex_web_service.g_request_headers(2).value := 'application/json';
-
-            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites/' || C.netlify_site_id || '/deploys', p_http_method=>'GET');
-            FOR C1 IN (SELECT state, ssl_url, error_message, created_at
-                         FROM JSON_TABLE(l_clob, '$[0]' COLUMNS (state, ssl_url, created_at, error_message))) 
-            LOOP
-                IF (to_timestamp(C1.created_at,'yyyy-mm-dd"T"hh24:mi:ss.ff3"Z"') >= C.log_time) THEN
-                    IF (C1.state='ready') THEN
-                        l_deployment_complete:=TRUE;
-                        l_ssl_url:=C1.ssl_url;
-                    END IF;
-                    l_netlify_status:='Netlify ' || C1.state || ' - ' || CASE WHEN C1.error_message IS NULL THEN 'OK' ELSE 'NOK' END;
-                    DELETE website_deploy WHERE website_id=pWebsiteId AND status=l_netlify_status;
-                    logDeployment('{"status":"' || l_netlify_status || '"}',pWebsiteId);
-                END IF;
-            END LOOP;
-        END LOOP;
-
-        /* return list of all deployment status to client */
-        FOR C IN (SELECT id, status, ROUND((next_log_time - log_time)*86400) ela_sec
-                    FROM 
-                        (
-                         SELECT id, status, log_time, NVL(LEAD(log_time) OVER (ORDER BY id),current_date) next_log_time
-                           FROM website_deploy 
-                          WHERE website_id=pWebsiteId
-                        )
-                   ORDER BY id) 
-        LOOP
-            l_status:=l_status || TO_CLOB('<span>' || C.status || ' - ' || C.ela_sec || ' seconds</span><br>');
-            IF (SUBSTR(C.status,-3)='NOK') THEN
-                l_deployment_complete:=TRUE;
-                EXIT;
-            END IF;
-        END LOOP;
-
-        IF (l_ssl_url IS NOT NULL) THEN
-            l_status:=l_status || TO_CLOB('<a target="_blank" href="' || l_ssl_url || '">' || l_ssl_url || '<a>');
-        END IF;
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('completed', l_deployment_complete);
-        apex_json.write('status', l_status);
-        apex_json.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-    END;  
-
 
     PROCEDURE getCldDetails(pArticleId IN article.id%type) IS
         l_user_id users.id%type;
@@ -661,7 +56,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_video_max_size usage.video_max_size%type;
         l_cldapikey VARCHAR2(1);
     BEGIN      
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         /* get Cloudinary details either of logged on user of the hosting user */
         BEGIN
@@ -704,7 +99,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     PROCEDURE getCldSignature(pParamsToSign IN CLOB) IS
@@ -712,7 +107,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_user_id users.id%type;
         l_string_to_sign varchar2(2000):=NULL; 
     BEGIN
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         SELECT NVL2(filename_override,'filename_override='||filename_override||'&',NULL) ||
                NVL2(headers,'headers='||headers||'&',NULL) ||
@@ -739,7 +134,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     /*
@@ -751,7 +146,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_maxtouchpoints NUMBER;
         l_user_id users.id%type;
     BEGIN
-        l_user_id:=getUserId(pSaveCookie=>TRUE);
+        l_user_id:=pck_core.getUserId(pSaveCookie=>TRUE);
 
         IF (l_user_id IS NOT NULL) THEN
             SELECT timezone, maxtouchpoints
@@ -766,657 +161,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
-    /*
-     **  Format timestamp according to user's current time zone
-     */
-    FUNCTION fmtUpdatedDate(pTimestamp IN article.updated_date%type) RETURN VARCHAR2
-    IS
-        l_timezone users.client_tz%type:=apex_util.get_session_state('APP_CLIENT_TZ');
-    BEGIN
-        IF (l_timezone IS NOT NULL) THEN
-            RETURN ( TO_CHAR(pTimestamp AT TIME ZONE l_timezone, 'dd Mon yyyy fmhh:fmmi PM') );
-        ELSE
-            RETURN ( TO_CHAR(pTimestamp, 'dd Mon yyyy'));
-        END IF;
-    END;
-
-    FUNCTION getMediaType(pResourceType IN VARCHAR2, pFormat IN VARCHAR2) RETURN VARCHAR2 
-    IS
-    BEGIN
-        IF (pResourceType='image') THEN
-            RETURN ('image');
-        ELSIF (pResourceType='video' AND pFormat IN ('mp4')) THEN
-            RETURN ('video');
-        ELSIF (pResourceType='video' AND pFormat IN ('m4a','wav')) THEN
-            RETURN('audio');
-        ELSE
-            RETURN (NULL);
-        END IF;
-    END;
-
-    /*
-     **  Format Cloudinary URL
-     */    
-    FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2 
-    IS
-        l_url VARCHAR2(500);
-        l_media_type VARCHAR(5);
-
-        FUNCTION getWidth RETURN VARCHAR2 IS
-            l_left PLS_INTEGER:=1;
-            l_right PLS_INTEGER:=3;
-            TYPE t_arr IS VARRAY(3) OF INTEGER;
-            l_arr t_arr:=t_arr(1,2,3);
-            l_width INTEGER:=pWidth; 
-        BEGIN
-            IF (pWidth=0) THEN
-                RETURN NULL;
-            END IF;
-            IF (pDimension IS NOT NULL) THEN
-                IF (pDimension=1) THEN
-                    RETURN NULL;
-                ELSE
-                    RETURN ',w_' || ROUND(pWidth*pDimension);
-                END IF;
-            END IF;
-            l_arr(1):=pWidth*.25;
-            l_arr(2):=pWidth*.625;
-            l_arr(3):=pWidth;
-            l_left:=1;
-            l_right:=3;
-            WHILE (l_left<l_right) LOOP
-                IF (ABS(l_arr(l_left)-gWidthThumbnail) <= ABS(l_arr(l_right)-gWidthThumbnail)) THEN
-                    l_right:=l_right-1;
-                ELSE
-                    l_left:=l_left+1;
-                END IF;
-            END LOOP;
-            IF (l_arr(l_left)=pWidth) THEN
-                RETURN NULL;
-            END IF;
-            RETURN ',w_' || ROUND(l_arr(l_left));
-        END;
-    BEGIN
-        /* 
-         ** Return best-fit thumbnail url of Cloudinary asset
-         */
-        IF (pResourceType IS NOT NULL) THEN
-            l_media_type:=getMediaType(pResourceType, pFormat);
-            l_url:='https://res.cloudinary.com/' || pCloudname ||
-                    CASE l_media_type
-                        WHEN 'image' THEN '/q_auto,f_auto' || getwidth() || '/' || pPublicId
-                        WHEN 'video' THEN '/video/upload/q_auto,f_auto' || getwidth() || '/' || pPublicId || '.jpg' -- video poster
-                        WHEN 'audio' THEN '/video/upload/q_auto,f_auto,w_' || gWidthThumbnail || '/fl_waveform' || '/' || pPublicId || '.png'  --audio waveform
-                    END;
-        END IF;        
-        RETURN (l_url);
-    END;
-
-    /*
-     **  Respond to user clicking "Save & Exit" in Rich Text Editor.
-     **  Parse text and extract title and excerpt for the artile.
-     **  Convert markdown to html and save in article row.
-     */
-     /*
-    PROCEDURE saveArticle 
-    IS
-        l_article_id    article.id%type:=apex_application.g_x01;
-        title_len       PLS_INTEGER;
-        excerpt_len     PLS_INTEGER;
-        l_word_count    article.word_count%type;
-        l_updated_date  article.updated_date%type;
-        l_body_html     CLOB;
-        l_plain_text    CLOB;
-        l_instr         PLS_INTEGER;
-        l_null          VARCHAR2(1);
-        l_title         VARCHAR2(61);
-        l_title_more    VARCHAR2(3);
-        l_excerpt       VARCHAR2(161);
-        l_excerpt_more  VARCHAR2(3);
-        l_excerpt_words VARCHAR2(15);
-        --l_extra_link_attributes apex_t_varchar2('target', '_blank');
-
-        PROCEDURE split2(pInput IN VARCHAR2, pMaxLen1 IN INTEGER, pOutput1 IN OUT VARCHAR2, pMore1 IN OUT VARCHAR2, 
-                                             pMaxLen2 IN INTEGER, pOutput2 IN OUT VARCHAR2, pMore2 IN OUT VARCHAR2) IS
-            l_words     apex_t_varchar2;
-            rem         PLS_INTEGER;
-            l_start2    PLS_INTEGER;
-        BEGIN
-            l_words:=apex_string.split(REPLACE(pInput,CHR(10),' '),' ');
-            --log(apex_string.join(l_words,':'));
-            FOR i IN 1..l_words.COUNT LOOP
-                IF (l_words(i) IS NULL) THEN
-                    CONTINUE;
-                END IF;
-                rem:=pMaxLen1 - NVL(LENGTHB(pOutput1),0);
-                IF (LENGTHB(l_words(i)) <= rem) THEN
-                    pOutput1:=pOutput1 || l_words(i) || ' ';
-                ELSE
-                    pOutput1:=RTRIM(pOutput1);
-                    pMore1:='...';
-                    l_start2:=i;
-                    EXIT;
-                END IF;
-            END LOOP;
-
-            IF (pMaxLen2=0) THEN RETURN; END IF;
-
-
-            FOR i IN l_start2..l_words.COUNT LOOP
-                IF (l_words(i) IS NULL) THEN
-                    CONTINUE;
-                END IF;
-                rem:=pMaxLen2 - NVL(LENGTHB(pOutput2),0);
-                IF (LENGTHB(l_words(i)) <= rem) THEN
-                    pOutput2:=pOutput2 || l_words(i) || ' ';
-                ELSE
-                    pOutput2:=RTRIM(pOutput2);
-                    pMore2:='...';
-                    EXIT;
-                END IF;
-            END LOOP;        
-        END;
-
-    BEGIN
-        SELECT MAX(DECODE(column_name,'TITLE',data_length)), MAX(DECODE(column_name,'EXCERPT',data_length))
-        INTO title_len, excerpt_len
-        FROM user_tab_columns 
-        WHERE table_name='ARTICLE';
-
-        FOR C IN (SELECT dbms_lob.getlength(body) len, body
-                    FROM article 
-                   WHERE id=l_article_id) 
-        LOOP
-            l_body_html := APEX_MARKDOWN.TO_HTML (p_markdown => C.body, p_embedded_html_mode => APEX_MARKDOWN.c_embedded_html_preserve, p_extra_link_attributes => apex_t_varchar2('target', '_blank')); -- escapes special characters while preserving embedded html
-            apex_escape.set_html_escaping_mode('E');
-            l_plain_text:=dbms_lob.substr(utl_i18n.unescape_reference(APEX_ESCAPE.STRIPHTML(l_body_html)),title_len+excerpt_len+20,1); -- strip html to plain text, removing any XSS embedded in <script></noscript>
-            l_plain_text:=APEX_ESCAPE.STRIPHTML(l_plain_text);
-            IF (l_plain_text IS NULL) THEN
-                EXIT;
-            END IF;
-            l_instr:=INSTR(l_plain_text,CHR(10));
-            IF (l_instr<=title_len AND l_instr>0) THEN
-                l_title:=SUBSTR(l_plain_text,1,l_instr-1);
-                split2(SUBSTR(l_plain_text,l_instr+1),excerpt_len,l_excerpt,l_excerpt_more,0,l_null,l_null);
-            ELSE
-                split2(l_plain_text,title_len,l_title,l_title_more,excerpt_len,l_excerpt,l_excerpt_more);
-            END IF;
-        END LOOP;
-
-        UPDATE article SET title=l_title, title_more=l_title_more, excerpt=l_excerpt, excerpt_more=l_excerpt_more, body_html=l_body_html 
-         WHERE id=l_article_id 
-         RETURNING word_count, updated_date INTO l_word_count, l_updated_date;
-
-        IF (l_word_count>0 AND l_excerpt IS NOT NULL) THEN
-            l_excerpt_words:=' ' || l_word_count || ' word' || CASE WHEN l_word_count>1 THEN 's' END;
-        END IF;
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('words', l_excerpt_words);
-        apex_json.write('title', l_title);
-        apex_json.write('excerpt', l_excerpt || l_excerpt_more);
-        apex_json.write('updated', fmtUpdatedDate(l_updated_date)); 
-        apex_json.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-    END;
-    */
-
-    /*
-    ** Logout authenticated session
-    */
-    PROCEDURE signout IS
-        l_app_id NUMBER;
-        l_session_id NUMBER;
-        l_page_id NUMBER;
-    BEGIN
-        getApexSession(l_app_id, l_session_id, l_page_id);
-
-        apex_session.delete_session(p_session_id=>l_session_id);
-        /*
-        owa_cookie.send(
-            name => 'ORA_WWV_APP_101',
-            value => null,
-            expires => sysdate -1, 
-            path =>'ords' );
-        */
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-    END;
-
-    FUNCTION buildArticle(pAppPageNo IN NUMBER, 
-                            pId IN article.id%type, 
-                            pNbAssets IN article.nb_assets%type, 
-                            pIsPublic IN article.is_public%type, 
-                            pTitle IN article.title%type, 
-                            pExcerpt IN article.excerpt%type, 
-                            pWordCount IN VARCHAR2, 
-                            pUpdatedDate IN article.updated_date%type,
-                            pCloudinaryUrl IN VARCHAR2, 
-                            pName IN users.name%type) RETURN VARCHAR2 
-   IS
-        l_element LONG;
-    BEGIN
-        l_element:=
-        '<li class="card" tabindex="0" data-id="' || pId || '">
-            <div class="button-container">
-                <button type="button" class="fa show-gallery"' || CASE WHEN pNbAssets=0 THEN ' disabled' END || '>&blacktriangleright;' || 
-                                                                  CASE WHEN pNbAssets=0 THEN '0' ELSE '1' END || '/' || pNbAssets || '</button>' ||
-                CASE WHEN pAppPageNo=2 THEN
-                '<div class="dropdown">
-                  <button type="button" class="fa fa-caret-down show-dropdown">&blacktriangledown;</button>
-                  <ul class="dropdown-items">
-                    <li><button type="button" class="fa fa-cloud-upload upload-media">Upload</button></li>
-                    <li><button type="button" class="fa fa-edit edit-text">Edit</button></li>
-                    <li><button type="button" class="fa fa-newspaper-o preview"' || CASE WHEN pId<0 OR COALESCE(pTitle,pExcerpt) IS NULL THEN ' disabled' END || '>Preview</button></li>' ||
-                    CASE 
-                      WHEN pIsPublic='Y' THEN 
-                        '<li><button type="button" class="fa fa-share2 unpublish">Unpublish</button></li>'
-                      ELSE 
-                        '<li><button type="button" class="fa fa-share2 publish"' || CASE WHEN pId<0 THEN ' disabled' END || '>Publish</button></li>'
-                    END 
-                    || '
-                    <li><button type="button" class="fa fa-trash delete"' || CASE WHEN pId=1 THEN ' disabled' END || '>Delete</button></li>
-                    <li><button type="button" class="fa fa-id-card">' || pId || '</button></li>
-                </div>'
-                END ||'
-            </div>' ||
-            CASE WHEN pNbAssets=0 
-                THEN '<button type="button" class="no-media upload-media">UPLOAD MEDIA</button>' 
-                ELSE '<img class="show-gallery" src="' || pCloudinaryUrl || '">' 
-            END ||
-            CASE WHEN COALESCE(pTitle,pExcerpt) IS NULL 
-                THEN '<br>
-                      <button type="button" class="no-media edit-text">CREATE TEXT</button>'
-                ELSE '<h4 class="title ' || CASE WHEN pAppPageNo=2 THEN 'edit-text' ELSE 'preview' END || '">' || pTitle || '</h4>
-                      <p class="excerpt">' || pExcerpt || '<span class="word-count">' || pWordCount || '</span></p>'
-            END || '   
-            <footer class="button-container"><span>' || pName || '</span><span class="updated-date">' || fmtUpdatedDate(pUpdatedDate)  || '</span></footer>
-        </li>';
-
-        RETURN (l_element);
-    END;
-
-    FUNCTION buildTemplates RETURN VARCHAR2 IS
-        l_clob CLOB;
-        l_cluster CLOB;
-        l_url VARCHAR2(200);
-    BEGIN
-        FOR C IN (SELECT github_repos_owner, github_deploy_repos, github_token FROM github) LOOP
-            apex_web_service.g_request_headers(1).name := 'Accept';
-            apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
-            apex_web_service.g_request_headers(2).name := 'Authorization';
-            apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
-            apex_web_service.g_request_headers(3).name := 'User-Agent';
-            apex_web_service.g_request_headers(3).value := C.github_repos_owner;
-
-            l_url:='https://api.github.com/repos/'|| C.github_repos_owner || '/' || C.github_deploy_repos || '/contents/TEMPLATES';
-            l_clob := apex_web_service.make_rest_request(p_url=>l_url,p_http_method=>'GET');
-
-            FOR C1 IN (SELECT message FROM JSON_TABLE(l_clob, '$' COLUMNS (message))) LOOP
-                IF (C1.message IS NOT NULL) THEN
-                    RETURN('<p>ERROR calling ' || l_url || ' - ' || C1.message || '</p>');
-                END IF;
-            END LOOP;
-
-            FOR C1 IN (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name))) LOOP
-                l_cluster:=l_cluster || 
-                '<input type="radio" id="template-' || LOWER(C1.name) || '" name="template" value="' || C1.name || '"></input>
-                 <label for="template-' || LOWER(C1.name) || '">' || C1.name || '</label>';
-            END LOOP;
-        END LOOP;
-        RETURN (l_cluster);
-    END;
-
-    /*
-     **  Login page
-     */
-    FUNCTION buildLoginPage RETURN CLOB IS
-    BEGIN
-        FOR C IN (SELECT body_html FROM article WHERE id=1) 
-        LOOP
-            RETURN TO_CLOB('
-                <ul>
-                    <li class="red"></li>
-                    <li class="grey">
-                        <p>Login</p>
-                        <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_facebook_svg ||'</a>
-                        <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_google_svg ||'</a>
-                    </li>
-                    <li class="grey">' || pck_icons.g_oracle_svg || pck_icons.g_github_svg || '</li>
-                    <li class="grey">' || pck_icons.g_cloudinary_svg || pck_icons.g_netlify_svg || '</li>
-                    <li class="yellow">ALWAYS FREE</li>
-                    <li class="grey"></li>
-                    <li class="blue"></li>
-                    <li class="grey">
-                        <button type="button" data-id="19124" id="privacy-policy">' || pck_icons.g_privacy_svg ||'</button>
-                    </li>
-                    <li class="grey"></li>
-                </ul>');
-        END LOOP;
-    END;
-
-    /*
-     **  Build authenticated page
-     */
-    FUNCTION buildAuthPage RETURN CLOB IS
-        l_clob CLOB;
-        l_user_id users.id%type;
-        l_user_name users.name%type;
-        l_current_website website.id%type;    
-    BEGIN
-       SELECT id, name 
-          INTO l_user_id, l_user_name
-          FROM users
-         WHERE email=apex_application.g_user;
-
-        l_clob:=l_clob || TO_CLOB(
-            '<nav>
-                <button type="button" class="add-website">NEW WEBSITE</button>');
-
-
-        FOR C IN (SELECT id, domain_name, rn, nb 
-                    FROM
-                    ( SELECT id, domain_name, ROW_NUMBER() OVER (ORDER BY COALESCE(updated_date, created_date) DESC) rn, COUNT(*) OVER () nb
-                        FROM website
-                       WHERE user_id=l_user_id
-                    ) 
-                    ORDER BY rn)
-        LOOP
-            IF (C.rn=1) THEN
-                l_current_website:=C.id;
-                l_clob:=l_clob || TO_CLOB(
-                '<div class="dropdown">
-                    <button type="button" class="show-dropdown" disabled data-websiteid="' || C.id || '">' || C.domain_name || '</button>
-                    <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                    <ul class="dropdown-items">
-                        <li><button type="button" class="deploy-website" data-websiteid="' || C.id || '">DEPLOY WEBSITE</button></li>
-                        <li><button type="button" class="edit-website" data-websiteid="' || C.id || '">EDIT WEBSITE</button></li>
-                        <li><button type="button" class="delete-website" data-websiteid="' || C.id || '">DELETE WEBSITE</button></li>');
-            END IF;
-            IF (C.rn>1) THEN
-                l_clob:=l_clob || TO_CLOB(
-                        '<li><button type="button" class="edit-website" data-websiteid="' || C.id || '">' || C.domain_name || '</button></li>');
-            END IF;
-            IF (C.rn=C.nb) THEN
-                l_clob:=l_clob || TO_CLOB(
-                    '</ul>
-                </div>');
-            END IF;
-        END LOOP;
-
-        l_clob:=l_clob || TO_CLOB(
-                '<div class="dropdown">
-                    <button type="button" class="show-dropdown" disabled>' || apex_application.g_user || '</button>
-                    <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                    <ul class="dropdown-items">
-                        <li><button type="button" class="fa signout">Sign out</button></li>
-                        <li><button type="button" class="fa delete-me">Delete all content</button></li>
-                    </ul>
-                </div>
-             </nav>');
-
-        RETURN l_clob;
-    END;
-
-    /*
-     **  Unauthenticated user - login page
-     **
-     **  Authenticated user - websites and articles authored by user
-     */
-    FUNCTION getPageContent RETURN CLOB IS
-        l_clob CLOB;
-        l_css_file_urls APEX_APPLICATION_PAGES.css_file_urls%type;
-        l_javascript_file_urls APEX_APPLICATION_PAGES.javascript_file_urls%type;
-        l_user_id users.id%type;
-        l_user_name users.name%type;
-        l_current_website website.id%type;
-        l_page_css APEX_APPLICATION_STATIC_FILES.file_name%type;
-        l_page_js APEX_APPLICATION_STATIC_FILES.file_name%type;
-    BEGIN
-        SELECT NVL(css_file_urls,' '), NVL(javascript_file_urls,' ')
-          INTO l_css_file_urls, l_javascript_file_urls
-          FROM APEX_APPLICATION_PAGES 
-         WHERE application_id=apex_application.g_flow_id
-           AND page_id=apex_application.g_flow_step_id;
-
-        l_page_css:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.css';
-
-        IF (INSTR(l_css_file_urls,l_page_css)=0) THEN
-            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name=REPLACE(l_page_css,'.min')) LOOP
-                l_clob:=l_clob || chr(10) || '<style>' || apex_util.blob_to_clob(C.file_content) || '</style>';
-            END LOOP;
-        END IF;
-
-        CASE apex_application.g_flow_step_id
-            WHEN 1 THEN l_clob:=l_clob || buildLoginPage;
-            WHEN 2 THEN l_clob:=l_clob || buildAuthPage;
-        END CASE;
-
-        /*
-            l_clob:=l_clob || TO_CLOB('<ul class="cards" data-websiteid="' || l_current_website || '" role="list">');
-
-            IF (l_current_website IS NOT NULL) THEN
-                FOR C IN (
-                    SELECT a.id,
-                           a.is_public,
-                           c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
-                           c.alt_text,
-                           NVL2(a.nb_assets,1,0) first_asset,
-                           NVL(a.nb_assets,0) nb_assets,
-                           a.title, 
-                           a.excerpt,
-                           CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
-                           NVL(a.updated_date, a.created_date) updated_date
-                      FROM article a, asset c, website_article wa
-                     WHERE a.author_user_id=l_user_id
-                       AND a.cover_asset_id=c.id(+)
-                       AND a.id=wa.article_id
-                       AND wa.website_id=l_current_website
-                     UNION ALL
-                     SELECT -1, null, null, null, null,null,null,null,0,0,null,null,null,systimestamp from dual
-                     ORDER BY updated_date DESC) 
-                LOOP
-                    l_clob:=l_clob || TO_CLOB(
-                        buildArticle(
-                            apex_application.g_flow_step_id, 
-                            C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), l_user_name));
-                END LOOP;
-            ELSE
-                FOR C IN (
-                    SELECT a.id,
-                           a.is_public,
-                           c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
-                           c.alt_text,
-                           NVL2(a.nb_assets,1,0) first_asset,
-                           NVL(a.nb_assets,0) nb_assets,
-                           a.title, 
-                           a.excerpt,
-                           CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
-                           NVL(a.updated_date, a.created_date) updated_date
-                      FROM article a, asset c
-                     WHERE a.author_user_id=l_user_id
-                       AND a.cover_asset_id=c.id(+)
-                       AND NOT EXISTS (SELECT null FROM website_article WHERE article_id=a.id)
-                     UNION ALL
-                     SELECT -1, null, null, null, null,null,null,null,0,0,null,null,null,systimestamp from dual
-                     ORDER BY updated_date DESC) 
-                LOOP
-                    l_clob:=l_clob || TO_CLOB(
-                        buildArticle(
-                            apex_application.g_flow_step_id, 
-                            C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), l_user_name));
-                END LOOP;            
-
-        l_clob:=l_clob || TO_CLOB('</ul>');
-
-        l_clob:=l_clob || TO_CLOB(
-            '<dialog class="popup">
-                <div>
-                    <button type="button" class="close">&times;</button>
-                    <h2></h2>
-                    <p></p>
-                    <button type="button" class="confirm">CONFIRM</button>
-                </div>
-            </dialog>
-            <dialog class="website">
-                <div>
-                    <div></div> <!-- empty div for grid -->
-                    <form>
-                        <div>
-                            <label for="domain-name">Domain name</label>
-                            <input type="text" id="domain-name" maxlength="30" required style="inline-size:30ch"></input><span></span>
-                        </div>
-                        <div>
-                            <label for="contact-email">Contact Email Address</label>
-                            <input type="text" id="contact-email" maxlength="50" style="inline-size:50ch"></input><span></span>
-                        </div>
-                        <fieldset>
-                            <legend>Default Image Dimension</legend>
-                            <div class="cluster">
-                                <input type="radio" id="image-dimension-s" name="image-dimension" value="0.25" checked></input>
-                                <label for="image-dimension-s">Small</label>
-                                <input type="radio" id="image-dimension-m" name="image-dimension" value="0.625"></input>
-                                <label for="image-dimension-m">Medium</label>
-                                <input type="radio" id="image-dimension-l" name="image-dimension" value="1"></input>
-                                <label for="image-dimension-l">Large</label>
-                            </div>
-                        </fieldset>
-                        <fieldset>
-                            <legend>Website Template</legend>
-                            <div class="cluster">' || buildTemplates() || '
-                            </div>
-                        </fieldset>
-                        <input type="submit" value="APPLY CHANGES">
-                    </form>
-                    <button type="button" class="close">&times;</button>
-                </div>
-            </dialog>            
-            <dialog class="preview">
-                <div>
-                    <div></div> <!-- empty div for preview grid -->
-                    <div class="content ck-content"></div>
-                    <button type="button" class="close" autofocus>&times;</button>
-                </div>
-            </dialog>
-            <dialog class="editor">
-                <div>
-                    <div></div>
-                    <div>
-                        <div id="editor"></div>
-                        <div class="button-container">
-                            <div id="editor-status"></div>
-                            <div id="word-count"></div>
-                        </div>
-                    </div>
-                    <button type="button" class="close">&times;</button>
-                </div>
-            </dialog>            
-            <dialog class="gallery">
-                <div>
-                    <button type="button" class="close" autofocus>&times;</button>
-                    <nav>
-                        <div>
-                            <button type="button" class="thumbs-minus fa">&minus;</button>
-                            <button type="button" class="thumbs-plus fa">&plus;</button>
-                        </div>
-                        <button type="button" class="list-performance">PERFORMANCE</button>
-                    </nav>
-                    <div class="gallery-container" role="region" aria-label="gallery">
-                        <p class="instruction"></p>
-                        <ul></ul>
-                    </div>
-                    <div class="gallery-overlay">
-                        <img src="">
-                        <fieldset>
-                            <legend><span></span><button class="close-fieldset" type="button">&times;</button></legend>
-                            <button type="button" class="dimensions"></button>
-                            <button type="button" class="copy-url" disabled>&boxbox;</button>
-                            <button type="button" class="dimensions"></button>
-                            <button type="button" class="copy-url" disabled>&boxbox;</button>
-                            <button type="button" class="dimensions"></button>
-                            <button type="button" class="copy-url" disabled>&boxbox;</button>
-                        </fieldset>
-                        <span class="counter"></span>
-                        <button type="button" class="close-fullscreen">&times;</button>
-                        <button type="button" class="prev">&lt;</button>
-                        <button type="button" class="next">&gt;</button>
-                    </div>
-                </div>
-            </dialog>            
-            <dialog class="perftable">
-                <div>
-                    <button type="button" class="close">&times;</button>
-                    <div class="content"></div>
-                </div>
-            </dialog>
-            <dialog class="cldapikey">
-                <div>
-                    <button type="button" class="close">&times;</button>
-                    <p>Subscribe to a free <a href="https://cloudinary.com/users/register_free">Cloudinary plan</a> and enter your API key in the field below</p>
-                    <p>Alternatively click "Continue as guest" for limited access</p>
-                    <fieldset>
-                        <legend>Cloudinary API Environment variable</legend>
-                        <input type="text" id="cldapikey">
-                    </fieldset>
-                    <div class="button-container">
-                        <button type="button" class="save">Save Changes</button>
-                        <button type="button" class="guest">Continue as guest</button>
-                    </div>
-                </div>
-            </dialog> 
-            ');
-        */
-
-        l_clob:=l_clob || TO_CLOB('
-            <input type="hidden" name="p_flow_id" value="' || apex_application.g_flow_id ||'" id="pFlowId">
-            <input type="hidden" name="p_flow_step_id" value="' || apex_application.g_flow_step_id ||'" id="pFlowStepId">
-            <input type="hidden" name="p_instance" value="' || APEX_CUSTOM_AUTH.GET_SESSION_ID ||'" id="pInstance">');            
-
-        l_page_js:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.js';
-
-        IF (INSTR(l_javascript_file_urls,l_page_js)=0) THEN
-            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name=REPLACE(l_page_js,'.min')) LOOP
-                l_clob:=l_clob || chr(10) || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
-            END LOOP;
-        END IF;
-
-        l_clob:=l_clob || chr(10) || TO_CLOB('
-        <script>
-            gRestUrl = "' || getRestUrl() || '";');
-        IF (apex_application.g_flow_step_id=2) THEN
-            l_clob:=l_clob || chr(10) || TO_CLOB('
-            gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home";');
-        END IF;
-        l_clob:=l_clob || chr(10) || TO_CLOB('
-        </script>');
-
-        l_clob:=l_clob || TO_CLOB('
-            <script type="module">
-              import {onCLS, onFID, onLCP} from ''https://unpkg.com/web-vitals?module'';
-              onCLS(addToVitalsQueue);
-              onFID(addToVitalsQueue);
-              onLCP(addToVitalsQueue);
-            </script>');
-
-        RETURN (l_clob);
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm);
-                RAISE;
-    END;
 
     /*
     ** GET ARTICLE (PAGE) CONTENT FOR WEBSITE
@@ -1424,7 +171,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE getWebsite(pWebsiteId IN website.id%type) IS
         l_user_id users.id%type;
     BEGIN
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         apex_json.open_object;
 
@@ -1445,7 +192,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     /*
@@ -1456,7 +203,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_user_name users.name%type;
         l_clob CLOB;
     BEGIN
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
         SELECT name INTO l_user_name FROM users WHERE id=l_user_id;
 
         FOR C IN (
@@ -1478,10 +225,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
              ORDER BY display_order) 
         LOOP
             l_clob:=l_clob || TO_CLOB(
-                buildArticle(
-                    2, 
-                    C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width), 
-                    l_user_name));
+                pck_core.buildArticle(C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width)));
         END LOOP;
 
         apex_json.open_object; 
@@ -1491,7 +235,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+    END;
+
+    PROCEDURE getWebsiteList(pWebsiteId IN website.id%type) IS
+        l_clob CLOB;
+    BEGIN
+        FOR C IN (SELECT a.id,
+                   a.is_public,
+                   c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
+                   NVL(a.title, a.excerpt) article_text,
+                   wa.page_title,
+                   wa.page_description,
+                   wa.display_order display_order
+              FROM article a, website_article wa, asset c
+             WHERE wa.website_id=pWebsiteId
+               AND a.id=wa.article_id
+               AND a.cover_asset_id=c.id(+)
+             ORDER BY display_order)
+        LOOP
+            l_clob:=l_clob || TO_CLOB('
+            <tr data-id="' || C.id || '">
+                <td><img src="' || pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '"></td>
+                <td><textarea>' || C.page_title || '</textarea></td>
+                <td><textarea>' || C.page_description || '</textarea></td>
+            </tr>');
+        END LOOP;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('content', l_clob);
+        apex_json.close_object;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
 
@@ -1502,7 +280,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         FOR C IN (
             SELECT a.id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
-                   DECODE(a.width,0,gWidthThumbnail,a.width) width, DECODE(a.height,0,gWidthThumbnail,a.height) height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format,
+                   DECODE(a.width,0,pck_core.gWidthThumbnail,a.width) width, DECODE(a.height,0,pck_core.gWidthThumbnail,a.height) height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format,
                    COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY a.display_order) rn,
                    t.nb_assets, NVL(u.maxtouchpoints,0) maxtouchpoints
               FROM asset a, article t, users u
@@ -1535,8 +313,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                         </div>' END || '
                     </div>');
 
-            l_url_image:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
-            l_media_type:=getMediaType(C.resource_type, C.format);
+            l_url_image:=pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
+            l_media_type:=pck_core.getMediaType(C.resource_type, C.format);
 
             pContent:=pContent || TO_CLOB('<img data-dimensions="'  || 
                                             ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || 
@@ -1592,7 +370,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_instruction VARCHAR2(300);
         n PLS_INTEGER;
     BEGIN
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         getThumbnailContent(pArticleId, l_user_id, n, l_instruction, l_clob);
 
@@ -1600,12 +378,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('success', TRUE);
         apex_json.write('content', l_clob);
         apex_json.write('instruction', l_instruction);
-
         apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     /*
@@ -1624,7 +401,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         nb_assets PLS_INTEGER;
         n PLS_INTEGER;
     BEGIN
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         SELECT article_id, website_id
           INTO l_article_id, l_website_id
@@ -1668,14 +445,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             APEX_JSON.write('success', TRUE);
             APEX_JSON.write('articleId',l_article_id);
             APEX_JSON.write('nbAssets','&blacktriangleright;1/' || C.nb_assets);
-            APEX_JSON.write('imgurl',getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width));
-            APEX_JSON.write('updated', fmtUpdatedDate(l_updated_date));
+            APEX_JSON.write('imgurl',pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width));
+            APEX_JSON.write('updated', pck_core.fmtUpdatedDate(l_updated_date));
             APEX_JSON.close_object;
         END LOOP;
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;  
 
     /*
@@ -1722,7 +499,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     /*
@@ -1786,7 +563,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             IF (C.rn=1) THEN 
                 l_content:=l_content || to_clob(
                 '<td rowspan="' || C.nb_rows || '">
-                    <figure><img src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
+                    <figure><img src="' || pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
                         <figcaption><span class="label">File name: </span>' || SUBSTR(C.public_id,1,INSTR(C.public_id,'_',-1)-1) || '.' || C.format 
                             || '<br><span class="label">Original size: </span>' || apex_string_util.to_display_filesize(C.bytes) 
                             || '<br><span class="label">Width: </span>' || C.width || ' px'
@@ -1830,7 +607,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);        
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);        
     END;
 
     /*
@@ -1889,7 +666,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_clob := apex_web_service.make_rest_request(p_url=>l_terraform_url, p_http_method=>'GET');
                 FOR C1 IN (SELECT name, value FROM JSON_TABLE(l_clob, '$.data[*]' COLUMNS (name PATH '$.attributes.name', value PATH '$.attributes.value')))
                 LOOP
-                    log(C1.name || ':' || C1.value);
+                    pck_core.log(C1.name || ':' || C1.value);
                     IF (C1.name='invoke_url') THEN
                         l_invoke_url:=C1.value || '/';
                     END IF;
@@ -1979,8 +756,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     IF (C2.alt_text IS NOT NULL) THEN
                         l_asset_object.put('alt_text',C2.alt_text);
                     END IF;
-                    l_media_type:=getMediaType(C2.resource_type, C2.format);
-                    l_url_img:=getCloudinaryUrl(C2.cld_cloud_name, C2.resource_type, C2.public_id, C2.format, C2.width, C.image_dimension);
+                    l_media_type:=pck_core.getMediaType(C2.resource_type, C2.format);
+                    l_url_img:=pck_core.getCloudinaryUrl(C2.cld_cloud_name, C2.resource_type, C2.public_id, C2.format, C2.width, C.image_dimension);
                     l_asset_object.put('media',l_media_type);
                     l_asset_object.put('url',l_url_img);
                     l_asset_array.append(l_asset_object);
@@ -2003,7 +780,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END IF;
 
         EXCEPTION WHEN OTHERS THEN
-            log_error(sqlcode,sqlerrm); 
+            pck_core.log_error(sqlcode,sqlerrm); 
             owa_util.status_line(400, '', true);
             htp.p('{"sqlcode":'||sqlcode||',"sqlerrm":"'||sqlerrm||'"}');
     END;
@@ -2015,7 +792,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE getArticle(pArticleId IN article.id%type)  IS
         l_user_id users.id%type;
     BEGIN
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         FOR C IN (SELECT a.body_html, UPPER(u.name) name, apex_util.get_since(a.created_date) created, CASE WHEN a.word_count<200 THEN 'less than a minute' ELSE ROUND(a.word_count/200) || ' minute read' END minutes 
                     FROM article a, users u 
@@ -2033,7 +810,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm, pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm, pAjax=>TRUE);
     END;  
 
     /*
@@ -2045,7 +822,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_display_order website_article.display_order%type;
     BEGIN
 
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         INSERT INTO article (id, author_user_id, created_date) 
         SELECT seq_article.nextval, id, current_timestamp
@@ -2064,7 +841,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     /*
@@ -2082,7 +859,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_words apex_t_varchar2;
         l_rem PLS_INTEGER;
     BEGIN
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         SELECT SUBSTR(title,1,60) title, 
                REGEXP_SUBSTR(word_count,'(\d)+') word_count,
@@ -2129,7 +906,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     /*
@@ -2166,10 +943,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_website_id website_article.website_id%type;
         n PLS_INTEGER;
     BEGIN
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         FOR C IN (SELECT websiteid FROM JSON_TABLE(pBodyText, '$' COLUMNS (websiteid))) LOOP
-            log('C.websiteid:'||C.websiteid);
             l_website_id:=C.websiteid;
         END LOOP;
 
@@ -2195,7 +971,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             LOOP
                 l_url:='https://api.cloudinary.com/v1_1/' || C.cld_cloud_name || '/resources/' || C.resource_type || '/tags/' || pArticleId;
                 l_clob := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'DELETE',p_username=>C.cld_api_key,p_password=>C.cld_api_secret); 
-                log(l_clob);
             END LOOP;
         END IF;
 
@@ -2205,7 +980,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
 
@@ -2232,14 +1007,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
-        apex_json.write('updated', fmtUpdatedDate(current_timestamp)); 
+        apex_json.write('updated', pck_core.fmtUpdatedDate(current_timestamp)); 
         apex_json.write('alt_text_updated',l_alt_text_updated);
         apex_json.write('description_updated',l_description_updated);
         apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     /*
@@ -2263,7 +1038,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_updated_date VARCHAR2(20);
         l_user_id users.id%type;
     BEGIN
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         SELECT a.article_id, a.cld_cloud_name, a.public_id, u.cld_api_key, u.cld_api_secret
           INTO l_article_id, l_cld_cloud_name, l_public_id, l_cld_api_key, l_cld_api_secret
@@ -2299,7 +1074,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         SELECT error_message INTO l_error_message FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS error_message VARCHAR2(500) PATH '$.error.message');
 
         IF (l_error_message IS NOT NULL) THEN
-            log(l_clob);
+            pck_core.log(l_clob);
             RAISE_APPLICATION_ERROR(-20001, l_error_message);
         END IF;
 
@@ -2312,7 +1087,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('articleId', l_article_id);
-        apex_json.write('updated', fmtUpdatedDate(current_date));
+        apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
         apex_json.write('content', l_clob);
         apex_json.write('nb', l_nb_assets);
         apex_json.write('instruction', l_instruction);
@@ -2321,7 +1096,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     /*
@@ -2342,11 +1117,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         DELETE users WHERE id=pUserId;
 
-        log('Deleted ' || nb_articles || ' articles and ' || nb_assets || ' images/videos.');
+        pck_core.log('Deleted ' || nb_articles || ' articles and ' || nb_assets || ' images/videos.');
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm);
+                pck_core.log_error(sqlcode,sqlerrm);
                 RAISE;        
     END;
 
@@ -2357,7 +1132,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         n PLS_INTEGER;
         l_user_id users.id%type;
     BEGIN
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         /* Reject publication request if cover image does not have ALT description */
 
@@ -2378,13 +1153,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             UPDATE article SET is_public='Y', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_user_id;
         END IF;
 
-        apex_json.write('updated', fmtUpdatedDate(current_date));
+        apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
         apex_json.write('success', TRUE);
         apex_json.close_object;        
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
                 RAISE;
     END;
 
@@ -2394,7 +1169,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE unpublishArticle(pArticleId IN article.id%type) IS
         l_user_id users.id%type;
     BEGIN
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         UPDATE article SET is_public='N', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_user_id;
 
@@ -2404,7 +1179,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
                 RAISE;
     END;    
 
@@ -2433,7 +1208,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_na_number NUMBER;
         l_na_varchar VARCHAR2(500);
     BEGIN
-        l_user_id:=getUserId();
+        l_user_id:=pck_core.getUserId();
 
         SELECT dbid_string INTO l_dbid_string 
           FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (dbid_string));
@@ -2460,7 +1235,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
               INTO l_cld_cloud_name, l_resource_type, l_public_id, l_format, l_width
               FROM asset 
               WHERE id=l_assets(1).id;
-            l_url:=getCloudinaryUrl(l_cld_cloud_name, l_resource_type, l_public_id, l_format, l_width);
+            l_url:=pck_core.getCloudinaryUrl(l_cld_cloud_name, l_resource_type, l_public_id, l_format, l_width);
             UPDATE article SET updated_date=current_date, cover_asset_id=l_assets(1).id WHERE id=l_article_id;
         END IF;
 
@@ -2472,12 +1247,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('articleId', l_article_id);
         apex_json.write('url', l_url);
         apex_json.write('content', l_clob);
-        apex_json.write('updated', fmtUpdatedDate(current_date));
+        apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
         apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
 
@@ -2500,7 +1275,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_cld_plan VARCHAR2(50);
         l_url VARCHAR2(500);
     BEGIN
-        log('Start transfer process for user id:' || l_user_id|| ' P2_CLD_API_ENV:' || l_cld_api);
+        pck_core.log('Start transfer process for user id:' || l_user_id|| ' P2_CLD_API_ENV:' || l_cld_api);
 
         IF (l_cld_api IS NULL) THEN
             l_error_message:='Cloudinary API Environment variable empty.'; 
@@ -2571,7 +1346,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm);
+                pck_core.log_error(sqlcode,sqlerrm);
                 RAISE;
     END;
 
@@ -2587,73 +1362,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' COLUMNS (session_id, page_id,
             NESTED '$.cwv[*]' COLUMNS (name, value, rating)))
         LOG ERRORS INTO core_web_vitals_err REJECT LIMIT UNLIMITED;                 
-    END;
-
-    /*
-     **  Get Cloudinary usage details for each Cloudinary subscriber. Daily job.
-     */    
-    PROCEDURE getUsage(pUserId IN users.id%type DEFAULT NULL, pUsageDate IN DATE DEFAULT NULL) IS
-        l_url VARCHAR2(100);
-        l_clob CLOB;
-        l_error_message VARCHAR2(50);
-        l_usage_date_param VARCHAR2(16):=NULL;
-    BEGIN
-        IF (pUsageDate IS NOT NULL) THEN
-            l_usage_date_param:='/date='||TO_CHAR(pUsageDate,'DD-MM-YYYY');
-        END IF;
-        FOR C IN (SELECT id, 
-                         cld_cloud_name, 
-                         cld_api_key, 
-                         cld_api_secret 
-                    FROM users 
-                   WHERE cld_cloud_name IS NOT NULL
-                     AND id=NVL(pUserId,id)
-                   ) 
-        LOOP
-            l_url:='https://api.cloudinary.com/v1_1/' || C.cld_cloud_name || '/usage' || l_usage_date_param;
-            log(l_url);
-            l_clob := apex_web_service.make_rest_request(
-                p_url=>l_url,
-                p_http_method=>'GET',
-                p_username=>C.cld_api_key,
-                p_password=>C.cld_api_secret);
-            SELECT error_message INTO l_error_message FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS error_message VARCHAR2(100) PATH '$.error.message');  
-            IF (l_error_message IS NOT NULL) THEN
-                log('Error callling REST API for user ' || C.id || ' - ' || l_error_message);
-                CONTINUE;
-            END IF;
-            DELETE usage WHERE user_id=C.id AND usage_date=NVL(pUsageDate,TRUNC(sysdate));
-            INSERT INTO usage (user_id,usage_date,last_updated,plan,transformations_usage,transformations_credit_usage,bandwidth_usage,bandwidth_credit_usage,storage_usage,storage_credit_usage,
-                credits_usage,credits_limit,used_percent,objects_usage,requests,resources,derived_resources,image_max_size,video_max_size,raw_max_size)
-            SELECT C.id, TO_DATE(date_requested,'YYYY-MM-DD"T"hh24:mi:ss"Z"'),TO_DATE(last_updated,'YYYY-MM-DD'),
-                plan,
-                transformations_usage,transformations_credit_usage,bandwidth_usage,bandwidth_credit_usage,storage_usage,storage_credit_usage,
-                credits_usage,credits_limit,used_percent,
-                objects_usage,requests,resources,derived_resources,
-                image_max_size,video_max_size,raw_max_size
-              FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS 
-                date_requested VARCHAR2(100) PATH '$.date_requested', 
-                last_updated VARCHAR2(100) PATH '$.last_updated', 
-                plan VARCHAR2(100) PATH '$.plan',
-                transformations_usage NUMBER PATH '$.transformations.usage',
-                transformations_credit_usage NUMBER PATH '$.transformations.credits_usage',
-                bandwidth_usage NUMBER PATH '$.bandwidth.usage',
-                bandwidth_credit_usage NUMBER PATH '$.bandwidth.credits_usage',
-                storage_usage NUMBER PATH '$.storage.usage',
-                storage_credit_usage NUMBER PATH '$.storage.credits_usage',
-                credits_usage NUMBER PATH '$.credits.usage',
-                credits_limit NUMBER PATH '$.credits.limit',
-                used_percent NUMBER PATH '$.credits.used_percent',
-                objects_usage NUMBER PATH '$.objects.usage',
-                requests NUMBER PATH '$.requests',
-                resources NUMBER PATH '$.resources',
-                derived_resources NUMBER PATH '$.derived_resources',
-                image_max_size NUMBER PATH '$.media_limits.image_max_size_bytes',
-                video_max_size NUMBER PATH '$.media_limits.video_max_size_bytes',
-                raw_max_size NUMBER PATH '$.media_limits.raw_max_size_bytes'
-                );
-        END LOOP;
-        COMMIT;
     END;
 
 END;
