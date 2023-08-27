@@ -10,6 +10,8 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       apex_session = document.querySelector("#pInstance").value,
       vitalsQueue = new Set(),
       mediaQueue = new Set(),
+      deployBtn = document.querySelector(".deploy-website"),
+      deleteBtn = document.querySelector(".delete-website"),
       addContent = document.querySelector(".add-content"),
       listBtn = document.querySelector(".list-view"),
       list = document.querySelector(".list"),
@@ -42,6 +44,12 @@ listBtn.addEventListener("click",  () => {
         addContent.disabled = true;
         addContent.style.opacity = 0.2;
         list.style.display = "block";
+        const websiteId = document.querySelector("#domain-id").value;
+        execProcess( "website-list/"+websiteId,"GET").then( (data) => {
+            const tbody = document.querySelector("tbody");
+            tbody.replaceChildren();
+            tbody.insertAdjacentHTML('afterbegin',data.content);
+        });
     } else {
         cards.style.display = "grid";
         list.style.display = "none";
@@ -890,18 +898,25 @@ document.querySelectorAll("input[type='text'").forEach(input => {
 });
 
 /* 
- ** DEPLOY WEBSITE
+ ** DELETE WEBSITE
  */
 
-document.querySelectorAll(".deploy-website").forEach(button => {
-    button.addEventListener('click',  e => {
-        execProcess("deploy/" + e.target.dataset.websiteid,"POST").then( (data) => {
-            popupOpen("Website deployment",data.status);
-            if (gIntervalId) {
-                clearInterval(gIntervalId);
-            }
-            gIntervalId = setInterval(getDeploymentStatus,2000,e.target.dataset.websiteid);
-        });
+deleteBtn.addEventListener('click',  () => {
+    const websiteId = document.querySelector("#domain-id").value;
+    popupOpen("DELETE WEBSITE "+websiteId,"not implemented yet");
+});
+
+/* 
+ ** DEPLOY WEBSITE
+ */
+deployBtn.addEventListener('click',  () => {
+    const websiteId = document.querySelector("#domain-id").value;
+    execProcess("deploy/" + websiteId,"POST").then( (data) => {
+        popupOpen("Website deployment",data.status);
+        if (gIntervalId) {
+            clearInterval(gIntervalId);
+        }
+        gIntervalId = setInterval(getDeploymentStatus,2000,websiteId);
     });
 });
 
