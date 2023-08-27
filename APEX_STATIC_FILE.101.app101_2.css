@@ -67,6 +67,16 @@
     --ck-z-modal: calc( var(--ck-z-default) + 999 );
 }
 
+/******************/
+/* PAGE CONTAINER */
+/******************/
+
+#application-container {
+    display: grid;
+    place-items: center;
+    margin: 0 1rem;
+}
+
 h4, ul {
     margin-block-start: 0;
     margin-block-end: 0;
@@ -80,15 +90,6 @@ body {
     letter-spacing: var(--tracking);
     line-height: 1.5;
     text-rendering: optimizeSpeed;
-}
-
-.fa {
-    font-size: inherit; /* override Apex css default "16px" */
-    vertical-align: baseline; /* override Apex css default "top"" */
-}
-
-.fa-check {
-    color: green;
 }
 
 /************************************/
@@ -107,8 +108,7 @@ nav {
     justify-content: space-between;
     background-color: var(--color-dark);
     color: var(--color-light-glare);
-    padding: var(--space-s);
-    margin-block-end: var(--space-s);
+    padding: 0.5rem;
 }
 
 label {
@@ -132,6 +132,62 @@ textarea:read-only {
     cursor: not-allowed;
 }
 
+hr {
+    inline-size: 100%;
+}
+
+.full-width {
+    inline-size: 100%;
+}
+/* ************** */
+/* WEBSITE FORM   */
+/* ************** */
+
+form {
+    border: 1px solid var(--color-pale);
+    padding: 1rem;
+    margin-block-start: 1rem;
+    margin-block-end: 1rem;
+}
+
+form > * + *   {
+    margin-block-start: 2ch;
+}
+
+input {
+    font-size: var(--step-0);
+}
+
+input[type="text"] + span {
+    font-size: 70%;
+    margin-inline-start: 1ch;
+}
+
+input[type="radio"] {
+    appearance: none;
+    border-radius: 50%;
+    inline-size: 2ch;
+    block-size: 2ch;
+    border: 1ch solid var(--color-pale);
+    transition: 0.2s all linear;
+}
+
+input[type="radio"]:checked {
+    border: 1ch solid var(--color-button);
+}
+
+.cluster {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: flex-start;
+    align-items: center;
+}
+
+.delete-website {
+    background-color: var(--color-secondary);
+    color: var(--color-light-glare);
+}
 
 /* ************* */
 /* DIALOG STYLES */
@@ -180,55 +236,10 @@ dialog.preview, dialog.perftable, dialog.gallery, dialog.editor {
     block-size: 100vh;
 }
 
-dialog.preview > div, dialog.website > div, dialog.editor > div {
+dialog.preview > div, dialog.editor > div {
   display: grid;
   grid-template-columns: minmax(1rem, 1fr) minmax(auto, var(--preview-width)) minmax(1rem, 1fr);
 }
-
-/* ************** */
-/* WEBSITE FORM   */
-/* ************** */
-
-form {
-    font-size: var(--step--1);
-    font-family: var(--font-serif);
-    margin: auto;
-}
-
-form > * + *   {
-    margin-block-start: 2ch;
-}
-
-input {
-    font-size: var(--step-0);
-}
-
-input[type="text"] + span {
-    font-size: 70%;
-    margin-inline-start: 1ch;
-}
-
-input[type="radio"] {
-    appearance: none;
-    border-radius: 50%;
-    inline-size: 2ch;
-    block-size: 2ch;
-    border: 1ch solid var(--color-pale);
-    transition: 0.2s all linear;
-}
-
-input[type="radio"]:checked {
-    border: 1ch solid var(--color-button);
-}
-
-.cluster {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    justify-content: flex-start;
-    align-items: center;
-}
-
 
 dialog.preview .details {
     display: flex;
@@ -375,11 +386,12 @@ nav button {
 }
 
 .cards {
-  display: grid;
-  list-style-type: none;
-  grid-template-columns: repeat(auto-fill,minmax(min(25ch, 100%), 1fr));
-  gap: 3ch;
-  font-size: var(--step-0);
+    display: grid;
+    list-style-type: none;
+    grid-template-columns: repeat(auto-fill,minmax(min(25ch, 100%), 1fr));
+    gap: 3ch;
+    font-size: var(--step-0);
+    margin-block-start: 1rem;
 }
 
 
@@ -421,6 +433,7 @@ nav button {
 .card .title {
     font-size: var(--step-1);
     line-height: 1.2;
+    text-wrap: balance;
 }
 
 .card .excerpt {
