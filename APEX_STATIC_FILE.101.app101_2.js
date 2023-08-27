@@ -2,6 +2,7 @@ let gArticleId,
     gBrowser,
     gConnectionType,
     gFullImage,
+    gIntervalId,
     gExpiredSession = false;
 
 const apex_app_id = document.querySelector("#pFlowId").value,
@@ -9,12 +10,13 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       apex_session = document.querySelector("#pInstance").value,
       vitalsQueue = new Set(),
       mediaQueue = new Set(),
+      addContent = document.querySelector(".add-content"),
+      listBtn = document.querySelector(".list-view"),
+      list = document.querySelector(".list"),
       cards = document.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
       popupConfirm = popup.querySelector("button.confirm"),
-      website = document.querySelector("dialog.website"),
-      preview = document.querySelector("dialog.preview"),
       gallery = document.querySelector("dialog.gallery"),
       galleryInstruction = gallery.querySelector(".instruction"),
       galleryList = gallery.querySelector("ul"),
@@ -29,6 +31,25 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       galleryFullDimensions = galleryFull.querySelectorAll("fieldset button.dimensions"),
       listPerformance = gallery.querySelector(".list-performance"),      
       perftable = document.querySelector("dialog.perftable");
+
+/*
+ **  LIST VIEW
+ */
+listBtn.addEventListener("click",  () => {
+    if (cards.style.display === "grid") {
+        cards.style.display = "none";
+        listBtn.innerHTML = "&#9783;";
+        addContent.disabled = true;
+        addContent.style.opacity = 0.2;
+        list.style.display = "block";
+    } else {
+        cards.style.display = "grid";
+        list.style.display = "none";
+        listBtn.innerHTML = "&#9776;";
+        addContent.disabled = false;
+        addContent.style.opacity = 1;
+    }
+});
 
 /*
 **  CLOSE ALL DIALOGS
@@ -761,7 +782,7 @@ ClassicEditor.create(document.querySelector("#editor"), {
         console.error(error);
     });
 
-
+/*
 window.addEventListener("DOMContentLoaded", () => {
     if (navigator.maxTouchPoints > 1) {
             cards.addEventListener("touchstart",cardHandlerAuth);
@@ -771,6 +792,7 @@ window.addEventListener("DOMContentLoaded", () => {
         galleryList.addEventListener("click",assetHandlerAuth);
     }
 });
+*/
 
 
 /* 
@@ -804,8 +826,7 @@ const makeSuccess = (el) => {
 /* 
  ** ADD NEW CARD
  */
-const add_card = document.querySelector(".add-card");
-add_card.addEventListener('click',  e => {
+addContent.addEventListener('click',  e => {
     // check that there isn't already a new card - i.e. the 2nd card with data-id="0" meaning that no content has yet been added to it
     if (cards.childElementCount>1 && cards.children[1].dataset.id === "0") {
         popupOpen("No need to do that","... you already opened a new card");
@@ -871,7 +892,6 @@ document.querySelectorAll("input[type='text'").forEach(input => {
 /* 
  ** DEPLOY WEBSITE
  */
-let gIntervalId;
 
 document.querySelectorAll(".deploy-website").forEach(button => {
     button.addEventListener('click',  e => {
