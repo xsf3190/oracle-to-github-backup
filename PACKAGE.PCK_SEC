@@ -1,15 +1,9 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS 
-  
-  PROCEDURE post_auth_facebook;
-
-  PROCEDURE post_auth_google;
-
-  PROCEDURE post_auth_linkedin;
-
-  PROCEDURE post_auth_azure;
-
-  PROCEDURE signout;
-
+    --
+    PROCEDURE post_auth_facebook;
+    --
+    PROCEDURE post_auth_google;
+    --
 END PCK_SEC;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
@@ -33,7 +27,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 FROM apex_applications
                 WHERE application_id = APEX_APPLICATION.G_FLOW_ID
                 );
-    
+
         FOR C IN (
             SELECT apex_session_id
               FROM apex_workspace_sessions
@@ -44,19 +38,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         LOOP
             apex_session.delete_session(p_session_id => C.apex_session_id);
         END LOOP;
-    
+
         INSERT INTO user_login(auth_provider,email,name,apex_session_id) VALUES (p_auth_provider, p_email, p_name, APEX_APPLICATION.G_INSTANCE);
-        
+
         BEGIN
             SELECT id
               INTO l_user_id
               FROM users 
              WHERE email=p_email;
-            
+
             UPDATE users 
                SET name=p_name, apex_session_id=APEX_APPLICATION.G_INSTANCE, last_login_date=current_timestamp, last_login_provider=p_auth_provider 
              WHERE id=l_user_id;
-            
+
             EXCEPTION WHEN NO_DATA_FOUND 
             THEN
                 INSERT INTO users(email, name, apex_session_id, last_login_date, last_login_provider) 
@@ -65,7 +59,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         END;
         --apex_util.set_session_state('APP_USER_ID',l_user_id);
         --apex_util.set_session_state('APP_USER_NAME',l_user_name);
-        
+
         COMMIT;
     END;    
 
@@ -83,6 +77,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     ** Linked-In API has separate entry points for profile name and email addres.
     ** Support very rude. API is bollocks. Gave up on Linkedin but keep the code just in case
     */
+    /*
     PROCEDURE post_auth_linkedin IS
         l_name users.name%type;
         l_email users.email%type;
@@ -93,17 +88,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     BEGIN
         pck_cms.log('starting'); 
         l_name:=apex_json.get_varchar2('localizedFirstName') || ' ' || apex_json.get_varchar2('localizedLastName');
-        
-        /*
-        APEX_WEB_SERVICE.g_request_cookies.delete();
-        owa_cookie.get_all(names => l_names,vals => l_vals,num_vals => l_num_vals);
-        pck_cms.log('pck_sec.post_auth_linkedin','setting cookies');    
-        FOR r IN 1 .. l_names.COUNT LOOP 
-            pck_cms.log(l_names(r),l_vals(r));             
-            APEX_WEB_SERVICE.g_request_cookies(1).name := l_names(r);
-            APEX_WEB_SERVICE.g_request_cookies(1).value := l_vals(r);
-        END LOOP;
-        */
+
         apex_web_service.g_request_headers.delete();
         pck_cms.log('Before make_rest_request');
         l_clob := apex_web_service.make_rest_request(
@@ -121,24 +106,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         insert_user_login('Linkedin', l_email, l_name);        
     END;   
+    */
 
     /*
     **  Gave up on Azure too - can't remember why though.
     */
+    /*
     PROCEDURE post_auth_azure IS
     BEGIN
         insert_user_login('Azure', apex_json.get_varchar2('userPrincipalName'), apex_json.get_varchar2('givenName') || ' ' || apex_json.get_varchar2('surname'));
     END; 
-
-    /*
-    ** Respond to user clicking "Sign Out" button
     */
-    PROCEDURE signout IS
-    BEGIN
-    pck_cms.log('signout called');
-        apex_session.delete_session;
-        apex_authentication.logout(apex_application.g_flow_id, apex_custom_auth.get_session_id);
-    END;
 
 END PCK_SEC;
 /
