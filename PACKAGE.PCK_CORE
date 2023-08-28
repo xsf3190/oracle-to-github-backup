@@ -37,6 +37,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
         pWordCount IN VARCHAR2, 
         pUpdatedDate IN article.updated_date%type,
         pCloudinaryUrl IN VARCHAR2) RETURN VARCHAR2;
+    --
+    PROCEDURE signout;
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
@@ -229,10 +231,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             CASE WHEN COALESCE(pTitle,pExcerpt) IS NULL 
                 THEN '<br>
                       <button type="button" class="no-media edit-text">CREATE TEXT</button>'
-                ELSE '<h4 class="title edit-text">' || pTitle || '</h4>
-                      <p class="excerpt">' || pExcerpt || '<span class="word-count">' || pWordCount || '</span></p>'
+                ELSE '<p class="title edit-text">' || NVL(pTitle,pExcerpt) || '</p>
+                    <div></div>'
             END || '   
-            <footer class="button-container"><span></span><span class="updated-date">' || fmtUpdatedDate(pUpdatedDate)  || '</span></footer>
+            <footer class="button-container"><span class="word-count">' || pWordCount || '</span><span class="updated-date">' || fmtUpdatedDate(pUpdatedDate)  || '</span></footer>
         </li>';
 
         RETURN (l_element);
@@ -292,7 +294,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_facebook_svg ||'</a>
                         <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_google_svg ||'</a>
                     </li>
-                    <li class="grey">' || pck_icons.g_oracle_svg || pck_icons.g_github_svg || '</li>
+                    <li class="grey">' || pck_icons.g_github_svg || pck_icons.g_oracle_svg || '</li>
                     <li class="grey">' || pck_icons.g_cloudinary_svg || pck_icons.g_netlify_svg || '</li>
                     <li class="yellow">ALWAYS FREE</li>
                     <li class="grey"></li>
@@ -475,14 +477,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             LOOP
                 l_clob:=l_clob || TO_CLOB('
                     <form>
-                        <div>
+                        <div class="text-input">
                             <label for="domain-name">Domain name</label>
-                            <input type="text" id="domain-name" maxlength="30" required style="inline-size:30ch" value="' || C.domain_name || '"></input><span></span>
+                            <textarea id="domain-name" maxlength="30">' || C.domain_name || '</textarea>
+                            <span class="result"></span>
+                            <span class="counter">' || LENGTH(C.domain_name) || '/30</span>
                             <input type="hidden" id="domain-id" name="domain-id" value="' || l_domains(1).id || '">
                         </div>
                         <div>
                             <label for="contact-email">Contact Email Address</label>
-                            <input type="text" id="contact-email" maxlength="50" style="inline-size:50ch" value="' || C.contact_email|| '""></input><span></span>
+                            <input type="text" id="contact-email" maxlength="50" value="' || C.contact_email|| '""></input><span></span>
                         </div>
                         <fieldset>
                             <legend>Website Template</legend>
