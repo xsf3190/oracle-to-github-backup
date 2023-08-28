@@ -35,6 +35,21 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       perftable = document.querySelector("dialog.perftable");
 
 /*
+**  TEXT INPUT COMPONENT
+*/
+document.querySelectorAll("textarea").forEach((textarea) => {
+    textarea.addEventListener('input',  e => {
+        const maxchars = e.target.getAttribute("maxlength");
+        const counter = textarea.nextElementSibling.nextElementSibling;
+        let numOfEnteredChars = e.target.value.length;
+        counter.textContent = numOfEnteredChars + "/" + maxchars;
+    });    
+    textarea.addEventListener("blur", () => {
+        textarea.nextElementSibling.textContent="OK";
+    });
+});
+
+/*
  **  LIST VIEW
  */
 listBtn.addEventListener("click",  () => {
