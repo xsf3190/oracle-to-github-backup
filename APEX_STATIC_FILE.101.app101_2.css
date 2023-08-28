@@ -442,12 +442,15 @@ nav button {
 }
 
 .card .title, .card .excerpt {
-    overflow-wrap: break-word;
+    /*overflow-wrap: break-word;
     word-wrap: break-word;
-    hyphens: auto;
+    hyphens: auto;*/
     margin-block-start: 0;
     margin-block-end: 0;
-    place-self: center;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;  
+    overflow: hidden;
 }
 
 .card:hover .title {
@@ -457,7 +460,7 @@ nav button {
     cursor: pointer;
 }
 
-.card .excerpt > span {
+.card .title > span {
     margin-left: 0.5em;
     font-style: italic;
     font-size: 75%;
