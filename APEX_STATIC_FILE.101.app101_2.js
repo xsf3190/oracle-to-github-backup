@@ -40,12 +40,18 @@ const apex_app_id = document.querySelector("#pFlowId").value,
 document.querySelectorAll("textarea").forEach((textarea) => {
     textarea.addEventListener('input',  e => {
         const maxchars = e.target.getAttribute("maxlength");
-        const counter = textarea.nextElementSibling.nextElementSibling;
+        const counter = textarea.nextElementSibling.querySelector("span:nth-of-type(2)");
         let numOfEnteredChars = e.target.value.length;
         counter.textContent = numOfEnteredChars + "/" + maxchars;
     });    
-    textarea.addEventListener("blur", () => {
-        textarea.nextElementSibling.textContent="OK";
+    textarea.addEventListener("change", e => {
+        const result = textarea.nextElementSibling.querySelector("span:nth-of-type(1)");
+        const table_column = e.target.dataset.column,
+              id = e.target.dataset.id,
+              value = e.target.value;
+        execProcess("update","PUT",{id:id,table_column:table_column,value:value}).then( (data) => {
+            result.textContent = "Updated Successfully";
+        });
     });
 });
 
