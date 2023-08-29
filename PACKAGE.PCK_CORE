@@ -264,8 +264,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
             FOR C1 IN (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name))) LOOP
                 l_cluster:=l_cluster || 
-                '<input type="radio" id="template-' || LOWER(C1.name) || '" name="template" value="' || C1.name || '"></input>
-                 <label for="template-' || LOWER(C1.name) || '">' || C1.name || '</label>';
+                '<div>
+                    <input type="radio" id="template-' || LOWER(C1.name) || '" name="template" value="' || C1.name || '"></input>
+                     <label for="template-' || LOWER(C1.name) || '">' || C1.name || '</label>
+                </div>';
             END LOOP;
         END LOOP;
         RETURN (l_cluster);
@@ -477,16 +479,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             LOOP
                 l_clob:=l_clob || TO_CLOB('
                     <form>
-                        <div class="text-input">
+                        <div style="max-width:min(30ch,100%)" class="textarea-wrapper">
                             <label for="domain-name">Domain name</label>
-                            <textarea id="domain-name" maxlength="30">' || C.domain_name || '</textarea>
-                            <span class="result"></span>
-                            <span class="counter">' || LENGTH(C.domain_name) || '/30</span>
-                            <input type="hidden" id="domain-id" name="domain-id" value="' || l_domains(1).id || '">
+                            <textarea id="domain-name" maxlength="30" rows="1" data-column="website.domain_name" data-id="' || l_domains(1).id || '">' || C.domain_name || '</textarea>
+                            <div class="button-container">
+                                <span></span>
+                                <span>' || LENGTH(C.domain_name) || '/30</span>
+                            </div>
                         </div>
-                        <div>
+                        <div style="max-width:min(50ch,100%)" class="textarea-wrapper">
                             <label for="contact-email">Contact Email Address</label>
-                            <input type="text" id="contact-email" maxlength="50" value="' || C.contact_email|| '""></input><span></span>
+                            <textarea id="contact-email" maxlength="50" rows="1" data-column="website.contact_email" data-id="' || l_domains(1).id || '">' || C.contact_email || '</textarea>
+                            <div class="button-container">
+                                <span></span>
+                                <span>' || LENGTH(C.contact_email) || '/50</span>
+                            </div>
                         </div>
                         <fieldset>
                             <legend>Website Template</legend>
