@@ -42,7 +42,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE uploadPerformance(pBodyText IN CLOB);
     --
-    PROCEDURE updateUser;
+    PROCEDURE updateField(pBodyText IN CLOB);
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
@@ -1257,97 +1257,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
 
     /**
-     **    Update user's record  with Cloudinary API details. Submit background job to transfer users's Cloudinary assets.
+     **    Update a specified column value
      */
-    PROCEDURE updateUser IS
-        l_cld_api VARCHAR2(200):=apex_util.get_session_state('P2_CLD_API_ENV');
-        l_user_id users.id%type:=apex_util.get_session_state('APP_USER_ID');
-        l_p1 INTEGER;
-        l_p2 INTEGER;
-        l_p3 INTEGER;
-        l_error_message VARCHAR2(100);
-        l_cld_cloud_name users.cld_cloud_name%type;
-        l_cld_api_key users.cld_api_key%type;
-        l_cld_api_secret users.cld_api_secret%type;
-        l_cld_error_message VARCHAR2(100);
-        l_clob CLOB;
-        l_job_name VARCHAR2(30);
-        l_cld_plan VARCHAR2(50);
-        l_url VARCHAR2(500);
+    PROCEDURE updateField(pBodyText IN CLOB) IS
+        l_user_id users.id%type;
+        n PLS_INTEGER;
     BEGIN
-        pck_core.log('Start transfer process for user id:' || l_user_id|| ' P2_CLD_API_ENV:' || l_cld_api);
+        l_user_id:=pck_core.getUserId();
 
-        IF (l_cld_api IS NULL) THEN
-            l_error_message:='Cloudinary API Environment variable empty.'; 
+        FOR C IN (SELECT id, table_column, value
+                    FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value)))
+        LOOP
+            CASE C.table_column
+                WHEN 'website.contact_email' THEN
+                    UPDATE website SET contact_email=C.value WHERE id=C.id;
+                WHEN 'website.domain_name' THEN
+                    UPDATE website SET domain_name=C.value WHERE id=C.id;
+            END CASE;
+            n:=sql%rowcount;
+        END LOOP;
+
+        apex_json.open_object;
+        IF (n=1) THEN 
+            apex_json.write('success', TRUE);
         ELSE
-            l_p1:=INSTR(l_cld_api,'/',-1);
-            l_p2:=INSTR(l_cld_api,':',-1);
-            l_p3:=INSTR(l_cld_api,'@');
-
-            l_cld_cloud_name:=SUBSTR(l_cld_api,l_p3+1);
-            l_cld_api_key:=SUBSTR(l_cld_api,l_p1+1,l_p2-l_p1-1); 
-            l_cld_api_secret:=SUBSTR(l_cld_api,l_p2+1,l_p3-l_p2-1);
-
-            IF (l_cld_cloud_name IS NULL OR l_cld_api_key IS NULL OR l_cld_api_secret IS NULL) THEN
-                l_error_message:='Cloudinary API Environment invalid.';
-            END IF;
+            apex_json.write('success', FALSE);
         END IF;
-
-        IF (l_error_message IS NULL) THEN
-            l_url:='https://api.cloudinary.com/v1_1/' || l_cld_cloud_name || '/usage';
-            l_clob := apex_web_service.make_rest_request(
-                p_url=>l_url,
-                p_http_method=>'GET',
-                p_username=>l_cld_api_key,
-                p_password=>l_cld_api_secret);
-            SELECT plan, error_message INTO l_cld_plan, l_error_message FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS plan VARCHAR2(50) PATH '$.plan', error_message VARCHAR2(100) PATH '$.error.message');  
-        END IF;
-
-        IF (l_error_message IS NOT NULL) THEN
-            apex_util.set_session_state('P2_PLSQL_STATUS','nok',p_commit=>false);
-            apex_application.g_x01 := l_error_message;
-            apex_application.g_x02 := 'CLOUDINARY_URL is invalid or inconsistent'; 
-            apex_application.g_x03 := 'error';  
-            RETURN;
-        END IF;
-
-
-        /* Validation checks passed. Update user record and submit background job (takes a long time) to transfer the user's assets to their new Cloudinary account */
-
-        UPDATE users 
-           SET cld_cloud_name=l_cld_cloud_name,
-               cld_api_key=l_cld_api_key, 
-               cld_api_secret=l_cld_api_secret,
-               cld_plan=l_cld_plan,
-               updated_date=current_timestamp
-         WHERE id=l_user_id;
-
-        apex_util.set_session_state('APP_CLD_API_KEY',l_cld_api_key,p_commit=>false);
-        apex_util.set_session_state('APP_CLD_CLOUD_NAME',l_cld_cloud_name,p_commit=>false);
-
-        l_job_name:='TRANSFER_USER_ASSETS_'||l_user_id;
-
-        dbms_scheduler.create_job(
-            job_name =>  l_job_name,
-            program_name => 'P_TRANSFER_ASSETS',
-            enabled =>    FALSE );
-
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_name => 'PUSERID',
-            argument_value => l_user_id);
-
-        dbms_scheduler.enable(l_job_name);
-
-        apex_util.set_session_state('P2_PLSQL_STATUS','ok',p_commit=>false);
-        apex_application.g_x01:='Successfully configured a ' || l_cld_plan || ' Cloudinary plan.';
-        apex_application.g_x02:='Starting transfer of all assets to your new Cloudinary account.';
-        apex_application.g_x03:='success';
+        apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm);
-                RAISE;
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     /*
