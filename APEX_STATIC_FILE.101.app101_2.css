@@ -48,8 +48,6 @@
   --transition-movement: 200ms linear;
   --transition-fade: 200ms ease;
   --transition-bounce: 500ms cubic-bezier(0.5, 0.05, 0.2, 1.5);
-  --tracking: -0.05ch;
-  --tracking-s: -0.075ch;
 
     --hue: 270;
     --saturation: 50%;
@@ -63,8 +61,10 @@
     --gallery-width: 15rem;
     --preview-width: 60ch;
 
-    --ck-z-default: 100;
-    --ck-z-modal: calc( var(--ck-z-default) + 999 );
+}
+
+* {
+    box-sizing: border-box;
 }
 
 /******************/
@@ -87,7 +87,6 @@ h4, ul {
 body {
     font-family: var(--font-serif);
     font-size: var(--step-0);
-    letter-spacing: var(--tracking);
     line-height: 1.5;
     text-rendering: optimizeSpeed;
 }
@@ -113,23 +112,22 @@ nav {
 
 label {
     display: block;
-}
-
-label > span {
-    color: var(--color-secondary);
+    font-weight: 600;
 }
 
 textarea {
-    line-height: 1.2;
     border: 0.2ch solid var(--color-pale);
     border-radius: 0.5ch;
-    resize: vertical;
-    inline-size: 100%;
+    resize: both;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: 1.5;
+    padding-left: 0.5ch;
 }
 
-textarea:read-only {
-    background-color: var(--color-light);
-    cursor: not-allowed;
+.textarea-wrapper {
+    display: flex;
+    flex-direction: column;
 }
 
 hr {
@@ -182,6 +180,10 @@ input[type="radio"]:checked {
     gap: 1rem;
     justify-content: flex-start;
     align-items: center;
+}
+
+.cluster label {
+    display: initial;
 }
 
 .delete-website {
@@ -434,17 +436,6 @@ nav button {
     font-size: var(--step-1);
     line-height: 1.2;
     text-wrap: balance;
-}
-
-.card .excerpt {
-    font-size: var(--step-0);
-    line-height: 1.4;
-}
-
-.card .title, .card .excerpt {
-    /*overflow-wrap: break-word;
-    word-wrap: break-word;
-    hyphens: auto;*/
     margin-block-start: 0;
     margin-block-end: 0;
     display: -webkit-box;
@@ -458,12 +449,6 @@ nav button {
     text-decoration-thickness: 0.1em;
     color: var(--color-button);
     cursor: pointer;
-}
-
-.card .title > span {
-    margin-left: 0.5em;
-    font-style: italic;
-    font-size: 75%;
 }
 
 .card footer {
