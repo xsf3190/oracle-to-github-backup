@@ -213,6 +213,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                    NVL(a.nb_assets,0) nb_assets,
                    a.title, 
                    a.excerpt,
+                   wa.nav_name,
+                   wa.page_title,
                    CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
                    NVL(a.updated_date, a.created_date) updated_date,
                    wa.display_order display_order
@@ -221,11 +223,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                AND a.id=wa.article_id
                AND a.cover_asset_id=c.id(+)
              UNION ALL
-             SELECT -1, null, null, null, null,null,null,0,null,null,null,systimestamp,-1 from dual
+             SELECT -1, null, null, null, null,null,null,0,null,null,null,null,null,systimestamp,-1 from dual
              ORDER BY display_order) 
         LOOP
             l_clob:=l_clob || TO_CLOB(
-                pck_core.buildArticle(C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width)));
+                pck_core.buildArticle(C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.nav_name, C.page_title, C.word_count, C.updated_date, pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width)));
         END LOOP;
 
         apex_json.open_object; 
@@ -714,7 +716,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
             l_json.put('website',l_website_object);
 
-            FOR C1 IN (SELECT a.id, a.created_date, a.word_count, a.title, a.body_html, wa.display_order, wa.path_name, wa.nav_name
+            FOR C1 IN (SELECT a.id, a.created_date, a.word_count, a.title, a.body_html, wa.display_order, apex_string_util.get_slug(wa.nav_name) path_name, wa.nav_name
                         FROM article a, website_article wa
                        WHERE wa.website_id=C.id
                          AND wa.article_id=a.id
@@ -723,7 +725,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_article_object:=new JSON_OBJECT_T;
                 l_article_object.put('article_id',C.id);
                 l_article_object.put('display_order',C1.display_order);
-                l_article_object.put('path_name',C1.path_name);
+                l_article_object.put('path_name',NVL(C1.path_name,'index'));
                 l_article_object.put('created',TO_CHAR(C1.created_date,'dd.mm.yyyy'));
 
                 IF (C1.nav_name IS NOT NULL) THEN
@@ -1270,19 +1272,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         LOOP
             CASE C.table_column
                 WHEN 'website.contact_email' THEN
-                    UPDATE website SET contact_email=C.value WHERE id=C.id;
+                    UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
                 WHEN 'website.domain_name' THEN
-                    UPDATE website SET domain_name=C.value WHERE id=C.id;
+                    UPDATE website SET domain_name=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
             END CASE;
             n:=sql%rowcount;
         END LOOP;
 
         apex_json.open_object;
-        IF (n=1) THEN 
-            apex_json.write('success', TRUE);
-        ELSE
-            apex_json.write('success', FALSE);
-        END IF;
+        apex_json.write('success', TRUE);
+        apex_json.write('rowcount', n);
         apex_json.close_object;
 
         EXCEPTION
