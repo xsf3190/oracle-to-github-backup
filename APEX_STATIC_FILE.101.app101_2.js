@@ -43,14 +43,32 @@ document.querySelectorAll("textarea").forEach((textarea) => {
         const counter = textarea.nextElementSibling.querySelector("span:nth-of-type(2)");
         let numOfEnteredChars = e.target.value.length;
         counter.textContent = numOfEnteredChars + "/" + maxchars;
+        if (numOfEnteredChars === Number(maxchars)) {
+            counter.style.color = "red";
+        } else {
+            counter.style.color = "initial";
+        }
     });    
+
+    textarea.addEventListener('focus',  () => {
+        const result = textarea.nextElementSibling.querySelector("span:nth-of-type(1)");
+        result.textContent = "";
+    });        
+
     textarea.addEventListener("change", e => {
         const result = textarea.nextElementSibling.querySelector("span:nth-of-type(1)");
         const table_column = e.target.dataset.column,
               id = e.target.dataset.id,
               value = e.target.value;
         execProcess("update","PUT",{id:id,table_column:table_column,value:value}).then( (data) => {
-            result.textContent = "Updated Successfully";
+            if (data.rowcount === 1) {
+                result.textContent = "Update OK";
+                result.style.color = "green";
+            } else {
+                result.textContent = "Update FAILED";
+                result.style.color = "red";
+            }
+            result.style.opacity = "1";
         });
     });
 });
@@ -931,7 +949,7 @@ deleteBtn.addEventListener('click',  () => {
  ** DEPLOY WEBSITE
  */
 deployBtn.addEventListener('click',  () => {
-    const websiteId = document.querySelector("#domain-id").value;
+    const websiteId = document.querySelector("form").dataset.id;
     execProcess("deploy/" + websiteId,"POST").then( (data) => {
         popupOpen("Website deployment",data.status);
         if (gIntervalId) {
