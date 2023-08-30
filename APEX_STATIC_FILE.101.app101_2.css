@@ -130,6 +130,13 @@ textarea {
     flex-direction: column;
 }
 
+/* UPDATE RESULT SHOWN IN ADJACENT TEXTAREA SPAN */
+.textarea-wrapper  span:first-of-type {
+    padding-left: 0.5ch;
+    opacity: 0;
+    transition: all 1s ease-in-out;
+}
+
 hr {
     inline-size: 100%;
 }
