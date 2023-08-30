@@ -34,6 +34,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
         pIsPublic IN article.is_public%type, 
         pTitle IN article.title%type, 
         pExcerpt IN article.excerpt%type, 
+        pNavName IN website_article.nav_name%type,
+        pPageTitle IN website_article.page_title%type,
         pWordCount IN VARCHAR2, 
         pUpdatedDate IN article.updated_date%type,
         pCloudinaryUrl IN VARCHAR2) RETURN VARCHAR2;
@@ -189,13 +191,42 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         ELSE
             RETURN ( TO_CHAR(pTimestamp, 'dd Mon yyyy'));
         END IF;
-    END;    
+    END;
+
+    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2) RETURN VARCHAR2 IS
+        l_table_name user_tab_columns.table_name%type;
+        l_column_name user_tab_columns.column_name%type;
+        l_data_length user_tab_columns.data_length%type;
+    BEGIN
+        l_table_name:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
+        l_column_name:=UPPER(SUBSTR(pColumn,INSTR(pColumn,'.')+1));
+
+        SELECT data_length 
+          INTO l_data_length 
+          FROM user_tab_columns 
+         WHERE table_name=l_table_name
+           AND column_name=l_column_name;
+
+        l_column_name:=LOWER(l_column_name);
+
+        RETURN('
+        <div style="max-width:min(' || l_data_length || 'ch,100%)" class="textarea-wrapper">
+            <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</label>
+            <textarea id="' || l_column_name || '" maxlength="' || l_data_length || '" rows="1" data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>
+            <div class="button-container">
+                <span></span>
+                <span>' || LENGTH(pValue) || '/30</span>
+            </div>
+        </div>');
+    END;
 
     FUNCTION buildArticle(pId IN article.id%type, 
                             pNbAssets IN article.nb_assets%type, 
                             pIsPublic IN article.is_public%type, 
                             pTitle IN article.title%type, 
                             pExcerpt IN article.excerpt%type, 
+                            pNavName IN website_article.nav_name%type,
+                            pPageTitle IN website_article.page_title%type,
                             pWordCount IN VARCHAR2, 
                             pUpdatedDate IN article.updated_date%type,
                             pCloudinaryUrl IN VARCHAR2) RETURN VARCHAR2 
@@ -231,8 +262,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             CASE WHEN COALESCE(pTitle,pExcerpt) IS NULL 
                 THEN '<br>
                       <button type="button" class="no-media edit-text">CREATE TEXT</button>'
-                ELSE '<p class="title edit-text">' || NVL(pTitle,pExcerpt) || '</p>
-                    <div></div>'
+                ELSE '<p class="title edit-text">' || NVL(pTitle,pExcerpt) || '</p> ' 
+                        || buildTextareaWrapper(pId,'website_article.nav_name',pNavName)
+                        || buildTextareaWrapper(pId,'website_article.page_title',pPageTitle)  
             END || '   
             <footer class="button-container"><span class="word-count">' || pWordCount || '</span><span class="updated-date">' || fmtUpdatedDate(pUpdatedDate)  || '</span></footer>
         </li>';
@@ -240,7 +272,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_element);
     END;
 
-    FUNCTION buildTemplates RETURN VARCHAR2 IS
+    FUNCTION buildTemplates(pSelectedTemplate IN VARCHAR2) RETURN VARCHAR2 IS
         l_clob CLOB;
         l_cluster CLOB;
         l_url VARCHAR2(200);
@@ -262,10 +294,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 END IF;
             END LOOP;
 
+            /* directory names are returned as array in alphabetic order */
             FOR C1 IN (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name))) LOOP
                 l_cluster:=l_cluster || 
                 '<div>
-                    <input type="radio" id="template-' || LOWER(C1.name) || '" name="template" value="' || C1.name || '"></input>
+                    <input type="radio" id="template-' || LOWER(C1.name) || '" name="template" value="' || C1.name || '"' || CASE WHEN pSelectedTemplate=C1.name THEN ' checked' END || '></input>
                      <label for="template-' || LOWER(C1.name) || '">' || C1.name || '</label>
                 </div>';
             END LOOP;
@@ -397,6 +430,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    NVL(a.nb_assets,0) nb_assets,
                    a.title, 
                    a.excerpt,
+                   wa.nav_name,
+                   wa.page_title,
                    CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
                    NVL(a.updated_date, a.created_date) updated_date,
                    wa.display_order display_order
@@ -405,12 +440,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                AND a.id=wa.article_id
                AND a.cover_asset_id=c.id(+)
              UNION ALL
-             SELECT -1, null, null, null, null,null,null,0,null,null,null,systimestamp,-1 from dual
+             SELECT -1, null, null, null, null,null,null,0,null,null,null,null,null,systimestamp,-1 from dual
              ORDER BY display_order)
         LOOP
             l_clob:=l_clob || TO_CLOB(
             buildArticle(
-                    C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width)));
+                    C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.nav_name, C.page_title, C.word_count, C.updated_date, getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width)));
         END LOOP;
         RETURN l_clob;
     END;
@@ -478,26 +513,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 AND user_id=l_user_id) 
             LOOP
                 l_clob:=l_clob || TO_CLOB('
-                    <form>
-                        <div style="max-width:min(30ch,100%)" class="textarea-wrapper">
-                            <label for="domain-name">Domain name</label>
-                            <textarea id="domain-name" maxlength="30" rows="1" data-column="website.domain_name" data-id="' || l_domains(1).id || '">' || C.domain_name || '</textarea>
-                            <div class="button-container">
-                                <span></span>
-                                <span>' || LENGTH(C.domain_name) || '/30</span>
-                            </div>
-                        </div>
-                        <div style="max-width:min(50ch,100%)" class="textarea-wrapper">
-                            <label for="contact-email">Contact Email Address</label>
-                            <textarea id="contact-email" maxlength="50" rows="1" data-column="website.contact_email" data-id="' || l_domains(1).id || '">' || C.contact_email || '</textarea>
-                            <div class="button-container">
-                                <span></span>
-                                <span>' || LENGTH(C.contact_email) || '/50</span>
-                            </div>
-                        </div>
+                    <form data-id="' || l_domains(1).id || '">'
+                        || buildTextareaWrapper(l_domains(1).id, 'website.domain_name', C.domain_name) 
+                        || buildTextareaWrapper(l_domains(1).id, 'website.contact_email', C.contact_email) || '
                         <fieldset>
                             <legend>Website Template</legend>
-                            <div class="cluster">' || buildTemplates() || '
+                            <div class="cluster">' || buildTemplates(C.template) || '
                             </div>
                         </fieldset>
                         <div class="button-container">
