@@ -10,11 +10,14 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       apex_session = document.querySelector("#pInstance").value,
       vitalsQueue = new Set(),
       mediaQueue = new Set(),
-      deployBtn = document.querySelector(".deploy-website"),
-      deleteBtn = document.querySelector(".delete-website"),
+      container = document.querySelector(".container"),
+      website = document.querySelector("form"),
+      deployWebsite = website.querySelector(".deploy-website"),
+      deleteWebsite = website.querySelector(".delete-website"),
+      addWebsite = document.querySelector(".add-website"),
       addContent = document.querySelector(".add-content"),
       listBtn = document.querySelector(".list-view"),
-      list = document.querySelector(".list"),
+      articleList = document.querySelector(".article-list"),
       cards = document.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
@@ -37,41 +40,58 @@ const apex_app_id = document.querySelector("#pFlowId").value,
 /*
 **  TEXT INPUT COMPONENT
 */
-document.querySelectorAll("textarea").forEach((textarea) => {
-    textarea.addEventListener('input',  e => {
-        const maxchars = e.target.getAttribute("maxlength");
-        const counter = textarea.nextElementSibling.querySelector("span:nth-of-type(2)");
-        let numOfEnteredChars = e.target.value.length;
-        counter.textContent = numOfEnteredChars + "/" + maxchars;
-        if (numOfEnteredChars === Number(maxchars)) {
-            counter.style.color = "red";
+const inputHandler = (e) => {
+    if (e.target.tagName !== "TEXTAREA") return;
+
+    const maxchars = e.target.getAttribute("maxlength");
+    const counter = e.target.nextElementSibling.querySelector("span:nth-of-type(2)");
+    let numOfEnteredChars = e.target.value.length;
+    counter.textContent = numOfEnteredChars + "/" + maxchars;
+    if (numOfEnteredChars === Number(maxchars)) {
+        counter.style.color = "red";
+    } else {
+        counter.style.color = "initial";
+    }
+}
+
+const focusHandler = (e) => {
+    console.log(e);
+    let result;
+    if (e.target.tagName == "TEXTAREA") {
+        result = e.target.nextElementSibling.querySelector("span:nth-of-type(1)");
+    } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
+        result = e.target.closest("fieldset").nextElementSibling.querySelector("span:nth-of-type(1)");
+    } else {
+        return;
+    }
+    result.textContent = "";
+}
+
+const changeHandler = (e) => {
+    let result;
+    if (e.target.tagName == "TEXTAREA") {
+        result = e.target.nextElementSibling.querySelector("span:nth-of-type(1)");
+    } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
+        result = e.target.closest("fieldset").nextElementSibling.querySelector("span:nth-of-type(1)");
+    } else {
+        return;
+    }
+
+    const table_column = e.target.dataset.column,
+            id = e.target.dataset.id,
+            value = e.target.value;
+
+    execProcess("update","PUT",{id:id,table_column:table_column,value:value}).then( (data) => {
+        if (data.rowcount === 1) {
+            result.textContent = "Update OK";
+            result.style.color = "green";
         } else {
-            counter.style.color = "initial";
+            result.textContent = "Update FAILED";
+            result.style.color = "red";
         }
-    });    
-
-    textarea.addEventListener('focus',  () => {
-        const result = textarea.nextElementSibling.querySelector("span:nth-of-type(1)");
-        result.textContent = "";
-    });        
-
-    textarea.addEventListener("change", e => {
-        const result = textarea.nextElementSibling.querySelector("span:nth-of-type(1)");
-        const table_column = e.target.dataset.column,
-              id = e.target.dataset.id,
-              value = e.target.value;
-        execProcess("update","PUT",{id:id,table_column:table_column,value:value}).then( (data) => {
-            if (data.rowcount === 1) {
-                result.textContent = "Update OK";
-                result.style.color = "green";
-            } else {
-                result.textContent = "Update FAILED";
-                result.style.color = "red";
-            }
-            result.style.opacity = "1";
-        });
+        result.style.opacity = "1";
     });
-});
+}
 
 /*
  **  LIST VIEW
@@ -82,16 +102,15 @@ listBtn.addEventListener("click",  () => {
         listBtn.innerHTML = "&#9783;";
         addContent.disabled = true;
         addContent.style.opacity = 0.2;
-        list.style.display = "block";
-        const websiteId = document.querySelector("#domain-id").value;
+        articleList.style.display = "grid";
+        const websiteId = website.dataset.id;
         execProcess( "website-list/"+websiteId,"GET").then( (data) => {
-            const tbody = document.querySelector("tbody");
-            tbody.replaceChildren();
-            tbody.insertAdjacentHTML('afterbegin',data.content);
+            articleList.replaceChildren();
+            articleList.insertAdjacentHTML('afterbegin',data.content);
         });
     } else {
         cards.style.display = "grid";
-        list.style.display = "none";
+        articleList.style.display = "none";
         listBtn.innerHTML = "&#9776;";
         addContent.disabled = false;
         addContent.style.opacity = 1;
@@ -182,14 +201,18 @@ window.addEventListener("DOMContentLoaded", (event) => {
         gConnectionType = connection.downlink + " Mb/s" + " -" + connection.effectiveType;
         console.log("gConnectionType",gConnectionType);
     }
-    
+
     if (navigator.maxTouchPoints > 1) {
-        cards.addEventListener("touchstart",cardHandler);
+        container.addEventListener("touchstart",cardHandler);
         galleryList.addEventListener("touchstart",showFullScreen);
     } else {
-        cards.addEventListener("click",cardHandler);
+        container.addEventListener("click",cardHandler);
         galleryList.addEventListener("click",showFullScreen);
     }
+    container.addEventListener("input",inputHandler);
+    container.addEventListener("focusin",focusHandler);
+    container.addEventListener("change",changeHandler);
+    
 
     if (checkPerformance()) {
         const observer = new PerformanceObserver(perfObserver);
@@ -368,23 +391,25 @@ const cardHandler = (e) => {
 
     if (!card) return;
 
-    const articleId = card.dataset.id;
+    const id = card.dataset.id;
 
     if (e.target.matches(".show-gallery")) {
-        show_gallery(articleId);                     
+        show_gallery(id);                     
     } else if (e.target.matches(".preview")) {
-        preview_article(articleId, e.srcElement);                  
+        preview_article(id, e.srcElement);                  
     } else if (e.target.matches(".delete")) {
-        delete_article(articleId);
+        delete_article(id);
     } else if (e.target.matches(".upload-media")) {
-        upload_media(articleId);
+        upload_media(id);
     } else if (e.target.matches(".edit-text")) {
-        edit_text(articleId,e.srcElement);          
+        edit_text(id,e.srcElement);          
     } else if (e.target.matches(".publish")) {
-        publish_article(articleId, e.srcElement);  
+        publish_article(id, e.srcElement);  
     } else if (e.target.matches(".unpublish")) {
-        unpublish_article(articleId, e.srcElement);                                 
-    }    
+        unpublish_article(id, e.srcElement);                                 
+    } else {
+        console.log("unhandled",e);
+    }
 }
 
 /* ************************************************* 
@@ -711,7 +736,7 @@ const widget=cloudinary.createUploadWidget(
                         "format": item.uploadInfo.format,
                         "cld_cloud_name": item.uploadInfo.url.split("/")[3],
                         "article_id": item.uploadInfo.tags[0],
-                        "website_id": cards.dataset.websiteid
+                        "website_id": website.dataset.id
                     });
                 }
             });
@@ -751,6 +776,16 @@ new Sortable(galleryList, {
                 galleryList.replaceChildren();
                 galleryList.insertAdjacentHTML('afterbegin',data.content);
             });
+        }
+    }
+});
+
+new Sortable(articleList, {
+    animation: 150,
+    ghostClass: 'drag-in-progress',
+    store: {
+        set: async function (sortable) {
+            console.log("sort articleList");
         }
     }
 });
@@ -888,69 +923,36 @@ addContent.addEventListener('click',  e => {
 });
 
 /* 
- ** SHOW WEBSITE ARTILES
- */
-document.querySelectorAll(".show-website").forEach(button => {
-    button.addEventListener('click',  e => {
-        execProcess("website/" + e.target.dataset.websiteid,"GET").then( (data) => {
-            cards.dataset.websiteid = e.target.dataset.websiteid;
-            cards.replaceChildren();
-            cards.insertAdjacentHTML('afterbegin',data.content);
-        });
-    });
-});
-
-/* 
  ** EDIT WEBSITE
  */
 document.querySelectorAll(".edit-website").forEach(button => {
     button.addEventListener('click',  e => {
-        execProcess("website/" + e.target.dataset.websiteid,"GET").then( (data) => {
-            document.getElementById("domain-name").value=data.domain_name;
-            document.getElementById("contact-email").value=data.contact_email;
-            document.getElementById(data.image_dimension).checked=true;
-            document.getElementById(data.template).checked=true;
-            website.showModal();
-        });
+        const websiteId = e.target.dataset.id;
+        popupOpen("EDIT WEBSITE - "+websiteId,"not implemented yet");
     });
 });
 
 /* 
  ** CREATE NEW WEBSITE
  */
-document.querySelectorAll(".add-website").forEach(button => {
-    button.addEventListener('click',  e => {
-        website.showModal();
-    });
-});
-
-/* 
- ** CHARACTER COUNTER FOR FORM INPUT ELEMENTS
- */
-document.querySelectorAll("input[type='text'").forEach(input => {
-    input.addEventListener('input',  e => {
-        const maxchars = e.target.getAttribute("maxlength");
-        const counter = e.target.nextElementSibling;
-        let numOfEnteredChars = e.target.value.length;
-        counter.textContent = numOfEnteredChars + "/" + maxchars;
-    });
+addWebsite.addEventListener('click',  () => {
+    popupOpen("NEW WEBSITE ","not implemented yet");
 });
 
 /* 
  ** DELETE WEBSITE
  */
 
-deleteBtn.addEventListener('click',  () => {
-    const websiteId = document.querySelector("#domain-id").value;
-    popupOpen("DELETE WEBSITE "+websiteId,"not implemented yet");
+deleteWebsite.addEventListener('click',  () => {
+    const websiteId = website.dataset.id;
+    popupOpen("DELETE WEBSITE - "+websiteId,"not implemented yet");
 });
 
 /* 
  ** DEPLOY WEBSITE
  */
-deployBtn.addEventListener('click',  () => {
-    const websiteId = document.querySelector("form").dataset.id;
-    execProcess("deploy/" + websiteId,"POST").then( (data) => {
+deployWebsite.addEventListener('click',  () => {
+    execProcess("deploy/" + website.dataset.id,"POST").then( (data) => {
         popupOpen("Website deployment",data.status);
         if (gIntervalId) {
             clearInterval(gIntervalId);
@@ -1005,7 +1007,8 @@ const edit_text = (articleId,button) => {
         return;
     }
     if (articleId === "0") {
-        execProcess( "article/"+articleId,"POST",{websiteid:cards.dataset.websiteid}).then( (data) => {
+        const websiteId = document.querySelector("form").dataset.id;
+        execProcess( "article/"+articleId,"POST",{websiteid:websiteId}).then( (data) => {
             enable_card_zero(data.articleId);
             editor.setData("");
             editor_status = "init";
@@ -1096,7 +1099,9 @@ popupConfirm.addEventListener("click",  (e) => {
           template = e.target.dataset.template,
           method = e.target.dataset.method;
 
-    execProcess( template + "/" + articleId, method, {websiteid:cards.dataset.websiteid}).then( () => {
+    const websiteId = document.querySelector("form").dataset.id;
+
+    execProcess( template + "/" + articleId, method, {websiteid:websiteId}).then( () => {
         if (template === "article" && method === "DELETE") {
             remove_card(articleId);
             e.target.dataset.id = "";
