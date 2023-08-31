@@ -205,7 +205,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_user_id:=pck_core.getUserId();
         SELECT name INTO l_user_name FROM users WHERE id=l_user_id;
-
+        /*
         FOR C IN (
             SELECT a.id,
                    a.is_public,
@@ -229,6 +229,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_clob:=l_clob || TO_CLOB(
                 pck_core.buildArticle(C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.nav_name, C.page_title, C.word_count, C.updated_date, pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width)));
         END LOOP;
+        */
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -243,12 +244,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE getWebsiteList(pWebsiteId IN website.id%type) IS
         l_clob CLOB;
     BEGIN
-        FOR C IN (SELECT a.id,
-                   a.is_public,
+        FOR C IN (SELECT wa.article_id,
                    c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
                    NVL(a.title, a.excerpt) article_text,
-                   wa.page_title,
-                   wa.page_description,
                    wa.display_order display_order
               FROM article a, website_article wa, asset c
              WHERE wa.website_id=pWebsiteId
@@ -257,11 +255,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
              ORDER BY display_order)
         LOOP
             l_clob:=l_clob || TO_CLOB('
-            <tr data-id="' || C.id || '">
-                <td><img src="' || pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '"></td>
-                <td><textarea>' || C.page_title || '</textarea></td>
-                <td><textarea>' || C.page_description || '</textarea></td>
-            </tr>');
+            <li data-id="' || pWebsiteId || ',' || C.article_id || '">
+                <figure>
+                    <img src="' || pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
+                    <figcaption>' || C.article_text || '</figcaption>
+                </figure>
+            </li>');
         END LOOP;
 
         apex_json.open_object; 
@@ -346,15 +345,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
             END CASE;
 
-            pContent:=pContent || TO_CLOB('
-                <div>
-                    <label for="alt-text">Alt text<span></span></label>
-                    <textarea id="alt-text" maxlength="50"' || CASE WHEN pUserId IS NULL THEN ' readonly' END || '>' || C.alt_text || '</textarea>
-                </div>
-                <div>
-                    <label for="description">Description<span></span></label>
-                    <textarea id="description" maxlength="500"' || CASE WHEN pUserId IS NULL THEN ' readonly' END || '>' || C.description || '</textarea>                    
-                </div>');
+            pContent:=pContent || TO_CLOB(pck_core.buildTextareaWrapper(C.id,'asset.alt_text',C.alt_text));
+            pContent:=pContent || TO_CLOB(pck_core.buildTextareaWrapper(C.id,'asset.description',C.description));
 
             pContent:=pContent || TO_CLOB('</li>');
 
@@ -1263,6 +1255,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */
     PROCEDURE updateField(pBodyText IN CLOB) IS
         l_user_id users.id%type;
+        l_id_1 NUMBER;
+        l_id_2 NUMBER;
         n PLS_INTEGER;
     BEGIN
         l_user_id:=pck_core.getUserId();
@@ -1270,11 +1264,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         FOR C IN (SELECT id, table_column, value
                     FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value)))
         LOOP
+            IF (INSTR(C.id,',')>0) THEN
+                l_id_1:=SUBSTR(C.id,1,INSTR(C.id,',')-1);
+                l_id_2:=SUBSTR(C.id,INSTR(C.id,',')+1);
+            END IF;
+
             CASE C.table_column
                 WHEN 'website.contact_email' THEN
                     UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
                 WHEN 'website.domain_name' THEN
                     UPDATE website SET domain_name=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                WHEN 'website.template' THEN
+                    UPDATE website SET template=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                WHEN 'website_article.nav_name' THEN
+                    UPDATE website_article SET nav_name=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
+                WHEN 'website_article.page_title' THEN
+                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
+                WHEN 'website_article.page_description' THEN
+                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
+                WHEN 'asset.alt_text' THEN
+                    UPDATE asset SET alt_text=C.value, updated_date=current_timestamp WHERE id=C.id;
+                WHEN 'asset.description' THEN
+                    UPDATE asset SET description=C.value, updated_date=current_timestamp WHERE id=C.id;               
             END CASE;
             n:=sql%rowcount;
         END LOOP;
