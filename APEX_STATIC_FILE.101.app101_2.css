@@ -125,7 +125,7 @@ textarea {
     padding-left: 0.5ch;
 }
 
-.textarea-wrapper {
+.textarea-wrapper, radio-wrapper {
     display: flex;
     flex-direction: column;
 }
@@ -191,6 +191,11 @@ input[type="radio"]:checked {
 
 .cluster label {
     display: initial;
+    font-weight: initial;
+}
+
+.radio-wrapper legend {
+    font-weight: 600;
 }
 
 .delete-website {
@@ -463,17 +468,31 @@ nav button {
     font-size: calc(var(--step--2)*.80);
 }
 
-/*
-.card button:hover, .card button:active {
-  background-color: var(--color-button-hover);
+
+/* ******************* */
+/* ARTICLE LIST STYLES */
+/* ******************* */
+
+.article-list {
+  list-style: none;
+  margin: 0;
+  display: grid;
+  grid-gap: 1ex;
+  grid-template-columns: repeat(auto-fill, minmax(min(15ch, 100%), 1fr));
 }
 
-.card button:focus {
-  background-color: var(--color-button-hover);
-  outline-color: transparent;
-  box-shadow: 0 0 0 4px var(--color-button-focus);
+.article-list > li {
+    border: 1px solid slategrey;
 }
-*/
+
+.article-list  figcaption {
+    font-size: var(--step--1);
+    text-wrap: balance;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;  
+    overflow: hidden;
+}
 
 /* ******************************** */
 /* OVERRIDE CKEDITOR DEFAULT STYLES */
@@ -546,7 +565,7 @@ nav button {
   margin: 0;
   display: grid;
   grid-gap: 0.5em;
-  grid-template-columns: repeat(auto-fill, minmax(var(--gallery-width), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(25ch, 100%), 1fr));
 }
 
 .drag-in-progress {
