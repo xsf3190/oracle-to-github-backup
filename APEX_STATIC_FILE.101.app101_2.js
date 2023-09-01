@@ -55,7 +55,6 @@ const inputHandler = (e) => {
 }
 
 const focusHandler = (e) => {
-    console.log(e);
     let result;
     if (e.target.tagName == "TEXTAREA") {
         result = e.target.nextElementSibling.querySelector("span:nth-of-type(1)");
@@ -65,6 +64,7 @@ const focusHandler = (e) => {
         return;
     }
     result.textContent = "";
+    result.style.opacity = "0";
 }
 
 const changeHandler = (e) => {
@@ -99,7 +99,6 @@ const changeHandler = (e) => {
 listBtn.addEventListener("click",  () => {
     if (cards.style.display === "grid") {
         cards.style.display = "none";
-        listBtn.innerHTML = "&#9783;";
         addContent.disabled = true;
         addContent.style.opacity = 0.2;
         articleList.style.display = "grid";
@@ -111,7 +110,6 @@ listBtn.addEventListener("click",  () => {
     } else {
         cards.style.display = "grid";
         articleList.style.display = "none";
-        listBtn.innerHTML = "&#9776;";
         addContent.disabled = false;
         addContent.style.opacity = 1;
     }
@@ -204,10 +202,8 @@ window.addEventListener("DOMContentLoaded", (event) => {
 
     if (navigator.maxTouchPoints > 1) {
         container.addEventListener("touchstart",cardHandler);
-        galleryList.addEventListener("touchstart",showFullScreen);
     } else {
         container.addEventListener("click",cardHandler);
-        galleryList.addEventListener("click",showFullScreen);
     }
     container.addEventListener("input",inputHandler);
     container.addEventListener("focusin",focusHandler);
@@ -392,11 +388,11 @@ const cardHandler = (e) => {
     if (!card) return;
 
     const id = card.dataset.id;
+    console.log("id",id);
+    console.log(e);
 
     if (e.target.matches(".show-gallery")) {
-        show_gallery(id);                     
-    } else if (e.target.matches(".preview")) {
-        preview_article(id, e.srcElement);                  
+        show_gallery(id);                                
     } else if (e.target.matches(".delete")) {
         delete_article(id);
     } else if (e.target.matches(".upload-media")) {
@@ -407,8 +403,10 @@ const cardHandler = (e) => {
         publish_article(id, e.srcElement);  
     } else if (e.target.matches(".unpublish")) {
         unpublish_article(id, e.srcElement);                                 
-    } else {
-        console.log("unhandled",e);
+    } else if (e.target.matches(".delete-asset")) {
+        delete_asset(id, e.target);                                 
+    } else if (e.target.matches(".fullscreen")) {
+        showFullScreen(e);                                 
     }
 }
 
@@ -418,42 +416,7 @@ const cardHandler = (e) => {
  **
  * ************************************************/
 
-/*
- *  Constant variables based on initial property settings
- */
-const galleryWidth = Number(getComputedStyle(document.documentElement).getPropertyValue("--gallery-width").match(/(\d+)/)[1]);
-const min_gallery_width = galleryWidth * .5,
-      max_gallery_width = galleryWidth * 1.5;
-
-const thumbs_minus = gallery.querySelector(".thumbs-minus");
-const thumbs_plus = gallery.querySelector(".thumbs-plus");
-
-thumbs_minus.addEventListener("click", () => {
-    setGalleryWidth("down",thumbs_minus,thumbs_plus);
-});
-thumbs_plus.addEventListener("click", () => {
-    setGalleryWidth("up",thumbs_minus,thumbs_plus);
-});
-
-/*
- **  Allow user to set Gallery thumbnail width up and down between 5rem and 15rem
- */
-const setGalleryWidth = (sizing,thumbs_minus,thumbs_plus) => {
-    const galleryWidth = getComputedStyle(document.documentElement).getPropertyValue(
-        "--gallery-width"
-    );
-    let width = Number(galleryWidth.match(/(\d+)/)[1]);
-    if (sizing === "up") {
-        width++;
-    } else {
-        width--;
-    }
-    document.documentElement.style.setProperty("--gallery-width", width + "rem");
-    thumbs_minus.disabled = width === min_gallery_width ? true : false;
-    thumbs_plus.disabled = width === max_gallery_width ? true : false;
-};
-
-enableKeydown = (event) => {
+const enableKeydown = (event) => {
     const keyName = event.key;
     if (keyName === "Escape") {
         galleryFullClose.click();
@@ -468,7 +431,7 @@ enableKeydown = (event) => {
 ** CLICK THUMBNAIL SHOWS IMAGE IN FULLSCREEN
 */
 const showFullScreen = (e) => {
-    if (e.target.tagName !== "IMG") return;
+    //if (e.target.tagName !== "IMG") return;
     galleryFull.requestFullscreen().then(() => {
         gFullImage = e.target;
         setImgSrc(e.target);
@@ -656,19 +619,6 @@ galleryFull.querySelectorAll("button.dimensions").forEach((button) => {
     });
 });
 
-/*
- **  LIST PERFORMANCE METRICS
- */
-listPerformance.addEventListener("click",  () => {
-    execProcess("uploadPerformance",{p_clob_01: JSON.stringify(gPerfObj)}).then( () => {
-        gPerfObj.images.length = 0;
-        execProcess("getPerformance", {x01:gArticleId}).then((data) => {
-            perftable.querySelector(".content").innerHTML = data.content;
-            perftable.showModal();
-        });
-    });
-});
-
 /* 
  ** GENERATE SIGNATURE FOR CLOUDINARY SUSCRIBER TO ENABLE SECURE MEDIA UPLOAD
  */
@@ -780,12 +730,18 @@ new Sortable(galleryList, {
     }
 });
 
+/* 
+ ** ENABLE DRAG AND DROP OF WEBSITE ARTICLES TO RE-ORDER
+ */
+
 new Sortable(articleList, {
     animation: 150,
     ghostClass: 'drag-in-progress',
     store: {
         set: async function (sortable) {
-            console.log("sort articleList");
+            execProcess("website-list/" + website.dataset.id, "PUT", {dbid_string: sortable.toArray().join(":")} ).then( () => {
+                console.log("articleList reordered");
+            });
         }
     }
 });
@@ -863,19 +819,6 @@ ClassicEditor.create(document.querySelector("#editor"), {
     .catch(error => {
         console.error(error);
     });
-
-/*
-window.addEventListener("DOMContentLoaded", () => {
-    if (navigator.maxTouchPoints > 1) {
-            cards.addEventListener("touchstart",cardHandlerAuth);
-            galleryList.addEventListener("touchstart",assetHandlerAuth);
-    } else {
-        cards.addEventListener("click",cardHandlerAuth);
-        galleryList.addEventListener("click",assetHandlerAuth);
-    }
-});
-*/
-
 
 /* 
  ** CARD 0 HAS CONTENT - MEDIA OR TEXT - SO ENABLE BUTTONS AND SET ARTICLE ID IN DROPDOWN LIST
@@ -1160,28 +1103,6 @@ const unpublish_article = (articleId, button) => {
     });
 }
 
-/* 
- ** HANDLE CARD ACTIONS THAT UPDATE CONTENT
- */
-const cardHandlerAuth = (e) => {
-    const card = e.srcElement.closest(".card");
-    if (!card) return;
-
-    const articleId = card.dataset.id;
-
-    if (e.target.matches(".delete")) {
-        delete_article(articleId);
-    } else if (e.target.matches(".upload-media")) {
-        upload_media(articleId);
-    } else if (e.target.matches(".edit-text")) {
-        edit_text(articleId,e.srcElement);          
-    } else if (e.target.matches(".publish")) {
-        publish_article(articleId, e.srcElement);  
-    } else if (e.target.matches(".unpublish")) {
-        unpublish_article(articleId, e.srcElement);                                 
-    }
-}
-
 /* *******************************
 ** START OF THUMBNAIL GALLERY CODE 
 *  *******************************/
@@ -1212,41 +1133,4 @@ const delete_asset = (id, button) => {
         updated_date.textContent = data.updated;
         show_gallery.textContent = "1/" + data.nb;
     });
-}
-
-/* 
- ** DELETE ASSET AND UPDATE THUMBNAIL GALLERY
- */
-const update_asset = (id, li) => {
-    const altText = li.querySelector("#alt-text").value,
-          description = li.querySelector("#description").value;
-    execProcess( "asset/"+id, "PUT", {alttext: altText, description: description}).then( (data) => {
-        if (data.alt_text_updated) {
-            li.querySelector("[for='alt-text'] > span").textContent = " - updated successfully";
-        } else {
-            li.querySelector("[for='alt-text'] > span").textContent = "";
-        }
-        if (data.description_updated) {
-            li.querySelector("[for='description'] > span").textContent = " - updated successfully";
-        } else {
-            li.querySelector("[for='description'] > span").textContent = "";
-        }       
-    });
-}
-
-/* 
- ** HANDLE ASSET ACTIONS THAT UPDATE CONTENT
- */
-const assetHandlerAuth = (e) => {
-
-    const item = e.target.closest(".card");
-    if (!item) return;
-
-    const id = item.dataset.id;
-
-    if (e.target.matches(".delete-asset")) {
-        delete_asset(id, e.target);                                 
-    } else if (e.target.matches(".update-asset")) {
-        update_asset(id, item); 
-    }
 }
