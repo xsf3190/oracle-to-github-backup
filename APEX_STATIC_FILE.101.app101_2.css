@@ -103,7 +103,7 @@ nav {
     top: 0;
     z-index: 1;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: no-wrap;
     justify-content: space-between;
     background-color: var(--color-dark);
     color: var(--color-light-glare);
@@ -134,7 +134,7 @@ textarea {
 .textarea-wrapper  span:first-of-type {
     padding-left: 0.5ch;
     opacity: 0;
-    transition: all 1s ease-in-out;
+    transition: opacity 1s ease-in-out;
 }
 
 hr {
@@ -317,7 +317,7 @@ dialog legend > button {
 /* DEFAULT BUTTON  */
 /* *************** */
 
-button, input[type="submit"] {
+button {
     min-height: 54px;
     min-width: 54px;
     border: none;
@@ -330,11 +330,14 @@ button, input[type="submit"] {
 }
 
 
-button:enabled, input[type="submit"] {
+button:enabled {
     cursor: pointer;
 }
 
-
+button > svg {
+    padding: 0.5ch;
+    pointer-events: none;
+}
 
 
 /* *************** */
@@ -420,6 +423,8 @@ nav button {
   display: grid;
   grid-template-rows: max-content max-content max-content 1fr;
   gap: 0.75em;
+  opacity: 1;
+  transition: opacity 1s ease-in-out;
 }
 
 .card img {
