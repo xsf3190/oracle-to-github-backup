@@ -28,11 +28,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE reorderAssets(pBodyText IN CLOB);
     --
+    PROCEDURE reorderWebsiteArticles(pWebsiteId IN website_article.website_id%type, pBodyText IN CLOB);
+    --
     PROCEDURE setClientInfo(pBodyText IN CLOB);
     --
     PROCEDURE unpublishArticle(pArticleId IN article.id%type);
-    --
-    PROCEDURE updateAsset(pBodyText IN CLOB, pId IN asset.id%type);
     --
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
     --
@@ -255,7 +255,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
              ORDER BY display_order)
         LOOP
             l_clob:=l_clob || TO_CLOB('
-            <li data-id="' || pWebsiteId || ',' || C.article_id || '">
+            <li data-id="' || C.article_id || '">
                 <figure>
                     <img src="' || pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
                     <figcaption>' || C.article_text || '</figcaption>
@@ -300,24 +300,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END IF;
 
             pContent:=pContent || TO_CLOB('
-                <li class="card" tabindex="0"' || CASE WHEN pUserId IS NOT NULL THEN ' data-id="' || C.id || '"' END || '>
+                <li class="card" tabindex="0" data-id="' || C.id || '">
                     <div class="button-container">
-                        <span>' || C.rn || '/' || C.nb || '</span>' || 
-                        CASE WHEN pUserId IS NOT NULL THEN
-                        '<div class="dropdown">
-                            <button type="button" class="fa fa-caret-down show-dropdown">&blacktriangledown;</button>
-                            <ul class="dropdown-items">
-                                <li><button type="button" class="fa fa-refresh update-asset">Update Text</button></li>
-                                <li><button type="button" class="fa fa-id-card view-performance">Performance</button></li>
-                                <li><button type="button" class="fa fa-trash delete-asset">Delete</button></li>
-                            </ul>
-                        </div>' END || '
+                        <span>' || C.rn || '/' || C.nb || '</span>
+                        <button type="button" class="fa delete-asset">' || pck_icons.g_delete_svg || '</button>
                     </div>');
 
             l_url_image:=pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
             l_media_type:=pck_core.getMediaType(C.resource_type, C.format);
 
-            pContent:=pContent || TO_CLOB('<img data-dimensions="'  || 
+            pContent:=pContent || TO_CLOB('<img class="fullscreen" data-dimensions="'  || 
                                             ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || 
                                             ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':' || 
                                             C.width || 'x' || C.height || '" src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>');
@@ -407,13 +399,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
          WHEN MATCHED THEN UPDATE SET updated_date=current_timestamp
          WHEN NOT MATCHED THEN INSERT (id, author_user_id, created_date) VALUES (s.article_id, l_user_id, current_timestamp);
 
-        /* create row in website_article table if we are in a website */
-        IF (l_website_id IS NOT NULL) THEN
-            SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_article WHERE article_id=l_article_id AND website_id=l_website_id);
-            IF (n=0) THEN
-                SELECT NVL(MAX(display_order),0)+1 INTO l_start_order_website FROM website_article WHERE website_id=l_website_id;
-                INSERT INTO website_article(article_id, website_id, display_order) VALUES (l_article_id, l_website_id, l_start_order_website);
-            END IF;
+        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_article WHERE article_id=l_article_id AND website_id=l_website_id);
+        IF (n=0) THEN
+            SELECT NVL(MAX(display_order),0)+1 INTO l_start_order_website FROM website_article WHERE website_id=l_website_id;
+            INSERT INTO website_article(article_id, website_id, display_order, user_id) VALUES (l_article_id, l_website_id, l_start_order_website, l_user_id);
         END IF;
 
         SELECT NVL(MAX(display_order),0) INTO l_start_order FROM asset WHERE article_id=l_article_id;
@@ -825,7 +814,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         FOR C IN (SELECT websiteid FROM JSON_TABLE(pBodyText, '$' COLUMNS (websiteid))) LOOP
             SELECT NVL(MAX(display_order),0)+1 INTO l_display_order FROM website_article WHERE website_id=C.websiteid;
-            INSERT INTO website_article(article_id, website_id, display_order) VALUES (seq_article.currval, C.websiteid, l_display_order);
+            INSERT INTO website_article(article_id, website_id, display_order, user_id) VALUES (seq_article.currval, C.websiteid, l_display_order, l_user_id);
         END LOOP;
 
         APEX_JSON.open_object; 
@@ -970,40 +959,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
-        apex_json.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-    END;
-
-
-    /*
-     **  Update the alt_text and description columns of a given ASSET
-     */   
-    PROCEDURE updateAsset(pBodyText IN CLOB, pId IN asset.id%type) IS
-        l_alt_text asset.alt_text%type := apex_application.g_x02;
-        l_description asset.description%type := apex_application.g_x03;
-        l_alt_text_old asset.alt_text%type := apex_application.g_x02;
-        l_description_old asset.description%type := apex_application.g_x03; 
-        l_alt_text_updated BOOLEAN;
-        l_description_updated BOOLEAN;
-    BEGIN
-        SELECT alttext, description INTO l_alt_text, l_description
-          FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (alttext, description));
-
-        SELECT alt_text, description INTO l_alt_text_old,l_description_old  FROM asset WHERE id=pId;
-
-        UPDATE asset SET alt_text=l_alt_text, description=l_description, updated_date=current_timestamp WHERE id=pId;
-
-        l_alt_text_updated:=NVL(l_alt_text,'x') != NVL(l_alt_text_old,'x');
-        l_description_updated:=NVL(l_description,'x') != NVL(l_description_old,'x');
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('updated', pck_core.fmtUpdatedDate(current_timestamp)); 
-        apex_json.write('alt_text_updated',l_alt_text_updated);
-        apex_json.write('description_updated',l_description_updated);
         apex_json.close_object;
 
         EXCEPTION
@@ -1178,6 +1133,45 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;    
 
     /*
+     **  Reorder website articles
+     */
+    PROCEDURE reorderWebsiteArticles(pWebsiteId IN website_article.website_id%type, pBodyText IN CLOB) IS
+        l_dbid_string LONG;
+
+        TYPE t_website_article IS RECORD(
+            article_id website_article.article_id%type,
+            display_order website_article.display_order%type);
+        TYPE tt_website_article IS TABLE OF t_website_article;
+        l_website_articles tt_website_article; 
+
+        l_user_id users.id%type;
+    BEGIN
+        l_user_id:=pck_core.getUserId();
+
+        SELECT dbid_string INTO l_dbid_string 
+          FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (dbid_string));
+
+        SELECT column_value, rownum 
+          BULK COLLECT INTO l_website_articles
+          FROM TABLE(apex_string.split(l_dbid_string,':'));
+
+        FORALL i IN l_website_articles.first .. l_website_articles.last
+        UPDATE website_article 
+           SET display_order=l_website_articles(i).display_order 
+         WHERE website_id = pWebsiteId
+           AND article_id=l_website_articles(i).article_id
+           AND user_id=l_user_id;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+    END;
+
+    /*
      **  Reorder assets
      */
     PROCEDURE reorderAssets(pBodyText IN CLOB) IS
@@ -1249,7 +1243,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
-
     /**
      **    Update a specified column value
      */
@@ -1277,15 +1270,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 WHEN 'website.template' THEN
                     UPDATE website SET template=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
                 WHEN 'website_article.nav_name' THEN
-                    UPDATE website_article SET nav_name=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
+                    UPDATE website_article SET nav_name=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
                 WHEN 'website_article.page_title' THEN
-                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
+                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
                 WHEN 'website_article.page_description' THEN
-                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
+                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
                 WHEN 'asset.alt_text' THEN
-                    UPDATE asset SET alt_text=C.value, updated_date=current_timestamp WHERE id=C.id;
+                    UPDATE asset SET alt_text=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
                 WHEN 'asset.description' THEN
-                    UPDATE asset SET description=C.value, updated_date=current_timestamp WHERE id=C.id;               
+                    UPDATE asset SET description=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;               
             END CASE;
             n:=sql%rowcount;
         END LOOP;
