@@ -465,7 +465,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         l_clob:=l_clob || TO_CLOB(
             '<div class="dropdown">
-                <button type="button" class="show-dropdown" disabled>' || apex_application.g_user || '</button>
+                <!--<button type="button" class="show-dropdown" disabled>' || apex_application.g_user || '</button>-->
+                <span>' || apex_application.g_user || '</span>
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
                 <ul class="dropdown-items">
                     <li><button type="button" class="signout">Sign out</button></li>
@@ -503,7 +504,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <hr>
                     <div class="button-container full-width">
                         <button type="button" class="add-content">NEW CONTENT</button>
-                        <button type="button" class="list-view" title="Article thumbnails to aid drag and drop">&#9776;</button>
+                        <button type="button" class="list-view" title="Article thumbnails to aid drag and drop">&#9783;</button>
                     </div>
                     <ul class="cards" style="display:grid">' || buildWebsiteArticles(C.id) || '
                     </ul>
@@ -536,14 +537,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </dialog>            
         <dialog class="gallery">
             <div>
-                <button type="button" class="close" autofocus>&times;</button>
-                <nav>
-                    <div>
-                        <button type="button" class="thumbs-minus fa">&minus;</button>
-                        <button type="button" class="thumbs-plus fa">&plus;</button>
-                    </div>
-                    <button type="button" class="list-performance">PERFORMANCE</button>
-                </nav>
+                <button type="button" class="close">&times;</button>
                 <div class="gallery-container" role="region" aria-label="gallery">
                     <p class="instruction"></p>
                     <ul></ul>
