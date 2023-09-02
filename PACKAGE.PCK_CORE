@@ -426,12 +426,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_clob CLOB;
         l_user_id users.id%type;
         l_user_name users.name%type;
-        l_current_website website.id%type;
-        TYPE t_domain IS RECORD(
-            id website.id%type,
-            domain_name website.domain_name%type);
-        TYPE tt_domain IS TABLE OF t_domain;
-        l_domains tt_domain;     
+
+        TYPE tt_domain IS TABLE OF website%rowtype;
+        l_domains tt_domain;  
     BEGIN
        SELECT id, name 
           INTO l_user_id, l_user_name
@@ -439,14 +436,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
          WHERE email=apex_application.g_user;
 
         l_clob:=l_clob || TO_CLOB(
-        '<nav class="full-width">
-            <button type="button" class="add-website">NEW WEBSITE</button>');
+        '<nav class="full-width">');
 
-        SELECT id, domain_name
+        SELECT *
           BULK COLLECT INTO l_domains
           FROM website
          WHERE user_id=l_user_id
          ORDER BY updated_date DESC;
+
+        IF (l_domains.COUNT>0) THEN
+            l_clob:=l_clob || TO_CLOB('
+            <button type="button" class="add-website">NEW WEBSITE</button>');
+        END IF;
 
         IF (l_domains.COUNT>1) THEN
             l_clob:=l_clob || TO_CLOB(
@@ -470,48 +471,51 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
                 <ul class="dropdown-items">
                     <li><button type="button" class="signout">Sign out</button></li>
+                    <li><button type="button" class="set-cloudinary">Cloudinary API</button></li>
+                    <li><button type="button" class="set-netlify">Netlify API</button></li>
                     <li><button type="button" class="delete-user">Delete all content</button></li>
                 </ul>
             </div>
         </nav>');
 
-        IF (l_domains.COUNT>0) THEN
-            FOR C IN (
-                SELECT id, domain_name, contact_email, template, favicon_url, trade_name, affiliation_link_img, affiliation_link_url
-                FROM website 
-                WHERE id=l_domains(1).id
-                AND user_id=l_user_id) 
-            LOOP
-                l_clob:=l_clob || TO_CLOB('
-                    <form data-id="' || C.id || '">'
-                        || buildTextareaWrapper(l_domains(1).id, 'website.domain_name', C.domain_name) 
-                        || buildTextareaWrapper(l_domains(1).id, 'website.contact_email', C.contact_email) || '
-                        <div class="radio-wrapper">
-                            <fieldset>
-                                <legend>Website Template</legend>
-                                <div class="cluster">' || buildTemplates(C.id, C.template) || '
-                                </div>
-                            </fieldset>
-                            <div class="button-container">
-                                <span></span><span>&nbsp;</span>
-                            </div>
-                        </div>
-                        <div class="button-container">
-                            <button type="button" class="deploy-website">DEPLOY</button>
-                            <button type="button" class="delete-website">DELETE WEBSITE</button>
-                        </div>
-                    </form>
-                    <hr>
-                    <div class="button-container full-width">
-                        <button type="button" class="add-content">NEW CONTENT</button>
-                        <button type="button" class="list-view" title="Article thumbnails to aid drag and drop">&#9783;</button>
-                    </div>
-                    <ul class="cards" style="display:grid">' || buildWebsiteArticles(C.id) || '
-                    </ul>
-                    <ul class="article-list" style="display:none">
-                    </ul>');
-            END LOOP;
+        IF (l_domains.COUNT=0) THEN
+            l_domains.EXTEND(1);
         END IF;
+
+        l_clob:=l_clob || TO_CLOB('
+        <form data-id="' || l_domains(1).id || '">' ||
+            buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name) || '
+            <div class="radio-wrapper">
+                <fieldset>
+                    <legend>Website Template</legend>
+                    <div class="cluster">' || buildTemplates(l_domains(1).id, l_domains(1).template) || '
+                    </div>
+                </fieldset>
+                <div class="button-container">
+                    <span></span><span>&nbsp;</span>
+                </div>
+            </div>' ||
+            buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email) || '
+            <div class="button-container">' ||
+            CASE WHEN l_domains(1).id IS NOT NULL 
+            THEN
+                '<button type="button" class="deploy-website">DEPLOY WEBSITE</button>
+                <button type="button" class="delete-website">DELETE WEBSITE</button>'
+            ELSE
+                '<button type="button" class="add-website">CREATE WEBSITE</button>
+                <button type="button" class="delete-website" style="display:none" disabled></button>'
+            END || '
+            </div>
+        </form>
+        <hr>
+        <div class="button-container full-width">
+            <button type="button" class="add-content">NEW CONTENT</button>
+            <button type="button" class="list-view" title="Article thumbnails to aid drag and drop">&#9783;</button>
+        </div>
+        <ul class="cards" style="display:grid">' || buildWebsiteArticles(l_domains(1).id) || '
+        </ul>
+        <ul class="article-list" style="display:none">
+        </ul>');
 
         l_clob:=l_clob || TO_CLOB(
         '<dialog class="popup">
