@@ -1244,53 +1244,76 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /**
-     **    Update a specified column value
+     **    Update the column value of 1 row
      */
     PROCEDURE updateField(pBodyText IN CLOB) IS
         l_user_id users.id%type;
         l_id_1 NUMBER;
         l_id_2 NUMBER;
-        n PLS_INTEGER;
+        l_clob CLOB;
+        l_message VARCHAR2(50);
+        l_color VARCHAR2(5);
+        n PLS_INTEGER:=1;
     BEGIN
         l_user_id:=pck_core.getUserId();
 
         FOR C IN (SELECT id, table_column, value
                     FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value)))
         LOOP
-            IF (C.id IS NULL) THEN
-                n:=-1;
-                EXIT;
-            END IF;
-
             IF (INSTR(C.id,',')>0) THEN
                 l_id_1:=SUBSTR(C.id,1,INSTR(C.id,',')-1);
                 l_id_2:=SUBSTR(C.id,INSTR(C.id,',')+1);
             END IF;
 
-            CASE C.table_column
-                WHEN 'website.contact_email' THEN
-                    UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
-                WHEN 'website.domain_name' THEN
+            IF (C.table_column='website.domain_name') THEN
+                pck_core.callNetlifyAPI(pUserId=>l_user_id,pEndpoint=>'sites',pMethod=>'GET', pData=>l_clob);
+                FOR C1 IN (SELECT name, custom_domain FROM JSON_TABLE(l_clob, '$[*]' COLUMNS name, custom_domain)) LOOP
+                    IF (C.value=C1.name OR C.value=C1.custom_domain) THEN
+                        l_message:='Name already taken';
+                        l_color:='red';
+                        EXIT;
+                    END IF;
+                END LOOP;
+                IF (l_message IS NULL AND C.id IS NOT NULL) THEN
                     UPDATE website SET domain_name=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
-                WHEN 'website.template' THEN
-                    UPDATE website SET template=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
-                WHEN 'website_article.nav_name' THEN
-                    UPDATE website_article SET nav_name=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
-                WHEN 'website_article.page_title' THEN
-                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
-                WHEN 'website_article.page_description' THEN
-                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
-                WHEN 'asset.alt_text' THEN
-                    UPDATE asset SET alt_text=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
-                WHEN 'asset.description' THEN
-                    UPDATE asset SET description=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;               
-            END CASE;
-            n:=sql%rowcount;
+                    n:=sql%rowcount;
+                END IF;
+            ELSIF (C.id IS NOT NULL) THEN
+                CASE C.table_column
+                    WHEN 'website.contact_email' THEN
+                        UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                    WHEN 'website.template' THEN
+                        UPDATE website SET template=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                    WHEN 'website_article.nav_name' THEN
+                        UPDATE website_article SET nav_name=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
+                    WHEN 'website_article.page_title' THEN
+                        UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
+                    WHEN 'website_article.page_description' THEN
+                        UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
+                    WHEN 'asset.alt_text' THEN
+                        UPDATE asset SET alt_text=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                    WHEN 'asset.description' THEN
+                        UPDATE asset SET description=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;               
+                END CASE;
+                n:=sql%rowcount;
+            END IF;
         END LOOP;
+
+        IF (l_message IS NULL) THEN
+            IF (n=1) THEN
+                l_message:='Updated OK';
+                l_color:='green';
+            ELSE
+                l_message:='Update NOK';
+                l_color:='red';
+            END IF;
+        END IF;
 
         apex_json.open_object;
         apex_json.write('success', TRUE);
-        apex_json.write('rowcount', n);
+        apex_json.write('message', l_message);
+        apex_json.write('color', l_color);
+
         apex_json.close_object;
 
         EXCEPTION
