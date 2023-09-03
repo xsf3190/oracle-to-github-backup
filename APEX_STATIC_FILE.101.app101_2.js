@@ -11,10 +11,12 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       vitalsQueue = new Set(),
       mediaQueue = new Set(),
       container = document.querySelector(".container"),
+      newWebsite = document.querySelector(".new-website"),
+      editWebsite = document.querySelector(".edit-website"),
       website = document.querySelector("form"),
       deployWebsite = website.querySelector(".deploy-website"),
+      addWebsite = website.querySelector(".add-website"),
       deleteWebsite = website.querySelector(".delete-website"),
-      addWebsite = document.querySelector(".add-website"),
       addContent = document.querySelector(".add-content"),
       listBtn = document.querySelector(".list-view"),
       articleList = document.querySelector(".article-list"),
@@ -78,18 +80,33 @@ const changeHandler = (e) => {
     }
 
     const table_column = e.target.dataset.column,
-            id = e.target.dataset.id,
-            value = e.target.value;
+          id = e.target.dataset.id,
+          value = e.target.value;
 
     execProcess("update","PUT",{id:id,table_column:table_column,value:value}).then( (data) => {
-        if (data.rowcount === 1) {
-            result.textContent = "Update OK";
-            result.style.color = "green";
-        } else {
-            result.textContent = "Update FAILED";
-            result.style.color = "red";
-        }
+        result.textContent = data.message;
+        result.style.color = data.color;
         result.style.opacity = "1";
+
+        if (deployWebsite) {
+            if (data.color==="red") {
+                deployWebsite.disabled = true;
+                deployWebsite.style.opacity = "0.2";
+            } else {
+                deployWebsite.disabled = false;
+                deployWebsite.style.opacity = "1";           
+            }
+        }
+
+        if (addWebsite) {
+            if (data.color==="red") {
+                addWebsite.disabled = true;
+                addWebsite.style.opacity = "0.2";
+            } else if (document.querySelector("#domain_name").value) {
+                addWebsite.disabled = false;
+                addWebsite.style.opacity = "1";           
+            }
+        }        
     });
 }
 
