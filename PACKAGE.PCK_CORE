@@ -2,6 +2,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     gWidthThumbnail CONSTANT INTEGER:=360;
     --
+    PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB);
+    --
     PROCEDURE log(pMsg IN VARCHAR2);
     --
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB);
@@ -167,6 +169,40 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         EXCEPTION
             WHEN OTHERS THEN
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+    END;
+
+    PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
+        l_app_id NUMBER;
+        l_session_id users.apex_session_id%type;
+        l_page_id NUMBER;
+        l_netlify_token users.netlify_token%type;
+        l_netlify_url VARCHAR2(50):='https://api.netlify.com/api/v1/';
+    BEGIN
+        /* Get user's netlify token */
+        FOR C IN (SELECT netlify_token FROM users WHERE id=pUserId) LOOP 
+            l_netlify_token:=C.netlify_token;
+        END LOOP;
+
+        /* Use Administrator's token if user does not have token */
+        IF (l_netlify_token IS NULL) THEN
+            getApexSession(l_app_id, l_session_id, l_page_id);
+            SELECT u.netlify_token INTO l_netlify_token FROM apex_applications a, users u WHERE a.application_id=l_app_id AND a.email_from=u.email;
+        END IF;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'Authorization';
+        apex_web_service.g_request_headers(1).value := 'Bearer ' || l_netlify_token;   
+        apex_web_service.g_request_headers(2).name := 'Content-Type';
+        apex_web_service.g_request_headers(2).value := 'application/json';
+
+        IF (pBody IS NULL) THEN
+            pData := apex_web_service.make_rest_request(p_url=>l_netlify_url || pEndpoint, p_http_method=>pMethod);
+        ELSE
+            pData := apex_web_service.make_rest_request(p_url=>l_netlify_url || pEndpoint, p_http_method=>pMethod, p_body=>pBody);
+        END IF;
+
+        EXCEPTION WHEN OTHERS THEN
+            log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     /*
@@ -445,28 +481,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
          ORDER BY updated_date DESC;
 
         IF (l_domains.COUNT>0) THEN
-            l_clob:=l_clob || TO_CLOB('
-            <button type="button" class="add-website">NEW WEBSITE</button>');
-        END IF;
-
-        IF (l_domains.COUNT>1) THEN
             l_clob:=l_clob || TO_CLOB(
             '<div class="dropdown">
-                <button type="button" class="show-dropdown" disabled>' || l_domains(1).domain_name || '</button>
+                <span>' || l_domains(1).domain_name || '</span>
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
                 <ul class="dropdown-items">');
-            FOR i IN 1..l_domains.COUNT LOOP
+            FOR i IN 2..l_domains.COUNT LOOP
                 l_clob:=l_clob || TO_CLOB(
                 '<li><button type="button" class="edit-website" data-websiteid="' || l_domains(i).id || '">' || l_domains(i).domain_name || '</button></li>');
             END LOOP;
             l_clob:=l_clob || TO_CLOB(
-                '</ul>
+                '<li><button type="button" class="new-website">NEW WEBSITE</button></li>
+                </ul>
             </div>');
         END IF;
 
         l_clob:=l_clob || TO_CLOB(
             '<div class="dropdown">
-                <!--<button type="button" class="show-dropdown" disabled>' || apex_application.g_user || '</button>-->
                 <span>' || apex_application.g_user || '</span>
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
                 <ul class="dropdown-items">
@@ -502,7 +533,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 '<button type="button" class="deploy-website">DEPLOY WEBSITE</button>
                 <button type="button" class="delete-website">DELETE WEBSITE</button>'
             ELSE
-                '<button type="button" class="add-website">CREATE WEBSITE</button>
+                '<button type="button" class="add-website" disabled>CREATE WEBSITE</button>
                 <button type="button" class="delete-website" style="display:none" disabled></button>'
             END || '
             </div>
