@@ -238,7 +238,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN('
         <div style="max-width:min(' || l_data_length || 'ch,100%)" class="textarea-wrapper">
             <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</label>
-            <textarea id="' || l_column_name || '" maxlength="' || l_data_length || '" rows="1" data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>
+            <textarea id="' || l_column_name || '" name="' || LOWER(l_column_name) || '" maxlength="' || l_data_length || '" rows="1" data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>
             <div class="button-container">
                 <span></span>
                 <span>' || NVL(LENGTH(pValue),0) || '/' || l_data_length || '</span>
@@ -514,12 +514,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END IF;
 
         l_clob:=l_clob || TO_CLOB('
-        <form data-id="' || l_domains(1).id || '">' ||
+        <form data-id="' || NVL(l_domains(1).id,0) || '">' ||
             buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name) || '
             <div class="radio-wrapper">
                 <fieldset>
                     <legend>Website Template</legend>
-                    <div class="cluster">' || buildTemplates(l_domains(1).id, l_domains(1).template) || '
+                    <div class="cluster">' || buildTemplates(l_domains(1).id, NVL(l_domains(1).template,'BASIC')) || '
                     </div>
                 </fieldset>
                 <div class="button-container">
@@ -527,21 +527,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </div>
             </div>' ||
             buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email) || '
-            <div class="button-container">' ||
-            CASE WHEN l_domains(1).id IS NOT NULL 
-            THEN
-                '<button type="button" class="deploy-website">DEPLOY WEBSITE</button>
-                <button type="button" class="delete-website">DELETE WEBSITE</button>'
-            ELSE
-                '<button type="button" class="add-website" disabled>CREATE WEBSITE</button>
-                <button type="button" class="delete-website" style="display:none" disabled></button>'
-            END || '
+            <div class="button-container">
+                <button type="button" class="add-website" disabled' || CASE WHEN l_domains(1).id IS NOT NULL THEN ' style="display:none"' END || '>CREATE WEBSITE</button>
+                <button type="button" class="deploy-website" disabled' || CASE WHEN l_domains(1).id IS NULL THEN ' style="display:none"' END || '>DEPLOY WEBSITE</button>
+                <button type="button" class="delete-website" disabled' || CASE WHEN l_domains(1).id IS NULL THEN ' style="display:none"' END || '>DELETE WEBSITE</button>
             </div>
         </form>
         <hr>
         <div class="button-container full-width">
-            <button type="button" class="add-content">NEW CONTENT</button>
-            <button type="button" class="list-view" title="Article thumbnails to aid drag and drop">&#9783;</button>
+            <button type="button" class="add-content"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled style="opacity:0.2"' END || '>NEW CONTENT</button>
+            <button type="button" class="list-view" title="Article thumbnails for drag and drop"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled style="opacity:0.2"' END || '>&#9783;</button>
         </div>
         <ul class="cards" style="display:grid">' || buildWebsiteArticles(l_domains(1).id) || '
         </ul>
