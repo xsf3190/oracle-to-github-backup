@@ -893,19 +893,41 @@ document.querySelectorAll(".edit-website").forEach(button => {
 });
 
 /* 
- ** CREATE NEW WEBSITE
+ ** CREATE NEW WEBSITE (OR COPY IF ID>0)
  */
-addWebsite.addEventListener('click',  () => {
-    popupOpen("NEW WEBSITE ","not implemented yet");
+addWebsite.addEventListener('click',  (e) => {
+    const formdata = Object.fromEntries(new FormData(website));
+    execProcess("website/" + website.dataset.id,"POST", formdata).then( (data) => {
+        e.target.style.display = "none";
+        deployWebsite.style.display = "block";
+        deleteWebsite.style.display = "block";
+        deleteWebsite.disabled = false;
+
+        website.dataset.id = data.websiteid;
+        const inputs = website.elements;
+        for (let i = 0; i < inputs.length; i++) {
+            inputs[i].dataset.id = data.websiteid;
+        }
+    });
 });
 
 /* 
  ** DELETE WEBSITE
  */
 
-deleteWebsite.addEventListener('click',  () => {
-    const websiteId = website.dataset.id;
-    popupOpen("DELETE WEBSITE - "+websiteId,"not implemented yet");
+deleteWebsite.addEventListener('click',  (e) => {
+    execProcess("website/" + website.dataset.id, "DELETE").then( (data) => {
+        e.target.style.display = "none";
+        deployWebsite.style.display = "none";
+        website.dataset.id = "";
+        const inputs = website.elements;
+        for (let i = 0; i < inputs.length; i++) {
+            inputs[i].dataset.id = "";
+            if (inputs[i].type === "textarea") {
+                inputs[i].value= "";
+            }
+        }
+    });
 });
 
 /* 
