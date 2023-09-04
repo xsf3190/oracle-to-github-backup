@@ -6,6 +6,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE deleteAsset(pId IN asset.id%type);
     --
+    PROCEDURE deleteWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB);
+    --
     PROCEDURE getContent(pWebsiteId IN website.id%type);
     --
     PROCEDURE getCldDetails(pArticleId IN article.id%type);
@@ -23,6 +25,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     PROCEDURE getWebsiteList(pWebsiteId IN website.id%type);
     --
     PROCEDURE insertArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
+    --
+    PROCEDURE insertWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB);
     --
     PROCEDURE publishArticle(pArticleId IN article.id%type);
     --
@@ -1075,6 +1079,61 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
+     **  Insert Website
+     */  
+    PROCEDURE insertWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
+        l_user_id users.id%type;
+    BEGIN
+        l_user_id:=pck_core.getUserId();
+
+        FOR C IN (SELECT domain_name, contact_email, template 
+                    FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (domain_name, contact_email, template )))
+        LOOP
+            INSERT INTO website (id, user_id, domain_name, contact_email, template)
+                VALUES (seq_website.nextval, l_user_id, C.domain_name, C.contact_email, C.template);
+        END LOOP;
+
+        apex_json.open_object;  
+        apex_json.write('success', TRUE);
+        apex_json.write('websiteid', seq_website.currval);
+        apex_json.close_object;        
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                RAISE;
+    END;  
+
+    /*
+     **  Delete Website. 
+     **  Articles that would become orpaned as a result are also deleted along with any assets.
+     */  
+    PROCEDURE deleteWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
+        l_user_id users.id%type;
+        TYPE t_website_article IS TABLE OF website_article%rowtype;
+        l_website_articles t_website_article;
+    BEGIN
+        l_user_id:=pck_core.getUserId();
+
+        SELECT * BULK COLLECT INTO l_website_articles FROM website_article WHERE website_id=pWebsiteId;
+
+        DELETE website WHERE id=pWebsiteId AND user_id=l_user_id;
+
+        FOR i IN 1..l_website_articles.COUNT LOOP
+            pck_core.log(l_website_articles(i).article_id);
+        END LOOP;
+
+        apex_json.open_object;  
+        apex_json.write('success', TRUE);
+        apex_json.close_object;        
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                RAISE;
+    END;          
+
+    /*
      **  Publish article
      */   
     PROCEDURE publishArticle(pArticleId IN article.id%type) IS
@@ -1243,6 +1302,30 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
+    FUNCTION domainExists(pUserid IN users.id%type, pName IN VARCHAR2) RETURN VARCHAR2 IS
+        n PLS_INTEGER;
+        l_clob CLOB;
+    BEGIN
+        IF (pName IS NULL) THEN
+            RETURN('Domain name must be entered');
+        END IF;
+
+        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT NULL FROM website WHERE domain_name=pName);
+        IF (n>0) THEN
+            RETURN('Name already taken');
+        END IF;
+
+        pck_core.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'GET', pData=>l_clob);
+        FOR C IN (SELECT name, custom_domain FROM JSON_TABLE(l_clob, '$[*]' COLUMNS name, custom_domain)) LOOP
+            IF (pName=C.name OR pName=C.custom_domain) THEN
+                RETURN('Name already taken');
+                EXIT;
+            END IF;
+        END LOOP;
+
+        RETURN NULL;
+    END;
+
     /**
      **    Update the column value of 1 row
      */
@@ -1250,36 +1333,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_user_id users.id%type;
         l_id_1 NUMBER;
         l_id_2 NUMBER;
-        l_clob CLOB;
+
         l_message VARCHAR2(50);
         l_color VARCHAR2(5);
         n PLS_INTEGER:=1;
     BEGIN
         l_user_id:=pck_core.getUserId();
 
-        FOR C IN (SELECT id, table_column, value
+        FOR C IN (SELECT id, table_column, CASE WHEN table_column='website.domain_name' THEN regexp_replace(value,'[^a-zA-Z0-9-]',null) ELSE value END value
                     FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value)))
         LOOP
+            IF (C.table_column='website.domain_name') THEN
+                l_message:=domainExists(l_user_id, C.value);
+                IF (l_message IS NOT NULL) THEN
+                    l_color:='red';
+                    EXIT;
+                END IF;
+            END IF;
+
             IF (INSTR(C.id,',')>0) THEN
                 l_id_1:=SUBSTR(C.id,1,INSTR(C.id,',')-1);
                 l_id_2:=SUBSTR(C.id,INSTR(C.id,',')+1);
-            END IF;
+            END IF;            
 
-            IF (C.table_column='website.domain_name') THEN
-                pck_core.callNetlifyAPI(pUserId=>l_user_id,pEndpoint=>'sites',pMethod=>'GET', pData=>l_clob);
-                FOR C1 IN (SELECT name, custom_domain FROM JSON_TABLE(l_clob, '$[*]' COLUMNS name, custom_domain)) LOOP
-                    IF (C.value=C1.name OR C.value=C1.custom_domain) THEN
-                        l_message:='Name already taken';
-                        l_color:='red';
-                        EXIT;
-                    END IF;
-                END LOOP;
-                IF (l_message IS NULL AND C.id IS NOT NULL) THEN
-                    UPDATE website SET domain_name=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
-                    n:=sql%rowcount;
-                END IF;
-            ELSIF (C.id IS NOT NULL) THEN
+            IF (C.id IS NOT NULL) THEN
                 CASE C.table_column
+                    WHEN 'website.domain_name' THEN
+                        UPDATE website SET domain_name=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
                     WHEN 'website.contact_email' THEN
                         UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
                     WHEN 'website.template' THEN
