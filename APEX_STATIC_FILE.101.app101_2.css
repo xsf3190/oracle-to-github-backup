@@ -104,10 +104,11 @@ nav {
     z-index: 1;
     display: flex;
     flex-wrap: no-wrap;
-    justify-content: space-between;
+    gap: 1ch;
+    justify-content: flex-end;
     background-color: var(--color-dark);
     color: var(--color-light-glare);
-    padding: 0.5rem;
+    padding: 0;
 }
 
 label {
@@ -130,8 +131,8 @@ textarea {
     flex-direction: column;
 }
 
-/* UPDATE RESULT SHOWN IN ADJACENT TEXTAREA SPAN */
-.textarea-wrapper  span:first-of-type {
+/* UPDATE RESULT SHOWN IN SPAN BENEATH INPUT ELEMENT */
+.result {
     padding-left: 0.5ch;
     opacity: 0;
     transition: opacity 1s ease-in-out;
