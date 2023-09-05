@@ -46,7 +46,7 @@ const inputHandler = (e) => {
     if (e.target.tagName !== "TEXTAREA") return;
 
     const maxchars = e.target.getAttribute("maxlength");
-    const counter = e.target.nextElementSibling.querySelector("span:nth-of-type(2)");
+    const counter = e.target.nextElementSibling.querySelector(".charcounter");
     let numOfEnteredChars = e.target.value.length;
     counter.textContent = numOfEnteredChars + "/" + maxchars;
     if (numOfEnteredChars === Number(maxchars)) {
@@ -59,9 +59,9 @@ const inputHandler = (e) => {
 const focusHandler = (e) => {
     let result;
     if (e.target.tagName == "TEXTAREA") {
-        result = e.target.nextElementSibling.querySelector("span:nth-of-type(1)");
+        result = e.target.nextElementSibling.querySelector(".result");
     } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
-        result = e.target.closest("fieldset").nextElementSibling.querySelector("span:nth-of-type(1)");
+        result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
     } else {
         return;
     }
@@ -72,9 +72,9 @@ const focusHandler = (e) => {
 const changeHandler = (e) => {
     let result;
     if (e.target.tagName == "TEXTAREA") {
-        result = e.target.nextElementSibling.querySelector("span:nth-of-type(1)");
+        result = e.target.nextElementSibling.querySelector(".result");
     } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
-        result = e.target.closest("fieldset").nextElementSibling.querySelector("span:nth-of-type(1)");
+        result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
     } else {
         return;
     }
@@ -900,6 +900,7 @@ addWebsite.addEventListener('click',  (e) => {
     execProcess("website/" + website.dataset.id,"POST", formdata).then( (data) => {
         e.target.style.display = "none";
         deployWebsite.style.display = "block";
+        deployWebsite.disabled = true;
         deleteWebsite.style.display = "block";
         deleteWebsite.disabled = false;
 
