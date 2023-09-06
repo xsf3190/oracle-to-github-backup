@@ -387,11 +387,11 @@ button > svg {
   background-color: var(--color-background-pale);
   color: var(--color-button);
   width: 100%;
-  border-bottom: solid 1px var(--color-button);
+  /*border-bottom: solid 1px var(--color-button);*/
 }
 
 .dropdown-items button:hover {
-  background-color: var(--color-button);
+  background-color: var(--color-pale);
   color: var(--color-light-glare);
 }
 
@@ -399,10 +399,6 @@ button > svg {
 /* *************** */
 /* CARD STYLES */
 /* *************** */
-
-nav button:not(.show-dropdown):hover {
-    text-decoration: overline;
-}
 
 nav button {
     background-color: transparent;
