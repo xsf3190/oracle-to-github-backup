@@ -304,9 +304,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <ul class="login">
                     <li class="red"></li>
                     <li class="grey">
-                        <p>Login</p>
-                        <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_facebook_svg ||'</a>
-                        <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_google_svg ||'</a>
+                        <p>Login w/</p>
+                        <div>
+                            <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_facebook_svg ||'</a>
+                            <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_google_svg ||'</a>
+                        </div>
                     </li>
                     <li class="grey">' || pck_icons.g_github_svg || pck_icons.g_oracle_svg || '</li>
                     <li class="grey">' || pck_icons.g_cloudinary_svg || pck_icons.g_netlify_svg || '</li>
@@ -503,13 +505,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <span>' || apex_application.g_user || '</span>
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
                 <ul class="dropdown-items">
-                    <li><button type="button" class="signout">LOG OUT</button></li>
                     <li><button type="button" class="new-website">NEW WEBSITE</button></li>' 
                     || l_edit_websites || '
-                    <li><span>API Keys</span></li>
-                    <li><button type="button" class="set-cloudinary">' || pck_icons.g_cloudinary_svg || '</button></li>
-                    <li><button type="button" class="set-github">' || pck_icons.g_github_svg || '</button></li>
-                    <li><button type="button" class="set-netlify">' || pck_icons.g_netlify_svg || '</button></li>
+                    <li><button type="button" class="api-keys">API Keys</button></li>
+                    <li><button type="button" class="signout">LOG OUT</button></li>
                 </ul>
             </div>
         </nav>');
