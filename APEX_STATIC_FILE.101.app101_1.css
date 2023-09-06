@@ -43,19 +43,17 @@ ul.login>li:nth-of-type(2) {
     grid-row: span 8;
     border-bottom: 0.75ch solid black;
     display: flex;
-    gap: 2ch;
-    justify-content: flex-end;
-    align-items: flex-start;
-    padding: 2ch;
+    flex-direction: column;
+    align-items: flex-end;
+    padding-right: 1ch;
 }
 
-ul.login>li:nth-of-type(2) p {
-    margin: 0;
-    line-height: var(--min-btn-size);
+ul.login>li:nth-of-type(2) a + a {
+    margin-left: 1ch;
 }
 
-ul.login>li:nth-of-type(2) a {
-    min-inline-size: var(--min-btn-size);
+ul.login>li:nth-of-type(2) svg {
+    inline-size: var(--min-btn-size);
 }
 
 ul.login>li:nth-of-type(3) {
