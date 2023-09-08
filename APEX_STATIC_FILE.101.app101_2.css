@@ -42,21 +42,13 @@
 
   --font-base: Inter, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif;
   --font-serif: Georgia, sans-serif;
-  --gutter: var(--space-s-m);
-  --border-radius: var(--step--2);
-  --transition-base: 250ms ease;
-  --transition-movement: 200ms linear;
-  --transition-fade: 200ms ease;
-  --transition-bounce: 500ms cubic-bezier(0.5, 0.05, 0.2, 1.5);
 
     --hue: 270;
     --saturation: 50%;
     --lightness: 45%;
-    --color-button: hsl(var(--hue) var(--saturation) var(--lightness));
-    --color-button-hover: hsl(var(--hue) var(--saturation) calc(var(--lightness) - 7%));
-    --color-button-focus: hsl(var(--hue) var(--saturation) calc(var(--lightness) - 10%));
-    --color-button-text: #FFF;
-    --color-pale: hsl(var(--hue) var(--saturation) calc(var(--lightness) + 35%));
+    --color-pale: hsl(var(--hue) var(--saturation) calc(var(--lightness) + 43%));
+    --color-pale-hover: hsl(var(--hue) var(--saturation) calc(var(--lightness) + 50%));
+    --color-solid: hsl(var(--hue) var(--saturation) var(--lightness));
 
     --gallery-width: 15rem;
     --preview-width: 60ch;
@@ -99,16 +91,12 @@ img {
 }
 
 nav {
+    background-color: white;
     position: sticky;
     top: 0;
     z-index: 1;
     display: flex;
-    flex-wrap: no-wrap;
-    gap: 1ch;
     justify-content: flex-end;
-    background-color: var(--color-dark);
-    color: var(--color-light-glare);
-    padding: 0;
 }
 
 label {
@@ -129,6 +117,17 @@ textarea {
 .textarea-wrapper, radio-wrapper {
     display: flex;
     flex-direction: column;
+}
+
+ul {
+  list-style: none;
+  min-width: 25ch;
+}
+
+button {
+  appearance: none;
+  background-color: transparent;
+  border: 0;
 }
 
 /* UPDATE RESULT SHOWN IN SPAN BENEATH INPUT ELEMENT */
@@ -323,34 +322,6 @@ dialog legend > button {
     vertical-align: text-bottom;
 }
 
-
-/* *************** */
-/* DEFAULT BUTTON  */
-/* *************** */
-
-button {
-    min-height: 54px;
-    min-width: 54px;
-    border: none;
-    padding-block-start: 0;
-    padding-block-end: 0;
-    background-color: var(--color-button);
-    color: var(--color-button-text);
-    font-size: var(--step-0);
-    font-weight: bold;
-}
-
-
-button:enabled {
-    cursor: pointer;
-}
-
-button > svg {
-    padding: 0.5ch;
-    pointer-events: none;
-}
-
-
 /* *************** */
 /* DROPDOWN STYLES */
 /* *************** */
@@ -361,38 +332,54 @@ button > svg {
 
 .dropdown .dropdown-items {
     display: none;
-    /*opacity: 0;*/
-    transition: opacity 400ms;
-    transition-delay: 300ms;
+    font-size: 85%;
     position: absolute;
-    z-index: 1;
-    right: 0;
+    right: 1rem;
     background-color: white;
-    color: var(--color-button);
     margin: 0;
-    padding: 0;
+    padding: 1ch;
     list-style-type: none;
-    border-left: var(--color-button) solid 1px;
-    border-top: var(--color-button) solid 1px;
+    border: var(--color-solid) solid 1px;
+    border-radius: 1ch;
 }
 
 .dropdown .dropdown-items.visible {
   display: block;
-  /*opacity: 1;*/
-  transition: opacity 100ms;
-  transition-delay: 0ms;
 }
 
+.dropdown-items li,
 .dropdown-items button {
-  background-color: var(--color-background-pale);
-  color: var(--color-button);
-  width: 100%;
-  /*border-bottom: solid 1px var(--color-button);*/
+  cursor: pointer;
 }
 
-.dropdown-items button:hover {
-  background-color: var(--color-pale);
-  color: var(--color-light-glare);
+.dropdown-items li:hover {
+  background-color: var(--color-pale-hover);
+  inline-size: 100%;
+  border-radius: 0.5ch;
+}
+
+.icon {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    padding: 0.5rem;
+    background-color: var(--color-pale);
+}
+
+.with-icon {
+  display: inline-flex;
+  align-items: center;
+  font: inherit;
+  padding: 1ch;
+}
+
+.with-icon .icon {
+  margin-inline-end: 1rem;
+}
+
+button svg,
+button use {
+  pointer-events: none;
 }
 
 
