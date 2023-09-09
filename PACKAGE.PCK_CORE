@@ -241,9 +241,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_column_name:=LOWER(l_column_name);
 
         RETURN('
-        <div style="max-width:min(' || l_data_length || 'ch,100%)" class="textarea-wrapper">
-            <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</label>
-            <textarea id="' || l_column_name || '" name="' || LOWER(l_column_name) || '" maxlength="' || l_data_length || '" rows="1" data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>
+        <div style="max-width:min(' || l_data_length || 'ch,100%)" class="textarea-wrapper">' ||
+            CASE WHEN l_column_name='domain_name' THEN '<div style="display: flex">' END || '
+            <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</label>' ||
+            CASE WHEN l_column_name='domain_name' THEN '<button type="button" class="show-dropdown">&blacktriangledown;</button></div>' END || '
+            <textarea id="' || l_column_name || '" name="' || LOWER(l_column_name) || '" maxlength="' || l_data_length || '" rows="1" data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>        
             <div class="button-container">
                 <span class="result"></span>
                 <span class="charcounter">' || NVL(LENGTH(pValue),0) || '/' || l_data_length || '</span>
@@ -278,7 +280,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 l_cluster:=l_cluster || 
                 '<div>
                     <input type="radio" data-column="website.template" data-id="' || pWebsiteId || '" id="template-' || LOWER(C1.name) || '" name="template" value="' || C1.name || '"' || CASE WHEN pSelectedTemplate=C1.name THEN ' checked' END || '></input>
-                     <label for="template-' || LOWER(C1.name) || '">' || C1.name || '</label>
+                    <label for="template-' || LOWER(C1.name) || '">' || C1.name || '</label>
                 </div>';
             END LOOP;
         END LOOP;
@@ -488,24 +490,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
          WHERE email=apex_application.g_user;
 
         l_clob:= TO_CLOB(
-        '<svg>
-            <defs>
-                <symbol id="new" viewBox="0 0 448 512">
-                    <path d="M256 80c0-17.7-14.3-32-32-32s-32 14.3-32 32V224H48c-17.7 0-32 14.3-32 32s14.3 32 32 32H192V432c0 17.7 14.3 32 32 32s32-14.3 32-32V288H400c17.7 0 32-14.3 32-32s-14.3-32-32-32H256V80z">
-                </symbol>
-                <symbol id="not-defined" viewBox="0 0 512 512">
-                    <path d="M367.2 412.5L99.5 144.8C77.1 176.1 64 214.5 64 256c0 106 86 192 192 192c41.5 0 79.9-13.1 111.2-35.5zm45.3-45.3C434.9 335.9 448 297.5 448 256c0-106-86-192-192-192c-41.5 0-79.9 13.1-111.2 35.5L412.5 367.2zM0 256a256 256 0 1 1 512 0A256 256 0 1 1 0 256z">
-                </symbol>
-                <symbol id="delete" viewBox="0 0 448 512">
-                    <path d="M170.5 51.6L151.5 80h145l-19-28.4c-1.5-2.2-4-3.6-6.7-3.6H177.1c-2.7 0-5.2 1.3-6.7 3.6zm147-26.6L354.2 80H368h48 8c13.3 0 24 10.7 24 24s-10.7 24-24 24h-8V432c0 44.2-35.8 80-80 80H112c-44.2 0-80-35.8-80-80V128H24c-13.3 0-24-10.7-24-24S10.7 80 24 80h8H80 93.8l36.7-55.1C140.9 9.4 158.4 0 177.1 0h93.7c18.7 0 36.2 9.4 46.6 24.9zM80 128V432c0 17.7 14.3 32 32 32H336c17.7 0 32-14.3 32-32V128H80zm80 64V400c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-8.8 7.2-16 16-16s16 7.2 16 16zm80 0V400c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-8.8 7.2-16 16-16s16 7.2 16 16zm80 0V400c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-8.8 7.2-16 16-16s16 7.2 16 16z">
-                </symbol>
-                <symbol id="signout" viewBox="0 0 512 512">
-                    <path d="M502.6 278.6c12.5-12.5 12.5-32.8 0-45.3l-128-128c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L402.7 224 192 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l210.7 0-73.4 73.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l128-128zM160 96c17.7 0 32-14.3 32-32s-14.3-32-32-32L96 32C43 32 0 75 0 128L0 384c0 53 43 96 96 96l64 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-64 0c-17.7 0-32-14.3-32-32l0-256c0-17.7 14.3-32 32-32l64 0z">
-                </symbol>
-                <symbol id="keys" viewBox="0 0 512 512">
-                    <path d="M336 352c97.2 0 176-78.8 176-176S433.2 0 336 0S160 78.8 160 176c0 18.7 2.9 36.8 8.3 53.7L7 391c-4.5 4.5-7 10.6-7 17v80c0 13.3 10.7 24 24 24h80c13.3 0 24-10.7 24-24V448h40c13.3 0 24-10.7 24-24V384h40c6.4 0 12.5-2.5 17-7l33.3-33.3c16.9 5.4 35 8.3 53.7 8.3zM376 96a40 40 0 1 1 0 80 40 40 0 1 1 0-80z">
-                </symbol>
-            </defs>
+        '<svg style="display:none">
+            <symbol id="plus" viewBox="0 0 448 512">
+                <path d="M256 80c0-17.7-14.3-32-32-32s-32 14.3-32 32V224H48c-17.7 0-32 14.3-32 32s14.3 32 32 32H192V432c0 17.7 14.3 32 32 32s32-14.3 32-32V288H400c17.7 0 32-14.3 32-32s-14.3-32-32-32H256V80z">
+            </symbol>
+            <symbol id="caret-down" viewBox="0 0 320 512"
+                <path d="M137.4 374.6c12.5 12.5 32.8 12.5 45.3 0l128-128c9.2-9.2 11.9-22.9 6.9-34.9s-16.6-19.8-29.6-19.8L32 192c-12.9 0-24.6 7.8-29.6 19.8s-2.2 25.7 6.9 34.9l128 128z">
+            </symbol>
+            <symbol id="not-defined" viewBox="0 0 512 512">
+                <path d="M367.2 412.5L99.5 144.8C77.1 176.1 64 214.5 64 256c0 106 86 192 192 192c41.5 0 79.9-13.1 111.2-35.5zm45.3-45.3C434.9 335.9 448 297.5 448 256c0-106-86-192-192-192c-41.5 0-79.9 13.1-111.2 35.5L412.5 367.2zM0 256a256 256 0 1 1 512 0A256 256 0 1 1 0 256z">
+            </symbol>
+            <symbol id="delete" viewBox="0 0 448 512">
+                <path d="M170.5 51.6L151.5 80h145l-19-28.4c-1.5-2.2-4-3.6-6.7-3.6H177.1c-2.7 0-5.2 1.3-6.7 3.6zm147-26.6L354.2 80H368h48 8c13.3 0 24 10.7 24 24s-10.7 24-24 24h-8V432c0 44.2-35.8 80-80 80H112c-44.2 0-80-35.8-80-80V128H24c-13.3 0-24-10.7-24-24S10.7 80 24 80h8H80 93.8l36.7-55.1C140.9 9.4 158.4 0 177.1 0h93.7c18.7 0 36.2 9.4 46.6 24.9zM80 128V432c0 17.7 14.3 32 32 32H336c17.7 0 32-14.3 32-32V128H80zm80 64V400c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-8.8 7.2-16 16-16s16 7.2 16 16zm80 0V400c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-8.8 7.2-16 16-16s16 7.2 16 16zm80 0V400c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-8.8 7.2-16 16-16s16 7.2 16 16z">
+            </symbol>
+            <symbol id="signout" viewBox="0 0 512 512">
+                <path d="M502.6 278.6c12.5-12.5 12.5-32.8 0-45.3l-128-128c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L402.7 224 192 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l210.7 0-73.4 73.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l128-128zM160 96c17.7 0 32-14.3 32-32s-14.3-32-32-32L96 32C43 32 0 75 0 128L0 384c0 53 43 96 96 96l64 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-64 0c-17.7 0-32-14.3-32-32l0-256c0-17.7 14.3-32 32-32l64 0z">
+            </symbol>
+            <symbol id="keys" viewBox="0 0 512 512">
+                <path d="M336 352c97.2 0 176-78.8 176-176S433.2 0 336 0S160 78.8 160 176c0 18.7 2.9 36.8 8.3 53.7L7 391c-4.5 4.5-7 10.6-7 17v80c0 13.3 10.7 24 24 24h80c13.3 0 24-10.7 24-24V448h40c13.3 0 24-10.7 24-24V384h40c6.4 0 12.5-2.5 17-7l33.3-33.3c16.9 5.4 35 8.3 53.7 8.3zM376 96a40 40 0 1 1 0 80 40 40 0 1 1 0-80z">
+            </symbol>
         </svg>');
 
         l_clob:=l_clob || TO_CLOB(
@@ -528,12 +531,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_clob:=l_clob || TO_CLOB('
             <div class="dropdown">
                 <span>' || apex_application.g_user || '</span>
-                <button type="button" class="show-dropdown with-icon">&blacktriangledown;</button>
+                <button type="button" class="show-dropdown">&blacktriangledown;</button>
                 <ul class="dropdown-items">
                     <li class="new-website">
                         <button type="button" class="with-icon">
                             <svg class="icon">
-                                <use href="#new" x="16" y="16"></use>
+                                <use href="#plus"></use>
                             </svg>
                             NEW WEBSITE
                         </button>
