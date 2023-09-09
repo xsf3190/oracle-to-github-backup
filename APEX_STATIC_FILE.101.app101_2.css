@@ -79,7 +79,6 @@ h4, ul {
 body {
     font-family: var(--font-serif);
     font-size: var(--step-0);
-    line-height: 1.5;
     text-rendering: optimizeSpeed;
 }
 
@@ -128,6 +127,10 @@ button {
   appearance: none;
   background-color: transparent;
   border: 0;
+}
+
+.show-dropdown {
+    font-size: inherit;
 }
 
 /* UPDATE RESULT SHOWN IN SPAN BENEATH INPUT ELEMENT */
@@ -184,11 +187,12 @@ input[type="radio"] {
     inline-size: 2ch;
     block-size: 2ch;
     border: 1ch solid var(--color-pale);
+    vertical-align: text-bottom;
     transition: 0.2s all linear;
 }
 
 input[type="radio"]:checked {
-    border: 1ch solid var(--color-button);
+    border: 1ch solid var(--color-solid);
 }
 
 .cluster {
@@ -359,6 +363,7 @@ dialog legend > button {
 }
 
 .icon {
+    box-sizing: content-box;
     width: 1rem;
     height: 1rem;
     border-radius: 50%;
