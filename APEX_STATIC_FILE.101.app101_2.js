@@ -382,9 +382,10 @@ const show_gallery = (articleId) => {
 };
 
 /*
- ** HANDLE OPENING / CLOSING DROPDOWN MENUS
+ ** COMMON CLICK HANDLER
  */
-window.onclick = (e) => {
+const cardHandler = (e) => {
+
     let open = e.target.matches(".show-dropdown") && e.target.nextElementSibling.classList.contains("visible");
 
     document.querySelectorAll(".dropdown-items.visible").forEach((dropdown) => {
@@ -394,19 +395,12 @@ window.onclick = (e) => {
     if (!open && e.target.matches(".show-dropdown")) {
         e.target.nextElementSibling.classList.toggle("visible");
     }
-}
 
-/*
- ** CARD HANDLER FOR READ-ONLY ACTIONS 
- */
-const cardHandler = (e) => {
     const card = e.srcElement.closest(".card");
 
     if (!card) return;
 
     const id = card.dataset.id;
-    console.log("id",id);
-    console.log(e);
 
     if (e.target.matches(".show-gallery")) {
         show_gallery(id);                                
