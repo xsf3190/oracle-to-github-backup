@@ -411,8 +411,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         SELECT NVL(MAX(display_order),0) INTO l_start_order FROM asset WHERE article_id=l_article_id;
 
-        INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, created_date, display_order)
-        SELECT seq_asset.nextval, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, current_timestamp, l_start_order+ROWNUM
+        INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, created_date, display_order, user_id)
+        SELECT seq_asset.nextval, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, current_timestamp, l_start_order+ROWNUM, l_user_id
           FROM JSON_TABLE(l_metadata FORMAT JSON, '$.images[*]' COLUMNS (article_id, public_id, width, height, bytes, resource_type, format, cld_cloud_name));
 
         /* Return upload details to calling Javascript process in order to update front-end */
