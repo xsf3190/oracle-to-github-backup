@@ -16,7 +16,6 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       website = document.querySelector("form"),
       deployWebsite = website.querySelector(".deploy-website"),
       addWebsite = website.querySelector(".add-website"),
-      deleteWebsite = website.querySelector(".delete-website"),
       addContent = document.querySelector(".add-content"),
       listBtn = document.querySelector(".list-view"),
       articleList = document.querySelector(".article-list"),
@@ -382,19 +381,27 @@ const show_gallery = (articleId) => {
 };
 
 /*
- ** COMMON CLICK HANDLER
+ ** COMMON DROPDOWN CLICK HANDLER
  */
-const cardHandler = (e) => {
-
+document.addEventListener("click", (e) => {
     let open = e.target.matches(".show-dropdown") && e.target.nextElementSibling.classList.contains("visible");
 
     document.querySelectorAll(".dropdown-items.visible").forEach((dropdown) => {
         dropdown.classList.toggle("visible",false);
+        dropdown.querySelectorAll(".delete-confirm").forEach((btn) => {
+            btn.remove();
+        });
     });
     
     if (!open && e.target.matches(".show-dropdown")) {
         e.target.nextElementSibling.classList.toggle("visible");
     }
+})
+
+/*
+ ** COMMON CLICK HANDLER
+ */
+const cardHandler = (e) => {
 
     const card = e.srcElement.closest(".card");
 
@@ -405,7 +412,7 @@ const cardHandler = (e) => {
     if (e.target.matches(".show-gallery")) {
         show_gallery(id);                                
     } else if (e.target.matches(".delete")) {
-        delete_article(id);
+        delete_object(id, e);
     } else if (e.target.matches(".upload-media")) {
         upload_media(id);
     } else if (e.target.matches(".edit-text")) {
@@ -823,9 +830,6 @@ ClassicEditor.create(document.querySelector("#editor"), {
         const imgFileSelector = document.querySelector("input[type=file]");
         const imgBtn = imgFileSelector.previousElementSibling;
         imgBtn.disabled=true;
-        editor.ui.focusTracker.on( 'change:isFocused', ( evt, data, isFocused ) => {
-            console.log( `The editor is focused: ${ isFocused }.` );
-        } );
     })
     .catch(error => {
         console.error(error);
@@ -849,14 +853,6 @@ if (window.location.hash === "#_=_"){
     history.replaceState 
         ? history.replaceState(null, null, window.location.href.split("#")[0])
         : window.location.hash = "";
-}
-
-/* 
- ** SET ADJACENT <span> TO SHOW SUCCESSFUL OUTCOME
- */
-const makeSuccess = (el) => {
-    el.nextElementSibling.classList.add("fa", "fa-check");
-    el.nextElementSibling.textContent = "Updated successfully";
 }
 
 /* 
@@ -895,8 +891,8 @@ addWebsite.addEventListener('click',  (e) => {
         e.target.style.display = "none";
         deployWebsite.style.display = "block";
         deployWebsite.disabled = true;
-        deleteWebsite.style.display = "block";
-        deleteWebsite.disabled = false;
+
+        // TODO - enable delete website nutton in dropdown
 
         website.dataset.id = data.websiteid;
         const inputs = website.elements;
@@ -909,7 +905,7 @@ addWebsite.addEventListener('click',  (e) => {
 /* 
  ** DELETE WEBSITE
  */
-
+/*
 deleteWebsite.addEventListener('click',  (e) => {
     execProcess("website/" + website.dataset.id, "DELETE").then( (data) => {
         e.target.style.display = "none";
@@ -924,6 +920,7 @@ deleteWebsite.addEventListener('click',  (e) => {
         }
     });
 });
+*/
 
 /* 
  ** DEPLOY WEBSITE
@@ -1088,27 +1085,54 @@ popupConfirm.addEventListener("click",  (e) => {
 });
 
 /*
- ** DELETE ARTICLE. REQUIRES CONFIRMATION IN CLICK HANDLER IF CONTAINS CONTENT
+ ** DELETE WEBSITE / ARTICLE / ASSET - REQUIRES CONFIRMATION
  */
-const delete_article = (articleId) => {
+const delete_object = (id, e) => {
+
+    console.log(id, e);
+
+    e.stopPropagation();
+    e.target.style.cursor = "none";
+
+    if (e.target.nextElementSibling) return;
+
+    const li = e.target.closest("li");
+
+    let btn = document.createElement("button");
+    btn.setAttribute("type", "button");
+    btn.classList.add("delete-confirm");
+    btn.style.width = "100%";
+    btn.style.color = "white";
+    btn.style.backgroundColor = "red";
+    btn.style.borderRadius = "1ch";
+    btn.style.padding = "2ch 0 2ch 0";
+    btn.style.opacity = "1";
+    btn.style.scale = "1";
+    btn.style.transition = "all 1s linear";
+
+    btn.textContent = "CONFIRM DELETE";
+    btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        console.log("DELETE CONFIRMED");
+        e.target.style.opacity = "0";
+        e.target.style.scale = "0.5";
+        setTimeout(() => {
+            let dropdown = e.target.closest(".dropdown-items");
+            e.target.closest("li").remove();
+            if (dropdown.childElementCount === 0) {
+                dropdown.classList.remove("visible");
+            }
+        }, 1000);
+    });
+
+    li.append(btn);
+
+    /*
     if (articleId === "0") {
         remove_card(articleId);
         return;
     }
-    let li = document.querySelector("[data-id='" + articleId + "']"),
-        title = li.querySelector(".title");
-    if (title) {
-        popup.querySelector("h2").textContent = title.textContent;
-    } else {
-        popup.querySelector("h2").textContent = "<NO TITLE>";
-    }
-    
-    popup.querySelector("p").textContent = "Are you sure you want to delete this card?";
-    popupConfirm.style.display = "block";
-    popupConfirm.dataset.id = articleId;
-    popupConfirm.dataset.template = "article";
-    popupConfirm.dataset.method = "DELETE";
-    popup.showModal();
+    */
 }
 
 /*
