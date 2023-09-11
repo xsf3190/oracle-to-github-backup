@@ -129,6 +129,15 @@ button {
   border: 0;
 }
 
+button.cta {
+    min-width:14ch;
+    background-color: var(--color-solid);
+    padding: 1ch 2ch;
+    color: white;
+    font: inherit;
+    border-radius: 1ch;
+}
+
 .show-dropdown {
     font-size: inherit;
 }
@@ -427,7 +436,7 @@ nav button {
 }
 
 .card img {
-  object-fit: scale-down;
+  object-fit: cover;
   inline-size: 100%;
   aspect-ratio: 4/3;
   margin: auto;
