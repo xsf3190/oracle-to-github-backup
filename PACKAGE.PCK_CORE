@@ -251,7 +251,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <button type="button" class="show-dropdown">&blacktriangledown;</button>
                     <ul class="dropdown-items">
                         <li>
-                            <button type="button" class="with-icon delete" data-id=' || pId || '>
+                            <button type="button" class="with-icon delete" data-table="website" data-id=' || pId || '>
                                 <svg class="icon">
                                     <use href="#delete">
                                 </svg>DELETE WEBSITE
@@ -450,14 +450,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <div class="dropdown">
                         <button type="button" class="show-dropdown">&blacktriangledown;</button>
                         <ul class="dropdown-items">
-                            <li class="upload-media">
-                                <button type="button" class="with-icon">
+                            <li>
+                                <button type="button" class="with-icon upload-media">
                                     <svg class="icon"><use href="#cloud-arrow-up"></use></svg>
                                 Upload Media
                                 </button>
                             </li>
-                            <li class="edit-text">
-                                <button type="button" class="with-icon">
+                            <li>
+                                <button type="button" class="with-icon edit-text">
                                     <svg class="icon"><use href="#pen-to-square"></use></svg>
                                 Edit Text
                                 </button>
@@ -468,8 +468,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                 Page Title (SEO)
                                 </button>
                             </li>
-                            <li class="delete">
-                                <button type="button" class="with-icon">
+                            <li>
+                                <button type="button" class="with-icon delete" data-table="website_article">
                                     <svg class="icon"><use href="#delete"></use></svg>
                                 Delete
                                 </button>
@@ -479,7 +479,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </div>' ||
                 CASE WHEN C.nb_assets=0 
                     THEN '<button type="button" class="no-media upload-media">UPLOAD MEDIA</button>' 
-                    ELSE '<img class="show-gallery" src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">' 
+                    ELSE '<img class="show-gallery"' || CASE WHEN C.format='svg' THEN ' style="object-fit:scale-down"' END || ' src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">' 
                 END ||
                 CASE WHEN COALESCE(C.title, C.excerpt) IS NULL 
                     THEN '<br>
@@ -605,7 +605,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END IF;
 
         l_clob:=l_clob || TO_CLOB('
-        <form data-id="' || NVL(l_domains(1).id,0) || '">' ||
+        <form class="card" data-id="' || NVL(l_domains(1).id,0) || '">' ||
             buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name) || '
             <div class="radio-wrapper">
                 <fieldset>
@@ -619,9 +619,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </div>' ||
             buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email) || '
             <div class="button-container">
-                <button type="button" class="add-website" disabled' || CASE WHEN l_domains(1).id IS NOT NULL THEN ' style="display:none"' END || '>CREATE WEBSITE</button>
-                <button type="button" class="deploy-website"' || CASE WHEN l_domains(1).id IS NULL OR l_domains(1).nb_articles=0 THEN ' style="display:none"' END || '>DEPLOY WEBSITE</button>
-                <button type="button" class="delete-website"' || CASE WHEN l_domains(1).id IS NULL THEN ' style="display:none"' END || '>DELETE WEBSITE</button>
+                <button type="button" class="add-website cta" disabled' || CASE WHEN l_domains(1).id IS NOT NULL THEN ' style="display:none"' END || '>CREATE WEBSITE</button>
+                <button type="button" class="deploy-website cta"' || CASE WHEN l_domains(1).id IS NULL OR l_domains(1).nb_articles=0 THEN ' style="display:none"' END || '>DEPLOY WEBSITE</button>
             </div>
         </form>
         <hr>
