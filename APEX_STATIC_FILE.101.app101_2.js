@@ -16,7 +16,6 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       website = document.querySelector("form"),
       deployWebsite = website.querySelector(".deploy-website"),
       addWebsite = website.querySelector(".add-website"),
-      addContent = document.querySelector(".add-content"),
       listBtn = document.querySelector(".list-view"),
       articleList = document.querySelector(".article-list"),
       cards = document.querySelector(".cards"),
@@ -115,8 +114,6 @@ const changeHandler = (e) => {
 listBtn.addEventListener("click",  () => {
     if (cards.style.display === "grid") {
         cards.style.display = "none";
-        addContent.disabled = true;
-        addContent.style.opacity = 0.2;
         articleList.style.display = "grid";
         const websiteId = website.dataset.id;
         execProcess( "website-list/"+websiteId,"GET").then( (data) => {
@@ -126,8 +123,6 @@ listBtn.addEventListener("click",  () => {
     } else {
         cards.style.display = "grid";
         articleList.style.display = "none";
-        addContent.disabled = false;
-        addContent.style.opacity = 1;
     }
 });
 
@@ -399,7 +394,7 @@ document.addEventListener("click", (e) => {
 })
 
 /*
- ** COMMON CLICK HANDLER
+ ** CARD CLICK HANDLER
  */
 const cardHandler = (e) => {
 
@@ -409,7 +404,11 @@ const cardHandler = (e) => {
 
     const id = card.dataset.id;
 
-    if (e.target.matches(".show-gallery")) {
+    if (e.target.matches(".new-before")) {
+        add_content(e.target, "beforebegin");
+    } else if (e.target.matches(".new-after")) {
+        add_content(e.target, "afterend");
+    } else if (e.target.matches(".show-gallery")) {
         show_gallery(id);                                
     } else if (e.target.matches(".delete")) {
         delete_object(id, e);
@@ -858,19 +857,16 @@ if (window.location.hash === "#_=_"){
 /* 
  ** ADD NEW CARD
  */
-addContent.addEventListener('click',  e => {
-    // check that there isn't already a new card - i.e. the 2nd card with data-id="0" meaning that no content has yet been added to it
-    if (cards.childElementCount>1 && cards.children[1].dataset.id === "0") {
-        popupOpen("No need to do that","... you already opened a new card");
+const add_content = (target, position) => {
+  if (cards.querySelector("[data-id='0']")) {
+        popupOpen("No need for that","... add content to the card you already created");
         return;
-    }
-    let first_card = document.querySelector(".card:first-child");
-    let clone = first_card.cloneNode(true);
-    first_card.style.display = "grid";
-    first_card.insertAdjacentElement('beforebegin',clone);
-    first_card.dataset.id = "0";
-    first_card.querySelector(".fa-id-card").textContent = "0";
-});
+  }
+  const selected_card = target.closest(".card");
+  const clone = cards.querySelector("[data-id='-1']").cloneNode(true);
+  clone.dataset.id = "0";
+  selected_card.insertAdjacentElement(position, clone);
+};
 
 /* 
  ** EDIT WEBSITE
@@ -1088,8 +1084,6 @@ popupConfirm.addEventListener("click",  (e) => {
  ** DELETE WEBSITE / ARTICLE / ASSET - REQUIRES CONFIRMATION
  */
 const delete_object = (id, e) => {
-
-    console.log(id, e);
 
     e.stopPropagation();
     e.target.style.cursor = "none";
