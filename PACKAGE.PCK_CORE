@@ -241,7 +241,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_column_name:=LOWER(l_column_name);
 
         RETURN('
-        <div style="max-width:min(' || l_data_length || 'ch,100%)" class="textarea-wrapper">' ||
+        <div style="min-width:min(' || l_data_length || 'ch,100%)" class="textarea-wrapper">' ||
             CASE WHEN l_column_name='domain_name' THEN '
             <div class="button-container">' 
             END || '
@@ -445,8 +445,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             l_clob:=l_clob || TO_CLOB('
             <li class="card" tabindex="0" data-id="' || C.id || '">
                 <div class="button-container">
-                    <button type="button" class="fa show-gallery"' || CASE WHEN C.nb_assets=0 THEN ' disabled' END || '>&blacktriangleright;' || 
-                                                                    CASE WHEN C.nb_assets=0 THEN '0' ELSE '1' END || '/' || C.nb_assets || '</button>
+                    <div>
+                        <button type="button" class="new-before">&#8678;</button>
+                        <span>NEW CONTENT</span>
+                        <button type="button" class="new-after">&#8680;</button>
+                    </div>
                     <div class="dropdown">
                         <button type="button" class="show-dropdown">&blacktriangledown;</button>
                         <ul class="dropdown-items">
@@ -521,6 +524,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         l_clob:= TO_CLOB(
         '<svg style="display:none">
+            <symbol id="backward" viewBox="0 0 512 512">
+                <path d="M459.5 440.6c9.5 7.9 22.8 9.7 34.1 4.4s18.4-16.6 18.4-29V96c0-12.4-7.2-23.7-18.4-29s-24.5-3.6-34.1 4.4L288 214.3V256v41.7L459.5 440.6zM256 352V256 128 96c0-12.4-7.2-23.7-18.4-29s-24.5-3.6-34.1 4.4l-192 160C4.2 237.5 0 246.5 0 256s4.2 18.5 11.5 24.6l192 160c9.5 7.9 22.8 9.7 34.1 4.4s18.4-16.6 18.4-29V352z">
+            </symbol>
+            <symbol id="forward" viewBox="0 0 512 512">
+                <path d="M52.5 440.6c-9.5 7.9-22.8 9.7-34.1 4.4S0 428.4 0 416V96C0 83.6 7.2 72.3 18.4 67s24.5-3.6 34.1 4.4L224 214.3V256v41.7L52.5 440.6zM256 352V256 128 96c0-12.4 7.2-23.7 18.4-29s24.5-3.6 34.1 4.4l192 160c7.3 6.1 11.5 15.1 11.5 24.6s-4.2 18.5-11.5 24.6l-192 160c-9.5 7.9-22.8 9.7-34.1 4.4s-18.4-16.6-18.4-29V352z">
+            </symbol>
             <symbol id="plus" viewBox="0 0 448 512">
                 <path d="M256 80c0-17.7-14.3-32-32-32s-32 14.3-32 32V224H48c-17.7 0-32 14.3-32 32s14.3 32 32 32H192V432c0 17.7 14.3 32 32 32s32-14.3 32-32V288H400c17.7 0 32-14.3 32-32s-14.3-32-32-32H256V80z">
             </symbol>
@@ -625,7 +634,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </form>
         <hr>
         <div class="button-container full-width">
-            <button type="button" class="add-content"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled style="opacity:0.2"' END || '>NEW CONTENT</button>
             <button type="button" class="list-view" title="Article thumbnails for drag and drop"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled style="opacity:0.2"' END || '>&#9783;</button>
         </div>
         <ul class="cards" style="display:grid">' || buildWebsiteArticles(l_domains(1).id) || '
