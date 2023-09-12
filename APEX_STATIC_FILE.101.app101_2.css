@@ -63,10 +63,12 @@
 /* PAGE CONTAINER */
 /******************/
 
-#application-container {
-    display: grid;
-    place-items: center;
-    margin: 0 1rem;
+#application-container > form {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    align-items: center;
+    margin: 2rem;
 }
 
 h4, ul {
@@ -124,9 +126,10 @@ ul {
 }
 
 button {
-  appearance: none;
-  background-color: transparent;
-  border: 0;
+    appearance: none;
+     background-color: transparent;
+    border: 0;
+    cursor: pointer;
 }
 
 button.cta {
@@ -138,8 +141,11 @@ button.cta {
     border-radius: 1ch;
 }
 
-.show-dropdown {
+.show-dropdown, .new-before, .new-after {
     font-size: inherit;
+    color: var(--color-solid);
+    background-color: var(--color-pale);
+    border-radius: 0.5ch;
 }
 
 /* UPDATE RESULT SHOWN IN SPAN BENEATH INPUT ELEMENT */
@@ -357,12 +363,11 @@ dialog legend > button {
 }
 
 .dropdown .dropdown-items.visible {
-  display: block;
+    display: block;
 }
 
-.dropdown-items li,
-.dropdown-items button {
-  cursor: pointer;
+.dropdown-items li {
+    cursor: pointer;
 }
 
 .dropdown-items li:hover {
@@ -420,27 +425,31 @@ nav button {
 }
 
 
-.cards > .card:first-child {
-    display: none;
+.card[data-id="-1"] {
+  display:none;
 }
 
 .card {
-  border: 0.1em solid;
-  border-radius: 0.5em;
-  padding: 0.5em;
-  display: grid;
-  grid-template-rows: max-content max-content max-content 1fr;
-  gap: 0.75em;
-  opacity: 1;
-  transition: opacity 1s ease-in-out;
+    border: 0.1em solid;
+    border-radius: 0.5em;
+    padding: 0.5em;
+    display: grid;
+    grid-template-rows: max-content max-content max-content 1fr;
+    gap: 0.75em;
+    opacity: 1;
+    transition: opacity 1s ease-in-out;
+}
+
+.card span {
+    font-family: monospace;
 }
 
 .card img {
-  object-fit: cover;
-  inline-size: 100%;
-  aspect-ratio: 4/3;
-  margin: auto;
-  cursor: pointer;
+    object-fit: contain;
+    inline-size: 100%;
+    aspect-ratio: 4/3;
+    margin: auto;
+    cursor: pointer;
 }
 
 .card .no-media {
