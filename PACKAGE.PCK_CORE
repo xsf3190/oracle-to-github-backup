@@ -12,6 +12,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2, pAjax IN BOOLEAN);
     --
+    PROCEDURE getApexSession(pAppId IN OUT NUMBER, pSessionId IN OUT NUMBER, pPageId IN OUT NUMBER);
+    --
     FUNCTION getUserId(pSaveCookie BOOLEAN DEFAULT FALSE) RETURN users.id%type;
     --
     FUNCTION getRestUrl RETURN VARCHAR2;
@@ -426,12 +428,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         FOR C IN (SELECT a.id,
                    a.is_public,
                    c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
-                   NVL(a.nb_assets,0) nb_assets,
+                   NVL(a.nb_assets,0) || ' media' nb_assets,
                    a.title, 
                    a.excerpt,
                    wa.nav_name,
                    wa.page_title,
-                   CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
+                   NVL(a.word_count,0) || ' words' word_count,
                    NVL(a.updated_date, a.created_date) updated_date,
                    wa.display_order display_order
               FROM article a, website_article wa, asset c
@@ -439,7 +441,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                AND a.id=wa.article_id
                AND a.cover_asset_id=c.id(+)
              UNION ALL
-             SELECT -1, null, null, null, null,null,null,0,null,null,null,null,null,systimestamp,-1 from dual
+             SELECT -1, null,null,null,null,null,null,null,null,null,null,null,null,systimestamp,-1 from dual
              ORDER BY display_order)
         LOOP
             l_clob:=l_clob || TO_CLOB('
@@ -480,7 +482,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         </ul>
                     </div>
                 </div>' ||
-                CASE WHEN C.nb_assets=0 
+                CASE WHEN C.nb_assets='0 media'
                     THEN '<button type="button" class="no-media upload-media">UPLOAD MEDIA</button>' 
                     ELSE '<img class="show-gallery"' || CASE WHEN C.format='svg' THEN ' style="object-fit:scale-down"' END || ' src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">' 
                 END ||
@@ -491,7 +493,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.nav_name',C.nav_name)
                             || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_title',C.page_title)  
                 END || '   
-                <footer class="button-container"><span class="word-count">' || C.word_count || '</span><span class="updated-date">' || fmtUpdatedDate(C.updated_date)  || '</span></footer>
+                <footer class="button-container"><div><span class="word-count">' || C.word_count || '</span> | <span class="nb-assets">' || C.nb_assets || '</span></div><span class="updated-date">' || fmtUpdatedDate(C.updated_date)  || '</span></footer>
             </li>');
         END LOOP;
         RETURN l_clob;
@@ -647,7 +649,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <button type="button" class="close">&times;</button>
                 <h2></h2>
                 <p></p>
-                <button type="button" class="confirm">CONFIRM</button>
             </div>
         </dialog>
         <dialog class="editor">
