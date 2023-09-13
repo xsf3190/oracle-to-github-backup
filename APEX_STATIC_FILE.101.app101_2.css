@@ -95,9 +95,9 @@ nav {
     background-color: white;
     position: sticky;
     top: 0;
-    z-index: 1;
     display: flex;
     justify-content: flex-end;
+    margin: 1rem;
 }
 
 label {
@@ -127,7 +127,7 @@ ul {
 
 button {
     appearance: none;
-     background-color: transparent;
+    background-color: transparent;
     border: 0;
     cursor: pointer;
 }
@@ -169,9 +169,6 @@ hr {
     inline-size: 100%;
 }
 
-.full-width {
-    inline-size: 100%;
-}
 /* ************** */
 /* WEBSITE FORM   */
 /* ************** */
@@ -333,6 +330,8 @@ dialog button.close {
     color: var(--color-button);
     outline: 0;
     margin-inline-start: 2ch;
+    position: sticky;
+    top: 0;
 }
 
 dialog legend > button {
@@ -457,7 +456,9 @@ nav button {
     inline-size: 100%;
     aspect-ratio: 4/3;
     font-family: inherit;
+    font-size: 150%;
     border-radius: 0.7em;
+    background-color: var(--color-pale);
 }
 
 .card .title {
