@@ -21,7 +21,6 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       cards = document.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
-      popupConfirm = popup.querySelector("button.confirm"),
       gallery = document.querySelector("dialog.gallery"),
       galleryInstruction = gallery.querySelector(".instruction"),
       galleryList = gallery.querySelector("ul"),
@@ -325,6 +324,8 @@ const execProcess = (template, method, input) => {
                         gExpiredSession = true;
                         popupClose.dataset.sqlcode = data.sqlcode;
                         heading = data.sqlerrm;
+                        const colon = heading.indexOf(":")+1;
+                        heading = heading.substring(colon).trimStart();
                         message = "ALL YOUR DATA IS SAVED. CLOSE THIS WINDOW TO LOGIN AGAIN."
                         break;
                     default:
@@ -343,7 +344,6 @@ const popupOpen = (heading, text) => {
     const parser = new DOMParser();
     popup.querySelector("h2").textContent = heading;
     popup.querySelector("p").textContent = parser.parseFromString('<!doctype html><body>' + text,"text/html").body.textContent;
-    popupConfirm.style.display = "none";
     popup.showModal();
 }
 
@@ -411,7 +411,7 @@ const cardHandler = (e) => {
     } else if (e.target.matches(".show-gallery")) {
         show_gallery(id);                                
     } else if (e.target.matches(".delete")) {
-        delete_object(id, e);
+        delete_table(id, e);
     } else if (e.target.matches(".upload-media")) {
         upload_media(id);
     } else if (e.target.matches(".edit-text")) {
@@ -420,8 +420,8 @@ const cardHandler = (e) => {
         publish_article(id, e.srcElement);  
     } else if (e.target.matches(".unpublish")) {
         unpublish_article(id, e.srcElement);                                 
-    } else if (e.target.matches(".delete-asset")) {
-        delete_asset(id, e.target);                                 
+    //} else if (e.target.matches(".delete-asset")) {
+    //    delete_asset(id, e.target);                                 
     } else if (e.target.matches(".fullscreen")) {
         showFullScreen(e);                                 
     }
@@ -686,7 +686,7 @@ const widget=cloudinary.createUploadWidget(
     },
     (error, result) => {
         if (error) {
-            alertBoxOpen("FAILURE IN CLOUDINARY UPLOAD", error.message);
+            popupOpen("FAILURE IN CLOUDINARY UPLOAD", error.message);
         }
         if (result.info.files && result.event === "queues-end") { 
             let metadata = {
@@ -718,9 +718,13 @@ const widget=cloudinary.createUploadWidget(
                     img.src = data.imgurl;
                     nomedia.replaceWith(img);
                 }
-                li.querySelector(".show-gallery").innerHTML = data.nbAssets;
                 li.querySelector(".show-gallery").disabled = false;
                 li.querySelector(".updated-date").textContent = data.updated;
+            }).then ( () => {
+                const list = cards.querySelectorAll(".card:not([data-id='-1'])");
+                execProcess("website-list/" + website.dataset.id, "PUT", {dbid_string: Array.from(list, (id) => id.dataset.id).join(":")} ).then( () => {
+                    console.log("Website articles reordered");
+                });
             });
         };
     }
@@ -840,7 +844,6 @@ ClassicEditor.create(document.querySelector("#editor"), {
 const enable_card_zero = (articleId) => {
     li = document.querySelector("[data-id='0']");
     li.dataset.id = articleId;
-    li.querySelector(".fa-id-card").textContent = articleId;
     li.querySelectorAll(".dropdown-items button:disabled").forEach((btn) => {
         btn.disabled = false;
     });
@@ -945,24 +948,12 @@ getDeploymentStatus = (websiteid) => {
 }
 
 /* 
- ** UPLOAD MEDIA. PROMPT FOR CLOUDINARY API KEY IF NON-SUBSCRIBER
+ ** UPLOAD MEDIA TO CLOUDINARY
  */
 const upload_media = (articleId) => {
     execProcess( "cld-details/"+articleId,"GET").then( (data) => {
-        if (data.cldapikey==="Y") {
-            widget.open();
-            widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
-            return;
-        }
-        const dialog = document.querySelector(".cldapikey");
-        const promise = new Promise(function(resolve, reject) {
-            dialog.showModal();
-            dialog.onclose = resolve;
-        });
-        promise.then(function(response) {
-            widget.open();
-            widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
-        });
+        widget.open();
+        widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
     });
 }
 
@@ -1054,7 +1045,6 @@ const update_card_elements = (data) => {
     li.querySelector(".updated-date").textContent = data.updated; 
 };
 
-
 /*
 **  REMOVE CARD FROM DOM
 */
@@ -1064,26 +1054,10 @@ const remove_card = (articleId) => {
     li.remove();
 }
 
-popupConfirm.addEventListener("click",  (e) => {
-    const articleId = e.target.dataset.id,
-          template = e.target.dataset.template,
-          method = e.target.dataset.method;
-
-    const websiteId = document.querySelector("form").dataset.id;
-
-    execProcess( template + "/" + articleId, method, {websiteid:websiteId}).then( () => {
-        if (template === "article" && method === "DELETE") {
-            remove_card(articleId);
-            e.target.dataset.id = "";
-        }
-        popup.close();
-    });
-});
-
 /*
- ** DELETE WEBSITE / ARTICLE / ASSET - REQUIRES CONFIRMATION
+ ** DELETE WEBSITE / ARTICLE / ASSET / USER - REQUIRES CONFIRMATION
  */
-const delete_object = (id, e) => {
+const delete_table = (id, e) => {
 
     e.stopPropagation();
     e.target.style.cursor = "none";
@@ -1095,6 +1069,8 @@ const delete_object = (id, e) => {
     let btn = document.createElement("button");
     btn.setAttribute("type", "button");
     btn.classList.add("delete-confirm");
+    btn.dataset.id = id;
+    btn.dataset.table = e.target.dataset.table;
     btn.style.width = "100%";
     btn.style.color = "white";
     btn.style.backgroundColor = "red";
@@ -1107,16 +1083,19 @@ const delete_object = (id, e) => {
     btn.textContent = "CONFIRM DELETE";
     btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        console.log("DELETE CONFIRMED");
-        e.target.style.opacity = "0";
-        e.target.style.scale = "0.5";
-        setTimeout(() => {
-            let dropdown = e.target.closest(".dropdown-items");
-            e.target.closest("li").remove();
-            if (dropdown.childElementCount === 0) {
-                dropdown.classList.remove("visible");
-            }
-        }, 1000);
+        console.log("DELETE ",e.target.dataset.table,e.target.dataset.id);
+        execProcess("delete","DELETE",{id:e.target.dataset.id,table_name:e.target.dataset.table}).then( (data) => {
+            e.target.style.opacity = "0";
+            e.target.style.scale = "0.5";
+            setTimeout(() => {
+                let dropdown = e.target.closest(".dropdown-items");
+                e.target.closest("li").remove();
+                if (dropdown.childElementCount === 0) {
+                    dropdown.classList.remove("visible");
+                }
+            }, 1000);
+            e.target.closest(".card").style.filter = "blur(5px)";
+        });
     });
 
     li.append(btn);
