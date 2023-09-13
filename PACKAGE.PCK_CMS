@@ -8,6 +8,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE deleteWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB);
     --
+    PROCEDURE deleteTable(pBodyText IN CLOB);
+    --
     PROCEDURE getContent(pWebsiteId IN website.id%type);
     --
     PROCEDURE getCldDetails(pArticleId IN article.id%type);
@@ -56,50 +58,51 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_cld_cloud_name users.cld_cloud_name%type;
         l_cld_api_key users.cld_api_key%type;
         l_cld_api_secret users.cld_api_secret%type;
+        l_app_id NUMBER;
+        l_session_id users.apex_session_id%type;
+        l_page_id NUMBER;
         l_image_max_size usage.image_max_size%type;
         l_video_max_size usage.video_max_size%type;
-        l_cldapikey VARCHAR2(1);
+        DEFAULT_IMAGE_MAX_SIZE CONSTANT NUMBER:=10*1024*1024;
+        DEFAULT_VIDEO_MAX_SIZE CONSTANT NUMBER:=100*1024*1024;
     BEGIN      
         l_user_id:=pck_core.getUserId();
 
-        /* get Cloudinary details either of logged on user of the hosting user */
-        BEGIN
-            SELECT cld_cloud_name, cld_api_key, image_max_size, video_max_size
-              INTO l_cld_cloud_name, l_cld_api_key, l_image_max_size, l_video_max_size
-              FROM 
+        /* get Cloudinary details either of logged on user of Administrator */
+        SELECT cld_cloud_name, cld_api_key, NVL(image_max_size,DEFAULT_IMAGE_MAX_SIZE), NVL(video_max_size, DEFAULT_VIDEO_MAX_SIZE)
+        INTO l_cld_cloud_name, l_cld_api_key, l_image_max_size, l_video_max_size
+        FROM 
+            (
+                SELECT ROW_NUMBER() OVER (ORDER BY g.usage_date DESC) rn, u.cld_cloud_name, u.cld_api_key, g.image_max_size, g.video_max_size
+                FROM users u, usage g 
+                WHERE u.id=l_user_id
+                AND g.user_id(+)=u.id
+            ) 
+        WHERE rn=1;
+
+        IF (l_cld_cloud_name IS NULL) THEN
+            pck_core.getApexSession(l_app_id, l_session_id, l_page_id);
+            SELECT cld_cloud_name, cld_api_key, NVL(image_max_size,DEFAULT_IMAGE_MAX_SIZE), NVL(video_max_size, DEFAULT_VIDEO_MAX_SIZE)
+                INTO l_cld_cloud_name, l_cld_api_key, l_image_max_size, l_video_max_size
+                FROM 
                     (
-                        SELECT ROW_NUMBER() OVER (ORDER BY usage_date DESC) rn, users.cld_cloud_name, users.cld_api_key, usage.image_max_size, usage.video_max_size
-                        FROM users, usage 
-                        WHERE users.id=l_user_id
-                        AND usage.user_id=users.id
+                        SELECT ROW_NUMBER() OVER (ORDER BY usage_date DESC) rn, u.cld_cloud_name, u.cld_api_key, g.image_max_size, g.video_max_size
+                        FROM apex_applications a, users u, usage g
+                        WHERE a.application_id=l_app_id 
+                        AND a.email_from=u.email
+                        AND g.user_id(+)=u.id
                     ) 
-             WHERE rn=1;
-             l_cldapikey:='Y';
+                WHERE rn=1;
+        END IF;  
 
-            EXCEPTION
-                WHEN NO_DATA_FOUND THEN
-                    SELECT cld_cloud_name, cld_api_key, image_max_size, video_max_size
-                      INTO l_cld_cloud_name, l_cld_api_key, l_image_max_size, l_video_max_size
-                      FROM 
-                            (
-                                SELECT ROW_NUMBER() OVER (ORDER BY usage_date DESC) rn, users.cld_cloud_name, users.cld_api_key, usage.image_max_size, usage.video_max_size
-                                FROM users, usage 
-                                WHERE users.hosting_user_ind='Y'
-                                AND usage.user_id=users.id
-                            ) 
-                     WHERE rn=1;  
-                     l_cldapikey:='N';
-            END;
-
-            apex_json.open_object; 
-            apex_json.write('success', TRUE);
-            apex_json.write('cloudname', l_cld_cloud_name);
-            apex_json.write('apikey', l_cld_api_key);
-            apex_json.write('maxImageFileSize', l_image_max_size);
-            apex_json.write('maxVideoFileSize', l_video_max_size);
-            apex_json.write('cldapikey', l_cldapikey);
-            apex_json.write('articleId', CASE WHEN pArticleId=0 THEN seq_article.nextval ELSE pArticleId END);
-            apex_json.close_object;
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('cloudname', l_cld_cloud_name);
+        apex_json.write('apikey', l_cld_api_key);
+        apex_json.write('maxImageFileSize', l_image_max_size);
+        apex_json.write('maxVideoFileSize', l_video_max_size);
+        apex_json.write('articleId', CASE WHEN pArticleId=0 THEN seq_article.nextval ELSE pArticleId END);
+        apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -406,11 +409,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
          WHEN MATCHED THEN UPDATE SET updated_date=current_timestamp
          WHEN NOT MATCHED THEN INSERT (id, author_user_id, created_date) VALUES (s.article_id, l_user_id, current_timestamp);
 
+        /* upload into WEBSITE_ARTICLE table */
+
         SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_article WHERE article_id=l_article_id AND website_id=l_website_id);
         IF (n=0) THEN
             SELECT NVL(MAX(display_order),0)+1 INTO l_start_order_website FROM website_article WHERE website_id=l_website_id;
             INSERT INTO website_article(article_id, website_id, display_order, user_id) VALUES (l_article_id, l_website_id, l_start_order_website, l_user_id);
         END IF;
+
+        /* upload into ASSET table */
 
         SELECT NVL(MAX(display_order),0) INTO l_start_order FROM asset WHERE article_id=l_article_id;
 
@@ -434,7 +441,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             APEX_JSON.open_object; 
             APEX_JSON.write('success', TRUE);
             APEX_JSON.write('articleId',l_article_id);
-            APEX_JSON.write('nbAssets','&blacktriangleright;1/' || C.nb_assets);
+            APEX_JSON.write('nbAssets',C.nb_assets || ' media');
             APEX_JSON.write('imgurl',pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width));
             APEX_JSON.write('updated', pck_core.fmtUpdatedDate(l_updated_date));
             APEX_JSON.close_object;
@@ -974,7 +981,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Delete 1 asset for a given article
+     **  Delete ASSET row and its Cloudinary media
      */   
     PROCEDURE deleteAsset(pId IN asset.id%type) IS
         l_article_id asset.article_id%type;
@@ -998,10 +1005,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         SELECT a.article_id, a.cld_cloud_name, a.public_id, u.cld_api_key, u.cld_api_secret
           INTO l_article_id, l_cld_cloud_name, l_public_id, l_cld_api_key, l_cld_api_secret
-          FROM asset a, article t, users u
+          FROM asset a, users u
          WHERE a.id=pId
-           AND a.article_id=t.id
-           AND t.author_user_id=u.id
+           AND a.user_id=u.id
            AND u.id=l_user_id;
 
         l_parm_names(1):='invalidate';
@@ -1404,6 +1410,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
+    /**
+     **    Delete object
+     */
+    PROCEDURE deleteTable(pBodyText IN CLOB) IS
+        l_user_id users.id%type;
+    BEGIN
+        l_user_id:=pck_core.getUserId();
+
+        FOR C IN (SELECT id, table_name
+                    FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_name)))
+        LOOP
+            CASE C.table_name
+                WHEN 'user' THEN
+                    null;            
+                WHEN 'website' THEN
+                    null;
+                WHEN 'website_article' THEN
+                    null;
+                WHEN 'article' THEN
+                    null;
+                WHEN 'asset' THEN
+                    deleteAsset(C.id);               
+            END CASE;
+        END LOOP;
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE);
+
+        apex_json.close_object;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+    END;
+
     /*
      **  Upload Core Web Vitals uploaded through navigator.beacon - hence no response sent.
      */      
@@ -1416,7 +1457,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' COLUMNS (session_id, page_id,
             NESTED '$.cwv[*]' COLUMNS (name, value, rating)))
         LOG ERRORS INTO core_web_vitals_err REJECT LIMIT UNLIMITED;                 
-    END;
+    END;    
 
 END;
 /
