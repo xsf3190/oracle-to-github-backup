@@ -80,7 +80,7 @@ const changeHandler = (e) => {
           id = e.target.dataset.id,
           value = e.target.value;
 
-    execProcess("update","PUT",{id:id,table_column:table_column,value:value}).then( (data) => {
+    execProcess("dml","PUT",{id:id,table_column:table_column,value:value}).then( (data) => {
         result.textContent = data.message;
         result.style.color = data.color;
         result.style.opacity = "1";
@@ -310,6 +310,8 @@ const execProcess = (template, method, input) => {
             }
 
             if (!response.ok) {
+                const data = await response.json();
+                popupOpen(data.action, data.cause);
                 throw new Error("Network response was not OK");
             }
 
@@ -707,24 +709,29 @@ const widget=cloudinary.createUploadWidget(
                     });
                 }
             });
+            let newArticle = false;
             execProcess("cld-upload","POST",metadata).then( (data) => {
                 let li = document.querySelector("[data-id='" + data.articleId + "']");
                 if (!li) {
                     li = enable_card_zero(data.articleId);
+                    newArticle = true;
                 }
                 let nomedia = li.querySelector("button.no-media.upload-media");
                 if (nomedia) {
                     const img = document.createElement("img");
                     img.src = data.imgurl;
+                    img.classList.add("show-gallery");
                     nomedia.replaceWith(img);
                 }
-                li.querySelector(".show-gallery").disabled = false;
+                li.querySelector(".nb-assets").textContent = data.nbAssets;
                 li.querySelector(".updated-date").textContent = data.updated;
             }).then ( () => {
-                const list = cards.querySelectorAll(".card:not([data-id='-1'])");
-                execProcess("website-list/" + website.dataset.id, "PUT", {dbid_string: Array.from(list, (id) => id.dataset.id).join(":")} ).then( () => {
-                    console.log("Website articles reordered");
-                });
+                if (newArticle) {
+                    const list = cards.querySelectorAll(".card:not([data-id='-1'])");
+                    execProcess("website-list/" + website.dataset.id, "PUT", {dbid_string: Array.from(list, (id) => id.dataset.id).join(":")} ).then( () => {
+                        console.log("Website articles reordered");
+                    });
+                }
             });
         };
     }
@@ -1083,18 +1090,17 @@ const delete_table = (id, e) => {
     btn.textContent = "CONFIRM DELETE";
     btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        console.log("DELETE ",e.target.dataset.table,e.target.dataset.id);
-        execProcess("delete","DELETE",{id:e.target.dataset.id,table_name:e.target.dataset.table}).then( (data) => {
-            e.target.style.opacity = "0";
-            e.target.style.scale = "0.5";
-            setTimeout(() => {
-                let dropdown = e.target.closest(".dropdown-items");
-                e.target.closest("li").remove();
-                if (dropdown.childElementCount === 0) {
-                    dropdown.classList.remove("visible");
-                }
-            }, 1000);
-            e.target.closest(".card").style.filter = "blur(5px)";
+        /* Construct object with primary key values of table row to be deleted - If website_article we also send website_id */
+        let pk={};
+        pk.table_name = e.target.dataset.table;
+        if (pk.table_name === "website_article") {
+            pk.article_id = e.target.dataset.id;
+            pk.website_id = website.dataset.id;
+        } else {
+            pk.id = e.target.dataset.id;
+        }
+        execProcess("dml","DELETE",pk).then( () => {
+            e.target.closest(".card").classList.add("fade-out");
         });
     });
 
