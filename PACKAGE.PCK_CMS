@@ -1,13 +1,5 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
-    PROCEDURE deleteAll(pUserId IN users.id%type);
-    --
-    PROCEDURE deleteArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
-    --
-    PROCEDURE deleteAsset(pId IN asset.id%type);
-    --
-    PROCEDURE deleteWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB);
-    --
     PROCEDURE deleteTable(pBodyText IN CLOB);
     --
     PROCEDURE getContent(pWebsiteId IN website.id%type);
@@ -280,46 +272,48 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
-
-    PROCEDURE getThumbnailContent(pArticleId IN article.id%type, pUserId IN users.id%type, pNbAssets IN OUT article.nb_assets%type, pInstruction IN OUT NOCOPY VARCHAR2, pContent IN OUT NOCOPY CLOB) 
+    /*
+     **  Build gallery of thumbnail images for a given article
+     */
+    PROCEDURE getThumbnails(pArticleId IN article.id%type)
     IS
+        l_clob CLOB;
+        l_user_id users.id%type;
+        l_instruction VARCHAR2(300);
         l_url_image VARCHAR2(300);
-        l_media_type VARCHAR2(5);   
+        l_media_type VARCHAR2(5);
+        n PLS_INTEGER:=0;   
     BEGIN
+        l_user_id:=pck_core.getUserId();
+
         FOR C IN (
             SELECT a.id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
-                   DECODE(a.width,0,pck_core.gWidthThumbnail,a.width) width, DECODE(a.height,0,pck_core.gWidthThumbnail,a.height) height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format,
-                   COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY a.display_order) rn,
-                   t.nb_assets, NVL(u.maxtouchpoints,0) maxtouchpoints
-              FROM asset a, article t, users u
-             WHERE t.id=pArticleId
-               AND a.article_id=t.id
-               AND t.author_user_id=NVL(pUserId, t.author_user_id)
-               AND u.id=t.author_user_id
+                   DECODE(a.width,0,pck_core.gWidthThumbnail,a.width) width, DECODE(a.height,0,pck_core.gWidthThumbnail,a.height) height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format
+              FROM asset a
+             WHERE a.article_id=pArticleId
                AND NVL(a.format,'N/A')<>'clt'
              ORDER BY a.display_order )
         LOOP
-            IF (C.rn=1) THEN
-                pNbAssets:=C.nb_assets;
-                pInstruction:=CASE WHEN C.maxtouchpoints > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen' || 
-                       CASE WHEN pUserId IS NOT NULL AND C.nb_assets > 1 THEN 
-                            '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover' END;
-            END IF;
-
-            pContent:=pContent || TO_CLOB('
+            n:=n+1;
+            l_clob:=l_clob || TO_CLOB('
                 <li class="card" tabindex="0" data-id="' || C.id || '">
-                    <div class="button-container">
-                        <span>' || C.rn || '/' || C.nb || '</span>
-                        <button type="button" class="delete" data-table="asset">
-                            <svg class="icon">
-                                <use href="#delete"></use>
-                            </svg>
-                        </button>
+                    <div>
+                        <div class="dropdown">
+                            <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                            <ul class="dropdown-items">
+                                <li>
+                                    <button type="button" class="with-icon delete" data-table="asset">
+                                        <svg class="icon"><use href="#delete"></use></svg>
+                                    Delete
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
                     </div>');
             l_url_image:=pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
             l_media_type:=pck_core.getMediaType(C.resource_type, C.format);
 
-            pContent:=pContent || TO_CLOB('<img class="fullscreen" data-dimensions="'  || 
+            l_clob:=l_clob || TO_CLOB('<img class="fullscreen" data-dimensions="'  || 
                                             ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || 
                                             ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':' || 
                                             C.width || 'x' || C.height || '" src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>');
@@ -327,7 +321,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             CASE l_media_type
 
                 WHEN 'video' THEN
-                    pContent:=pContent || TO_CLOB(
+                    l_clob:=l_clob || TO_CLOB(
                     '<video controls preload="metadata" poster="' || l_url_image || '">
                         <source src="' || REPLACE(l_url_image,'.jpg','.webm') || '" type="video/webm"></source>
                         <source src="' || REPLACE(l_url_image,'.jpg','.mp4') || '" type="video/mp4"></source>
@@ -335,7 +329,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
                 WHEN 'audio' THEN
                     l_url_image:=REGEXP_REPLACE(l_url_image,',w_(\d)+\/fl_waveform',NULL);
-                    pContent:=pContent || TO_CLOB(
+                    l_clob:=l_clob || TO_CLOB(
                     '<audio preload="metadata" controls>
                         <source src="' || REPLACE(l_url_image,'.png','.aac') || '" type="audio/aac"></source>
                         <source src="' || REPLACE(l_url_image,'.png','.ogg') || '" type="audio/ogg"></source>
@@ -344,31 +338,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     </audio>');
 
                 ELSE NULL;
-
             END CASE;
 
-            pContent:=pContent || TO_CLOB(pck_core.buildTextareaWrapper(C.id,'asset.alt_text',C.alt_text));
-            pContent:=pContent || TO_CLOB(pck_core.buildTextareaWrapper(C.id,'asset.description',C.description));
+            l_clob:=l_clob || TO_CLOB(pck_core.buildTextareaWrapper(C.id,'asset.alt_text',C.alt_text));
+            l_clob:=l_clob || TO_CLOB(pck_core.buildTextareaWrapper(C.id,'asset.description',C.description));
 
-            pContent:=pContent || TO_CLOB('</li>');
+            l_clob:=l_clob || TO_CLOB('</li>');
 
         END LOOP;
 
-    END;
-
-    /*
-     **  Build gallery of thumbnail images from ASSET table 
-     **  Executed in response to user requesting gallery of media assets for a given article
-     */
-    PROCEDURE getThumbnails(pArticleId IN article.id%type) IS
-        l_clob CLOB;
-        l_user_id users.id%type;
-        l_instruction VARCHAR2(300);
-        n PLS_INTEGER;
-    BEGIN
-        l_user_id:=pck_core.getUserId();
-
-        getThumbnailContent(pArticleId, l_user_id, n, l_instruction, l_clob);
+        FOR C IN (SELECT NVL(maxtouchpoints,0) maxtouchpoints FROM users WHERE id=l_user_id) LOOP
+            l_instruction:=CASE WHEN C.maxtouchpoints > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen';
+            IF (n > 1) THEN 
+                l_instruction:=l_instruction || '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover';
+            END IF;
+        END LOOP;
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -376,9 +360,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('instruction', l_instruction);
         apex_json.close_object;
 
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
     /*
@@ -931,47 +912,53 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;    
 
     /*
-     **  Remove article and any uploaded assets
+     **  Delete website_article. If deleted article not in any other website delete the article and any assets
      */   
-    PROCEDURE deleteArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
+    PROCEDURE deleteArticle(pUserId IN users.id%type, pArticleId IN website_article.article_id%type, pWebsiteId IN website_article.website_id%type) IS
         l_clob CLOB;
         l_url VARCHAR2(500);
-        l_user_id users.id%type;
-        l_website_id website_article.website_id%type;
+        l_error_message VARCHAR2(4000);
         n PLS_INTEGER;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        DELETE website_article 
+         WHERE user_id=pUserId 
+           AND article_id=pArticleId 
+           AND website_id=pWebsiteId;
 
-        FOR C IN (SELECT websiteid FROM JSON_TABLE(pBodyText, '$' COLUMNS (websiteid))) LOOP
-            l_website_id:=C.websiteid;
-        END LOOP;
+        n:=sql%rowcount;
+        /* Confirm current user owned the deleted website_article */
 
-        IF (l_website_id IS NOT NULL) THEN
-            DELETE website_article WHERE article_id=pArticleId AND website_id=l_website_id;
+        IF (n=1) THEN 
+            SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_article WHERE article_id=pArticleId);
+            IF (n=0) THEN
+                /* Delete externally managed assets first to avoid potential cost and inconvenience of orphans */
+
+                FOR C IN (SELECT DISTINCT a.resource_type, a.cld_cloud_name, u.cld_api_key, u.cld_api_secret 
+                            FROM users u, asset a
+                           WHERE a.article_id=pArticleId
+                            AND a.cld_cloud_name=u.cld_cloud_name)
+                LOOP
+                    /* Cloudinary Admin API used for bulk delete of all assets tagged by article id. Uses Basic Authentication. */
+                    l_url:='https://api.cloudinary.com/v1_1/' || C.cld_cloud_name || '/resources/' || C.resource_type || '/tags/' || pArticleId;
+                    l_clob := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'DELETE',p_username=>C.cld_api_key,p_password=>C.cld_api_secret); 
+                    IF (apex_web_service.g_status_code<>200) THEN
+                        pck_core.log('HTTPS status ' || apex_web_service.g_status_code || ' url:' || l_url);
+                        RAISE_APPLICATION_ERROR(-20001,'ERROR DELETING CLOUDINARY ASSET');
+                    END IF;
+                    SELECT error_message INTO l_error_message FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS error_message VARCHAR2(500) PATH '$.error.message');
+                    pck_core.log(l_error_message);
+                    IF (l_error_message IS NOT NULL) THEN
+                        RAISE_APPLICATION_ERROR(-20001,l_error_message);
+                    END IF;
+                END LOOP;
+
+                /* Delete the article. Referential integrity constraint cascades to linked asset rows */
+                DELETE article WHERE id=pArticleId;
+
+            END IF;
         END IF;
 
-        /* delete article if not in any website */
-
-        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_article WHERE article_id=pArticleId);
-
-        IF (n=0) THEN
-            DELETE asset WHERE article_id=pArticleId;
-
-            DELETE article WHERE id=pArticleId;
-
-            FOR C IN (SELECT DISTINCT a.resource_type, u.cld_cloud_name, u.cld_api_key, u.cld_api_secret 
-                        FROM users u, article t, asset a
-                       WHERE t.id=pArticleId
-                         AND t.author_user_id=u.id
-                         AND u.id=l_user_id
-                         AND t.id=a.article_id)
-            LOOP
-                l_url:='https://api.cloudinary.com/v1_1/' || C.cld_cloud_name || '/resources/' || C.resource_type || '/tags/' || pArticleId;
-                l_clob := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'DELETE',p_username=>C.cld_api_key,p_password=>C.cld_api_secret); 
-            END LOOP;
-        END IF;
-
-        apex_json.open_object; 
+        apex_json.open_object;
         apex_json.write('success', TRUE);
         apex_json.close_object;
 
@@ -983,32 +970,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Delete ASSET row and its Cloudinary media
      */   
-    PROCEDURE deleteAsset(pId IN asset.id%type) IS
+    PROCEDURE deleteAsset(pUserId IN asset.user_id%type, pId IN asset.id%type) IS
         l_article_id asset.article_id%type;
         l_cld_cloud_name asset.cld_cloud_name%type;
         l_public_id asset.public_id%type;
         l_cld_api_key users.cld_api_key%type;
         l_cld_api_secret users.cld_api_secret%type;
-        l_nb_assets article.nb_assets%type;
         l_parm_names apex_application_global.VC_ARR2;
         l_parm_values apex_application_global.VC_ARR2;
         l_timestamp NUMBER:=trunc((cast(current_timestamp at time zone 'UTC' as date) - to_date('01-jan-1970','dd-mon-yyyy')) * (86400));
         l_signature VARCHAR2(100);
         l_string_to_sign varchar2(2000);  
-        l_error_message VARCHAR2(500);
         l_clob CLOB;
-        l_instruction VARCHAR2(500);
+        l_error_message VARCHAR2(500);
         l_updated_date VARCHAR2(20);
-        l_user_id users.id%type;
+        l_nb_assets article.nb_assets%type;
     BEGIN
-        l_user_id:=pck_core.getUserId();
-
+        pck_core.log(pUserId||'-'||pId);
         SELECT a.article_id, a.cld_cloud_name, a.public_id, u.cld_api_key, u.cld_api_secret
           INTO l_article_id, l_cld_cloud_name, l_public_id, l_cld_api_key, l_cld_api_secret
           FROM asset a, users u
          WHERE a.id=pId
            AND a.user_id=u.id
-           AND u.id=l_user_id;
+           AND u.id=pUserId;
 
         l_parm_names(1):='invalidate';
         l_parm_values(1):='true';
@@ -1041,19 +1025,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END IF;
 
         DELETE asset WHERE id=pId;
-        UPDATE article SET nb_assets = nb_assets-1, updated_date=current_date WHERE id=l_article_id;
-
-        l_clob:=NULL;
-        getThumbnailContent(l_article_id, l_user_id, l_nb_assets, l_instruction, l_clob);
+        UPDATE article SET nb_assets = nb_assets-1, updated_date=current_date WHERE id=l_article_id RETURNING nb_assets INTO l_nb_assets;
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('articleId', l_article_id);
         apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
-        apex_json.write('content', l_clob);
-        apex_json.write('nb', l_nb_assets);
-        apex_json.write('instruction', l_instruction);
-
+        apex_json.write('nb-assets', l_nb_assets || ' media');
         apex_json.close_object;
 
         EXCEPTION
@@ -1260,7 +1238,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         l_user_id users.id%type;
         l_url VARCHAR2(500);
-        l_clob CLOB;
         l_na_number NUMBER;
         l_na_varchar VARCHAR2(500);
     BEGIN
@@ -1275,13 +1252,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         /* get the article id from first asset */
         SELECT article_id INTO l_article_id
-          FROM asset WHERE id=l_assets(1).id;
+          FROM asset 
+         WHERE id=l_assets(1).id
+           AND user_id=l_user_id;
 
         /* ... and get id of first asset as this may have been replaced */
         SELECT cover_asset_id 
           INTO l_first_dbid 
           FROM article 
-         WHERE id=l_article_id;
+         WHERE id=l_article_id
+           AND author_user_id=l_user_id;
 
         FORALL i IN l_assets.first .. l_assets.last
         UPDATE asset SET display_order=l_assets(i).display_order WHERE id  = l_assets(i).id;
@@ -1290,19 +1270,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             SELECT cld_cloud_name, resource_type, public_id, format, width
               INTO l_cld_cloud_name, l_resource_type, l_public_id, l_format, l_width
               FROM asset 
-              WHERE id=l_assets(1).id;
+              WHERE id=l_assets(1).id
+                AND user_id=l_user_id;
             l_url:=pck_core.getCloudinaryUrl(l_cld_cloud_name, l_resource_type, l_public_id, l_format, l_width);
             UPDATE article SET updated_date=current_date, cover_asset_id=l_assets(1).id WHERE id=l_article_id;
         END IF;
-
-        l_clob:=NULL;
-        getThumbnailContent(l_article_id, l_user_id, l_na_number, l_na_varchar, l_clob);
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('articleId', l_article_id);
         apex_json.write('url', l_url);
-        apex_json.write('content', l_clob);
         apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
         apex_json.close_object;
 
@@ -1418,27 +1395,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_user_id:=pck_core.getUserId();
 
-        FOR C IN (SELECT id, table_name
-                    FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_name)))
+        FOR C IN (SELECT t.id, t.article_id, t.website_id, t.table_name
+                    FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, article_id, website_id, table_name)) t
+                   WHERE u.id=l_user_id)
         LOOP
             CASE C.table_name
                 WHEN 'user' THEN
                     null;            
                 WHEN 'website' THEN
-                    null;
+                    pck_core.log('delete website '||C.id);
                 WHEN 'website_article' THEN
-                    null;
-                WHEN 'article' THEN
-                    null;
+                    deleteArticle(l_user_id,C.article_id,C.website_id);
                 WHEN 'asset' THEN
-                    deleteAsset(C.id);               
+                    deleteAsset(l_user_id,C.id);               
             END CASE;
         END LOOP;
 
-        apex_json.open_object;
-        apex_json.write('success', TRUE);
-
-        apex_json.close_object;
+        /* NB: each procedure returns its own JSON response */
 
         EXCEPTION
             WHEN OTHERS THEN
