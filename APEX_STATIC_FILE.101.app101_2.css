@@ -412,6 +412,7 @@ nav button {
 .button-container {
   display: flex;
   justify-content: space-between;
+  margin-bottom: 0.5ch;
 }
 
 .cards {
@@ -482,6 +483,17 @@ nav button {
 .card footer {
     font-style: italic;
     font-size: 50%;
+}
+
+.fade-out {
+  animation: fade-out 1s forwards;
+}
+
+@keyframes fade-out {
+  100% {
+    opacity: 0;
+    display: none;
+  }
 }
 
 
@@ -588,6 +600,10 @@ nav button {
     opacity: 0.4;
 }
 
+.instruction {
+    margin: 0 0 2ch 2ch;
+}
+
 .gallery-container .instruction > span {
   padding: 0 0.5em;
   color: var(--color-secondary);
@@ -598,6 +614,11 @@ nav button {
   block-size: 100%;
   object-fit: scale-down;
   max-height: 20ch; /* bollox safari */
+}
+
+.gallery-container .card > div:first-of-type {
+    display: flex;
+    justify-content: flex-end;
 }
 
 video, audio {
