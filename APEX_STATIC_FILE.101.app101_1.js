@@ -3,7 +3,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       apex_session = document.querySelector("#pInstance").value,
       vitalsQueue = new Set(),
       popup = document.querySelector("dialog"),
-      privacy = document.querySelector("#privacy-policy");
+      privacy = document.querySelector("[data-id]");
 
 /*
 **  CLOSE DIALOGS
