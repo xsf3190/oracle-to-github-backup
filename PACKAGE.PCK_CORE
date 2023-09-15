@@ -324,20 +324,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <ul class="login">
                     <li class="red"></li>
                     <li class="grey">
-                        <p>Login w/</p>
+                        <span>Login w/</span>
                         <div>
                             <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_facebook_svg ||'</a>
                             <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_google_svg ||'</a>
                         </div>
+                        <span data-id="' || C.id || '">Priv</span>
                     </li>
                     <li class="grey">' || pck_icons.g_github_svg || pck_icons.g_oracle_svg || '</li>
                     <li class="grey">' || pck_icons.g_cloudinary_svg || pck_icons.g_netlify_svg || '</li>
                     <li class="yellow">ALWAYS FREE</li>
                     <li class="grey"></li>
                     <li class="blue"></li>
-                    <li class="grey">
-                        <button type="button" data-id="' || C.id || '" id="privacy-policy">' || pck_icons.g_privacy_svg ||'</button>
-                    </li>
+                    <li class="grey"></li>
                     <li class="grey"></li>
                 </ul>
                 <dialog>
