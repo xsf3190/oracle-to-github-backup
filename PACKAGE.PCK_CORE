@@ -253,10 +253,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <button type="button" class="show-dropdown">&blacktriangledown;</button>
                     <ul class="dropdown-items">
                         <li>
+                            <button type="button" class="with-icon new-website">
+                                <svg class="icon">
+                                    <use href="#plus"></use>
+                                </svg>
+                                NEW WEBSITE
+                            </button>
+                        </li>                    
+                        <li>
                             <button type="button" class="with-icon delete" data-table="website" data-id=' || pId || '>
                                 <svg class="icon">
                                     <use href="#delete">
-                                </svg>DELETE WEBSITE
+                                </svg>
+                                DELETE WEBSITE
                             </button>
                         </li>
                     </ul>
@@ -321,12 +330,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         FOR C IN (SELECT id FROM article WHERE id=19124)  -- the miserable privacy policy
         LOOP
             RETURN TO_CLOB('
-                <ul class="login">
+                <ul class="container">
                     <li class="red">' || pck_icons.g_oracle_svg || '</li>
-                    <li class="grey">
-                        <p>LOGIN</p>
-                        <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_facebook_svg ||'</a>
-                        <a href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_google_svg ||'</a>
+                    <li class="grey login">
+                        <a class="button" href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_facebook_svg ||'Login w/ Facebook</a>
+                        <a class="button" href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_google_svg ||'Login w/ Google</a>
                         <button data-id="' || C.id || '">Priv</button>
                     </li>
                     <li class="grey">' || pck_icons.g_github_svg || '</li>
@@ -580,14 +588,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <span>' || apex_application.g_user || '</span>
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
                 <ul class="dropdown-items">
-                    <li class="new-website">
-                        <button type="button" class="with-icon">
-                            <svg class="icon">
-                                <use href="#plus"></use>
-                            </svg>
-                            NEW WEBSITE
-                        </button>
-                    </li>
                     <li class="signout">
                         <button type="button" class="with-icon">
                             <svg class="icon">
