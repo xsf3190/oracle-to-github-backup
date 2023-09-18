@@ -83,29 +83,39 @@ const changeHandler = (e) => {
     execProcess("dml","PUT",{id:id,table_column:table_column,value:value}).then( (data) => {
         result.textContent = data.message;
         result.style.color = data.color;
-        result.style.opacity = "1";
-
-        if (deployWebsite) {
-            if (data.color==="red") {
-                deployWebsite.disabled = true;
-                deployWebsite.style.opacity = "0.2";
-            } else {
-                deployWebsite.disabled = false;
-                deployWebsite.style.opacity = "1";           
-            }
-        }
-
-        if (addWebsite) {
-            if (data.color==="red") {
-                addWebsite.disabled = true;
-                addWebsite.style.opacity = "0.2";
-            } else if (document.querySelector("#domain_name").value) {
-                addWebsite.disabled = false;
-                addWebsite.style.opacity = "1";           
-            }
-        }        
+        result.style.opacity = "1";        
     });
 }
+
+/*
+ **  NEW WEBSITE
+ */
+newWebsite.addEventListener("click",  () => {
+    website.dataset.id = "";
+    const inputs = website.elements;
+    for (let i = 0; i < inputs.length; i++) {
+        if (inputs[i].type === "textarea") {
+            inputs[i].dataset.id = "";
+            inputs[i].value = "";
+            const maxchars = inputs[i].getAttribute("maxlength"),
+                  charcounter = inputs[i].nextElementSibling.querySelector(".charcounter");
+            charcounter.textContent = "0/" + maxchars;
+        } else if (inputs[i].type === "radio") {
+            inputs[i].dataset.id = "";
+            inputs[i].checked = false;
+        }
+    }
+    const clone = cards.querySelector("[data-id='-1']").cloneNode(true),
+          clone0 = clone.cloneNode(true);
+    cards.querySelectorAll(".card").forEach((card) => {
+        card.classList.add("fade-out");
+    });
+    clone0.dataset.id = "0";
+    setTimeout( () => {
+        cards.replaceChildren(clone,clone0);
+        website.querySelector("textarea").focus();
+    },1000);
+});
 
 /*
  **  LIST VIEW
@@ -958,6 +968,10 @@ getDeploymentStatus = (websiteid) => {
  ** UPLOAD MEDIA TO CLOUDINARY
  */
 const upload_media = (articleId) => {
+    if (articleId === "0") {
+        popupOpen("CANT DO THAT YET","Must first enter valid Domain Name");
+        return;
+    }
     execProcess( "cld-details/"+articleId,"GET").then( (data) => {
         widget.open();
         widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
