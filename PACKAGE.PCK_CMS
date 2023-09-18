@@ -1322,12 +1322,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         l_message VARCHAR2(50);
         l_color VARCHAR2(5);
-        n PLS_INTEGER:=1;
+        n PLS_INTEGER;
     BEGIN
         l_user_id:=pck_core.getUserId();
 
-        FOR C IN (SELECT id, table_column, CASE WHEN table_column='website.domain_name' THEN regexp_replace(value,'[^a-zA-Z0-9-]',null) ELSE value END value
-                    FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value)))
+        FOR C IN (SELECT t.id, t.table_column, CASE WHEN t.table_column='website.domain_name' THEN regexp_replace(t.value,'[^a-zA-Z0-9-]',null) ELSE t.value END value
+                    FROM users, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value)) t
+                   WHERE users.id=l_user_id)
         LOOP
             IF (C.table_column='website.domain_name') THEN
                 l_message:=domainExists(l_user_id, C.value);
