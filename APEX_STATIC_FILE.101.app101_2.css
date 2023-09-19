@@ -55,7 +55,7 @@
 
 }
 
-* {
+*, *::before, *::after {
     box-sizing: border-box;
 }
 
@@ -82,6 +82,7 @@ body {
     font-family: var(--font-serif);
     font-size: var(--step-0);
     text-rendering: optimizeSpeed;
+    -webkit-font-smoothing: antialiased;
 }
 
 /************************************/
@@ -89,6 +90,11 @@ body {
 /************************************/
 img {
     max-inline-size: 100%;
+    display: block;
+}
+
+input, button, textarea, select {
+  font: inherit;
 }
 
 nav {
@@ -109,8 +115,6 @@ textarea {
     border: 0.2ch solid var(--color-pale);
     border-radius: 0.5ch;
     resize: both;
-    font-family: inherit;
-    font-size: inherit;
     line-height: 1.5;
     padding-left: 0.5ch;
 }
@@ -137,12 +141,10 @@ button.cta {
     background-color: var(--color-solid);
     padding: 1ch 2ch;
     color: white;
-    font: inherit;
     border-radius: 1ch;
 }
 
 .show-dropdown, .new-before, .new-after {
-    font-size: inherit;
     color: var(--color-solid);
     background-color: var(--color-pale);
     border-radius: 0.5ch;
@@ -376,18 +378,24 @@ dialog legend > button {
 }
 
 .icon {
-    box-sizing: content-box;
     width: 1rem;
     height: 1rem;
+    background-color: var(--color-pale);
+}
+
+.dropdown .icon {
+    box-sizing: content-box;
     border-radius: 50%;
     padding: 0.5rem;
-    background-color: var(--color-pale);
+}
+
+.dropdown .separator {
+    border-top: solid 1px var(--color-solid);
 }
 
 .with-icon {
   display: inline-flex;
   align-items: center;
-  font: inherit;
   padding: 1ch;
 }
 
@@ -456,7 +464,6 @@ nav button {
     display: inline-block;
     inline-size: 100%;
     aspect-ratio: 4/3;
-    font-family: inherit;
     font-size: 150%;
     border-radius: 0.7em;
     background-color: var(--color-pale);
