@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
+    PROCEDURE copyWebsite(pWebsiteId IN website.id%type);
+    --
     PROCEDURE deleteTable(pBodyText IN CLOB);
     --
     PROCEDURE getContent(pWebsiteId IN website.id%type);
@@ -19,8 +21,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     PROCEDURE getWebsiteList(pWebsiteId IN website.id%type);
     --
     PROCEDURE insertArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
-    --
-    PROCEDURE insertWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB);
     --
     PROCEDURE publishArticle(pArticleId IN article.id%type);
     --
@@ -175,15 +175,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.open_object;
 
         FOR C IN (
-            SELECT domain_name, contact_email, DECODE(image_dimension,0.25,'s',0.625,'m',1,'l') image_dimension, template, favicon_url, trade_name,affiliation_link_img,affiliation_link_url
+            SELECT domain_name, contact_email, template, favicon_url, trade_name,affiliation_link_img,affiliation_link_url
               FROM website 
              WHERE id=pWebsiteId
                AND user_id=l_user_id) 
         LOOP
             apex_json.write('domain_name', C.domain_name);
             apex_json.write('contact_email', C.contact_email);
-            apex_json.write('image_dimension', 'image-dimension-' || C.image_dimension);
             apex_json.write('template', 'template-' || LOWER(C.template));
+            apex_json.write('cards',pck_core.buildWebsiteArticles(pWebsiteId));
         END LOOP;
 
         apex_json.write('success', TRUE);
@@ -914,7 +914,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Delete website_article. If deleted article not in any other website delete the article and any assets
      */   
-    PROCEDURE deleteArticle(pUserId IN users.id%type, pArticleId IN website_article.article_id%type, pWebsiteId IN website_article.website_id%type) IS
+    PROCEDURE deleteArticle(pUserId IN users.id%type, pArticleId IN website_article.article_id%type, pWebsiteId IN website_article.website_id%type, pSendResponse IN BOOLEAN DEFAULT TRUE) IS
         l_clob CLOB;
         l_url VARCHAR2(500);
         l_error_message VARCHAR2(4000);
@@ -958,9 +958,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END IF;
         END IF;
 
-        apex_json.open_object;
-        apex_json.write('success', TRUE);
-        apex_json.close_object;
+        IF (pSendResponse) THEN
+            apex_json.open_object;
+            apex_json.write('success', TRUE);
+            apex_json.close_object;
+        END IF;
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -1066,52 +1068,63 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Insert Website
+     **  Copy Website
      */  
-    PROCEDURE insertWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
+    PROCEDURE copyWebsite(pWebsiteId IN website.id%type) IS
         l_user_id users.id%type;
+        l_domain_name_copy website.domain_name%type;
     BEGIN
         l_user_id:=pck_core.getUserId();
 
-        FOR C IN (SELECT domain_name, contact_email, template 
-                    FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (domain_name, contact_email, template )))
-        LOOP
-            INSERT INTO website (id, user_id, domain_name, contact_email, template)
-                VALUES (seq_website.nextval, l_user_id, C.domain_name, C.contact_email, C.template);
-        END LOOP;
+        SELECT SUBSTR(domain_name,1,25) || '_COPY' INTO l_domain_name_copy FROM website WHERE id=pWebsiteId AND user_id=l_user_id;
+
+        INSERT INTO website (id,domain_name,user_id,favicon_url,template,contact_email,trade_name,affiliation_link_img,affiliation_link_url)
+        SELECT seq_website.nextval,l_domain_name_copy,user_id,favicon_url,template,contact_email,trade_name,affiliation_link_img,affiliation_link_url
+          FROM website
+         WHERE id=pWebsiteId
+           AND user_id=l_user_id;
+
+        INSERT INTO website_article (website_id,article_id,display_order,nav_name,page_title,page_description,user_id)
+        SELECT seq_website.currval, article_id,display_order,nav_name,page_title,page_description,user_id
+          FROM website_article
+         WHERE website_id=pWebsiteId
+           AND user_id=l_user_id;
 
         apex_json.open_object;  
-        apex_json.write('success', TRUE);
-        apex_json.write('websiteid', seq_website.currval);
+        apex_json.write('success',TRUE);
+        apex_json.write('website_id',seq_website.currval);
+        apex_json.write('domain_name',l_domain_name_copy);
         apex_json.close_object;        
 
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
                 RAISE;
-    END;  
+    END;
 
     /*
-     **  Delete Website. 
-     **  Articles that would become orpaned as a result are also deleted along with any assets.
+     **  Delete Website.
      */  
-    PROCEDURE deleteWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
-        l_user_id users.id%type;
+    PROCEDURE deleteWebsite(pUserId IN website.user_id%type, pWebsiteId IN website.id%type) IS
         TYPE t_website_article IS TABLE OF website_article%rowtype;
         l_website_articles t_website_article;
+        l_netlify_site_id website.netlify_site_id%type;
+        l_return CLOB;
     BEGIN
-        l_user_id:=pck_core.getUserId();
-
-        SELECT * BULK COLLECT INTO l_website_articles FROM website_article WHERE website_id=pWebsiteId;
-
-        DELETE website WHERE id=pWebsiteId AND user_id=l_user_id;
+        SELECT * BULK COLLECT INTO l_website_articles FROM website_article WHERE website_id=pWebsiteId AND user_id=pUserId;
 
         FOR i IN 1..l_website_articles.COUNT LOOP
-            pck_core.log(l_website_articles(i).article_id);
+            deleteArticle(pUserId, l_website_articles(i).article_id, l_website_articles(i).website_id, pSendResponse=>FALSE);
         END LOOP;
 
+        DELETE website WHERE id=pWebsiteId AND user_id=pUserId RETURNING netlify_site_id INTO l_netlify_site_id;
+
+        IF (l_netlify_site_id IS NOT NULL) THEN
+            pck_core.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pData=>l_return);
+        END IF;
+
         apex_json.open_object;  
-        apex_json.write('success', TRUE);
+        apex_json.write('success',TRUE);
         apex_json.close_object;        
 
         EXCEPTION
@@ -1291,6 +1304,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     FUNCTION domainExists(pUserid IN users.id%type, pName IN VARCHAR2) RETURN VARCHAR2 IS
         n PLS_INTEGER;
         l_clob CLOB;
+        l_return CLOB;
     BEGIN
         IF (pName IS NULL) THEN
             RETURN('Domain name must be entered');
@@ -1301,10 +1315,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             RETURN('Name already taken');
         END IF;
 
-        pck_core.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'GET', pData=>l_clob);
-        FOR C IN (SELECT name, custom_domain FROM JSON_TABLE(l_clob, '$[*]' COLUMNS name, custom_domain)) LOOP
+        pck_core.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'GET', pData=>l_return);
+        FOR C IN (SELECT name, custom_domain FROM JSON_TABLE(l_return, '$[*]' COLUMNS name, custom_domain)) LOOP
             IF (pName=C.name OR pName=C.custom_domain) THEN
-                RETURN('Name already taken');
+                RETURN('Name already deployed');
                 EXIT;
             END IF;
         END LOOP;
@@ -1322,6 +1336,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         l_message VARCHAR2(50);
         l_color VARCHAR2(5);
+        l_website_id website.id%type;
         n PLS_INTEGER;
     BEGIN
         l_user_id:=pck_core.getUserId();
@@ -1330,40 +1345,40 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     FROM users, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value)) t
                    WHERE users.id=l_user_id)
         LOOP
-            IF (C.table_column='website.domain_name') THEN
-                l_message:=domainExists(l_user_id, C.value);
-                IF (l_message IS NOT NULL) THEN
-                    l_color:='red';
-                    EXIT;
-                END IF;
-            END IF;
-
             IF (INSTR(C.id,',')>0) THEN
                 l_id_1:=SUBSTR(C.id,1,INSTR(C.id,',')-1);
                 l_id_2:=SUBSTR(C.id,INSTR(C.id,',')+1);
             END IF;            
 
-            IF (C.id IS NOT NULL) THEN
-                CASE C.table_column
-                    WHEN 'website.domain_name' THEN
+            CASE C.table_column
+                WHEN 'website.domain_name' THEN
+                    l_message:=domainExists(l_user_id, C.value);
+                    IF (l_message IS NOT NULL) THEN
+                        l_color:='red';
+                        EXIT;
+                    END IF;
+                    IF (C.id IS NULL) THEN
+                        INSERT INTO website (id, user_id, domain_name) VALUES (seq_website.nextval, l_user_id, C.value);
+                        l_website_id:=seq_website.currval;
+                    ELSE
                         UPDATE website SET domain_name=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
-                    WHEN 'website.contact_email' THEN
-                        UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
-                    WHEN 'website.template' THEN
-                        UPDATE website SET template=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
-                    WHEN 'website_article.nav_name' THEN
-                        UPDATE website_article SET nav_name=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
-                    WHEN 'website_article.page_title' THEN
-                        UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
-                    WHEN 'website_article.page_description' THEN
-                        UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
-                    WHEN 'asset.alt_text' THEN
-                        UPDATE asset SET alt_text=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
-                    WHEN 'asset.description' THEN
-                        UPDATE asset SET description=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;               
-                END CASE;
-                n:=sql%rowcount;
-            END IF;
+                    END IF;
+                WHEN 'website.contact_email' THEN
+                    UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                WHEN 'website.template' THEN
+                    UPDATE website SET template=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                WHEN 'website_article.nav_name' THEN
+                    UPDATE website_article SET nav_name=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
+                WHEN 'website_article.page_title' THEN
+                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
+                WHEN 'website_article.page_description' THEN
+                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
+                WHEN 'asset.alt_text' THEN
+                    UPDATE asset SET alt_text=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                WHEN 'asset.description' THEN
+                    UPDATE asset SET description=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;               
+            END CASE;
+            n:=sql%rowcount;
         END LOOP;
 
         IF (l_message IS NULL) THEN
@@ -1380,7 +1395,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('success', TRUE);
         apex_json.write('message', l_message);
         apex_json.write('color', l_color);
-
+        IF (l_website_id IS NOT NULL) THEN
+            apex_json.write('website_id', l_website_id);
+        END IF;
         apex_json.close_object;
 
         EXCEPTION
@@ -1404,7 +1421,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 WHEN 'user' THEN
                     null;            
                 WHEN 'website' THEN
-                    pck_core.log('delete website '||C.id);
+                    deleteWebsite(l_user_id,C.id);
                 WHEN 'website_article' THEN
                     deleteArticle(l_user_id,C.article_id,C.website_id);
                 WHEN 'asset' THEN
