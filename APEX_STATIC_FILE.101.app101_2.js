@@ -11,11 +11,13 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       vitalsQueue = new Set(),
       mediaQueue = new Set(),
       container = document.querySelector(".container"),
-      newWebsite = document.querySelector(".new-website"),
-      editWebsite = document.querySelector(".edit-website"),
       website = document.querySelector("form"),
+      domainName = website.querySelector("#domain_name"),
+      domainNameResult = domainName.nextElementSibling.querySelector(".result"),
+      newWebsite = website.querySelector(".new-website"),
+      copyWebsite = website.querySelector(".copy-website"),
+      editWebsite = website.querySelectorAll(".edit-website"),
       deployWebsite = website.querySelector(".deploy-website"),
-      addWebsite = website.querySelector(".add-website"),
       listBtn = document.querySelector(".list-view"),
       articleList = document.querySelector(".article-list"),
       cards = document.querySelector(".cards"),
@@ -83,14 +85,23 @@ const changeHandler = (e) => {
     execProcess("dml","PUT",{id:id,table_column:table_column,value:value}).then( (data) => {
         result.textContent = data.message;
         result.style.color = data.color;
-        result.style.opacity = "1";        
+        result.style.opacity = "1";
+        if (data.website_id) {
+            website.dataset.id = data.website_id;
+            const inputs = website.elements;
+            for (let i = 0; i < inputs.length; i++) {
+                if (inputs[i].type === "textarea" || inputs[i].type === "radio") {
+                    inputs[i].dataset.id = data.website_id;
+                }
+            }
+        }     
     });
 }
 
 /*
- **  NEW WEBSITE
+ **  RESET PAGE ELEMENTS WHEN USER CLICKS NEW OR DELETE WEBSITE
  */
-newWebsite.addEventListener("click",  () => {
+const resetWebsite = () => {
     website.dataset.id = "";
     const inputs = website.elements;
     for (let i = 0; i < inputs.length; i++) {
@@ -98,23 +109,73 @@ newWebsite.addEventListener("click",  () => {
             inputs[i].dataset.id = "";
             inputs[i].value = "";
             const maxchars = inputs[i].getAttribute("maxlength"),
+                  result = inputs[i].nextElementSibling.querySelector(".result"),
                   charcounter = inputs[i].nextElementSibling.querySelector(".charcounter");
+            result.textContent = "";
             charcounter.textContent = "0/" + maxchars;
         } else if (inputs[i].type === "radio") {
             inputs[i].dataset.id = "";
             inputs[i].checked = false;
         }
     }
-    const clone = cards.querySelector("[data-id='-1']").cloneNode(true),
-          clone0 = clone.cloneNode(true);
     cards.querySelectorAll(".card").forEach((card) => {
         card.classList.add("fade-out");
     });
+}
+
+/*
+ **  NEW WEBSITE
+ */
+newWebsite.addEventListener("click",  () => {
+    const clone = cards.querySelector("[data-id='-1']").cloneNode(true),
+          clone0 = clone.cloneNode(true);
     clone0.dataset.id = "0";
+
+    resetWebsite();
+    
     setTimeout( () => {
         cards.replaceChildren(clone,clone0);
-        website.querySelector("textarea").focus();
+        domainName.focus();
     },1000);
+});
+
+/*
+ **  COPY WEBSITE
+ */
+copyWebsite.addEventListener("click",  () => {
+    const websiteId = website.dataset.id;
+    execProcess( "website/"+websiteId,"POST").then( (data) => {
+        domainName.value = data.domain_name;
+        
+        website.querySelectorAll("[data-id]").forEach((item) => {
+            item.dataset.id=data.website_id;
+        });        
+        
+        cards.querySelectorAll("[data-id*=',']").forEach((item) => {
+            const original_id = item.dataset.id;
+            item.dataset.id=original_id.replace(websiteId+",",data.website_id+",");
+        });
+
+        website.dataset.id=data.website_id;
+        
+        domainNameResult.style.opacity = "1";
+        domainNameResult.textContent = "WEBSITE COPIED";
+        //domain_name.focus();
+    });
+});
+
+/*
+ **  EDIT WEBSITE
+ */
+editWebsite.forEach((button) => {
+    button.addEventListener("click", (e) => {
+        execProcess( "website/"+e.target.dataset.id,"GET").then( (data) => {
+            domainName.value = data.domain_name;
+            
+            cards.replaceChildren();
+            cards.insertAdjacentHTML('afterbegin',data.cards);
+        });
+    });
 });
 
 /*
@@ -889,56 +950,6 @@ const add_content = (target, position) => {
 };
 
 /* 
- ** EDIT WEBSITE
- */
-document.querySelectorAll(".edit-website").forEach(button => {
-    button.addEventListener('click',  e => {
-        const websiteId = e.target.dataset.id;
-        popupOpen("EDIT WEBSITE - "+websiteId,"not implemented yet");
-    });
-});
-
-/* 
- ** CREATE NEW WEBSITE (OR COPY IF ID>0)
- */
-addWebsite.addEventListener('click',  (e) => {
-    const formdata = Object.fromEntries(new FormData(website));
-    execProcess("website/" + website.dataset.id,"POST", formdata).then( (data) => {
-        e.target.style.display = "none";
-        deployWebsite.style.display = "block";
-        deployWebsite.disabled = true;
-
-        // TODO - enable delete website nutton in dropdown
-
-        website.dataset.id = data.websiteid;
-        const inputs = website.elements;
-        for (let i = 0; i < inputs.length; i++) {
-            inputs[i].dataset.id = data.websiteid;
-        }
-    });
-});
-
-/* 
- ** DELETE WEBSITE
- */
-/*
-deleteWebsite.addEventListener('click',  (e) => {
-    execProcess("website/" + website.dataset.id, "DELETE").then( (data) => {
-        e.target.style.display = "none";
-        deployWebsite.style.display = "none";
-        website.dataset.id = "";
-        const inputs = website.elements;
-        for (let i = 0; i < inputs.length; i++) {
-            inputs[i].dataset.id = "";
-            if (inputs[i].type === "textarea") {
-                inputs[i].value= "";
-            }
-        }
-    });
-});
-*/
-
-/* 
  ** DEPLOY WEBSITE
  */
 deployWebsite.addEventListener('click',  () => {
@@ -968,8 +979,8 @@ getDeploymentStatus = (websiteid) => {
  ** UPLOAD MEDIA TO CLOUDINARY
  */
 const upload_media = (articleId) => {
-    if (articleId === "0") {
-        popupOpen("CANT DO THAT YET","Must first enter valid Domain Name");
+    if (!website.dataset.id) {
+        popupOpen("CANT DO THAT YET","Need a Domain Name");
         return;
     }
     execProcess( "cld-details/"+articleId,"GET").then( (data) => {
@@ -1076,7 +1087,7 @@ const remove_card = (articleId) => {
 }
 
 /*
- ** DELETE WEBSITE / ARTICLE / ASSET / USER - REQUIRES CONFIRMATION
+ ** DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER - REQUIRES CONFIRMATION
  */
 const delete_table = (id, e) => {
 
@@ -1114,7 +1125,27 @@ const delete_table = (id, e) => {
             pk.id = e.target.dataset.id;
         }
         execProcess("dml","DELETE",pk).then( () => {
-            e.target.closest(".card").classList.add("fade-out");
+            switch (pk.table_name) {
+                case "website_article":
+                    e.target.closest(".card").classList.add("fade-out");
+                    break;
+                case "asset":
+                    e.target.closest(".card").classList.add("fade-out");
+                    break;
+                case "website":
+                    resetWebsite();
+                    
+                    setTimeout( () => {
+                        cards.replaceChildren();
+                        //domainName.focus();
+                        e.target.closest(".dropdown").querySelector(".show-dropdown").click();
+                        domainNameResult.style.opacity = "1";
+                        domainNameResult.style.color = "green";
+                        domainNameResult.textContent = "WEBSITE DELETED OK";
+                    },1000);
+                    break;                    
+            }
+            e.target.remove();
         });
     });
 
