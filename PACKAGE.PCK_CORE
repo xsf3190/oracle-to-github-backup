@@ -32,7 +32,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
         pWidth IN INTEGER, 
         pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2) RETURN VARCHAR2;
+    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
+    --
+    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type) RETURN CLOB;
     --
     PROCEDURE signout;
 END;
@@ -208,6 +210,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             pData := apex_web_service.make_rest_request(p_url=>l_netlify_url || pEndpoint, p_http_method=>pMethod, p_body=>pBody);
         END IF;
 
+        IF (apex_web_service.g_status_code<>200) THEN
+            RAISE_APPLICATION_ERROR(-20000,'NETLIFY API HTTP STATUS: '||apex_web_service.g_status_code || ' METHOD:' || pMethod || ' URL:' || l_netlify_url || pEndpoint);
+        END IF;
+
         EXCEPTION WHEN OTHERS THEN
             log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
@@ -226,7 +232,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END IF;
     END;
 
-    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2) RETURN VARCHAR2 IS
+    /*
+     **  Create wrapper html for textarea element, optionally including dropdown
+     */
+    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
         l_table_name user_tab_columns.table_name%type;
         l_column_name user_tab_columns.column_name%type;
         l_data_length user_tab_columns.data_length%type;
@@ -244,42 +253,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         RETURN('
         <div style="min-width:min(' || l_data_length || 'ch,100%)" class="textarea-wrapper">' ||
-            CASE WHEN l_column_name='domain_name' THEN '
-            <div class="button-container">' 
-            END || '
-                <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</label>' ||
-            CASE WHEN l_column_name='domain_name' THEN '
-                <div class="dropdown">
-                    <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                    <ul class="dropdown-items">
-                        <li>
-                            <button type="button" class="with-icon new-website">
-                                <svg class="icon">
-                                    <use href="#plus"></use>
-                                </svg>
-                                NEW WEBSITE
-                            </button>
-                        </li>
-                        <li>
-                            <button type="button" class="with-icon copy-website">
-                                <svg class="icon">
-                                    <use href="#copy"></use>
-                                </svg>
-                                COPY WEBSITE
-                            </button>
-                        </li>                                         
-                        <li>
-                            <button type="button" class="with-icon delete" data-table="website" data-id=' || pId || '>
-                                <svg class="icon">
-                                    <use href="#delete">
-                                </svg>
-                                DELETE WEBSITE
-                            </button>
-                        </li>
-                    </ul>
-                </div>
-            </div>' 
-            END || '
+            CASE WHEN pDropdown IS NOT NULL THEN '<div class="button-container">' END || '
+            <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</label>' || pDropdown || 
+            CASE WHEN pDropdown IS NOT NULL THEN '</div>' END || '
             <textarea id="' || l_column_name || '" name="' || LOWER(l_column_name) || '" maxlength="' || l_data_length || '" rows="1" data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>        
             <div class="button-container">
                 <span class="result"></span>
@@ -288,6 +264,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </div>');
     END;
 
+    /*
+     **  Create radio element for available Github templates
+     */
     FUNCTION buildTemplates(pWebsiteId IN website.id%type, pSelectedTemplate IN VARCHAR2) RETURN VARCHAR2 IS
         l_clob CLOB;
         l_cluster CLOB;
@@ -461,9 +440,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <li class="card" tabindex="0" data-id="' || C.id || '">
                 <div class="button-container">
                     <div>
-                        <button type="button" class="new-before">&#8678;</button>
+                        <button type="button" class="new-before">
+                            <svg class="icon"><use href="#left-long"></use></svg>
+                        </button>
                         <span>NEW CONTENT</span>
-                        <button type="button" class="new-after">&#8680;</button>
+                        <button type="button" class="new-after">
+                            <svg class="icon"><use href="#right-long"></use></svg>
+                        </button>
                     </div>
                     <div class="dropdown">
                         <button type="button" class="show-dropdown">&blacktriangledown;</button>
@@ -520,6 +503,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_user_id users.id%type;
         l_user_name users.name%type;
         l_edit_websites CLOB;
+        l_domain_dropdown LONG;
 
         TYPE t_domain IS RECORD (
             id              website.id%type,
@@ -563,8 +547,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <symbol id="delete" viewBox="0 0 448 512">
                 <path d="M170.5 51.6L151.5 80h145l-19-28.4c-1.5-2.2-4-3.6-6.7-3.6H177.1c-2.7 0-5.2 1.3-6.7 3.6zm147-26.6L354.2 80H368h48 8c13.3 0 24 10.7 24 24s-10.7 24-24 24h-8V432c0 44.2-35.8 80-80 80H112c-44.2 0-80-35.8-80-80V128H24c-13.3 0-24-10.7-24-24S10.7 80 24 80h8H80 93.8l36.7-55.1C140.9 9.4 158.4 0 177.1 0h93.7c18.7 0 36.2 9.4 46.6 24.9zM80 128V432c0 17.7 14.3 32 32 32H336c17.7 0 32-14.3 32-32V128H80zm80 64V400c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-8.8 7.2-16 16-16s16 7.2 16 16zm80 0V400c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-8.8 7.2-16 16-16s16 7.2 16 16zm80 0V400c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-8.8 7.2-16 16-16s16 7.2 16 16z">
             </symbol>
+            <symbol id="left-long" viewBox="0 0 512 512">
+                <path d="M177.5 414c-8.8 3.8-19 2-26-4.6l-144-136C2.7 268.9 0 262.6 0 256s2.7-12.9 7.5-17.4l144-136c7-6.6 17.2-8.4 26-4.6s14.5 12.5 14.5 22l0 72 288 0c17.7 0 32 14.3 32 32l0 64c0 17.7-14.3 32-32 32l-288 0 0 72c0 9.6-5.7 18.2-14.5 22z">
+            </symbol>
             <symbol id="pen-to-square" viewBox="0 0 512 512">
                 <path d="M471.6 21.7c-21.9-21.9-57.3-21.9-79.2 0L362.3 51.7l97.9 97.9 30.1-30.1c21.9-21.9 21.9-57.3 0-79.2L471.6 21.7zm-299.2 220c-6.1 6.1-10.8 13.6-13.5 21.9l-29.6 88.8c-2.9 8.6-.6 18.1 5.8 24.6s15.9 8.7 24.6 5.8l88.8-29.6c8.2-2.7 15.7-7.4 21.9-13.5L437.7 172.3 339.7 74.3 172.4 241.7zM96 64C43 64 0 107 0 160V416c0 53 43 96 96 96H352c53 0 96-43 96-96V320c0-17.7-14.3-32-32-32s-32 14.3-32 32v96c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32V160c0-17.7 14.3-32 32-32h96c17.7 0 32-14.3 32-32s-14.3-32-32-32H96z">
+            </symbol>
+            <symbol id="right-long" viewBox="0 0 512 512">
+                <path d="M334.5 414c8.8 3.8 19 2 26-4.6l144-136c4.8-4.5 7.5-10.8 7.5-17.4s-2.7-12.9-7.5-17.4l-144-136c-7-6.6-17.2-8.4-26-4.6s-14.5 12.5-14.5 22l0 72L32 192c-17.7 0-32 14.3-32 32l0 64c0 17.7 14.3 32 32 32l288 0 0 72c0 9.6 5.7 18.2 14.5 22z">
             </symbol>
             <symbol id="search-engine" viewBox="0 0 512 512">
                 <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z">
@@ -584,15 +574,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
           BULK COLLECT INTO l_domains
           FROM website w
          WHERE w.user_id=l_user_id
-         ORDER BY w.updated_date DESC;
-
-        FOR i IN 2..l_domains.COUNT LOOP
-            l_edit_websites:=l_edit_websites || TO_CLOB(
-            '<li class="edit-website">
-                <button type="button" data-websiteid="' || l_domains(i).id || '">' || l_domains(i).domain_name || '
-                </button>
-            </li>');
-        END LOOP;
+         ORDER BY COALESCE(w.updated_date, w.created_date) DESC;
 
         l_clob:=l_clob || TO_CLOB('
             <div class="dropdown">
@@ -623,9 +605,62 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             l_domains.EXTEND(1);
         END IF;
 
+        l_domain_dropdown:='
+        <div class="dropdown">
+            <button type="button" class="show-dropdown">&blacktriangledown;</button>
+            <ul class="dropdown-items">
+                <li>
+                    <button type="button" class="with-icon new-website">
+                        <svg class="icon">
+                            <use href="#plus"></use>
+                        </svg>
+                        NEW WEBSITE
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="with-icon copy-website">
+                        <svg class="icon">
+                            <use href="#copy"></use>
+                        </svg>
+                        COPY WEBSITE
+                    </button>
+                </li>';
+
+        IF (l_domains.COUNT>=2) THEN
+            l_domain_dropdown:=l_domain_dropdown ||'<li class="separator"></li>';
+        END IF;
+
+        FOR i IN 2..l_domains.COUNT LOOP
+            l_domain_dropdown:=l_domain_dropdown ||'
+                <li>
+                    <button type="button" class="with-icon edit-website" data-id="' || l_domains(i).id || '">
+                            <svg class="icon">
+                                <use href="#pen-to-square"></use>
+                            </svg>' ||          
+                    l_domains(i).domain_name || '
+                    </button>
+                </li>';
+        END LOOP;
+
+        IF (l_domains.COUNT>=2) THEN
+            l_domain_dropdown:=l_domain_dropdown ||'<li class="separator"></li>';
+        END IF;
+
+        l_domain_dropdown:=l_domain_dropdown ||'
+                <li>
+                    <button type="button" class="with-icon delete" data-table="website" data-id=' || l_domains(1).id || '>
+                        <svg class="icon">
+                            <use href="#delete">
+                        </svg>
+                        DELETE WEBSITE
+                    </button>
+                </li>
+            </ul>
+        </div>';
+
         l_clob:=l_clob || TO_CLOB('
         <form class="card" data-id="' || NVL(l_domains(1).id,0) || '">' ||
-            buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name) || '
+            buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_domain_dropdown) || '
             <div class="radio-wrapper">
                 <fieldset>
                     <legend>Website Template</legend>
@@ -638,7 +673,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </div>' ||
             buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email) || '
             <div class="button-container">
-                <button type="button" class="add-website cta" disabled' || CASE WHEN l_domains(1).id IS NOT NULL THEN ' style="display:none"' END || '>CREATE WEBSITE</button>
                 <button type="button" class="deploy-website cta"' || CASE WHEN l_domains(1).id IS NULL OR l_domains(1).nb_articles=0 THEN ' style="display:none"' END || '>DEPLOY WEBSITE</button>
             </div>
         </form>
