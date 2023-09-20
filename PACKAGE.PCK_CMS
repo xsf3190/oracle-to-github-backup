@@ -1301,27 +1301,40 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
+    /*
+    **  Check domain name not already exists in this database or is an existing subdomain of netlify.app
+    */
     FUNCTION domainExists(pUserid IN users.id%type, pName IN VARCHAR2) RETURN VARCHAR2 IS
         n PLS_INTEGER;
-        l_clob CLOB;
         l_return CLOB;
     BEGIN
         IF (pName IS NULL) THEN
             RETURN('Domain name must be entered');
         END IF;
 
-        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT NULL FROM website WHERE domain_name=pName);
-        IF (n>0) THEN
-            RETURN('Name already taken');
+        SELECT COUNT(*) INTO n FROM website WHERE domain_name=pName;
+        IF (n=1) THEN
+            RETURN('Name already in use');
         END IF;
 
         pck_core.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'GET', pData=>l_return);
         FOR C IN (SELECT name, custom_domain FROM JSON_TABLE(l_return, '$[*]' COLUMNS name, custom_domain)) LOOP
-            IF (pName=C.name OR pName=C.custom_domain) THEN
-                RETURN('Name already deployed');
+            IF (pName=C.name) THEN
+                RETURN('Name deployed - TEST');
+                EXIT;
+            END IF;
+            IF (pName=C.custom_domain) THEN
+                RETURN('Name deployed - LIVE');
                 EXIT;
             END IF;
         END LOOP;
+
+        apex_web_service.clear_request_headers;
+
+        l_return := apex_web_service.make_rest_request(p_url=>'https://' || pName || '.netlify.app', p_http_method=>'HEAD');
+        IF (apex_web_service.g_status_code=200) THEN
+            RETURN('Name is existing Netlify subdomain');
+        END IF;
 
         RETURN NULL;
     END;
