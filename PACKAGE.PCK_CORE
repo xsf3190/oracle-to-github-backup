@@ -2,6 +2,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     gWidthThumbnail CONSTANT INTEGER:=360;
     --
+    FUNCTION getGithubReposOwner(pUserId IN users.id%type) RETURN VARCHAR2;
+    --
+    FUNCTION getNetlifyIntallationId(pUserId IN users.id%type) RETURN VARCHAR2;
+    --
+    PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB);
+    --
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB);
     --
     PROCEDURE log(pMsg IN VARCHAR2);
@@ -77,12 +83,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
 
     PROCEDURE getApexSession(pAppId IN OUT NUMBER, pSessionId IN OUT NUMBER, pPageId IN OUT NUMBER) IS
+        l_apex_session VARCHAR2(50);
         l_parts apex_t_varchar2;
     BEGIN
-        l_parts:=apex_string.split(OWA_UTIL.get_cgi_env('Apex-Session'),',');
-        pAppId:=l_parts(1);
-        pSessionId:=l_parts(2);
-        pPageId:=l_parts(3);
+        l_apex_session:=OWA_UTIL.get_cgi_env('Apex-Session');
+        IF (l_apex_session IS NULL) THEN
+            pAppId:=apex_application.g_flow_id;
+            pSessionId:=APEX_CUSTOM_AUTH.GET_SESSION_ID;
+            pPageId:=apex_application.g_flow_step_id;
+        ELSE        
+            l_parts:=apex_string.split(l_apex_session,',');
+            pAppId:=l_parts(1);
+            pSessionId:=l_parts(2);
+            pPageId:=l_parts(3);
+        END IF;
     END;
 
     /*
@@ -180,6 +194,107 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;
 
+    FUNCTION getGithubReposOwner(pUserId IN users.id%type) RETURN VARCHAR2 IS
+        l_app_id NUMBER;
+        l_session_id users.apex_session_id%type;
+        l_page_id NUMBER;
+        l_github_repos_owner users.github_repos_owner%type;
+    BEGIN
+        /* Get user's github token and account name (repository owner) */
+        FOR C IN (SELECT github_repos_owner FROM users WHERE id=pUserId) LOOP 
+            l_github_repos_owner:=C.github_repos_owner;
+        END LOOP;
+
+        /* Get Administrator value if user has not registered github repository */
+        IF (l_github_repos_owner IS NULL) THEN
+            getApexSession(l_app_id, l_session_id, l_page_id);
+            SELECT u.github_repos_owner
+              INTO l_github_repos_owner
+              FROM apex_applications a, users u 
+             WHERE a.application_id=l_app_id 
+               AND a.email_from=u.email;
+        END IF;
+
+        RETURN (l_github_repos_owner);
+    END;
+
+    FUNCTION getNetlifyIntallationId(pUserId IN users.id%type) RETURN VARCHAR2 IS
+        l_app_id NUMBER;
+        l_session_id users.apex_session_id%type;
+        l_page_id NUMBER;
+        l_netlify_installation_id users.netlify_installation_id%type;
+    BEGIN
+        /* Get user's github token and account name (repository owner) */
+        FOR C IN (SELECT netlify_installation_id FROM users WHERE id=pUserId) LOOP 
+            l_netlify_installation_id:=C.netlify_installation_id;
+        END LOOP;
+
+        /* Get Administrator value if user has not registered github repository */
+        IF (l_netlify_installation_id IS NULL) THEN
+            getApexSession(l_app_id, l_session_id, l_page_id);
+            SELECT u.netlify_installation_id
+              INTO l_netlify_installation_id
+              FROM apex_applications a, users u 
+             WHERE a.application_id=l_app_id 
+               AND a.email_from=u.email;
+        END IF;
+
+        RETURN (l_netlify_installation_id);
+    END;
+
+    PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
+        l_app_id NUMBER;
+        l_session_id users.apex_session_id%type;
+        l_page_id NUMBER;
+        l_github_repos_owner users.github_repos_owner%type;
+        l_github_token users.github_token%type;
+        l_github_url VARCHAR2(200):='https://api.github.com/repos/';
+    BEGIN
+        /* Get user's github token and account name (repository owner) */
+        FOR C IN (SELECT github_repos_owner, github_token FROM users WHERE id=pUserId) LOOP 
+            l_github_repos_owner:=C.github_repos_owner;
+            l_github_token:=C.github_token;
+        END LOOP;
+
+        /* Use Administrator's token if user does not have token */
+        IF (l_github_token IS NULL) THEN
+            getApexSession(l_app_id, l_session_id, l_page_id);
+            SELECT u.github_repos_owner, u.github_token
+              INTO l_github_repos_owner, l_github_token
+              FROM apex_applications a, users u 
+             WHERE a.application_id=l_app_id 
+               AND a.email_from=u.email;
+        END IF;
+
+        --l_url:='https://api.github.com/repos/'|| C.github_repos_owner || '/' || C.github_deploy_repos || '/contents/TEMPLATES';
+
+        apex_web_service.g_request_headers(1).name := 'Accept';
+        apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
+        apex_web_service.g_request_headers(2).name := 'Authorization';
+        apex_web_service.g_request_headers(2).value := 'Bearer ' || l_github_token;
+        apex_web_service.g_request_headers(3).name := 'User-Agent';
+        apex_web_service.g_request_headers(3).value := l_github_repos_owner;
+
+        l_github_url:=l_github_url || l_github_repos_owner || '/' || pRepository;
+
+        IF (pEndpoint IS NOT NULL) THEN 
+            l_github_url:=l_github_url || '/' || pEndpoint;
+        END IF;
+
+        IF (pBody IS NULL) THEN
+            pData := apex_web_service.make_rest_request(p_url=>l_github_url, p_http_method=>pMethod);
+        ELSE
+            pData := apex_web_service.make_rest_request(p_url=>l_github_url, p_http_method=>pMethod, p_body=>pBody);
+        END IF;
+
+        IF (apex_web_service.g_status_code<>200) THEN
+            RAISE_APPLICATION_ERROR(-20000,'GITHUB API HTTP STATUS: '||apex_web_service.g_status_code || ' METHOD:' || pMethod || ' URL:' || l_github_url);
+        END IF;
+
+        EXCEPTION WHEN OTHERS THEN
+            log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+    END;    
+
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
         l_app_id NUMBER;
         l_session_id users.apex_session_id%type;
@@ -239,22 +354,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_table_name user_tab_columns.table_name%type;
         l_column_name user_tab_columns.column_name%type;
         l_data_length user_tab_columns.data_length%type;
+        l_comments user_col_comments.comments%type;
     BEGIN
         l_table_name:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
         l_column_name:=UPPER(SUBSTR(pColumn,INSTR(pColumn,'.')+1));
 
-        SELECT data_length 
-          INTO l_data_length 
-          FROM user_tab_columns 
-         WHERE table_name=l_table_name
-           AND column_name=l_column_name;
+        SELECT c.data_length, NVL(i.comments,'Info not defined yet') 
+          INTO l_data_length, l_comments
+          FROM user_tab_columns c, user_col_comments i
+         WHERE c.table_name=l_table_name
+           AND c.column_name=l_column_name
+           AND i.table_name=c.table_name
+           AND i.column_name=c.column_name;
 
         l_column_name:=LOWER(l_column_name);
 
         RETURN('
         <div style="min-width:min(' || l_data_length || 'ch,100%)" class="textarea-wrapper">' ||
             CASE WHEN pDropdown IS NOT NULL THEN '<div class="button-container">' END || '
-            <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</label>' || pDropdown || 
+            <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
+                '<button type="button" popovertarget="' || l_column_name || '_popover"><svg class="icon"><use href="#info"></use></svg></button>
+                 <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>
+            </label>' || pDropdown || 
             CASE WHEN pDropdown IS NOT NULL THEN '</div>' END || '
             <textarea id="' || l_column_name || '" name="' || LOWER(l_column_name) || '" maxlength="' || l_data_length || '" rows="1" data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>        
             <div class="button-container">
@@ -267,37 +388,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     /*
      **  Create radio element for available Github templates
      */
-    FUNCTION buildTemplates(pWebsiteId IN website.id%type, pSelectedTemplate IN VARCHAR2) RETURN VARCHAR2 IS
+    FUNCTION buildTemplates(pUserId IN users.id%type, pWebsiteId IN website.id%type, pSelectedTemplate IN VARCHAR2) RETURN VARCHAR2 IS
         l_clob CLOB;
         l_cluster CLOB;
         l_url VARCHAR2(200);
     BEGIN
-        FOR C IN (SELECT github_repos_owner, github_deploy_repos, github_token FROM github) LOOP
-            apex_web_service.g_request_headers(1).name := 'Accept';
-            apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
-            apex_web_service.g_request_headers(2).name := 'Authorization';
-            apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
-            apex_web_service.g_request_headers(3).name := 'User-Agent';
-            apex_web_service.g_request_headers(3).value := C.github_repos_owner;
+        callGithubAPI(pUserId=>pUserId, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_clob);
 
-            l_url:='https://api.github.com/repos/'|| C.github_repos_owner || '/' || C.github_deploy_repos || '/contents/TEMPLATES';
-            l_clob := apex_web_service.make_rest_request(p_url=>l_url,p_http_method=>'GET');
+        --l_url:='https://api.github.com/repos/'|| C.github_repos_owner || '/' || C.github_deploy_repos || '/contents/TEMPLATES';
+        --l_clob := apex_web_service.make_rest_request(p_url=>l_url,p_http_method=>'GET');
 
-            FOR C1 IN (SELECT message FROM JSON_TABLE(l_clob, '$' COLUMNS (message))) LOOP
-                IF (C1.message IS NOT NULL) THEN
-                    RETURN('<p>ERROR calling ' || l_url || ' - ' || C1.message || '</p>');
-                END IF;
-            END LOOP;
-
-            /* directory names are returned as array in alphabetic order */
-            FOR C1 IN (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name))) LOOP
-                l_cluster:=l_cluster || 
-                '<div>
-                    <input type="radio" data-column="website.template" data-id="' || pWebsiteId || '" id="template-' || LOWER(C1.name) || '" name="template" value="' || C1.name || '"' || CASE WHEN pSelectedTemplate=C1.name THEN ' checked' END || '></input>
-                    <label for="template-' || LOWER(C1.name) || '">' || C1.name || '</label>
-                </div>';
-            END LOOP;
+        FOR C1 IN (SELECT message FROM JSON_TABLE(l_clob, '$' COLUMNS (message))) LOOP
+            IF (C1.message IS NOT NULL) THEN
+                RETURN('<p>ERROR calling ' || l_url || ' - ' || C1.message || '</p>');
+            END IF;
         END LOOP;
+
+        /* directory names are returned as array in alphabetic order */
+        FOR C1 IN (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name))) LOOP
+            l_cluster:=l_cluster || 
+            '<div>
+                <input type="radio" data-column="website.template" data-id="' || pWebsiteId || '" id="template-' || LOWER(C1.name) || '" name="template" value="' || C1.name || '"' || CASE WHEN pSelectedTemplate=C1.name THEN ' checked' END || '></input>
+                <label for="template-' || LOWER(C1.name) || '">' || C1.name || '</label>
+            </div>';
+        END LOOP;
+
         RETURN (l_cluster);
     END;
 
@@ -541,6 +656,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <symbol id="copy" viewBox="0 0 448 512">
                 <path d="M384 336H192c-8.8 0-16-7.2-16-16V64c0-8.8 7.2-16 16-16l140.1 0L400 115.9V320c0 8.8-7.2 16-16 16zM192 384H384c35.3 0 64-28.7 64-64V115.9c0-12.7-5.1-24.9-14.1-33.9L366.1 14.1c-9-9-21.2-14.1-33.9-14.1H192c-35.3 0-64 28.7-64 64V320c0 35.3 28.7 64 64 64zM64 128c-35.3 0-64 28.7-64 64V448c0 35.3 28.7 64 64 64H256c35.3 0 64-28.7 64-64V416H272v32c0 8.8-7.2 16-16 16H64c-8.8 0-16-7.2-16-16V192c0-8.8 7.2-16 16-16H96V128H64z">
             </symbol>
+            <symbol id="info" viewBox="0 0 192 512">
+                <path d="M48 80a48 48 0 1 1 96 0A48 48 0 1 1 48 80zM0 224c0-17.7 14.3-32 32-32H96c17.7 0 32 14.3 32 32V448h32c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H64V256H32c-17.7 0-32-14.3-32-32z">
+            </symbol>
             <symbol id="not-defined" viewBox="0 0 512 512">
                 <path d="M367.2 412.5L99.5 144.8C77.1 176.1 64 214.5 64 256c0 106 86 192 192 192c41.5 0 79.9-13.1 111.2-35.5zm45.3-45.3C434.9 335.9 448 297.5 448 256c0-106-86-192-192-192c-41.5 0-79.9 13.1-111.2 35.5L412.5 367.2zM0 256a256 256 0 1 1 512 0A256 256 0 1 1 0 256z">
             </symbol>
@@ -659,12 +777,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </div>';
 
         l_clob:=l_clob || TO_CLOB('
-        <form class="card" data-id="' || NVL(l_domains(1).id,0) || '">' ||
+        <form class="card" data-id="' || l_domains(1).id || '">' ||
             buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_domain_dropdown) || '
             <div class="radio-wrapper">
                 <fieldset>
                     <legend>Website Template</legend>
-                    <div class="cluster">' || buildTemplates(l_domains(1).id, NVL(l_domains(1).template,'BASIC')) || '
+                    <div class="cluster">' || buildTemplates(l_user_id, l_domains(1).id, NVL(l_domains(1).template,'BASIC')) || '
                     </div>
                 </fieldset>
                 <div class="button-container">
@@ -672,9 +790,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </div>
             </div>' ||
             buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email) || '
-            <div class="button-container">
-                <button type="button" class="deploy-website cta"' || CASE WHEN l_domains(1).id IS NULL OR l_domains(1).nb_articles=0 THEN ' style="display:none"' END || '>DEPLOY WEBSITE</button>
-            </div>
+            <button type="button" class="deploy-website cta">DEPLOY TEST WEBSITE</button>
+            <button type="button" class="deploy-website-live cta">DEPLOY LIVE WEBSITE</button>
         </form>
         <hr>
         <div class="button-container full-width">
@@ -744,9 +861,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_clob CLOB;
         l_css_file_urls APEX_APPLICATION_PAGES.css_file_urls%type;
         l_javascript_file_urls APEX_APPLICATION_PAGES.javascript_file_urls%type;
-        l_user_id users.id%type;
-        l_user_name users.name%type;
-        l_current_website website.id%type;
         l_page_css APEX_APPLICATION_STATIC_FILES.file_name%type;
         l_page_js APEX_APPLICATION_STATIC_FILES.file_name%type;
     BEGIN
