@@ -311,6 +311,16 @@ window.addEventListener("DOMContentLoaded", (event) => {
             flushQueues();
         }, { capture: true} );
     }
+
+    if (!website.dataset.id) {
+        website.querySelector(".new-website").click();
+        popupOpen("WELCOME","Enter Domain name. Choose template. Create content. Deploy.");
+    } else if (cards.childElementCount === 1) {
+        const clone = cards.querySelector("[data-id='-1']").cloneNode(true);
+        clone.dataset.id = "0";
+        cards.insertAdjacentElement('afterbegin', clone);
+    }
+
 });
 
 /*
