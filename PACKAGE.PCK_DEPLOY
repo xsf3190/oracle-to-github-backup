@@ -13,63 +13,18 @@ end;
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as 
     
     /*
-    ** Build and deploy infrastructure through Terraform by submitting Github action. 
-    ** Do this once and each time we recycle the public key that is used to sign a website's contact email
-    */    
-    PROCEDURE deployInfrastructure IS
-        l_clob CLOB;
-        l_admin_user_id users.id%type;
-        l_json JSON_OBJECT_T;
-        l_action JSON_OBJECT_T;
-    BEGIN
-
-        /* Get the admin user with Github token and the public key required to verify signed contact email addresses */
-        SELECT id INTO l_admin_user_id 
-          FROM users 
-         WHERE github_repos_owner IS NOT NULL 
-           AND github_token IS NOT NULL;
-
-
-        FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, t.token,
-                         replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(t.public_key))),chr(13)||chr(10),null) public_key
-                    FROM users u, terraform t
-                   WHERE u.id=l_admin_user_id) 
-        LOOP
-            apex_web_service.g_request_headers(1).name := 'Accept';
-            apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
-            apex_web_service.g_request_headers(2).name := 'Authorization';
-            apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
-            apex_web_service.g_request_headers(3).name := 'User-Agent';
-            apex_web_service.g_request_headers(3).value := C.github_repos_owner;
-
-            /* trigger the deployment using Githib actions */          
-            l_json:=new JSON_OBJECT_T;
-            l_json.put('event_type', 'trigger_build_infra');
-
-            l_action:=new JSON_OBJECT_T;
-            l_action.put('from_email', 'funnyface@markrussellbrown.com');
-            l_action.put('public_key', C.public_key);
-            l_action.put('terraform_token', C.token);
-            l_json.put('client_payload', l_action);
-
-            pck_core.log('deployInfrastructure - JSON for dispatching Github Action:'||l_json.stringify);
-
-            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_json.stringify);
-        END LOOP;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm);
-                RAISE;
-    END;    
-
-    /*
     ** Build and deploy website to Netlify by submitting Github action
     */    
     PROCEDURE deployWebsite(pWebsiteId IN website.id%type) IS
         l_clob CLOB;
-        l_website_user_id website.user_id%type;
-        l_admin_user_id users.id%type;
+        l_user_id website.user_id%type;
+        l_domain_name website.domain_name%type;
+        l_template website.template%type;
+        l_contact_email website.contact_email%type;
+        l_netlify_site_id website.netlify_site_id%type;
+        l_github_repos_owner users.github_repos_owner%type;
+        l_netlify_installation_id users.netlify_installation_id%type;
+
         l_repo_id INTEGER;
         l_deploy_key_id VARCHAR2(40);
         l_json JSON_OBJECT_T;
@@ -77,16 +32,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_action JSON_OBJECT_T;
         l_site clob;
     BEGIN
-        /* get authenticated user that owns website to be deployed */
-        l_website_user_id:=pck_core.getUserId();
-
-        /* Get the admin user with Netlify and Github tokens as well as private key required to sign the contact_email for the website */
-        SELECT id INTO l_admin_user_id 
-          FROM users 
-         WHERE github_repos_owner IS NOT NULL 
-           AND github_token IS NOT NULL 
-           AND netlify_token IS NOT NULL 
-           AND netlify_installation_id IS NOT NULL;
+        l_user_id:=pck_core.getUserId();
 
         DELETE website_deploy WHERE website_id=pWebsiteId;
         logDeployment('{"status":"Starting Deployment"}',pWebsiteId);
@@ -96,97 +42,77 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         apex_json.write('status', 'Starting Deployment');
         apex_json.close_object;
 
-        FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, u.netlify_token, u.netlify_installation_id, 
-                         w.domain_name, w.template, w.netlify_site_id, w.contact_email
-                    FROM users u, website w
-                   WHERE u.id=l_admin_user_id
-                     AND w.id=pWebsiteId
-                     AND w.user_id=l_website_user_id) 
-        LOOP
-            /*
-            ** 1. Create Netlify Site with deployment id if not already exists
-            ** 2. Trigger Github action build
-            */
+        /* Check whether site exists in Netlify */
 
-            IF (C.netlify_site_id IS NULL) THEN
+        SELECT domain_name, template, contact_email, netlify_site_id
+          INTO l_domain_name, l_template, l_contact_email, l_netlify_site_id
+          FROM website
+         WHERE id=pWebsiteId
+           AND user_id=l_user_id;
 
-                logDeployment('{"status":"Creating Netlify website"}',pWebsiteId);
-                /* get id of the common DEPLOY repository */
-                apex_web_service.g_request_headers(1).name := 'Accept';
-                apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
-                apex_web_service.g_request_headers(2).name := 'Authorization';
-                apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
-                apex_web_service.g_request_headers(3).name := 'User-Agent';
-                apex_web_service.g_request_headers(3).value := C.github_repos_owner;
+        /*
+        ** 1. Create Netlify Site with deployment id if not already exists
+        ** 2. Trigger Github action build
+        */
 
-                l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo ,p_http_method=>'GET');
-                FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
-                    l_repo_id:=C1.id;
-                END LOOP;
+        IF (l_netlify_site_id IS NULL) THEN
+            logDeployment('{"status":"Creating Netlify website"}',pWebsiteId);
 
-                /* Setup connect to Netlify */
-                apex_web_service.clear_request_headers;
+            /* get id of the DEPLOY github repository */
+            pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>NULL, pMethod=>'GET', pData=>l_clob);
+            FOR C IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
+                l_repo_id:=C.id;
+            END LOOP;
 
-                apex_web_service.g_request_headers(1).name := 'Authorization';
-                apex_web_service.g_request_headers(1).value := 'Bearer ' || C.netlify_token;   
-                apex_web_service.g_request_headers(2).name := 'Content-Type';
-                apex_web_service.g_request_headers(2).value := 'application/json';
+            /* get netlify deploy id */
+            pck_core.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'deploy_keys', pMethod=>'POST', pData=>l_clob);
+            FOR C IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
+                l_deploy_key_id:=C.id;
+            END LOOP;
 
-                /* get netlify deploy id */
-                l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/deploy_keys',p_http_method=>'POST');
-                FOR C1 IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
-                    l_deploy_key_id:=C1.id;
-                END LOOP;
+            /* create JSON payload for new Netlify site */
+            l_json:=new JSON_OBJECT_T;
+            l_json.put('name', l_domain_name);
 
-                /* create JSON payload for new Netlify site */
-                l_json:=new JSON_OBJECT_T;
-                l_json.put('name', C.domain_name);
+            l_repo:=new JSON_OBJECT_T;
+            l_repo.put('provider', 'github');
+            l_repo.put('repo_type', 'git');
+            l_repo.put('repo_id', l_repo_id);
+            l_repo.put('repo', pck_core.getGithubReposOwner(l_user_id) || '/DEPLOY');
+            l_repo.put('repo_branch', 'main');
+            l_repo.put('private', FALSE);
+            l_repo.put('deploy_key_id', l_deploy_key_id);
+            l_repo.put('installation_id', pck_core.getNetlifyIntallationId(l_user_id));
+            l_repo.put('base', l_domain_name);   
+            l_json.put('repo', l_repo);
 
-                l_repo:=new JSON_OBJECT_T;
-                l_repo.put('provider', 'github');
-                l_repo.put('repo_type', 'git');
-                l_repo.put('repo_id', l_repo_id);
-                l_repo.put('repo', C.deploy_repo);
-                l_repo.put('repo_branch', 'main');
-                l_repo.put('private', FALSE);
-                l_repo.put('deploy_key_id', l_deploy_key_id);
-                l_repo.put('installation_id', C.netlify_installation_id);
-                l_repo.put('base', C.domain_name);   
-                l_json.put('repo', l_repo);
-
-                /* Create Netlify site and store the site_id in website table */
-                l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites', p_http_method=>'POST', p_body=>l_json.stringify);
-                pck_core.log('Response from POST api.netlify.com/api/v1/sites:'||TO_CHAR(l_clob));
-                FOR C1 IN (SELECT site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id))) LOOP
-                    UPDATE website 
-                       SET netlify_site_id = C1.site_id, 
-                           netlify_deploy_id =  l_deploy_key_id
-                     WHERE id=pWebsiteId;
-                END LOOP;
-                logDeployment('{"status":"Netlify website created and linked to github"}',pWebsiteId);
-            END IF;
+            /* Create Netlify site and store the site_id in website table */
+            --l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites', p_http_method=>'POST', p_body=>l_json.stringify);
+            pck_core.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+            pck_core.log('Response from POST api.netlify.com/api/v1/sites:'||TO_CHAR(l_clob));
+            FOR C1 IN (SELECT site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id))) LOOP
+                UPDATE website 
+                    SET netlify_site_id = C1.site_id, 
+                        netlify_deploy_id =  l_deploy_key_id
+                    WHERE id=pWebsiteId;
+            END LOOP;
+            logDeployment('{"status":"Netlify website created and linked to github"}',pWebsiteId);
+        END IF;
 
             /* trigger the deployment by dispatching Github action */          
             l_json:=new JSON_OBJECT_T;
             l_json.put('event_type', 'trigger_build');
 
             l_action:=new JSON_OBJECT_T;
-            l_action.put('build_path', C.domain_name);
-            l_action.put('template', C.template);
+            l_action.put('build_path', l_domain_name);
+            l_action.put('template', l_template);
             l_action.put('fetch_url', pck_core.getRestUrl() || 'content/' || pWebsiteId);  
             l_action.put('log_url', pck_core.getRestUrl() || 'deploy-status/' || pWebsiteId);
             l_json.put('client_payload', l_action);
 
-            apex_web_service.clear_request_headers;
-            apex_web_service.g_request_headers(1).name := 'Accept';
-            apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
-            apex_web_service.g_request_headers(2).name := 'Authorization';
-            apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
-            apex_web_service.g_request_headers(3).name := 'User-Agent';
-            apex_web_service.g_request_headers(3).value := C.github_repos_owner;
-
-            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_json.stringify);
-        END LOOP;
+            --l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_json.stringify);
+            pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+            pck_core.log(l_clob);
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -297,6 +223,57 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             WHEN OTHERS THEN
                 pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
     END;  
+
+    /*
+    ** Build and deploy infrastructure through Terraform by submitting Github action. 
+    ** Do this once and each time we recycle the public key that is used to sign a website's contact email
+    */    
+    PROCEDURE deployInfrastructure IS
+        l_clob CLOB;
+        l_admin_user_id users.id%type;
+        l_json JSON_OBJECT_T;
+        l_action JSON_OBJECT_T;
+    BEGIN
+
+        /* Get the admin user with Github token and the public key required to verify signed contact email addresses */
+        SELECT id INTO l_admin_user_id 
+          FROM users 
+         WHERE github_repos_owner IS NOT NULL 
+           AND github_token IS NOT NULL;
+
+
+        FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, t.token,
+                         replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(t.public_key))),chr(13)||chr(10),null) public_key
+                    FROM users u, terraform t
+                   WHERE u.id=l_admin_user_id) 
+        LOOP
+            apex_web_service.g_request_headers(1).name := 'Accept';
+            apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
+            apex_web_service.g_request_headers(2).name := 'Authorization';
+            apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
+            apex_web_service.g_request_headers(3).name := 'User-Agent';
+            apex_web_service.g_request_headers(3).value := C.github_repos_owner;
+
+            /* trigger the deployment using Githib actions */          
+            l_json:=new JSON_OBJECT_T;
+            l_json.put('event_type', 'trigger_build_infra');
+
+            l_action:=new JSON_OBJECT_T;
+            l_action.put('from_email', 'funnyface@markrussellbrown.com');
+            l_action.put('public_key', C.public_key);
+            l_action.put('terraform_token', C.token);
+            l_json.put('client_payload', l_action);
+
+            pck_core.log('deployInfrastructure - JSON for dispatching Github Action:'||l_json.stringify);
+
+            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_json.stringify);
+        END LOOP;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error(sqlcode,sqlerrm);
+                RAISE;
+    END;    
 
 end;
 /
