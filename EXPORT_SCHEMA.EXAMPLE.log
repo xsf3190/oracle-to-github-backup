@@ -1,36 +1,36 @@
-19-SEP-23 20:00:42.454: Starting "EXAMPLE"."EXPORT_SCHEMA_JOB":  
-19-SEP-23 20:00:45.741: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
-19-SEP-23 20:00:45.924: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
-19-SEP-23 20:00:46.226: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
-19-SEP-23 20:00:46.827: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
-19-SEP-23 20:00:48.408: Processing object type SCHEMA_EXPORT/TABLE/TABLE
-19-SEP-23 20:00:59.943: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
-19-SEP-23 20:01:00.034: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
-19-SEP-23 20:01:00.224: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
-19-SEP-23 20:01:00.586: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
-19-SEP-23 20:01:01.547: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
-19-SEP-23 20:01:02.804: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
-19-SEP-23 20:01:03.514: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
-19-SEP-23 20:01:04.325: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
-19-SEP-23 20:01:04.660: . . exported "EXAMPLE"."ASSET"                           473.9 KB   21464 rows
-19-SEP-23 20:01:05.324: . . exported "EXAMPLE"."PERFORMANCE"                     70.42 KB    2560 rows
-19-SEP-23 20:01:05.437: . . exported "EXAMPLE"."LOG"                             63.80 KB    2061 rows
-19-SEP-23 20:01:05.547: . . exported "EXAMPLE"."CORE_WEB_VITALS"                 118.4 KB    6182 rows
-19-SEP-23 20:01:05.695: . . exported "EXAMPLE"."USER_LOGIN"                      47.41 KB    3615 rows
-19-SEP-23 20:01:05.782: . . exported "EXAMPLE"."SERVERTIMING"                    35.58 KB    5361 rows
-19-SEP-23 20:01:05.884: . . exported "EXAMPLE"."USAGE"                           32.38 KB     920 rows
-19-SEP-23 20:01:06.022: . . exported "EXAMPLE"."ARTICLE"                         92.92 KB     321 rows
-19-SEP-23 20:01:06.107: . . exported "EXAMPLE"."WEBSITE_ARTICLE"                 6.812 KB     282 rows
-19-SEP-23 20:01:06.215: . . exported "EXAMPLE"."USERS"                           6.687 KB      17 rows
-19-SEP-23 20:01:06.301: . . exported "EXAMPLE"."METRICS"                         7.125 KB      84 rows
-19-SEP-23 20:01:06.400: . . exported "EXAMPLE"."WEBSITE"                         5.578 KB       6 rows
-19-SEP-23 20:01:06.481: . . exported "EXAMPLE"."CORE_WEB_VITALS_ERR"             5.101 KB       1 rows
-19-SEP-23 20:01:06.557: . . exported "EXAMPLE"."TERRAFORM"                       6.101 KB       1 rows
-19-SEP-23 20:01:06.629: . . exported "EXAMPLE"."WEBSITE_DEPLOY"                  4.929 KB      14 rows
-19-SEP-23 20:01:06.712: . . exported "EXAMPLE"."GITHUB"                          4.687 KB       1 rows
-19-SEP-23 20:01:06.718: . . exported "EXAMPLE"."BLOB2FILE"                           0 KB       0 rows
-19-SEP-23 20:01:07.302: Master table "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully loaded/unloaded
-19-SEP-23 20:01:07.307: ******************************************************************************
-19-SEP-23 20:01:07.307: Dump file set for EXAMPLE.EXPORT_SCHEMA_JOB is:
-19-SEP-23 20:01:07.311:   /u03/dbfs/BDE1649F626EB000E0532E14000A3C29/data/dpdump/EXAMPLE.dmp
-19-SEP-23 20:01:07.316: Job "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully completed at Tue Sep 19 20:01:07 2023 elapsed 0 00:00:28
+20-SEP-23 20:00:48.755: Starting "EXAMPLE"."EXPORT_SCHEMA_JOB":  
+20-SEP-23 20:00:52.033: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
+20-SEP-23 20:00:52.237: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
+20-SEP-23 20:00:52.548: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
+20-SEP-23 20:00:53.145: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
+20-SEP-23 20:00:54.915: Processing object type SCHEMA_EXPORT/TABLE/TABLE
+20-SEP-23 20:01:09.296: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
+20-SEP-23 20:01:09.374: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
+20-SEP-23 20:01:09.562: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
+20-SEP-23 20:01:09.931: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
+20-SEP-23 20:01:10.820: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
+20-SEP-23 20:01:11.657: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
+20-SEP-23 20:01:12.180: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
+20-SEP-23 20:01:12.726: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
+20-SEP-23 20:01:13.087: . . exported "EXAMPLE"."ASSET"                           473.9 KB   21464 rows
+20-SEP-23 20:01:13.208: . . exported "EXAMPLE"."PERFORMANCE"                     70.42 KB    2560 rows
+20-SEP-23 20:01:13.323: . . exported "EXAMPLE"."LOG"                             67.82 KB    2131 rows
+20-SEP-23 20:01:13.435: . . exported "EXAMPLE"."CORE_WEB_VITALS"                 120.4 KB    6295 rows
+20-SEP-23 20:01:13.550: . . exported "EXAMPLE"."USER_LOGIN"                      47.57 KB    3624 rows
+20-SEP-23 20:01:13.644: . . exported "EXAMPLE"."SERVERTIMING"                    35.58 KB    5361 rows
+20-SEP-23 20:01:13.739: . . exported "EXAMPLE"."USAGE"                           32.51 KB     924 rows
+20-SEP-23 20:01:13.860: . . exported "EXAMPLE"."ARTICLE"                         92.92 KB     321 rows
+20-SEP-23 20:01:13.961: . . exported "EXAMPLE"."WEBSITE_ARTICLE"                 6.796 KB     281 rows
+20-SEP-23 20:01:14.073: . . exported "EXAMPLE"."USERS"                           6.679 KB      17 rows
+20-SEP-23 20:01:14.177: . . exported "EXAMPLE"."METRICS"                         7.156 KB      85 rows
+20-SEP-23 20:01:14.258: . . exported "EXAMPLE"."WEBSITE"                         5.585 KB       6 rows
+20-SEP-23 20:01:14.357: . . exported "EXAMPLE"."CORE_WEB_VITALS_ERR"             5.101 KB       1 rows
+20-SEP-23 20:01:14.442: . . exported "EXAMPLE"."TERRAFORM"                       6.101 KB       1 rows
+20-SEP-23 20:01:14.520: . . exported "EXAMPLE"."WEBSITE_DEPLOY"                  4.890 KB      12 rows
+20-SEP-23 20:01:14.597: . . exported "EXAMPLE"."GITHUB"                          4.687 KB       1 rows
+20-SEP-23 20:01:14.604: . . exported "EXAMPLE"."BLOB2FILE"                           0 KB       0 rows
+20-SEP-23 20:01:15.249: Master table "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully loaded/unloaded
+20-SEP-23 20:01:15.254: ******************************************************************************
+20-SEP-23 20:01:15.255: Dump file set for EXAMPLE.EXPORT_SCHEMA_JOB is:
+20-SEP-23 20:01:15.259:   /u03/dbfs/BDE1649F626EB000E0532E14000A3C29/data/dpdump/EXAMPLE.dmp
+20-SEP-23 20:01:15.265: Job "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully completed at Wed Sep 20 20:01:15 2023 elapsed 0 00:00:30
