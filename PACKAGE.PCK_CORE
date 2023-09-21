@@ -48,10 +48,18 @@ END;
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB) IS PRAGMA AUTONOMOUS_TRANSACTION;
-        k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
-        k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);
+        --k_calling_package constant varchar2(128) := utl_call_stack.subprogram(2)(1);
+        --k_calling_subprog constant varchar2(128) := utl_call_stack.subprogram(2)(2);
+        l_depth PLS_INTEGER;
+        l_procedure_name varchar2(100);
     BEGIN
-        INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, k_calling_package || '.' || k_calling_subprog, pMsg);
+        l_depth:=UTL_CALL_STACK.dynamic_depth;
+        FOR i IN 1..l_depth LOOP
+            l_procedure_name:=UTL_CALL_STACK.concatenate_subprogram(UTL_CALL_STACK.subprogram(i));
+        END LOOP;
+
+        --INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, k_calling_package || '.' || k_calling_subprog, pMsg);
+        INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, l_procedure_name, pMsg);
         COMMIT;
     END;
 
@@ -67,11 +75,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     BEGIN
         ROLLBACK;
         log(pCode || '-' || pErrMsg || '-' || dbms_utility.format_error_stack||dbms_utility.format_error_backtrace);
+        IF (apex_application.g_flow_id IS NOT NULL) THEN
+            apex_json.open_object; 
+            apex_json.write('success', FALSE); 
+            apex_json.write('sqlcode', sqlcode); 
+            apex_json.write('sqlerrm', sqlerrm); 
+            apex_json.close_object;
+        END IF;
     END;
 
+    -- REMOVE THIS EVENTUALLY
     PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2, pAjax IN BOOLEAN) IS
     BEGIN
         log_error(pCode, pErrMsg);
+        /*
         IF (pAjax) THEN
             apex_json.open_object; 
             apex_json.write('success', FALSE); 
@@ -79,6 +96,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             apex_json.write('sqlerrm', sqlerrm); 
             apex_json.close_object;
         END IF;
+        */
     END;
 
 
@@ -287,7 +305,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             pData := apex_web_service.make_rest_request(p_url=>l_github_url, p_http_method=>pMethod, p_body=>pBody);
         END IF;
 
-        IF (apex_web_service.g_status_code<>200) THEN
+        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) THEN
             RAISE_APPLICATION_ERROR(-20000,'GITHUB API HTTP STATUS: '||apex_web_service.g_status_code || ' METHOD:' || pMethod || ' URL:' || l_github_url);
         END IF;
 
@@ -300,7 +318,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_session_id users.apex_session_id%type;
         l_page_id NUMBER;
         l_netlify_token users.netlify_token%type;
-        l_netlify_url VARCHAR2(50):='https://api.netlify.com/api/v1/';
+        l_netlify_url VARCHAR2(100):='https://api.netlify.com/api/v1/';
     BEGIN
         /* Get user's netlify token */
         FOR C IN (SELECT netlify_token FROM users WHERE id=pUserId) LOOP 
@@ -319,18 +337,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         apex_web_service.g_request_headers(2).name := 'Content-Type';
         apex_web_service.g_request_headers(2).value := 'application/json';
 
+        l_netlify_url:=l_netlify_url || pEndpoint;
+
         IF (pBody IS NULL) THEN
-            pData := apex_web_service.make_rest_request(p_url=>l_netlify_url || pEndpoint, p_http_method=>pMethod);
+            pData := apex_web_service.make_rest_request(p_url=>l_netlify_url, p_http_method=>pMethod);
         ELSE
-            pData := apex_web_service.make_rest_request(p_url=>l_netlify_url || pEndpoint, p_http_method=>pMethod, p_body=>pBody);
+            pData := apex_web_service.make_rest_request(p_url=>l_netlify_url, p_http_method=>pMethod, p_body=>pBody);
         END IF;
 
-        IF (apex_web_service.g_status_code<>200) THEN
-            RAISE_APPLICATION_ERROR(-20000,'NETLIFY API HTTP STATUS: '||apex_web_service.g_status_code || ' METHOD:' || pMethod || ' URL:' || l_netlify_url || pEndpoint);
+        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) THEN
+            RAISE_APPLICATION_ERROR(-20000,'NETLIFY API HTTP STATUS: '||apex_web_service.g_status_code || ' METHOD:' || pMethod || ' URL:' || l_netlify_url);
         END IF;
 
         EXCEPTION WHEN OTHERS THEN
-            log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+            log_error(sqlcode,sqlerrm);
     END;
 
     /*
