@@ -31,19 +31,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_repo JSON_OBJECT_T;
         l_action JSON_OBJECT_T;
         l_site clob;
+        l_app_id NUMBER;
+        l_session_id NUMBER;
+        l_page_id NUMBER;
     BEGIN
         l_user_id:=pck_core.getUserId();
 
         DELETE website_deploy WHERE website_id=pWebsiteId;
         logDeployment('{"status":"Starting Deployment"}',pWebsiteId);
 
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('status', 'Starting Deployment');
-        apex_json.close_object;
-
-        /* Check whether site exists in Netlify */
-
+        /* Get deployment details including Netlify site id */
         SELECT domain_name, template, contact_email, netlify_site_id
           INTO l_domain_name, l_template, l_contact_email, l_netlify_site_id
           FROM website
@@ -87,36 +84,42 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_json.put('repo', l_repo);
 
             /* Create Netlify site and store the site_id in website table */
-            --l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites', p_http_method=>'POST', p_body=>l_json.stringify);
             pck_core.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
             pck_core.log('Response from POST api.netlify.com/api/v1/sites:'||TO_CHAR(l_clob));
-            FOR C1 IN (SELECT site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id))) LOOP
+            FOR C IN (SELECT site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id))) LOOP
                 UPDATE website 
-                    SET netlify_site_id = C1.site_id, 
-                        netlify_deploy_id =  l_deploy_key_id
+                    SET netlify_site_id = C.site_id--, 
+                        --netlify_deploy_id =  l_deploy_key_id
                     WHERE id=pWebsiteId;
             END LOOP;
             logDeployment('{"status":"Netlify website created and linked to github"}',pWebsiteId);
         END IF;
 
-            /* trigger the deployment by dispatching Github action */          
-            l_json:=new JSON_OBJECT_T;
-            l_json.put('event_type', 'trigger_build');
+        /* We include apex session header in the payload */
+        pck_core.getApexSession(l_app_id,l_session_id,l_page_id);
 
-            l_action:=new JSON_OBJECT_T;
-            l_action.put('build_path', l_domain_name);
-            l_action.put('template', l_template);
-            l_action.put('fetch_url', pck_core.getRestUrl() || 'content/' || pWebsiteId);  
-            l_action.put('log_url', pck_core.getRestUrl() || 'deploy-status/' || pWebsiteId);
-            l_json.put('client_payload', l_action);
+        /* trigger deployment by dispatching Github action */          
+        l_json:=new JSON_OBJECT_T;
+        l_json.put('event_type', 'trigger_build');
 
-            --l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_json.stringify);
-            pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
-            pck_core.log(l_clob);
+        l_action:=new JSON_OBJECT_T;
+        l_action.put('build_path', l_domain_name);
+        l_action.put('template', l_template);
+        l_action.put('fetch_url', pck_core.getRestUrl() || 'content/' || pWebsiteId);  
+        l_action.put('log_url', pck_core.getRestUrl() || 'deploy-status/' || pWebsiteId);
+        l_action.put('apex_session', l_app_id || ',' || l_session_id || ',' || l_page_id);
+        l_json.put('client_payload', l_action);
+
+        /* The Github API 'dispatches' endpoint does not send a response */
+        pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm);
     END;
 
     /*
@@ -155,28 +158,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
      **  Get deployment status from website_deploy logging table
      */      
     PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type) IS 
+        l_user_id users.id%type;
         l_status CLOB;
         l_clob CLOB;
         l_ssl_url VARCHAR2(100);
         l_deployment_complete BOOLEAN:=FALSE;
         l_netlify_status website_deploy.status%type;
     BEGIN
+        l_user_id:=pck_core.getUserId();
+
         /* If github action completed get latest Netlify deployment status and add this to the website_deploy table */
 
-        FOR C IN (SELECT u.netlify_token, w.netlify_site_id, w.netlify_deploy_id, wd.log_time
-                    FROM users u, website w, website_deploy wd
+        FOR C IN (SELECT w.netlify_site_id, wd.log_time
+                    FROM website w, website_deploy wd
                    WHERE w.id=pWebsiteId 
+                     AND w.user_id=l_user_id
                      AND wd.website_id=w.id
-                     AND wd.status='Github action completed - OK'
-                     AND u.netlify_token IS NOT NULL) 
+                     AND wd.status='Github action completed - OK') 
         LOOP
-            apex_web_service.clear_request_headers;
-            apex_web_service.g_request_headers(1).name := 'Authorization';
-            apex_web_service.g_request_headers(1).value := 'Bearer ' || C.netlify_token;   
-            apex_web_service.g_request_headers(2).name := 'Content-Type';
-            apex_web_service.g_request_headers(2).value := 'application/json';
+            pck_core.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites/'|| C.netlify_site_id || '/deploys', pMethod=>'GET', pData=>l_clob);
 
-            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites/' || C.netlify_site_id || '/deploys', p_http_method=>'GET');
+            --l_clob := apex_web_service.make_rest_request(p_url=>'https://api.netlify.com/api/v1/sites/' || C.netlify_site_id || '/deploys', p_http_method=>'GET');
+
+
             FOR C1 IN (SELECT state, ssl_url, error_message, created_at
                          FROM JSON_TABLE(l_clob, '$[0]' COLUMNS (state, ssl_url, created_at, error_message))) 
             LOOP
