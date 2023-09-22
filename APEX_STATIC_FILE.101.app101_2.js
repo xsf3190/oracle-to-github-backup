@@ -963,12 +963,12 @@ const add_content = (target, position) => {
  ** DEPLOY WEBSITE
  */
 deployWebsite.addEventListener('click',  () => {
-    execProcess("deploy/" + website.dataset.id,"POST").then( (data) => {
-        popupOpen("Website deployment",data.status);
+    execProcess("deploy/" + website.dataset.id,"POST").then( () => {
+        popupOpen("Website deployment","Starting...could take a while");
         if (gIntervalId) {
             clearInterval(gIntervalId);
         }
-        gIntervalId = setInterval(getDeploymentStatus,2000,websiteId);
+        gIntervalId = setInterval(getDeploymentStatus,2000,website.dataset.id);
     });
 });
 
