@@ -1358,7 +1358,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;
 
         apex_web_service.clear_request_headers;
-
         l_return := apex_web_service.make_rest_request(p_url=>'https://' || pName || '.netlify.app', p_http_method=>'HEAD');
         IF (apex_web_service.g_status_code=200) THEN
             RETURN('Name is existing Netlify subdomain');
@@ -1378,7 +1377,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_message VARCHAR2(50);
         l_color VARCHAR2(5);
         l_website_id website.id%type;
-        n PLS_INTEGER;
+        n PLS_INTEGER:=0;
     BEGIN
         l_user_id:=pck_core.getUserId();
 
@@ -1395,12 +1394,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 WHEN 'website.domain_name' THEN
                     l_message:=domainExists(l_user_id, C.value);
                     IF (l_message IS NOT NULL) THEN
-                        l_color:='red';
                         EXIT;
                     END IF;
                     IF (C.id IS NULL) THEN
-                        INSERT INTO website (id, user_id, domain_name) VALUES (seq_website.nextval, l_user_id, C.value);
+                        INSERT INTO website (id, user_id, domain_name, template) VALUES (seq_website.nextval, l_user_id, C.value,'-1');
                         l_website_id:=seq_website.currval;
+                        l_message:='Created OK';
                     ELSE
                         UPDATE website SET domain_name=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
                     END IF;
@@ -1422,13 +1421,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             n:=sql%rowcount;
         END LOOP;
 
-        IF (l_message IS NULL) THEN
-            IF (n=1) THEN
+        IF (n=1) THEN  /* means update or insert was successful */
+            l_color:='green';
+            IF (l_message IS NULL) THEN
                 l_message:='Updated OK';
-                l_color:='green';
-            ELSE
-                l_message:='Update NOK';
-                l_color:='red';
+            END IF;
+        ELSE  /* means update or insert failed */
+            l_color:='red';
+            IF (l_message IS NULL) THEN
+                l_message:='Updated NOK';
             END IF;
         END IF;
 
@@ -1443,7 +1444,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error(sqlcode,sqlerrm);
     END;
 
     /**
