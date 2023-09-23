@@ -75,14 +75,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     BEGIN
         ROLLBACK;
         log(pCode || '-' || pErrMsg || '-' || dbms_utility.format_error_stack||dbms_utility.format_error_backtrace);
-        /* If running APEX return sqlcode and error message to calling javascript function */
-        IF (apex_application.g_flow_id IS NOT NULL) THEN
-            apex_json.open_object; 
-            apex_json.write('success', FALSE); 
-            apex_json.write('sqlcode', sqlcode); 
-            apex_json.write('sqlerrm', sqlerrm); 
-            apex_json.close_object;
-        END IF;
+        apex_json.open_object; 
+        apex_json.write('success', FALSE); 
+        apex_json.write('sqlcode', pCode); 
+        apex_json.write('sqlerrm', pErrMsg); 
+        apex_json.close_object;
     END;
 
     -- REMOVE THIS EVENTUALLY - dont need pAjax any more
