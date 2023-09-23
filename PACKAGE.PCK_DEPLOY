@@ -34,11 +34,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_app_id NUMBER;
         l_session_id NUMBER;
         l_page_id NUMBER;
+        n PLS_INTEGER;
+        --
+        API_FAILURE EXCEPTION;
+        PRAGMA EXCEPTION_INIT (API_FAILURE, -20001);
+        TEMPLATE_NOT_DEFINED EXCEPTION;
+        PRAGMA EXCEPTION_INIT (TEMPLATE_NOT_DEFINED, -20002);
     BEGIN
         l_user_id:=pck_core.getUserId();
-
-        DELETE website_deploy WHERE website_id=pWebsiteId;
-        logDeployment('{"status":"Starting Deployment"}',pWebsiteId);
 
         /* Get deployment details including Netlify site id */
         SELECT domain_name, template, contact_email, netlify_site_id
@@ -46,6 +49,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
           FROM website
          WHERE id=pWebsiteId
            AND user_id=l_user_id;
+
+        /* Check website can be deployed */
+        pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_clob);
+        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) THEN
+            RAISE API_FAILURE;
+        END IF;
+
+        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (
+            SELECT name
+            FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name))
+            WHERE name=l_template );
+        IF (n<>1) THEN
+            RAISE TEMPLATE_NOT_DEFINED;
+        END IF;
+
+        DELETE website_deploy WHERE website_id=pWebsiteId;
+        logDeployment('{"status":"Starting Deployment"}',pWebsiteId);
 
         /*
         ** 1. Create Netlify Site with deployment id if not already exists
@@ -87,10 +107,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             pck_core.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
             pck_core.log('Response from POST api.netlify.com/api/v1/sites:'||TO_CHAR(l_clob));
             FOR C IN (SELECT site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id))) LOOP
-                UPDATE website 
-                    SET netlify_site_id = C.site_id--, 
-                        --netlify_deploy_id =  l_deploy_key_id
-                    WHERE id=pWebsiteId;
+                UPDATE website SET netlify_site_id = C.site_id WHERE id=pWebsiteId;
             END LOOP;
             logDeployment('{"status":"Netlify website created and linked to github"}',pWebsiteId);
         END IF;
