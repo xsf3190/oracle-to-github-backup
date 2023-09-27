@@ -17,6 +17,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     */    
     PROCEDURE deployWebsite(pWebsiteId IN website.id%type) IS
         l_clob CLOB;
+        l_json_clob CLOB;
         l_user_id website.user_id%type;
         l_domain_name website.domain_name%type;
         l_template website.template%type;
@@ -59,7 +60,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_json:=new JSON_OBJECT_T;
             l_json.put('message','Commit by user id ' || l_user_id);
             l_json.put('content', APEX_WEB_SERVICE.BLOB2CLOBBASE64(l_placeholder)); /* Github insists on base64 string */
-            pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/'||l_domain_name || '/.placeholder', pMethod=>'PUT', pBody=>l_json.to_clob, pData=>l_clob);
+            l_json_clob:=l_json.to_clob;
+            pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/'||l_domain_name || '/.placeholder', pMethod=>'PUT', pBody=>l_json_clob, pData=>l_clob);
         END IF;
 
         DELETE website_deploy WHERE website_id=pWebsiteId;
@@ -126,7 +128,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json.put('client_payload', l_action);
 
         /* nb; Github API 'dispatches' endpoint does not send a response */
-        pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+        l_json_clob:=l_json.stringify;
+        pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json_clob, pData=>l_clob);
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -246,46 +249,39 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     /*
     ** Build and deploy infrastructure through Terraform by submitting Github action. 
     ** Do this once and each time we recycle the public key that is used to sign a website's contact email
-    */    
+    */
     PROCEDURE deployInfrastructure IS
         l_clob CLOB;
-        l_admin_user_id users.id%type;
+        l_json_clob CLOB;
+        l_user_id users.id%type;
         l_json JSON_OBJECT_T;
         l_action JSON_OBJECT_T;
     BEGIN
+        l_user_id:=pck_core.getUserId();
 
-        /* Get the admin user with Github token and the public key required to verify signed contact email addresses */
-        SELECT id INTO l_admin_user_id 
-          FROM users 
-         WHERE github_repos_owner IS NOT NULL 
-           AND github_token IS NOT NULL;
-
-
-        FOR C IN (SELECT u.github_repos_owner, u.github_repos_owner||'/DEPLOY' deploy_repo, u.github_token, t.token,
-                         replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(t.public_key))),chr(13)||chr(10),null) public_key
-                    FROM users u, terraform t
-                   WHERE u.id=l_admin_user_id) 
+        FOR C IN (SELECT terraform_token, replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(terraform_public_key))),chr(13)||chr(10),null) terraform_public_key
+                    FROM users
+                   WHERE id=l_user_id) 
         LOOP
-            apex_web_service.g_request_headers(1).name := 'Accept';
-            apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
-            apex_web_service.g_request_headers(2).name := 'Authorization';
-            apex_web_service.g_request_headers(2).value := 'Bearer ' || C.github_token;
-            apex_web_service.g_request_headers(3).name := 'User-Agent';
-            apex_web_service.g_request_headers(3).value := C.github_repos_owner;
-
-            /* trigger the deployment using Githib actions */          
+            /* trigger the deployment using Githib action */          
             l_json:=new JSON_OBJECT_T;
             l_json.put('event_type', 'trigger_build_infra');
 
             l_action:=new JSON_OBJECT_T;
             l_action.put('from_email', 'funnyface@markrussellbrown.com');
-            l_action.put('public_key', C.public_key);
-            l_action.put('terraform_token', C.token);
+            l_action.put('public_key', C.terraform_public_key);
+            l_action.put('terraform_token', C.terraform_token);
             l_json.put('client_payload', l_action);
 
-            pck_core.log('deployInfrastructure - JSON for dispatching Github Action:'||l_json.stringify);
+            --l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_json.stringify);
 
-            l_clob := apex_web_service.make_rest_request(p_url=>'https://api.github.com/repos/'|| C.deploy_repo || '/dispatches' ,p_http_method=>'POST',p_body=>l_json.stringify);
+            /* nb; Github API 'dispatches' endpoint does not send a response */
+            l_json_clob:=l_json.stringify;
+            pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json_clob, pData=>l_clob);
+
+            apex_json.open_object; 
+            apex_json.write('success', TRUE);
+            apex_json.close_object;
         END LOOP;
 
         EXCEPTION
