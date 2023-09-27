@@ -14,6 +14,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       website = document.querySelector("form"),
       domainName = website.querySelector("#domain_name"),
       domainNameResult = domainName.nextElementSibling.querySelector(".result"),
+      contactEmail = website.querySelector("#contact_email"),
       newWebsite = website.querySelector(".new-website"),
       copyWebsite = website.querySelector(".copy-website"),
       editWebsite = website.querySelectorAll(".edit-website"),
@@ -35,6 +36,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       galleryFullCloseFieldset = galleryFull.querySelector("button.close-fieldset"),
       galleryFullLegend = galleryFull.querySelector("legend > span"),
       galleryFullDimensions = galleryFull.querySelectorAll("fieldset button.dimensions"),
+      list = document.querySelector("dialog.list"),
       listPerformance = gallery.querySelector(".list-performance"),      
       perftable = document.querySelector("dialog.perftable");
 
@@ -170,8 +172,22 @@ copyWebsite.addEventListener("click",  () => {
 editWebsite.forEach((button) => {
     button.addEventListener("click", (e) => {
         execProcess( "website/"+e.target.dataset.id,"GET").then( (data) => {
-            domainName.value = data.domain_name;
+            resetWebsite();
             
+            website.dataset.id = e.target.dataset.id;
+            const inputs = website.elements;
+            for (let i = 0; i < inputs.length; i++) {
+                if (inputs[i].type === "textarea" || inputs[i].type === "radio") {
+                    inputs[i].dataset.id = e.target.dataset.id;
+                }
+            }
+
+            domainName.value = data.domain_name;
+            contactEmail.value = data.contact_email ? data.contact_email : "";
+            if (data.template) {
+                document.getElementById(data.template).checked = true;
+            }
+
             cards.replaceChildren();
             cards.insertAdjacentHTML('afterbegin',data.cards);
         });
@@ -869,6 +885,16 @@ signout.addEventListener('click',  () => {
     }).catch( ()=>window.location.href = gHomeUrl);
 });
 
+const sessionLog = document.querySelector(".session-log");
+sessionLog.addEventListener('click',  () => {
+    execProcess("log/"+apex_session,"GET").then( (data) => {
+        const log = list.querySelector(".content");
+        log.replaceChildren();
+        log.insertAdjacentHTML('afterbegin',data.content);
+        list.showModal();
+    });
+});
+
 /* 
  ** RICH TEXT EDITOR AUTOSAVE FEATURE FUNCTION TO SEND UPDATED TEXT TO DATABASE. RETURNS data.articleId IF ARTICLE ROW WAS CREATED.
  */
@@ -960,9 +986,24 @@ const add_content = (target, position) => {
 };
 
 /* 
- ** DEPLOY WEBSITE
+ ** DEPLOY WEBSITE - template must mut be selected
  */
 deployWebsite.addEventListener('click',  () => {
+    if (!domainName.value) {
+        domainNameResult.textContent = "MUST HAVE A DOMAIN NAME";
+        domainNameResult.style.opacity = "1";
+        domainNameResult.style.color = "red";
+        return;
+    }
+
+    const template = website.querySelector("[name='template']:checked");
+    if (!template) {
+        let templateResult = website.querySelector("[name='template']").closest("fieldset").nextElementSibling.querySelector(".result");
+        templateResult.textContent = "SELECT TEMPLATE FOR DEPLOYMENT";
+        templateResult.style.opacity = "1";
+        templateResult.style.color = "red";
+        return;
+    }
     execProcess("deploy/" + website.dataset.id,"POST").then( () => {
         popupOpen("Website deployment","Starting...could take a while");
         if (gIntervalId) {
