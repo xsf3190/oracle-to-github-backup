@@ -66,11 +66,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     PROCEDURE post_auth_facebook IS
     BEGIN
         insert_user_login('Facebook', apex_json.get_varchar2('email'), apex_json.get_varchar2('name'));
+        EXCEPTION WHEN OTHERS THEN pck_core.log_error; RAISE;
     END;
 
     PROCEDURE post_auth_google IS
     BEGIN
         insert_user_login('Google', apex_json.get_varchar2('email'), apex_json.get_varchar2('name'));
+        EXCEPTION WHEN OTHERS THEN pck_core.log_error; RAISE;
     END; 
 
     /* 
