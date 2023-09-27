@@ -6,17 +6,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION getNetlifyIntallationId(pUserId IN users.id%type) RETURN VARCHAR2;
     --
-    PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB);
+    PROCEDURE getTerraformData(pUserId IN users.id%type, pTerraformOrganizationName IN OUT users.terraform_organization_name%type, pTerraformWorkspaceName IN OUT users.terraform_workspace_name%type, pTerraformPrivateKey IN OUT users.terraform_private_key%type);
+    --
+    PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB);
+    --
+    PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB);
     --
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB);
+    --
+    PROCEDURE callTerraformAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB);
     --
     PROCEDURE log(pMsg IN VARCHAR2);
     --
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB);
     --
-    PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2);
-    --
-    PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2, pAjax IN BOOLEAN);
+    PROCEDURE log_error;
     --
     PROCEDURE getApexSession(pAppId IN OUT NUMBER, pSessionId IN OUT NUMBER, pPageId IN OUT NUMBER);
     --
@@ -41,53 +45,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type) RETURN CLOB;
-    --
-    PROCEDURE signout;
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
-
-    PROCEDURE log(pMsg IN OUT NOCOPY CLOB) IS PRAGMA AUTONOMOUS_TRANSACTION;
-        l_depth PLS_INTEGER;
-        l_procedure_name varchar2(100);
-    BEGIN
-        l_depth:=UTL_CALL_STACK.dynamic_depth;
-        FOR i IN 1..l_depth LOOP
-            l_procedure_name:=UTL_CALL_STACK.concatenate_subprogram(UTL_CALL_STACK.subprogram(i));
-        END LOOP;
-        INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, l_procedure_name, pMsg);
-        COMMIT;
-    END;
-
-    PROCEDURE log(pMsg IN VARCHAR2) IS PRAGMA AUTONOMOUS_TRANSACTION;
-        l_depth PLS_INTEGER;
-        l_procedure_name varchar2(100);
-    BEGIN
-        l_depth:=UTL_CALL_STACK.dynamic_depth;
-        FOR i IN 1..l_depth LOOP
-            l_procedure_name:=UTL_CALL_STACK.concatenate_subprogram(UTL_CALL_STACK.subprogram(i));
-        END LOOP;        
-        INSERT INTO log(id, procedure_name, message) VALUES (seq_log.nextval, l_procedure_name, pMsg);
-        COMMIT;
-    END;
-
-    PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2) IS
-    BEGIN
-        ROLLBACK;
-        log(pCode || '-' || pErrMsg || '-' || dbms_utility.format_error_stack||dbms_utility.format_error_backtrace);
-        apex_json.open_object; 
-        apex_json.write('success', FALSE); 
-        apex_json.write('sqlcode', pCode); 
-        apex_json.write('sqlerrm', pErrMsg); 
-        apex_json.close_object;
-    END;
-
-    -- REMOVE THIS EVENTUALLY - dont need pAjax any more
-    PROCEDURE log_error(pCode IN NUMBER, pErrMsg IN VARCHAR2, pAjax IN BOOLEAN) IS
-    BEGIN
-        log_error(pCode, pErrMsg);
-    END;
-
 
     PROCEDURE getApexSession(pAppId IN OUT NUMBER, pSessionId IN OUT NUMBER, pPageId IN OUT NUMBER) IS
         l_apex_session VARCHAR2(50);
@@ -104,6 +64,81 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             pSessionId:=l_parts(2);
             pPageId:=l_parts(3);
         END IF;
+        EXCEPTION WHEN VALUE_ERROR THEN NULL;  /* Raised when procedure is not called in internet session */
+    END;
+
+    PROCEDURE log(pMsg IN OUT NOCOPY CLOB) IS PRAGMA AUTONOMOUS_TRANSACTION;
+        l_calling_subprogram1 varchar2(128); -- package name, standalone function name, standalone procedure name or "__anonymous_block".
+        l_calling_subprogram2 varchar2(128); -- package procedure name or package function name. NULL if the parent is a standalone function, standalone procedure, or anonymous block.
+        l_app_id NUMBER;
+        l_session_id NUMBER;
+        l_page_id NUMBER;
+    BEGIN
+        l_calling_subprogram1 := utl_call_stack.subprogram(2)(1);
+        BEGIN
+            l_calling_subprogram2 := '.'||utl_call_stack.subprogram(2)(2);
+            EXCEPTION WHEN subscript_beyond_count THEN
+                l_calling_subprogram2 := null;
+        END;
+        getApexSession(l_app_id, l_session_id, l_page_id);
+        INSERT INTO log(id, procedure_name, message, session_id) VALUES (seq_log.nextval, l_calling_subprogram1||l_calling_subprogram2, pMsg, l_session_id);
+        COMMIT;
+    END;
+
+    PROCEDURE log(pMsg IN VARCHAR2) IS PRAGMA AUTONOMOUS_TRANSACTION;
+        l_calling_subprogram1 varchar2(128); -- package name, standalone function name, standalone procedure name or "__anonymous_block".
+        l_calling_subprogram2 varchar2(128); -- package procedure name or package function name. NULL if the parent is a standalone function, standalone procedure, or anonymous block.
+        l_app_id NUMBER;
+        l_session_id NUMBER;
+        l_page_id NUMBER;
+    BEGIN
+        l_calling_subprogram1 := utl_call_stack.subprogram(2)(1);
+        BEGIN
+            l_calling_subprogram2 := '.'||utl_call_stack.subprogram(2)(2);
+            EXCEPTION WHEN subscript_beyond_count THEN
+                l_calling_subprogram2 := null;
+        END;
+        getApexSession(l_app_id, l_session_id, l_page_id);
+        INSERT INTO log(id, procedure_name, message, session_id) VALUES (seq_log.nextval, l_calling_subprogram1||l_calling_subprogram2, pMsg, l_session_id);
+        COMMIT;
+    END;
+
+    /*
+    **  Log ORACLE exceptions.
+    */
+    PROCEDURE log_error IS
+        l_depth PLS_INTEGER;
+        l_stack LONG;
+        l_apex_session VARCHAR2(50);
+    BEGIN
+        ROLLBACK;
+
+        /* Format call stack which includes procedure names */
+        l_depth:=UTL_CALL_STACK.dynamic_depth;
+        l_stack:='CALL STACK'||chr(10);
+        FOR i IN 1..l_depth LOOP
+            l_stack:=l_stack || 'Line: ' || UTL_CALL_STACK.unit_line(i) || ' ' || UTL_CALL_STACK.owner(i)||'.'||UTL_CALL_STACK.concatenate_subprogram(UTL_CALL_STACK.subprogram(i)) || chr(10);
+        END LOOP;
+
+        /* Format error backtrace */
+        l_stack:=l_stack || 'ERROR BACKTRACE'||chr(10);
+        l_depth := UTL_CALL_STACK.error_depth;
+        FOR i IN 1..l_depth LOOP
+            l_stack:=l_stack || 'ORA-' || UTL_CALL_STACK.error_number(i) || ' - ' || UTL_CALL_STACK.error_msg(i) || chr(10);
+        END LOOP;
+
+        log(l_stack);
+
+        /* If invoked in Apex session return sqlcode, sqlerrm in json payload */
+        l_apex_session:=OWA_UTIL.get_cgi_env('Apex-Session');   
+
+        apex_json.open_object; 
+        apex_json.write('success', FALSE); 
+        apex_json.write('sqlcode', SQLCODE); 
+        apex_json.write('sqlerrm', SQLERRM); 
+        apex_json.close_object;
+
+        EXCEPTION WHEN VALUE_ERROR THEN NULL;
     END;
 
     /*
@@ -168,39 +203,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_rest_url);
     END;
 
-
-    /*
-    ** Logout authenticated session
-    */
-    PROCEDURE signout IS
-        l_app_id NUMBER;
-        l_session_id NUMBER;
-        l_page_id NUMBER;
-        session_ended EXCEPTION;
-        PRAGMA EXCEPTION_INIT(session_ended,-20987);
-    BEGIN
-        getApexSession(l_app_id, l_session_id, l_page_id);
-
-        BEGIN 
-            apex_session.delete_session(p_session_id=>l_session_id);
-            EXCEPTION WHEN session_ended THEN NULL;
-        END;
-        /*
-        owa_cookie.send(
-            name => 'ORA_WWV_APP_101',
-            value => null,
-            expires => sysdate -1, 
-            path =>'ords' );
-        */
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-    END;
-
     FUNCTION getGithubReposOwner(pUserId IN users.id%type) RETURN VARCHAR2 IS
         l_app_id NUMBER;
         l_session_id users.apex_session_id%type;
@@ -249,13 +251,45 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_netlify_installation_id);
     END;
 
-    PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
+    PROCEDURE getTerraformData(pUserId IN users.id%type, pTerraformOrganizationName IN OUT users.terraform_organization_name%type, pTerraformWorkspaceName IN OUT users.terraform_workspace_name%type, pTerraformPrivateKey IN OUT users.terraform_private_key%type) IS
+        l_app_id NUMBER;
+        l_session_id users.apex_session_id%type;
+        l_page_id NUMBER;
+        l_terraform_organization_name users.terraform_organization_name%type;
+        l_terraform_workspace_name users.terraform_workspace_name%type;
+        l_terraform_private_key users.terraform_private_key%type;
+    BEGIN
+        /* Get user's github token and account name (repository owner) */
+        FOR C IN (SELECT terraform_organization_name,terraform_workspace_name,terraform_private_key FROM users WHERE id=pUserId) LOOP 
+            l_terraform_organization_name:=C.terraform_organization_name;
+            l_terraform_workspace_name:=C.terraform_workspace_name;
+            l_terraform_private_key:=C.terraform_private_key;
+        END LOOP;
+
+        /* Get Administrator value if user has not registered github repository */
+        IF (l_terraform_organization_name IS NULL) THEN
+            getApexSession(l_app_id, l_session_id, l_page_id);
+            SELECT u.terraform_organization_name,u.terraform_workspace_name,u.terraform_private_key
+              INTO l_terraform_organization_name,l_terraform_workspace_name,l_terraform_private_key
+              FROM apex_applications a, users u 
+             WHERE a.application_id=l_app_id 
+               AND a.email_from=u.email;
+        END IF;
+
+        pTerraformOrganizationName:=l_terraform_organization_name;
+        pTerraformWorkspaceName:=l_terraform_workspace_name;
+        pTerraformPrivateKey:=l_terraform_private_key;
+
+    END;
+
+    PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB) IS
         l_app_id NUMBER;
         l_session_id users.apex_session_id%type;
         l_page_id NUMBER;
         l_github_repos_owner users.github_repos_owner%type;
         l_github_token users.github_token%type;
         l_github_url VARCHAR2(200):='https://api.github.com/repos/';
+        l_error_message LONG;
     BEGIN
         /* Get user's github token and account name (repository owner) */
         FOR C IN (SELECT github_repos_owner, github_token FROM users WHERE id=pUserId) LOOP 
@@ -292,9 +326,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             pData := apex_web_service.make_rest_request(p_url=>l_github_url, p_http_method=>pMethod, p_body=>pBody);
         END IF;
 
-        EXCEPTION WHEN OTHERS THEN
-            log_error(sqlcode,sqlerrm);
-    END;    
+        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) AND (apex_web_service.g_status_code<>404) THEN
+            l_error_message:=pMethod || ' ' || l_github_url || ' https status:' || apex_web_service.g_status_code;
+            FOR C IN (SELECT message FROM JSON_TABLE(pData,'$' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
+                l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
+            END LOOP;
+            RAISE_APPLICATION_ERROR(-20020,l_error_message);
+        END IF;
+    END;
+
+    PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB) IS
+        l_clob CLOB;
+    BEGIN
+        callGithubAPI(pUserId,pRepository,pEndpoint,pMethod,l_clob,pData);
+    END;
 
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
         l_app_id NUMBER;
@@ -302,6 +347,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_page_id NUMBER;
         l_netlify_token users.netlify_token%type;
         l_netlify_url VARCHAR2(100):='https://api.netlify.com/api/v1/';
+        l_error_message LONG;
     BEGIN
         /* Get user's netlify token */
         FOR C IN (SELECT netlify_token FROM users WHERE id=pUserId) LOOP 
@@ -328,9 +374,59 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             pData := apex_web_service.make_rest_request(p_url=>l_netlify_url, p_http_method=>pMethod, p_body=>pBody);
         END IF;
 
-        EXCEPTION WHEN OTHERS THEN
-            log_error(sqlcode,sqlerrm);
+        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) THEN
+            l_error_message:=pMethod || ' ' || l_netlify_url || ' https status:' || apex_web_service.g_status_code;
+            FOR C IN (SELECT message FROM JSON_TABLE(pData,'$' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
+                l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
+            END LOOP;
+            RAISE_APPLICATION_ERROR(-20030,l_error_message);
+        END IF;
     END;
+
+    PROCEDURE callTerraformAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
+        l_app_id NUMBER;
+        l_session_id users.apex_session_id%type;
+        l_page_id NUMBER;
+        l_terraform_token users.terraform_token%type;
+        l_terraform_url VARCHAR2(100):='https://app.terraform.io/';
+        l_error_message LONG;
+    BEGIN
+        /* Get Terraform details either from website owner or Administrator */
+        FOR C IN (SELECT terraform_token FROM users WHERE id=pUserId) LOOP
+            l_terraform_token:=C.terraform_token;
+        END LOOP;
+
+        IF (l_terraform_token IS NULL) THEN
+            getApexSession(l_app_id, l_session_id, l_page_id);
+            SELECT u.terraform_token
+              INTO l_terraform_token
+              FROM apex_applications a, users u 
+             WHERE a.application_id=l_app_id 
+               AND a.email_from=u.email;
+        END IF;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'Authorization';
+        apex_web_service.g_request_headers(1).value := 'Bearer ' || l_terraform_token;   
+        apex_web_service.g_request_headers(2).name := 'Content-Type';
+        apex_web_service.g_request_headers(2).value := 'application/json';
+
+        l_terraform_url:=l_terraform_url || pEndpoint;
+
+        IF (pBody IS NULL) THEN
+            pData := apex_web_service.make_rest_request(p_url=>l_terraform_url, p_http_method=>pMethod);
+        ELSE
+            pData := apex_web_service.make_rest_request(p_url=>l_terraform_url, p_http_method=>pMethod, p_body=>pBody);
+        END IF;
+
+        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) THEN
+            l_error_message:=pMethod || ' ' || l_terraform_url || ' https status:' || apex_web_service.g_status_code;
+            FOR C IN (SELECT message FROM JSON_TABLE(pData,'$' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
+                l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
+            END LOOP;
+            RAISE_APPLICATION_ERROR(-20040,l_error_message);
+        END IF;
+    END;    
 
     /*
      **  Format timestamp according to user's current time zone
@@ -610,54 +706,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
           FROM users
          WHERE email=apex_application.g_user;
 
-        l_clob:= TO_CLOB(
-        '<svg style="display:none">
-            <symbol id="backward" viewBox="0 0 512 512">
-                <path d="M459.5 440.6c9.5 7.9 22.8 9.7 34.1 4.4s18.4-16.6 18.4-29V96c0-12.4-7.2-23.7-18.4-29s-24.5-3.6-34.1 4.4L288 214.3V256v41.7L459.5 440.6zM256 352V256 128 96c0-12.4-7.2-23.7-18.4-29s-24.5-3.6-34.1 4.4l-192 160C4.2 237.5 0 246.5 0 256s4.2 18.5 11.5 24.6l192 160c9.5 7.9 22.8 9.7 34.1 4.4s18.4-16.6 18.4-29V352z">
-            </symbol>
-            <symbol id="forward" viewBox="0 0 512 512">
-                <path d="M52.5 440.6c-9.5 7.9-22.8 9.7-34.1 4.4S0 428.4 0 416V96C0 83.6 7.2 72.3 18.4 67s24.5-3.6 34.1 4.4L224 214.3V256v41.7L52.5 440.6zM256 352V256 128 96c0-12.4 7.2-23.7 18.4-29s24.5-3.6 34.1 4.4l192 160c7.3 6.1 11.5 15.1 11.5 24.6s-4.2 18.5-11.5 24.6l-192 160c-9.5 7.9-22.8 9.7-34.1 4.4s-18.4-16.6-18.4-29V352z">
-            </symbol>
-            <symbol id="plus" viewBox="0 0 448 512">
-                <path d="M256 80c0-17.7-14.3-32-32-32s-32 14.3-32 32V224H48c-17.7 0-32 14.3-32 32s14.3 32 32 32H192V432c0 17.7 14.3 32 32 32s32-14.3 32-32V288H400c17.7 0 32-14.3 32-32s-14.3-32-32-32H256V80z">
-            </symbol>
-            <symbol id="caret-down" viewBox="0 0 320 512">
-                <path d="M137.4 374.6c12.5 12.5 32.8 12.5 45.3 0l128-128c9.2-9.2 11.9-22.9 6.9-34.9s-16.6-19.8-29.6-19.8L32 192c-12.9 0-24.6 7.8-29.6 19.8s-2.2 25.7 6.9 34.9l128 128z">
-            </symbol>
-            <symbol id="cloud-arrow-up" viewBox="0 0 640 512">
-                <path d="M144 480C64.5 480 0 415.5 0 336c0-62.8 40.2-116.2 96.2-135.9c-.1-2.7-.2-5.4-.2-8.1c0-88.4 71.6-160 160-160c59.3 0 111 32.2 138.7 80.2C409.9 102 428.3 96 448 96c53 0 96 43 96 96c0 12.2-2.3 23.8-6.4 34.6C596 238.4 640 290.1 640 352c0 70.7-57.3 128-128 128H144zm79-217c-9.4 9.4-9.4 24.6 0 33.9s24.6 9.4 33.9 0l39-39V392c0 13.3 10.7 24 24 24s24-10.7 24-24V257.9l39 39c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-80-80c-9.4-9.4-24.6-9.4-33.9 0l-80 80z">
-            </symbol>
-            <symbol id="copy" viewBox="0 0 448 512">
-                <path d="M384 336H192c-8.8 0-16-7.2-16-16V64c0-8.8 7.2-16 16-16l140.1 0L400 115.9V320c0 8.8-7.2 16-16 16zM192 384H384c35.3 0 64-28.7 64-64V115.9c0-12.7-5.1-24.9-14.1-33.9L366.1 14.1c-9-9-21.2-14.1-33.9-14.1H192c-35.3 0-64 28.7-64 64V320c0 35.3 28.7 64 64 64zM64 128c-35.3 0-64 28.7-64 64V448c0 35.3 28.7 64 64 64H256c35.3 0 64-28.7 64-64V416H272v32c0 8.8-7.2 16-16 16H64c-8.8 0-16-7.2-16-16V192c0-8.8 7.2-16 16-16H96V128H64z">
-            </symbol>
-            <symbol id="info" viewBox="0 0 192 512">
-                <path d="M48 80a48 48 0 1 1 96 0A48 48 0 1 1 48 80zM0 224c0-17.7 14.3-32 32-32H96c17.7 0 32 14.3 32 32V448h32c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H64V256H32c-17.7 0-32-14.3-32-32z">
-            </symbol>
-            <symbol id="not-defined" viewBox="0 0 512 512">
-                <path d="M367.2 412.5L99.5 144.8C77.1 176.1 64 214.5 64 256c0 106 86 192 192 192c41.5 0 79.9-13.1 111.2-35.5zm45.3-45.3C434.9 335.9 448 297.5 448 256c0-106-86-192-192-192c-41.5 0-79.9 13.1-111.2 35.5L412.5 367.2zM0 256a256 256 0 1 1 512 0A256 256 0 1 1 0 256z">
-            </symbol>
-            <symbol id="delete" viewBox="0 0 448 512">
-                <path d="M170.5 51.6L151.5 80h145l-19-28.4c-1.5-2.2-4-3.6-6.7-3.6H177.1c-2.7 0-5.2 1.3-6.7 3.6zm147-26.6L354.2 80H368h48 8c13.3 0 24 10.7 24 24s-10.7 24-24 24h-8V432c0 44.2-35.8 80-80 80H112c-44.2 0-80-35.8-80-80V128H24c-13.3 0-24-10.7-24-24S10.7 80 24 80h8H80 93.8l36.7-55.1C140.9 9.4 158.4 0 177.1 0h93.7c18.7 0 36.2 9.4 46.6 24.9zM80 128V432c0 17.7 14.3 32 32 32H336c17.7 0 32-14.3 32-32V128H80zm80 64V400c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-8.8 7.2-16 16-16s16 7.2 16 16zm80 0V400c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-8.8 7.2-16 16-16s16 7.2 16 16zm80 0V400c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-8.8 7.2-16 16-16s16 7.2 16 16z">
-            </symbol>
-            <symbol id="left-long" viewBox="0 0 512 512">
-                <path d="M177.5 414c-8.8 3.8-19 2-26-4.6l-144-136C2.7 268.9 0 262.6 0 256s2.7-12.9 7.5-17.4l144-136c7-6.6 17.2-8.4 26-4.6s14.5 12.5 14.5 22l0 72 288 0c17.7 0 32 14.3 32 32l0 64c0 17.7-14.3 32-32 32l-288 0 0 72c0 9.6-5.7 18.2-14.5 22z">
-            </symbol>
-            <symbol id="pen-to-square" viewBox="0 0 512 512">
-                <path d="M471.6 21.7c-21.9-21.9-57.3-21.9-79.2 0L362.3 51.7l97.9 97.9 30.1-30.1c21.9-21.9 21.9-57.3 0-79.2L471.6 21.7zm-299.2 220c-6.1 6.1-10.8 13.6-13.5 21.9l-29.6 88.8c-2.9 8.6-.6 18.1 5.8 24.6s15.9 8.7 24.6 5.8l88.8-29.6c8.2-2.7 15.7-7.4 21.9-13.5L437.7 172.3 339.7 74.3 172.4 241.7zM96 64C43 64 0 107 0 160V416c0 53 43 96 96 96H352c53 0 96-43 96-96V320c0-17.7-14.3-32-32-32s-32 14.3-32 32v96c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32V160c0-17.7 14.3-32 32-32h96c17.7 0 32-14.3 32-32s-14.3-32-32-32H96z">
-            </symbol>
-            <symbol id="right-long" viewBox="0 0 512 512">
-                <path d="M334.5 414c8.8 3.8 19 2 26-4.6l144-136c4.8-4.5 7.5-10.8 7.5-17.4s-2.7-12.9-7.5-17.4l-144-136c-7-6.6-17.2-8.4-26-4.6s-14.5 12.5-14.5 22l0 72L32 192c-17.7 0-32 14.3-32 32l0 64c0 17.7 14.3 32 32 32l288 0 0 72c0 9.6 5.7 18.2 14.5 22z">
-            </symbol>
-            <symbol id="search-engine" viewBox="0 0 512 512">
-                <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z">
-            </symbol> 
-            <symbol id="signout" viewBox="0 0 512 512">
-                <path d="M502.6 278.6c12.5-12.5 12.5-32.8 0-45.3l-128-128c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L402.7 224 192 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l210.7 0-73.4 73.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l128-128zM160 96c17.7 0 32-14.3 32-32s-14.3-32-32-32L96 32C43 32 0 75 0 128L0 384c0 53 43 96 96 96l64 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-64 0c-17.7 0-32-14.3-32-32l0-256c0-17.7 14.3-32 32-32l64 0z">
-            </symbol>
-            <symbol id="keys" viewBox="0 0 512 512">
-                <path d="M336 352c97.2 0 176-78.8 176-176S433.2 0 336 0S160 78.8 160 176c0 18.7 2.9 36.8 8.3 53.7L7 391c-4.5 4.5-7 10.6-7 17v80c0 13.3 10.7 24 24 24h80c13.3 0 24-10.7 24-24V448h40c13.3 0 24-10.7 24-24V384h40c6.4 0 12.5-2.5 17-7l33.3-33.3c16.9 5.4 35 8.3 53.7 8.3zM376 96a40 40 0 1 1 0 80 40 40 0 1 1 0-80z">
-            </symbol>
-        </svg>');
+        l_clob:= TO_CLOB(pck_icons.g_icons_svg);
 
         /* Construct the navigation header section */
         l_clob:=l_clob || TO_CLOB('
@@ -682,26 +731,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             API Keys
                         </button>
                     </li>
+                    <li class="session-log">
+                        <button type="button" class="with-icon session-log">
+                            <svg class="icon">
+                                <use href="#list"></use>
+                            </svg>
+                            Session Log
+                        </button>
+                    </li>      
                 </ul>
             </div>
         </nav>');
 
 
-        /* Get templates from user's own Github DEPLOY repository or the Administrator's if they have not registered their own */
+        /* Get templates from Administrator's github DEPLOY repository. Do it now so we can print at least the <nav> in case templates are not defined.
+        ** Data returned in variable l_temmplates which we use to build the radio controls later in the code
+         */
         callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_templates);
-        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) THEN
-            l_clob:=l_clob || '
-            <div>ERROR accessing GITHUB DEPLOY repository. HTTPS Status code is '|| apex_web_service.g_status_code || '</div>';
-            RETURN(l_clob);
-        END IF;
-
-        FOR C IN (SELECT message FROM JSON_TABLE(l_templates, '$' COLUMNS (message))) LOOP
-            IF (C.message IS NOT NULL) THEN
-                l_clob:=l_clob || '
-                <div>ERROR accessing GITHUB DEPLOY repository. GITHUB API error is '|| C.message || '</div>';
-                RETURN(l_clob);
-            END IF;
-        END LOOP;
 
         SELECT w.id, w.domain_name, w.template, w.favicon_url, w.contact_email, (SELECT COUNT(*) FROM dual WHERE EXISTS (SELECT NULL FROM website_article WHERE website_id=w.id))
           BULK COLLECT INTO l_domains
@@ -804,12 +850,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         <ul class="article-list" style="display:none">
         </ul>');
 
-        l_clob:=l_clob || TO_CLOB(
-        '<dialog class="popup">
+        l_clob:=l_clob || TO_CLOB('
+        <dialog class="popup">
             <div>
                 <button type="button" class="close">&times;</button>
                 <h2></h2>
                 <p></p>
+            </div>
+        </dialog>
+        <dialog class="list">
+            <div>
+                <div class="content"></div>
+                <button type="button" class="close">&times;</button>
             </div>
         </dialog>
         <dialog class="editor">
@@ -916,7 +968,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         EXCEPTION
             WHEN OTHERS THEN
-                log_error(sqlcode,sqlerrm);
+                log_error;
                 RAISE;
     END;
 
