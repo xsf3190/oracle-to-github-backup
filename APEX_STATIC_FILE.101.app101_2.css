@@ -342,6 +342,43 @@ dialog legend > button {
     vertical-align: text-bottom;
 }
 
+
+dialog.list > div{
+    inline-size: 90vw;
+    display: grid;
+    grid-template-columns: 1fr 44px;
+}
+
+dialog.list table {
+    table-layout: fixed;
+    width: 100%;
+    white-space: nowrap;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-family: monospace;
+    font-size: 1ch;
+}
+
+dialog.list th:nth-of-type(1) {
+    width: 10%;
+    text-align: left;
+    vertical-align: top;
+}
+
+dialog.list th:nth-of-type(2) {
+    width: 90%;
+    text-align: left;
+}
+
+dialog.list td {
+    vertical-align: top;
+}
+
+dialog.list tr {
+    border-bottom: 1px solid var(--color-pale);
+}
+
+
 /* *************** */
 /* DROPDOWN STYLES */
 /* *************** */
@@ -367,14 +404,14 @@ dialog legend > button {
     display: block;
 }
 
-.dropdown-items li {
+.dropdown-items button {
     cursor: pointer;
+    inline-size: 100%;
 }
 
 .dropdown-items li:hover {
-  background-color: var(--color-pale-hover);
-  inline-size: 100%;
-  border-radius: 0.5ch;
+    background-color: var(--color-pale-hover);
+    border-radius: 0.5ch;
 }
 
 .icon {
