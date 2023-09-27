@@ -24,22 +24,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_netlify_site_id website.netlify_site_id%type;
         l_github_repos_owner users.github_repos_owner%type;
         l_netlify_installation_id users.netlify_installation_id%type;
-
+        l_placeholder BLOB:=HEXTORAW('00');
         l_repo_id INTEGER;
         l_deploy_key_id VARCHAR2(40);
         l_json JSON_OBJECT_T;
         l_repo JSON_OBJECT_T;
         l_action JSON_OBJECT_T;
-        l_site clob;
         l_app_id NUMBER;
         l_session_id NUMBER;
         l_page_id NUMBER;
         n PLS_INTEGER;
-        --
-        API_FAILURE EXCEPTION;
-        PRAGMA EXCEPTION_INIT (API_FAILURE, -20001);
-        TEMPLATE_NOT_DEFINED EXCEPTION;
-        PRAGMA EXCEPTION_INIT (TEMPLATE_NOT_DEFINED, -20002);
     BEGIN
         l_user_id:=pck_core.getUserId();
 
@@ -50,18 +44,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
          WHERE id=pWebsiteId
            AND user_id=l_user_id;
 
-        /* Check website can be deployed */
+        /* Check website template exists in Repository */
         pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_clob);
-        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) THEN
-            RAISE API_FAILURE;
+
+        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name)) WHERE name=l_template);
+        IF (n<>1) THEN
+            RAISE_APPLICATION_ERROR(-20021,'TEMPLATE ' || l_template || ' - NOT FOUND IN DEPLOY REPOSITORY');
         END IF;
 
-        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (
-            SELECT name
-            FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name))
-            WHERE name=l_template );
-        IF (n<>1) THEN
-            RAISE TEMPLATE_NOT_DEFINED;
+        /* Check Github folder(directory) exists for the website - Netlify site must be linked to the DEPLOY repository folder in order to enable auto-deploy */
+        pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pData=>l_clob);
+
+        IF (apex_web_service.g_status_code=404) THEN /* No Github directory */
+            l_json:=new JSON_OBJECT_T;
+            l_json.put('message','Commit by user id ' || l_user_id);
+            l_json.put('content', APEX_WEB_SERVICE.BLOB2CLOBBASE64(l_placeholder)); /* Github insists on base64 string */
+            pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/'||l_domain_name || '/.placeholder', pMethod=>'PUT', pBody=>l_json.to_clob, pData=>l_clob);
         END IF;
 
         DELETE website_deploy WHERE website_id=pWebsiteId;
@@ -73,7 +71,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         */
 
         IF (l_netlify_site_id IS NULL) THEN
-            logDeployment('{"status":"Creating Netlify website"}',pWebsiteId);
+            logDeployment('{"status":"Creating site in Netlify"}',pWebsiteId);
 
             /* get id of the DEPLOY github repository */
             pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>NULL, pMethod=>'GET', pData=>l_clob);
@@ -105,14 +103,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             /* Create Netlify site and store the site_id in website table */
             pck_core.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
-            pck_core.log('Response from POST api.netlify.com/api/v1/sites:'||TO_CHAR(l_clob));
+            pck_core.log(l_clob);
             FOR C IN (SELECT site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id))) LOOP
                 UPDATE website SET netlify_site_id = C.site_id WHERE id=pWebsiteId;
             END LOOP;
-            logDeployment('{"status":"Netlify website created and linked to github"}',pWebsiteId);
+            logDeployment('{"status":"Netlify site created and linked to github"}',pWebsiteId);
         END IF;
 
-        /* We include apex session header in the payload */
+        /* Include apex session header in the payload sent to Github action - this will be used to authenticate subsequent content retrieval in the action Eleventy code path */
         pck_core.getApexSession(l_app_id,l_session_id,l_page_id);
 
         /* trigger deployment by dispatching Github action */          
@@ -127,7 +125,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_action.put('apex_session', l_app_id || ',' || l_session_id || ',' || l_page_id);
         l_json.put('client_payload', l_action);
 
-        /* The Github API 'dispatches' endpoint does not send a response */
+        /* nb; Github API 'dispatches' endpoint does not send a response */
         pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
 
         apex_json.open_object; 
@@ -136,7 +134,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm);
+                pck_core.log_error;
     END;
 
     /*
@@ -167,7 +165,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm);
+                pck_core.log_error;
     END;    
 
 
@@ -242,7 +240,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;  
 
     /*
@@ -292,8 +290,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm);
-                RAISE;
+                pck_core.log_error;
     END;    
 
 end;
