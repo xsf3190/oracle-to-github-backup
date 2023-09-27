@@ -14,6 +14,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getPerformance;
     --
+    PROCEDURE getSessionLog(SessionId IN NUMBER);
+    --
     PROCEDURE getThumbnails(pArticleId IN article.id%type);
     --
     PROCEDURE getWebsite(pWebsiteId IN website.id%type);
@@ -41,9 +43,40 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     PROCEDURE uploadPerformance(pBodyText IN CLOB);
     --
     PROCEDURE updateField(pBodyText IN CLOB);
+    --
+    PROCEDURE signout;
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
+
+    PROCEDURE getSessionLog(SessionId IN NUMBER) IS
+        l_content CLOB;
+    BEGIN
+        l_content:='
+        <table>
+            <thead>
+                <tr>
+                    <th>Log Time</th><th>Log Message</th>
+                </tr>
+            </thead>
+            <tbody>';
+        FOR C IN (SELECT log_date, message FROM log ORDER BY id DESC) LOOP
+            l_content:=l_content || '
+                <tr>
+                    <td>' || TO_CHAR(C.log_date,'hh24:mi:ss') || '</td><td>' || REPLACE(C.message,chr(10),'<br>') || '</td>
+                </tr>';
+        END LOOP;
+        l_content:=l_content || '
+            </tbody>
+        </table>';
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('content', l_content);
+        apex_json.close_object;
+
+        EXCEPTION WHEN OTHERS THEN pck_core.log_error;
+    END;
 
     PROCEDURE getCldDetails(pArticleId IN article.id%type) IS
         l_user_id users.id%type;
@@ -98,7 +131,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     PROCEDURE getCldSignature(pParamsToSign IN CLOB) IS
@@ -133,7 +166,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     /*
@@ -160,7 +193,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
 
@@ -175,14 +208,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.open_object;
 
         FOR C IN (
-            SELECT domain_name, contact_email, template, favicon_url, trade_name,affiliation_link_img,affiliation_link_url
+            SELECT domain_name, contact_email, template, favicon_url, trade_name, affiliation_link_img, affiliation_link_url
               FROM website 
              WHERE id=pWebsiteId
                AND user_id=l_user_id) 
         LOOP
             apex_json.write('domain_name', C.domain_name);
             apex_json.write('contact_email', C.contact_email);
-            apex_json.write('template', 'template-' || LOWER(C.template));
+            IF (C.template<>'-1') THEN
+                apex_json.write('template', 'template-' || LOWER(C.template));
+            END IF;
             apex_json.write('cards',pck_core.buildWebsiteArticles(pWebsiteId));
         END LOOP;
 
@@ -191,7 +226,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     /*
@@ -237,7 +272,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     PROCEDURE getWebsiteList(pWebsiteId IN website.id%type) IS
@@ -269,7 +304,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     /*
@@ -360,6 +395,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('instruction', l_instruction);
         apex_json.close_object;
 
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
     END;
 
     /*
@@ -430,7 +468,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;  
 
     /*
@@ -477,7 +515,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     /*
@@ -585,8 +623,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);        
+                pck_core.log_error;        
     END;
+
+    PROCEDURE getTerraformParameters(pUserId IN users.id%type, pContactEmail IN website.contact_email%type, pAwsGatewayUrl IN OUT VARCHAR2, pSignatureContactEmail IN OUT VARCHAR2) IS
+        l_clob CLOB;
+        l_clob2 CLOB;
+        l_terraform_organization_name users.terraform_organization_name%type;
+        l_terraform_workspace_name users.terraform_workspace_name%type;
+        l_terraform_private_key users.terraform_private_key%type;
+        l_terraform_private_key_raw RAW(4000);
+        l_terraform_url VARCHAR2(200);
+        l_signed_data RAW(4000);
+    BEGIN
+        pck_core.getTerraformData(pUserId, l_terraform_organization_name, l_terraform_workspace_name, l_terraform_private_key);
+
+        pck_core.callTerraformAPI(pUserId=>pUserId, pEndpoint=>'api/v2/organizations/' || l_terraform_organization_name || '/workspaces/' || l_terraform_workspace_name, pMethod=>'GET', pData=>l_clob);
+
+        FOR C IN (SELECT related FROM JSON_TABLE(l_clob, '$.data.relationships.outputs.links' COLUMNS (related))) LOOP
+            pck_core.callTerraformAPI(pUserId=>pUserId, pEndpoint=>C.related, pMethod=>'GET', pData=>l_clob2);
+            FOR C1 IN (SELECT value FROM JSON_TABLE(l_clob2, '$.data[*]' COLUMNS (name PATH '$.attributes.name', value PATH '$.attributes.value')) WHERE name='invoke_url') LOOP
+                pAwsGatewayUrl:=C1.value || '/';
+            END LOOP;
+        END LOOP;
+
+        l_terraform_private_key_raw:=utl_i18n.string_to_raw(regexp_replace(l_terraform_private_key,'(-+((BEGIN|END) (RSA )?(PUBLIC|PRIVATE) KEY)-+\s?|\s)',''));
+
+        l_signed_data:=DBMS_CRYPTO.SIGN(src =>utl_i18n.string_to_raw(pContactEmail), prv_key =>l_terraform_private_key_raw, pubkey_alg =>dbms_crypto.KEY_TYPE_RSA,sign_alg =>dbms_crypto.SIGN_SHA256_RSA);
+
+        pSignatureContactEmail:=utl_i18n.raw_to_char(utl_encode.base64_encode(l_signed_data));
+    END;
+
 
     /*
     ** Fetched from Eleventy running in Github action to retrieve website content and array of articles
@@ -595,7 +662,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     **    articles: [{},{},..{}]
     ** }
     */ 
-
     PROCEDURE getContent(pWebsiteId IN website.id%type) IS
         l_json JSON_OBJECT_T;
         l_website_object JSON_OBJECT_T;
@@ -608,17 +674,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_nb_articles INTEGER;
         l_nb_assets INTEGER;
         l_admin_user_id users.id%type;
-        l_signed_data RAW(4000);
+
         l_clob CLOB;
-        l_terraform_organization_name users.terraform_organization_name%type;
-        l_terraform_workspace_name users.terraform_workspace_name%type;
-        l_terraform_token users.terraform_token%type;
-        l_terraform_public_key users.terraform_public_key%type;
-        l_terraform_private_key users.terraform_private_key%type;
+
         l_user_id users.id%type;
         l_app_id NUMBER;
         l_session_id users.apex_session_id%type;
         l_page_id NUMBER;
+        l_aws_gateway_url VARCHAR2(200);
+        l_signatureContactEmail VARCHAR2(4000);
 
         /* If title missing remove the empty <h1></h1> tag */
         FUNCTION stripHeading(pTitle IN VARCHAR2, pBodyHtml IN OUT NOCOPY CLOB) RETURN CLOB IS
@@ -631,73 +695,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     dbms_lob.instr(pBodyHtml,'</h1>')+5));
         END;
 
-        FUNCTION getTerraformInvokeUrl RETURN VARCHAR2 IS
-            l_clob CLOB;
-            l_terraform_url VARCHAR2(200);
-            l_invoke_url VARCHAR2(200);
-        BEGIN
-            apex_web_service.clear_request_headers;
-            apex_web_service.g_request_headers(1).name := 'Authorization';
-            apex_web_service.g_request_headers(1).value := 'Bearer ' || l_terraform_token;   
-            apex_web_service.g_request_headers(2).name := 'Content-Type';
-            apex_web_service.g_request_headers(2).value := 'application/json';
-
-            l_terraform_url:='https://app.terraform.io/api/v2/organizations/' || l_terraform_organization_name || '/workspaces/' || l_terraform_workspace_name;                
-            l_clob := apex_web_service.make_rest_request(p_url=>l_terraform_url, p_http_method=>'GET');
-            IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) THEN
-                RETURN (NULL);
-            END IF;
-
-            pck_core.log(l_clob);
-
-            SELECT 'https://app.terraform.io' || related 
-                INTO l_terraform_url
-                FROM JSON_TABLE(l_clob, '$.data.relationships.outputs.links' COLUMNS (related));
-
-            l_clob := apex_web_service.make_rest_request(p_url=>l_terraform_url, p_http_method=>'GET');
-            FOR C1 IN (SELECT name, value FROM JSON_TABLE(l_clob, '$.data[*]' COLUMNS (name PATH '$.attributes.name', value PATH '$.attributes.value')))
-            LOOP
-                pck_core.log(C1.name || ':' || C1.value);
-                IF (C1.name='invoke_url') THEN
-                    l_invoke_url:=C1.value || '/';
-                END IF;
-            END LOOP;
-
-            RETURN (l_invoke_url);
-        END;  
-
     BEGIN
         l_user_id:=pck_core.getUserId();
-        pck_core.log('l_user_id:'||l_user_id);
 
         l_json:= new JSON_OBJECT_T;
         l_website_object:= new JSON_OBJECT_T;
         l_article_array:= new JSON_ARRAY_T;
 
-        /* Get Terraform details either from website owner or Administrator */
-        FOR C IN (SELECT terraform_organization_name,terraform_workspace_name,terraform_token,terraform_public_key,terraform_private_key
-                    FROM users
-                   WHERE id=l_user_id )
-        LOOP
-            l_terraform_organization_name:=C.terraform_organization_name;
-            l_terraform_workspace_name:=C.terraform_workspace_name;
-            l_terraform_token:=C.terraform_token;
-            l_terraform_public_key:=C.terraform_public_key;
-            l_terraform_private_key:=C.terraform_private_key;
-        END LOOP;
-
-        IF (l_terraform_token IS NULL) THEN
-            pck_core.getApexSession(l_app_id, l_session_id, l_page_id);
-            SELECT u.terraform_organization_name,u.terraform_workspace_name,u.terraform_token,u.terraform_public_key,u.terraform_private_key
-              INTO l_terraform_organization_name,l_terraform_workspace_name,l_terraform_token,l_terraform_public_key,l_terraform_private_key
-              FROM apex_applications a, users u 
-             WHERE a.application_id=l_app_id 
-               AND a.email_from=u.email;
-        END IF;
-
-        /* Get details of requested website */
-        FOR C IN (SELECT id, domain_name, favicon_url, image_dimension, contact_email, trade_name, affiliation_link_img, affiliation_link_url, 
-                         utl_i18n.string_to_raw(regexp_replace(l_terraform_private_key,'(-+((BEGIN|END) (RSA )?(PUBLIC|PRIVATE) KEY)-+\s?|\s)','')) private_key
+        /* Get details of website */
+        FOR C IN (SELECT id, domain_name, favicon_url, image_dimension, contact_email, trade_name, affiliation_link_img, affiliation_link_url
                     FROM website
                    WHERE id=pWebsiteId
                      AND user_id=l_user_id)
@@ -708,17 +714,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_website_object.put('contact_email',C.contact_email);
             l_website_object.put('trade_name',C.trade_name);
             l_website_object.put('affiliation_link_img',C.affiliation_link_img);
-            l_website_object.put('affiliation_link_url',C.affiliation_link_url);            
-            l_website_object.put('aws_gateway_url',getTerraformInvokeUrl());
-
-            /* sign the contact_email for the website */
-            l_signed_data:=DBMS_CRYPTO.SIGN(
-               src =>utl_i18n.string_to_raw(C.contact_email),
-               prv_key =>C.private_key,
-               pubkey_alg =>dbms_crypto.KEY_TYPE_RSA,
-               sign_alg =>dbms_crypto.SIGN_SHA256_RSA);
-
-            l_website_object.put('signatureContactEmail', utl_i18n.raw_to_char(utl_encode.base64_encode(l_signed_data)));
+            l_website_object.put('affiliation_link_url',C.affiliation_link_url);
+            IF (C.contact_email IS NOT NULL) THEN 
+                getTerraformParameters(l_user_id,C.contact_email,l_aws_gateway_url,l_signatureContactEmail);
+                l_website_object.put('aws_gateway_url',l_aws_gateway_url);
+                l_website_object.put('signatureContactEmail',l_signatureContactEmail);
+            END IF;
 
             l_json.put('website',l_website_object);
 
@@ -746,7 +747,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     l_article_object.put('words',C1.word_count);
                     l_article_object.put('text',stripHeading(C1.title, C1.body_html));
                 END IF;
-
 
                 FOR C2 IN (SELECT rn, nb, cld_cloud_name, resource_type, public_id, format, width, alt_text 
                              FROM
@@ -788,9 +788,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END IF;
 
         EXCEPTION WHEN OTHERS THEN
-            pck_core.log_error(sqlcode,sqlerrm); 
             owa_util.status_line(400, '', true);
             htp.p('{"sqlcode":'||sqlcode||',"sqlerrm":"'||sqlerrm||'"}');
+            pck_core.log_error; 
     END;
 
     /*
@@ -817,7 +817,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm, pAjax=>TRUE);
+                pck_core.log_error;
     END;  
 
     /*
@@ -848,7 +848,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     /*
@@ -913,7 +913,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     /*
@@ -995,7 +995,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     /*
@@ -1067,7 +1067,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     /*
@@ -1092,8 +1092,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm);
-                RAISE;        
+                pck_core.log_error;
     END;
 
     /*
@@ -1127,8 +1126,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-                RAISE;
+                pck_core.log_error;
     END;
 
     /*
@@ -1158,7 +1156,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm);
+                pck_core.log_error;
     END;          
 
     /*
@@ -1195,8 +1193,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
-                RAISE;
+                pck_core.log_error;
     END;
 
     /*
@@ -1215,7 +1212,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
                 RAISE;
     END;    
 
@@ -1255,7 +1252,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     /*
@@ -1326,7 +1323,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     /*
@@ -1444,7 +1441,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm);
+                pck_core.log_error;
     END;
 
     /**
@@ -1475,7 +1472,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         EXCEPTION
             WHEN OTHERS THEN
-                pck_core.log_error(sqlcode,sqlerrm,pAjax=>TRUE);
+                pck_core.log_error;
     END;
 
     /*
@@ -1490,7 +1487,39 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' COLUMNS (session_id, page_id,
             NESTED '$.cwv[*]' COLUMNS (name, value, rating)))
         LOG ERRORS INTO core_web_vitals_err REJECT LIMIT UNLIMITED;                 
-    END;    
+    END;   
+
+    /*
+    ** Logout authenticated session
+    */
+    PROCEDURE signout IS
+        l_app_id NUMBER;
+        l_session_id NUMBER;
+        l_page_id NUMBER;
+        session_ended EXCEPTION;
+        PRAGMA EXCEPTION_INIT(session_ended,-20987);
+    BEGIN
+        pck_core.getApexSession(l_app_id, l_session_id, l_page_id);
+
+        BEGIN 
+            apex_session.delete_session(p_session_id=>l_session_id);
+            EXCEPTION WHEN session_ended THEN NULL;
+        END;
+        /*
+        owa_cookie.send(
+            name => 'ORA_WWV_APP_101',
+            value => null,
+            expires => sysdate -1, 
+            path =>'ords' );
+        */
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;     
 
 END;
 /
