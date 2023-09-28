@@ -607,6 +607,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    a.excerpt,
                    wa.nav_name,
                    wa.page_title,
+                   wa.page_description,
                    a.word_count,
                    NVL(a.updated_date, a.created_date) updated_date,
                    wa.display_order display_order
@@ -615,7 +616,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                AND a.id=wa.article_id
                AND a.cover_asset_id=c.id(+)
              UNION ALL
-             SELECT -1, null,null,null,null,null,null,0,null,null,null,null,0,systimestamp,-1 from dual
+             SELECT -1, null,null,null,null,null,null,0,null,null,null,null,null,0,systimestamp,-1 from dual
              ORDER BY display_order)
         LOOP
             l_clob:=l_clob || TO_CLOB('
@@ -669,7 +670,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         <button type="button" class="no-media edit-text">CREATE TEXT</button>'
                     ELSE '<p class="title edit-text">' || NVL(C.title, C.excerpt) || '</p> ' 
                             || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.nav_name',C.nav_name)
-                            || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_title',C.page_title)  
+                            || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_title',C.page_title) 
+                            || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_description',C.page_description)  
                 END || '   
                 <footer class="button-container"><div><span class="word-count">' || NVL(C.word_count,0) || ' words' || '</span> | <span class="nb-assets">' || NVL(C.nb_assets,0) || ' media</span></div><span class="updated-date">' || fmtUpdatedDate(C.updated_date)  || '</span></footer>
             </li>');
