@@ -673,7 +673,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_media_type VARCHAR2(5);
         l_nb_articles INTEGER;
         l_nb_assets INTEGER;
-        l_admin_user_id users.id%type;
 
         l_clob CLOB;
 
@@ -703,10 +702,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_article_array:= new JSON_ARRAY_T;
 
         /* Get details of website */
-        FOR C IN (SELECT id, domain_name, favicon_url, image_dimension, contact_email, trade_name, affiliation_link_img, affiliation_link_url
-                    FROM website
-                   WHERE id=pWebsiteId
-                     AND user_id=l_user_id)
+        FOR C IN (SELECT w.id, w.domain_name, w.favicon_url, w.image_dimension, w.contact_email, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, u.name author_name
+                    FROM website w, users u
+                   WHERE w.id=pWebsiteId
+                     AND w.user_id=l_user_id
+                     AND u.id=w.user_id)
         LOOP
             l_website_object.put('id',C.id);
             l_website_object.put('name',C.domain_name);
@@ -715,6 +715,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_website_object.put('trade_name',C.trade_name);
             l_website_object.put('affiliation_link_img',C.affiliation_link_img);
             l_website_object.put('affiliation_link_url',C.affiliation_link_url);
+            l_website_object.put('author',C.author_name);
             IF (C.contact_email IS NOT NULL) THEN 
                 getTerraformParameters(l_user_id,C.contact_email,l_aws_gateway_url,l_signatureContactEmail);
                 l_website_object.put('aws_gateway_url',l_aws_gateway_url);
@@ -723,7 +724,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
             l_json.put('website',l_website_object);
 
-            FOR C1 IN (SELECT a.id, a.created_date, a.word_count, a.title, a.body_html, wa.display_order, apex_string_util.get_slug(wa.nav_name) path_name, wa.nav_name
+            FOR C1 IN (SELECT a.id, a.created_date, a.word_count, a.title, a.body_html, 
+                              wa.display_order, wa.page_title, wa.page_description, NVL(apex_string_util.get_slug(wa.nav_name),'index') path_name, wa.nav_name
                         FROM article a, website_article wa
                        WHERE wa.website_id=C.id
                          AND wa.article_id=a.id
@@ -732,7 +734,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_article_object:=new JSON_OBJECT_T;
                 l_article_object.put('article_id',C.id);
                 l_article_object.put('display_order',C1.display_order);
-                l_article_object.put('path_name',NVL(C1.path_name,'index'));
+                l_article_object.put('path_name',C1.path_name);
+                l_article_object.put('page_title',C1.page_title);
+                l_article_object.put('page_description',C1.page_description);
                 l_article_object.put('created',TO_CHAR(C1.created_date,'dd.mm.yyyy'));
 
                 IF (C1.nav_name IS NOT NULL) THEN
