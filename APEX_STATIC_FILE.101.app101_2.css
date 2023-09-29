@@ -566,6 +566,27 @@ nav button {
     overflow: hidden;
 }
 
+/* ************** */
+/* EDITOR  STYLES */
+/* ************** */
+
+.editor {
+    opacity: 0;
+    display: none;
+}
+
+.fade-in {
+  animation: fade-in 1s forwards;
+}
+
+@keyframes fade-in {
+  100% {
+    opacity: 1;
+    display: block;
+  }
+}
+
+
 /* ******************************** */
 /* OVERRIDE CKEDITOR DEFAULT STYLES */
 /* ******************************** */
