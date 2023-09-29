@@ -1043,7 +1043,8 @@ const upload_media = (articleId) => {
 /* 
  ** GET CONTENT FOR RICH TEXT EDITOR 
  */
-const editorDialog = document.querySelector("dialog.editor");
+//const editorDialog = document.querySelector("dialog.editor");
+const editorContainer = document.querySelector("div.editor");
 
 const edit_text = (articleId,button) => {
     const pendingActions = editor.plugins.get( 'PendingActions' );
@@ -1057,7 +1058,9 @@ const edit_text = (articleId,button) => {
             editor.setData("");
             editor_status = "init";
             editor_status_text.textContent = "";
-            editorDialog.showModal();
+            //editorDialog.showModal();
+            editorContainer.classList.add("fade-in");
+
         });
     } else {
         execProcess( "article/"+articleId,"GET").then( (data) => {
@@ -1069,7 +1072,8 @@ const edit_text = (articleId,button) => {
             } else {
                 editor.setData("");
             }
-            editorDialog.showModal();
+            //editorDialog.showModal();
+            editorContainer.classList.add("fade-in");
         });
     }
 }
