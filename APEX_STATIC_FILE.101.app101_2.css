@@ -388,20 +388,26 @@ dialog.list tr {
 }
 
 .dropdown .dropdown-items {
-    display: none;
+    /*display: none;*/
+    max-height: 0;
+    transition: 0.5s linear;
+    overflow:hidden;
     font-size: 85%;
     position: absolute;
     right: 1rem;
     background-color: white;
     margin: 0;
-    padding: 1ch;
+    padding:0;
     list-style-type: none;
-    border: var(--color-solid) solid 1px;
+    
     border-radius: 1ch;
 }
 
 .dropdown .dropdown-items.visible {
-    display: block;
+    /*display: block;*/
+    max-height:100dvh;
+    padding: 1ch;
+    border: var(--color-solid) solid 1px;
 }
 
 .dropdown-items button {
