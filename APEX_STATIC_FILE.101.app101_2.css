@@ -576,20 +576,11 @@ nav button {
 /* EDITOR  STYLES */
 /* ************** */
 
-.editor {
-    opacity: 0;
+div.editor {
     display: none;
-}
-
-.fade-in {
-  animation: fade-in 1s forwards;
-}
-
-@keyframes fade-in {
-  100% {
-    opacity: 1;
-    display: block;
-  }
+    width: min(100vw,70ch);
+    max-height: 60dvh;
+    margin: auto;
 }
 
 
