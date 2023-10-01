@@ -24,6 +24,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       cards = document.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
+      editorContainer = document.querySelector("div.editor"),
       gallery = document.querySelector("dialog.gallery"),
       galleryInstruction = gallery.querySelector(".instruction"),
       galleryList = gallery.querySelector("ul"),
@@ -213,7 +214,14 @@ listBtn.addEventListener("click",  () => {
 });
 
 /*
-**  CLOSE ALL DIALOGS
+**  CLOSE EDITOR 
+*/
+document.querySelector("button.close-editor").addEventListener("click", (e) => {
+    editorContainer.style.display = "none";
+});
+
+/*
+**  CLOSE DIALOGS
 */
 document.querySelectorAll("button.close").forEach((button) => {
     button.addEventListener("click", (e) => {
@@ -1044,7 +1052,7 @@ const upload_media = (articleId) => {
  ** GET CONTENT FOR RICH TEXT EDITOR 
  */
 //const editorDialog = document.querySelector("dialog.editor");
-const editorContainer = document.querySelector("div.editor");
+
 
 const edit_text = (articleId,button) => {
     const pendingActions = editor.plugins.get( 'PendingActions' );
@@ -1059,7 +1067,7 @@ const edit_text = (articleId,button) => {
             editor_status = "init";
             editor_status_text.textContent = "";
             //editorDialog.showModal();
-            editorContainer.classList.add("fade-in");
+            editorContainer.style.display = "block";
 
         });
     } else {
@@ -1073,7 +1081,7 @@ const edit_text = (articleId,button) => {
                 editor.setData("");
             }
             //editorDialog.showModal();
-            editorContainer.classList.add("fade-in");
+            editorContainer.style.display = "block";
         });
     }
 }
