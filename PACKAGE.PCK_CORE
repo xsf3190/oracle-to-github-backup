@@ -712,7 +712,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         /* Construct the navigation header section */
         l_clob:=l_clob || TO_CLOB('
-        <nav class="full-width">
+        <nav>
             <div class="dropdown">
                 <span>' || apex_application.g_user || '</span>
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
@@ -744,15 +744,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </ul>
             </div>
         </nav>
-        <div class="editor">
+        <div class="editor" aria-hidden="true" tabindex="-1">
             <div>
+                <nav>
+                    <button type="button" class="close-editor">&times;</button>
+                </nav>
                 <div id="editor"></div>
                 <div class="button-container">
                     <div id="editor-status"></div>
                     <div id="word-count"></div>
                 </div>
             </div>
-            <button type="button" class="close-editor">&times;</button>
+
         </div>');
 
 
