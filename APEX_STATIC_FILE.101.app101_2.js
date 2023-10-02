@@ -918,13 +918,13 @@ const saveData = async ( data ) => {
     const pendingActions = editor.plugins.get( 'PendingActions' );
     const action = pendingActions.add( 'Saving changes' );
 
-    editor_status_text.textContent = "Saving content ...";
+    editor_status_text.textContent = "Saving content ... ";
     const word_count = document.querySelector(".ck-word-count__words").textContent;
     
     const title = document.querySelector(".ck > h1").textContent;
     await execProcess("article/"+gArticleId, "PUT",  {edit_text: data, title: title, word_count: word_count}).then( (data) => {
         pendingActions.remove( action );
-        editor_status_text.textContent = "Saving content .." + data.words + " saved";
+        editor_status_text.textContent = "Saved " + data.words;
         update_card_elements(data);
     }).catch( (error) => console.error(error));
 }
@@ -1080,8 +1080,8 @@ const edit_text = (articleId,button) => {
             } else {
                 editor.setData("");
             }
-            //editorDialog.showModal();
             editorContainer.style.display = "block";
+            editorContainer.style.opacity = "1";
         });
     }
 }
