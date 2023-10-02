@@ -103,7 +103,6 @@ nav {
     top: 0;
     display: flex;
     justify-content: flex-end;
-    margin: 1rem;
 }
 
 label {
@@ -463,7 +462,7 @@ nav button {
 .button-container {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 0.5ch;
+  /*margin-bottom: 0.5ch;*/
 }
 
 .cards {
@@ -578,9 +577,26 @@ nav button {
 
 div.editor {
     display: none;
-    width: min(100vw,70ch);
-    max-height: 60dvh;
-    margin: auto;
+    opacity: 0;
+    position: fixed;
+    z-index: 1;
+    inset:0;
+    margin: 0 auto;
+    max-width: 70ch;
+    padding: 0 2ch;
+    background: rgba(255,255,255, .95);
+    transition: opacity 2s;
+    border: solid 1px var(--color-solid);
+}
+
+.editor .button-container {
+    font-family: monspace;
+    color: green;
+    margin-top: 1ch;
+}
+
+.close-editor {
+    font-size: 200%;
 }
 
 
@@ -588,8 +604,9 @@ div.editor {
 /* OVERRIDE CKEDITOR DEFAULT STYLES */
 /* ******************************** */
 
-.ck-content {
-    height: 90vh;
+.ck-editor__editable_inline {
+    max-height:calc(100dvh - 9rem);
+    overscroll-behavior: contain;
 }
 
 .ck-content > * + * {
