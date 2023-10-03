@@ -50,6 +50,7 @@
     --color-pale-hover: hsl(var(--hue) var(--saturation) calc(var(--lightness) + 50%));
     --color-solid: hsl(var(--hue) var(--saturation) var(--lightness));
 
+    --card-width: 25ch;
     --gallery-width: 15rem;
     --preview-width: 60ch;
 
@@ -99,10 +100,13 @@ input, button, textarea, select {
 
 nav {
     background-color: white;
-    position: sticky;
-    top: 0;
     display: flex;
     justify-content: flex-end;
+}
+
+nav:first-of-type {
+    position: sticky;
+    top: 0;
 }
 
 label {
@@ -468,10 +472,8 @@ nav button {
 .cards {
     display: grid;
     list-style-type: none;
-    grid-template-columns: repeat(auto-fill,minmax(min(25ch, 100%), 1fr));
+    grid-template-columns: repeat(auto-fill,minmax(min(var(--card-width), 100%), 1fr));
     gap: 3ch;
-    font-size: var(--step-0);
-    margin-block-start: 1rem;
 }
 
 
