@@ -646,12 +646,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                 Edit Text
                                 </button>
                             </li>
-                            <li class="SEO">
-                                <button type="button" class="with-icon">
-                                    <svg class="icon"><use href="#search-engine"></use></svg>
-                                Page Title (SEO)
-                                </button>
-                            </li>
                             <li>
                                 <button type="button" class="with-icon delete" data-table="website_article">
                                     <svg class="icon"><use href="#delete"></use></svg>
@@ -857,9 +851,46 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <button type="button" class="deploy-website-live cta">DEPLOY LIVE WEBSITE</button>
         </form>
         <hr>
-        <div class="button-container full-width">
-            <button type="button" class="list-view" title="Article thumbnails for drag and drop"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled style="opacity:0.2"' END || '>&#9783;</button>
-        </div>
+        <nav>
+            <div class="dropdown">
+                <span>View Options</span>
+                <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                <ul class="dropdown-items">
+                    <li>
+                        <button type="button" class="with-icon list-view">
+                            <svg class="icon">
+                                <use href="#thumbtack"></use>
+                            </svg>
+                            Thumbnails
+                        </button>
+                    </li>                    
+                    <li>
+                        <button type="button" class="with-icon nav-view">
+                            <svg class="icon">
+                                <use href="#bars"></use>
+                            </svg>
+                            Navigation Labels
+                        </button>
+                    </li>
+                    <li>
+                        <button type="button" class="with-icon seo-view">
+                            <svg class="icon">
+                                <use href="#searchengin"></use>
+                            </svg>
+                            SEO Items
+                        </button>
+                    </li>
+                    <li>
+                        <button type="button" class="with-icon edit-view">
+                            <svg class="icon">
+                                <use href="#pencil"></use>
+                            </svg>
+                            Edit Content
+                        </button>
+                    </li>      
+                </ul>
+            </div>
+        </nav>
         <ul class="cards" style="display:grid">' || buildWebsiteArticles(l_domains(1).id) || '
         </ul>
         <ul class="article-list" style="display:none">
