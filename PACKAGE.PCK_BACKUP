@@ -457,24 +457,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         p_restore_files IN OUT VARCHAR2)
     IS  
         l_backup tt_backup; 
-
         l_clob CLOB;
         l_blob BLOB;
-
         l_json JSON_OBJECT_T;
         l_content CLOB;
-
         l_message VARCHAR2(500);
         l_sha VARCHAR2(500);
-
         l_db_name VARCHAR2(128):=sys_context('userenv','db_name');
         l_db_name2 VARCHAR2(50):=SUBSTR(l_db_name,INSTR(l_db_name,'_')+1);
-
         l_files apex_t_export_files;
-
         l_datapump_start TIMESTAMP:=current_timestamp;
-
         l_github CLOB;
+        n PLS_INTEGER;
     BEGIN
         /*
         ** Get existing details of any files previously copied to Github. We need the file name and SHA so that Github can update / insert as required
@@ -591,9 +585,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 ELSE
                     l_clob:=LTRIM(LTRIM(dbms_metadata.get_ddl(l_backup(i).object_type,l_backup(i).object_name),chr(13)||chr(10)));
                     IF (l_backup(i).object_type='TABLE') THEN
-                        FOR C IN (SELECT null FROM user_tab_comments WHERE table_name=l_backup(i).object_name AND comments IS NOT NULL) LOOP
+                        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS
+                            (
+                                SELECT null FROM user_tab_comments WHERE table_name=l_backup(i).object_name AND comments IS NOT NULL
+                            )
+                            OR EXISTS
+                            (
+                                SELECT null FROM user_col_comments WHERE table_name=l_backup(i).object_name AND comments IS NOT NULL
+                            );                            
+                        IF (n<>0) THEN
                             l_clob:=l_clob || chr(10) || LTRIM(LTRIM(dbms_metadata.get_dependent_ddl('COMMENT',l_backup(i).object_name),chr(13)||chr(10)));
-                        END LOOP;
+                        END IF;
                     END IF; 
             END CASE;
 
