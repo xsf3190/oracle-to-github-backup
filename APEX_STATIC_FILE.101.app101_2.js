@@ -199,18 +199,10 @@ editWebsite.forEach((button) => {
  **  LIST VIEW
  */
 listBtn.addEventListener("click",  () => {
-    if (cards.style.display === "grid") {
-        cards.style.display = "none";
-        articleList.style.display = "grid";
-        const websiteId = website.dataset.id;
-        execProcess( "website-list/"+websiteId,"GET").then( (data) => {
-            articleList.replaceChildren();
-            articleList.insertAdjacentHTML('afterbegin',data.content);
-        });
-    } else {
-        cards.style.display = "grid";
-        articleList.style.display = "none";
-    }
+    execProcess( "website-list/"+website.dataset.id,"GET").then( (data) => {
+        cards.replaceChildren();
+        cards.insertAdjacentHTML('afterbegin',data.content);
+    });
 });
 
 /*
@@ -867,7 +859,7 @@ new Sortable(galleryList, {
  ** ENABLE DRAG AND DROP OF WEBSITE ARTICLES TO RE-ORDER
  */
 
-new Sortable(articleList, {
+new Sortable(cards, {
     animation: 150,
     ghostClass: 'drag-in-progress',
     store: {
