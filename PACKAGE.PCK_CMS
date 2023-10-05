@@ -1134,13 +1134,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Delete Website.
+     **  Delete Website and articles from schema, Netlify and Github repository folder
      */  
     PROCEDURE deleteWebsite(pUserId IN website.user_id%type, pWebsiteId IN website.id%type) IS
         TYPE t_website_article IS TABLE OF website_article%rowtype;
         l_website_articles t_website_article;
+        l_domain_name website.domain_name%type;
         l_netlify_site_id website.netlify_site_id%type;
-        l_return CLOB;
+        l_api_return CLOB;
+        l_github CLOB;
+        l_json JSON_OBJECT_T;
     BEGIN
         SELECT * BULK COLLECT INTO l_website_articles FROM website_article WHERE website_id=pWebsiteId AND user_id=pUserId;
 
@@ -1148,10 +1151,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             deleteArticle(pUserId, l_website_articles(i).article_id, l_website_articles(i).website_id, pSendResponse=>FALSE);
         END LOOP;
 
-        DELETE website WHERE id=pWebsiteId AND user_id=pUserId RETURNING netlify_site_id INTO l_netlify_site_id;
+        DELETE website WHERE id=pWebsiteId AND user_id=pUserId RETURNING domain_name, netlify_site_id INTO l_domain_name, l_netlify_site_id;
 
         IF (l_netlify_site_id IS NOT NULL) THEN
-            pck_core.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pData=>l_return);
+            pck_core.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pData=>l_api_return);
+            pck_core.callGithubAPI(pUserId=>pUserid, pEndpoint=>'contents/'||l_site_name, pMethod=>'GET', pData=>l_api_return);
+            FOR C IN (SELECT name, sha, message FROM JSON_TABLE(l_api_return FORMAT JSON, '$[*]' COLUMNS (name, sha, message))) LOOP
+                IF (C.message IS NOT NULL) THEN 
+                    pck_core.log(C.message);
+                ELSE
+                    l_json:=JSON_OBJECT_T.parse('{"message":"Commit by PLSQL"}');
+                    l_json.put('sha',C.sha);
+                    l_github:=l_json.to_clob;
+                    pck_core.callGithubAPI(pUserId=>pUserid, pEndpoint=>'contents/' || l_site_name || '/'||C.name, pMethod=>'DELETE', pBody=>l_github, pData=>l_api_return);
+                END IF;
+            END LOOP;
         END IF;
 
         apex_json.open_object;  
