@@ -8,6 +8,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type);
     --
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2);
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as 
@@ -16,13 +17,77 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     ** Build and deploy website to Netlify by submitting Github action
     */    
     PROCEDURE deployWebsite(pWebsiteId IN website.id%type) IS
-        l_clob CLOB;
-        l_json_clob CLOB;
         l_user_id website.user_id%type;
+        l_template website.template%type;
+        l_clob CLOB;
+        l_job_name VARCHAR2(30);
+        l_app_id NUMBER;
+        l_session_id NUMBER;
+        l_page_id NUMBER;
+        n PLS_INTEGER;
+    BEGIN
+        l_user_id:=pck_core.getUserId();
+
+        /* Template must exist in Deploy repository */
+        SELECT template
+          INTO l_template
+          FROM website
+         WHERE id=pWebsiteId
+           AND user_id=l_user_id;
+
+        pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_clob);
+        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name)) WHERE name=l_template);
+        IF (n<>1) THEN
+            RAISE_APPLICATION_ERROR(-20021,'NO TEMPLATE "' || l_template || '" IN DEPLOY REPOSITORY');
+        END IF;
+
+        /* apex session header included in payload sent to Github action in order to authenticate content retrieval */
+        pck_core.getApexSession(l_app_id,l_session_id,l_page_id);
+
+        /* Submit background job to run the deployment - can take some time depending on number of pages to build */
+        l_job_name:=dbms_scheduler.generate_job_name('DEPLOY_');
+        dbms_scheduler.create_job(
+            job_name   => l_job_name,
+            job_type   =>'STORED_PROCEDURE',
+            job_action =>'pck_deploy.runDeployment',
+            number_of_arguments=>4,
+            start_date=>systimestamp
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 1,
+            argument_value => pWebsiteId
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 2,
+            argument_value => l_user_id
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 3,
+            argument_value => l_app_id || ',' || l_session_id || ',' || l_page_id
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 4,
+            argument_value => pck_core.getRestUrl()
+        );
+        dbms_scheduler.enable(l_job_name);
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+    END;
+
+
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2) is
         l_domain_name website.domain_name%type;
         l_template website.template%type;
-        l_contact_email website.contact_email%type;
         l_netlify_site_id website.netlify_site_id%type;
+        l_clob CLOB;
+        l_json_clob CLOB;
+
         l_github_repos_owner users.github_repos_owner%type;
         l_netlify_installation_id users.netlify_installation_id%type;
         l_placeholder BLOB:=HEXTORAW('00');
@@ -31,89 +96,76 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json JSON_OBJECT_T;
         l_repo JSON_OBJECT_T;
         l_action JSON_OBJECT_T;
-        l_app_id NUMBER;
-        l_session_id NUMBER;
-        l_page_id NUMBER;
-        n PLS_INTEGER;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        DELETE website_deploy WHERE website_id=pWebsiteId;
 
-        /* Get deployment details including Netlify site id */
-        SELECT domain_name, template, contact_email, netlify_site_id
-          INTO l_domain_name, l_template, l_contact_email, l_netlify_site_id
+        logDeployment('{"status":"Starting Deployment"}',pWebsiteId);
+
+        SELECT domain_name, template, netlify_site_id
+          INTO l_domain_name, l_template, l_netlify_site_id
           FROM website
          WHERE id=pWebsiteId
-           AND user_id=l_user_id;
+           AND user_id=pUserId;
 
-        /* Check website template exists in Repository */
-        pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_clob);
-
-        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name)) WHERE name=l_template);
-        IF (n<>1) THEN
-            RAISE_APPLICATION_ERROR(-20021,'TEMPLATE ' || l_template || ' - NOT FOUND IN DEPLOY REPOSITORY');
+        /* Delete Netlify site if previously deployed */
+        IF (l_netlify_site_id IS NOT NULL) THEN
+            logDeployment('{"status":"Deleting previously deployed Netlify site"}',pWebsiteId);
+            pck_core.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pData=>l_clob);
         END IF;
 
-        /* Check Github folder(directory) exists for the website - Netlify site must be linked to the DEPLOY repository folder in order to enable auto-deploy */
-        pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pData=>l_clob);
-
-        IF (apex_web_service.g_status_code=404) THEN /* No Github directory */
+        /* Github directory must exist for the website in order to enable auto-deploy from Netlify */
+        pck_core.callGithubAPI(pUserId=>pUserId, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pData=>l_clob);
+        IF (apex_web_service.g_status_code=404) THEN
+            logDeployment('{"status":"Creating Github repository folder DEPLOY/' || l_domain_name || '"}',pWebsiteId);
             l_json:=new JSON_OBJECT_T;
-            l_json.put('message','Commit by user id ' || l_user_id);
+            l_json.put('message','Commit by user id ' || pUserId);
             l_json.put('content', APEX_WEB_SERVICE.BLOB2CLOBBASE64(l_placeholder)); /* Github insists on base64 string */
             l_json_clob:=l_json.to_clob;
-            pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/'||l_domain_name || '/.placeholder', pMethod=>'PUT', pBody=>l_json_clob, pData=>l_clob);
+            pck_core.callGithubAPI(pUserId=>pUserId, pEndpoint=>'contents/'||l_domain_name || '/.placeholder', pMethod=>'PUT', pBody=>l_json_clob, pData=>l_clob);
         END IF;
-
-        DELETE website_deploy WHERE website_id=pWebsiteId;
-        logDeployment('{"status":"Starting Deployment"}',pWebsiteId);
 
         /*
         ** 1. Create Netlify Site with deployment id if not already exists
         ** 2. Trigger Github action build
         */
+        logDeployment('{"status":"Creating site in Netlify"}',pWebsiteId);
 
-        IF (l_netlify_site_id IS NULL) THEN
-            logDeployment('{"status":"Creating site in Netlify"}',pWebsiteId);
+        /* get id of the DEPLOY github repository */
+        pck_core.callGithubAPI(pUserId=>pUserId, pEndpoint=>NULL, pMethod=>'GET', pData=>l_clob);
+        FOR C IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
+            l_repo_id:=C.id;
+        END LOOP;
 
-            /* get id of the DEPLOY github repository */
-            pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>NULL, pMethod=>'GET', pData=>l_clob);
-            FOR C IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
-                l_repo_id:=C.id;
-            END LOOP;
+        /* get netlify deploy id */
+        pck_core.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'deploy_keys', pMethod=>'POST', pData=>l_clob);
+        FOR C IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
+            l_deploy_key_id:=C.id;
+        END LOOP;
 
-            /* get netlify deploy id */
-            pck_core.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'deploy_keys', pMethod=>'POST', pData=>l_clob);
-            FOR C IN (SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) LOOP
-                l_deploy_key_id:=C.id;
-            END LOOP;
+        /* create JSON payload for new Netlify site */
+        l_json:=new JSON_OBJECT_T;
+        l_json.put('name', l_domain_name);
 
-            /* create JSON payload for new Netlify site */
-            l_json:=new JSON_OBJECT_T;
-            l_json.put('name', l_domain_name);
+        l_repo:=new JSON_OBJECT_T;
+        l_repo.put('provider', 'github');
+        l_repo.put('repo_type', 'git');
+        l_repo.put('repo_id', l_repo_id);
+        l_repo.put('repo', pck_core.getGithubReposOwner(pUserId) || '/DEPLOY');
+        l_repo.put('repo_branch', 'main');
+        l_repo.put('private', FALSE);
+        l_repo.put('deploy_key_id', l_deploy_key_id);
+        l_repo.put('installation_id', pck_core.getNetlifyIntallationId(pUserId));
+        l_repo.put('base', l_domain_name);   
+        l_json.put('repo', l_repo);
 
-            l_repo:=new JSON_OBJECT_T;
-            l_repo.put('provider', 'github');
-            l_repo.put('repo_type', 'git');
-            l_repo.put('repo_id', l_repo_id);
-            l_repo.put('repo', pck_core.getGithubReposOwner(l_user_id) || '/DEPLOY');
-            l_repo.put('repo_branch', 'main');
-            l_repo.put('private', FALSE);
-            l_repo.put('deploy_key_id', l_deploy_key_id);
-            l_repo.put('installation_id', pck_core.getNetlifyIntallationId(l_user_id));
-            l_repo.put('base', l_domain_name);   
-            l_json.put('repo', l_repo);
+        /* Create Netlify site and store the site_id in website table */
+        pck_core.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
 
-            /* Create Netlify site and store the site_id in website table */
-            pck_core.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
-            pck_core.log(l_clob);
-            FOR C IN (SELECT site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id))) LOOP
-                UPDATE website SET netlify_site_id = C.site_id WHERE id=pWebsiteId;
-            END LOOP;
+        /* Update website table with Netlify site id */
+        FOR C IN (SELECT site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id))) LOOP
             logDeployment('{"status":"Netlify site created and linked to github"}',pWebsiteId);
-        END IF;
-
-        /* Include apex session header in the payload sent to Github action - this will be used to authenticate subsequent content retrieval in the action Eleventy code path */
-        pck_core.getApexSession(l_app_id,l_session_id,l_page_id);
+            UPDATE website SET netlify_site_id = C.site_id WHERE id=pWebsiteId;
+        END LOOP;
 
         /* trigger deployment by dispatching Github action */          
         l_json:=new JSON_OBJECT_T;
@@ -122,18 +174,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_action:=new JSON_OBJECT_T;
         l_action.put('build_path', l_domain_name);
         l_action.put('template', l_template);
-        l_action.put('fetch_url', pck_core.getRestUrl() || 'content/' || pWebsiteId);  
-        l_action.put('log_url', pck_core.getRestUrl() || 'deploy-status/' || pWebsiteId);
-        l_action.put('apex_session', l_app_id || ',' || l_session_id || ',' || l_page_id);
+        l_action.put('fetch_url', pRestURL || 'content/' || pWebsiteId);  
+        l_action.put('log_url', pRestURL || 'deploy-status/' || pWebsiteId);
+        l_action.put('apex_session', pApexSession);
         l_json.put('client_payload', l_action);
 
-        /* nb; Github API 'dispatches' endpoint does not send a response */
+        /* Note that Github API 'dispatches' endpoint does not send a response */
         l_json_clob:=l_json.stringify;
-        pck_core.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json_clob, pData=>l_clob);
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.close_object;
+        logDeployment('{"status":"Triggering github action to build site"}',pWebsiteId);
+        pck_core.callGithubAPI(pUserId=>pUserId, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json_clob, pData=>l_clob);
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -148,18 +197,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type) IS 
         l_exitcode PLS_INTEGER;
         l_status website_deploy.status%type;
+        v_caller utl_call_stack.UNIT_QUALIFIED_NAME;
+        v_name varchar2(128);
+        v_pkg    varchar2(128) := $$plsql_unit;
     BEGIN
+        for i in 2..utl_call_stack.dynamic_depth  loop
+            v_caller:=utl_call_stack.subprogram(i);
+            v_name := utl_call_stack.concatenate_subprogram(v_caller);
+            if v_caller(1) != v_pkg then
+                -- In some scenarios, we might want to go even one step upward the call stack. Typically not for error logging purposes.
+                -- In such cases we could simply fetch one more name from the call stack
+                -- v_caller := utl_call_stack.subprogram(i+1);
+
+                -- build the full name, but only if we found the caller
+                pck_core.log(v_name);
+                -- no need to go further through the call stack
+                exit;
+            end if;
+        end loop;
+
         SELECT status 
           INTO l_status
           FROM JSON_TABLE(pBodyText, '$' COLUMNS (status));
 
-        l_exitcode:=owa_util.get_cgi_env('QUERY_STRING');
-
-        IF (l_exitcode IS NOT NULL) THEN
-            IF (l_exitcode=0) THEN
-                l_status:=l_status || ' - OK';
-            ELSE
-                l_status:=l_status || ' - NOK';
+        IF (v_name IS NULL) THEN
+            l_exitcode:=owa_util.get_cgi_env('QUERY_STRING');
+            IF (l_exitcode IS NOT NULL) THEN
+                IF (l_exitcode=0) THEN
+                    l_status:=l_status || ' - OK';
+                ELSE
+                    l_status:=l_status || ' - NOK';
+                END IF;
             END IF;
         END IF;
 
