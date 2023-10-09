@@ -51,7 +51,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
     PROCEDURE getSessionLog(SessionId IN NUMBER) IS
         l_content CLOB;
+        l_user_id users.id%type;
     BEGIN
+        l_user_id:=pck_core.getUserId();
         l_content:='
         <table>
             <thead>
@@ -60,10 +62,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 </tr>
             </thead>
             <tbody>';
-        FOR C IN (SELECT log_date, message FROM log ORDER BY id DESC) LOOP
+        FOR C IN (SELECT TO_CHAR(log_date AT TIME ZONE client_tz, 'fmhh:fmmi:fmss PM') log_date, message 
+                    FROM log, users 
+                   WHERE users.id=l_user_id
+                   ORDER BY log.id DESC) LOOP
             l_content:=l_content || '
                 <tr>
-                    <td>' || TO_CHAR(C.log_date,'hh24:mi:ss') || '</td><td>' || REPLACE(C.message,chr(10),'<br>') || '</td>
+                    <td>' || C.log_date || '</td><td>' || REPLACE(C.message,chr(10),'<br>') || '</td>
                 </tr>';
         END LOOP;
         l_content:=l_content || '
@@ -636,12 +641,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_terraform_url VARCHAR2(200);
         l_signed_data RAW(4000);
     BEGIN
-        pck_core.getTerraformData(pUserId, l_terraform_organization_name, l_terraform_workspace_name, l_terraform_private_key);
+        pck_api.getTerraformData(pUserId, l_terraform_organization_name, l_terraform_workspace_name, l_terraform_private_key);
 
-        pck_core.callTerraformAPI(pUserId=>pUserId, pEndpoint=>'api/v2/organizations/' || l_terraform_organization_name || '/workspaces/' || l_terraform_workspace_name, pMethod=>'GET', pData=>l_clob);
+        pck_api.callTerraformAPI(pUserId=>pUserId, pEndpoint=>'api/v2/organizations/' || l_terraform_organization_name || '/workspaces/' || l_terraform_workspace_name, pMethod=>'GET', pData=>l_clob);
 
         FOR C IN (SELECT related FROM JSON_TABLE(l_clob, '$.data.relationships.outputs.links' COLUMNS (related))) LOOP
-            pck_core.callTerraformAPI(pUserId=>pUserId, pEndpoint=>C.related, pMethod=>'GET', pData=>l_clob2);
+            pck_api.callTerraformAPI(pUserId=>pUserId, pEndpoint=>C.related, pMethod=>'GET', pData=>l_clob2);
             FOR C1 IN (SELECT value FROM JSON_TABLE(l_clob2, '$.data[*]' COLUMNS (name PATH '$.attributes.name', value PATH '$.attributes.value')) WHERE name='invoke_url') LOOP
                 pAwsGatewayUrl:=C1.value || '/';
             END LOOP;
@@ -1155,10 +1160,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         IF (l_netlify_site_id IS NOT NULL) THEN
             /* Delete Netlify site - disconnects from Github */
-            pck_core.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pData=>l_api_return);
+            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pData=>l_api_return);
 
             /* Delete website files from Github DEPLOY repository - directory name is automatically deleted */
-            pck_core.callGithubAPI(pUserId=>pUserid, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pData=>l_api_return);
+            pck_api.callGithubAPI(pUserId=>pUserid, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pData=>l_api_return);
             FOR C IN (SELECT name, sha, message FROM JSON_TABLE(l_api_return FORMAT JSON, '$[*]' COLUMNS (name, sha, message))) LOOP
                 IF (C.message IS NOT NULL) THEN 
                     pck_core.log(C.message);
@@ -1166,7 +1171,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     l_json:=JSON_OBJECT_T.parse('{"message":"Commit by PLSQL"}');
                     l_json.put('sha',C.sha);
                     l_github:=l_json.to_clob; 
-                    pck_core.callGithubAPI(pUserId=>pUserid, pEndpoint=>'contents/' || l_domain_name || '/'||C.name, pMethod=>'DELETE', pBody=>l_github, pData=>l_api_return);
+                    pck_api.callGithubAPI(pUserId=>pUserid, pEndpoint=>'contents/' || l_domain_name || '/'||C.name, pMethod=>'DELETE', pBody=>l_github, pData=>l_api_return);
                 END IF;
             END LOOP;
         END IF;
@@ -1362,18 +1367,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         IF (n=1) THEN
             RETURN('Name already in use');
         END IF;
-
-        pck_core.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'GET', pData=>l_return);
-        FOR C IN (SELECT name, custom_domain FROM JSON_TABLE(l_return, '$[*]' COLUMNS name, custom_domain)) LOOP
-            IF (pName=C.name) THEN
-                RETURN('Name deployed - TEST');
-                EXIT;
-            END IF;
-            IF (pName=C.custom_domain) THEN
-                RETURN('Name deployed - LIVE');
-                EXIT;
-            END IF;
-        END LOOP;
 
         apex_web_service.clear_request_headers;
         l_return := apex_web_service.make_rest_request(p_url=>'https://' || pName || '.netlify.app', p_http_method=>'HEAD');
