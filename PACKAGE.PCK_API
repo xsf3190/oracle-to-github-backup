@@ -1,0 +1,231 @@
+CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS 
+    --
+    FUNCTION getGithubReposOwner(pUserId IN users.id%type) RETURN VARCHAR2;
+    --
+    FUNCTION getNetlifyIntallationId(pUserId IN users.id%type) RETURN VARCHAR2;
+    --
+    PROCEDURE getTerraformData(pUserId IN users.id%type, pTerraformOrganizationName IN OUT users.terraform_organization_name%type, pTerraformWorkspaceName IN OUT users.terraform_workspace_name%type, pTerraformPrivateKey IN OUT users.terraform_private_key%type);
+    --
+    PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB);
+    --
+    PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB);
+    --
+    PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB);
+    --
+    PROCEDURE callTerraformAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB);
+    --
+END;
+/
+CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS 
+    FUNCTION getGithubReposOwner(pUserId IN users.id%type) RETURN VARCHAR2 IS
+        l_github_repos_owner users.github_repos_owner%type;
+    BEGIN
+        /* Get user's github token and account name (repository owner) */
+        FOR C IN (SELECT github_repos_owner FROM users WHERE id=pUserId) LOOP 
+            l_github_repos_owner:=C.github_repos_owner;
+        END LOOP;
+
+        /* Get Administrator value if user has not registered github repository */
+        IF (l_github_repos_owner IS NULL) THEN
+            SELECT u.github_repos_owner
+              INTO l_github_repos_owner
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        END IF;
+
+        RETURN (l_github_repos_owner);
+    END;
+
+    FUNCTION getNetlifyIntallationId(pUserId IN users.id%type) RETURN VARCHAR2 IS
+        l_netlify_installation_id users.netlify_installation_id%type;
+    BEGIN
+        /* Get user's github token and account name (repository owner) */
+        FOR C IN (SELECT netlify_installation_id FROM users WHERE id=pUserId) LOOP 
+            l_netlify_installation_id:=C.netlify_installation_id;
+        END LOOP;
+
+        /* Get Administrator value if user has not registered github repository */
+        IF (l_netlify_installation_id IS NULL) THEN
+            SELECT u.netlify_installation_id
+              INTO l_netlify_installation_id
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        END IF;
+
+        RETURN (l_netlify_installation_id);
+    END;
+
+    PROCEDURE getTerraformData(pUserId IN users.id%type, pTerraformOrganizationName IN OUT users.terraform_organization_name%type, pTerraformWorkspaceName IN OUT users.terraform_workspace_name%type, pTerraformPrivateKey IN OUT users.terraform_private_key%type) IS
+        l_terraform_organization_name users.terraform_organization_name%type;
+        l_terraform_workspace_name users.terraform_workspace_name%type;
+        l_terraform_private_key users.terraform_private_key%type;
+    BEGIN
+        /* Get user's github token and account name (repository owner) */
+        FOR C IN (SELECT terraform_organization_name,terraform_workspace_name,terraform_private_key FROM users WHERE id=pUserId) LOOP 
+            l_terraform_organization_name:=C.terraform_organization_name;
+            l_terraform_workspace_name:=C.terraform_workspace_name;
+            l_terraform_private_key:=C.terraform_private_key;
+        END LOOP;
+
+        /* Get Administrator value if user has not registered github repository */
+        IF (l_terraform_organization_name IS NULL) THEN
+            SELECT u.terraform_organization_name,u.terraform_workspace_name,u.terraform_private_key
+              INTO l_terraform_organization_name,l_terraform_workspace_name,l_terraform_private_key
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        END IF;
+
+        pTerraformOrganizationName:=l_terraform_organization_name;
+        pTerraformWorkspaceName:=l_terraform_workspace_name;
+        pTerraformPrivateKey:=l_terraform_private_key;
+
+    END;
+
+    PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB) IS
+        l_github_repos_owner users.github_repos_owner%type;
+        l_github_token users.github_token%type;
+        l_github_url VARCHAR2(200):='https://api.github.com/repos/';
+        l_error_message LONG;
+    BEGIN
+        /* Get user's github token and account name (repository owner) */
+        FOR C IN (SELECT github_repos_owner, github_token FROM users WHERE id=pUserId) LOOP 
+            l_github_repos_owner:=C.github_repos_owner;
+            l_github_token:=C.github_token;
+        END LOOP;
+
+        /* Use Administrator's token if user does not have token */
+        IF (l_github_token IS NULL) THEN
+            SELECT u.github_repos_owner, u.github_token
+              INTO l_github_repos_owner, l_github_token
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        END IF;
+
+        apex_web_service.g_request_headers(1).name := 'Accept';
+        apex_web_service.g_request_headers(1).value := 'application/vnd.github+json';
+        apex_web_service.g_request_headers(2).name := 'Authorization';
+        apex_web_service.g_request_headers(2).value := 'Bearer ' || l_github_token;
+        apex_web_service.g_request_headers(3).name := 'User-Agent';
+        apex_web_service.g_request_headers(3).value := l_github_repos_owner;
+
+        l_github_url:=l_github_url || l_github_repos_owner || '/' || pRepository;
+
+        IF (pEndpoint IS NOT NULL) THEN 
+            l_github_url:=l_github_url || '/' || pEndpoint;
+        END IF;
+
+        IF (pBody IS NULL) THEN
+            pData := apex_web_service.make_rest_request(p_url=>l_github_url, p_http_method=>pMethod);
+        ELSE
+            pData := apex_web_service.make_rest_request(p_url=>l_github_url, p_http_method=>pMethod, p_body=>pBody);
+        END IF;
+
+        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) AND (apex_web_service.g_status_code<>404) THEN
+            l_error_message:=pMethod || ' ' || l_github_url || ' https status:' || apex_web_service.g_status_code;
+            FOR C IN (SELECT message FROM JSON_TABLE(pData,'$' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
+                l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
+            END LOOP;
+            RAISE_APPLICATION_ERROR(-20020,l_error_message);
+        END IF;
+    END;
+
+    PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB) IS
+        l_clob CLOB;
+    BEGIN
+        callGithubAPI(pUserId,pRepository,pEndpoint,pMethod,l_clob,pData);
+    END;
+
+    PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
+        l_netlify_token users.netlify_token%type;
+        l_netlify_url VARCHAR2(100):='https://api.netlify.com/api/v1/';
+        l_error_message LONG;
+    BEGIN
+        /* Get user's netlify token */
+        FOR C IN (SELECT netlify_token FROM users WHERE id=pUserId) LOOP 
+            l_netlify_token:=C.netlify_token;
+        END LOOP;
+
+        /* Use Administrator's token if user does not have token */
+        IF (l_netlify_token IS NULL) THEN
+            SELECT u.netlify_token 
+              INTO l_netlify_token 
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        END IF;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'Authorization';
+        apex_web_service.g_request_headers(1).value := 'Bearer ' || l_netlify_token;   
+        apex_web_service.g_request_headers(2).name := 'Content-Type';
+        apex_web_service.g_request_headers(2).value := 'application/json';
+
+        l_netlify_url:=l_netlify_url || pEndpoint;
+
+        IF (pBody IS NULL) THEN
+            pData := apex_web_service.make_rest_request(p_url=>l_netlify_url, p_http_method=>pMethod);
+        ELSE
+            pData := apex_web_service.make_rest_request(p_url=>l_netlify_url, p_http_method=>pMethod, p_body=>pBody);
+        END IF;
+
+        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) AND (apex_web_service.g_status_code<>404) THEN
+            l_error_message:=pMethod || ' ' || l_netlify_url || ' https status:' || apex_web_service.g_status_code;
+            FOR C IN (SELECT message FROM JSON_TABLE(pData,'$' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
+                l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
+            END LOOP;
+            RAISE_APPLICATION_ERROR(-20030,l_error_message);
+        END IF;
+    END;
+
+    PROCEDURE callTerraformAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
+        l_terraform_token users.terraform_token%type;
+        l_terraform_url VARCHAR2(100):='https://app.terraform.io/';
+        l_error_message LONG;
+    BEGIN
+        /* Get Terraform details either from website owner or Administrator */
+        FOR C IN (SELECT terraform_token FROM users WHERE id=pUserId) LOOP
+            l_terraform_token:=C.terraform_token;
+        END LOOP;
+
+        IF (l_terraform_token IS NULL) THEN
+            SELECT u.terraform_token
+              INTO l_terraform_token
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        END IF;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'Authorization';
+        apex_web_service.g_request_headers(1).value := 'Bearer ' || l_terraform_token;   
+        apex_web_service.g_request_headers(2).name := 'Content-Type';
+        apex_web_service.g_request_headers(2).value := 'application/json';
+
+        l_terraform_url:=l_terraform_url || pEndpoint;
+
+        IF (pBody IS NULL) THEN
+            pData := apex_web_service.make_rest_request(p_url=>l_terraform_url, p_http_method=>pMethod);
+        ELSE
+            pData := apex_web_service.make_rest_request(p_url=>l_terraform_url, p_http_method=>pMethod, p_body=>pBody);
+        END IF;
+
+        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) THEN
+            l_error_message:=pMethod || ' ' || l_terraform_url || ' https status:' || apex_web_service.g_status_code;
+            FOR C IN (SELECT message FROM JSON_TABLE(pData,'$' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
+                l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
+            END LOOP;
+            RAISE_APPLICATION_ERROR(-20040,l_error_message);
+        END IF;
+    END;
+END;
+/
