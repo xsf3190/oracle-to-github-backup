@@ -192,6 +192,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         l_password VARCHAR2(20);
         l_workspace_name apex_workspace_developers.workspace_name%type;
         l_restore_files VARCHAR2(4000);
+        l_clob CLOB;
+        l_delete CLOB;
     BEGIN
         /*
         ** 1. Get Cloudinary usage for all subscribers 
@@ -265,6 +267,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
           FROM metrics met, credits cr, db1, db2;
 
         COMMIT;
+
+        /*
+            4. Delete Github Action workflow logs
+        */
+        pck_api.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'actions/runs', pMethod=>'GET', pData=>l_clob);
+        FOR C IN (SELECT total_count FROM JSON_TABLE(l_clob, '$' COLUMNS(total_count))) LOOP
+            pck_core.log('Github Action workflow runs total_count:'||C.total_count );
+        END LOOP;
+        FOR C IN (SELECT id FROM JSON_TABLE(l_clob, '$.workflow_runs[*]' COLUMNS(id))) LOOP
+            pck_api.callGithubAPI(pUserId=>44, pEndpoint=>'actions/runs/' || C.id, pMethod=>'DELETE', pData=>l_delete);
+        END LOOP;
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -473,7 +486,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         /*
         ** Get existing details of any files previously copied to Github. We need the file name and SHA so that Github can update / insert as required
         */
-        pck_core.callGithubAPI(pUserId=>p_user_id, pRepository=>'oracle-to-github-backup', pEndpoint=>'contents/', pMethod=>'GET', pData=>l_github);
+        pck_api.callGithubAPI(pUserId=>p_user_id, pRepository=>'oracle-to-github-backup', pEndpoint=>'contents/', pMethod=>'GET', pData=>l_github);
 
         /* 
         **  Run datapump exports for the current schema: 
@@ -622,7 +635,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             l_json.put('content', l_content);
 
             l_github:=l_json.to_clob;
-            pck_core.callGithubAPI(pUserId=>p_user_id, pRepository=>'oracle-to-github-backup', pEndpoint=>'contents/' || l_backup(i).object_type || '.' || l_backup(i).object_name, pMethod=>'PUT', pBody=>l_github, pData=>l_clob);
+            pck_api.callGithubAPI(pUserId=>p_user_id, pRepository=>'oracle-to-github-backup', pEndpoint=>'contents/' || l_backup(i).object_type || '.' || l_backup(i).object_name, pMethod=>'PUT', pBody=>l_github, pData=>l_clob);
             /*
             l_clob := apex_web_service.make_rest_request(
                 p_url=>'https://api.github.com/repos/' || p_github_repos_owner || '/' || p_github_repos || '/contents/' || l_backup(i).object_type || '.' || l_backup(i).object_name,
