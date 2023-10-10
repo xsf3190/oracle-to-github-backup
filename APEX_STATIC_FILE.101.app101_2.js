@@ -47,6 +47,10 @@ const apex_app_id = document.querySelector("#pFlowId").value,
 const inputHandler = (e) => {
     if (e.target.tagName !== "TEXTAREA") return;
 
+    if (e.target.id==="domain_name") {
+        e.target.value = e.target.value.replace(/[^a-z0-9.]/gi, "");
+    };
+
     const maxchars = e.target.getAttribute("maxlength");
     const counter = e.target.nextElementSibling.querySelector(".charcounter");
     let numOfEnteredChars = e.target.value.length;
