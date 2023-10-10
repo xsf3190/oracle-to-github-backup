@@ -609,6 +609,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                         IF (n<>0) THEN
                             l_clob:=l_clob || chr(10) || LTRIM(LTRIM(dbms_metadata.get_dependent_ddl('COMMENT',l_backup(i).object_name),chr(13)||chr(10)));
                         END IF;
+                        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS
+                            (
+                                SELECT null FROM user_indexes WHERE table_name=l_backup(i).object_name
+                            );                            
+                        IF (n<>0) THEN
+                            l_clob:=l_clob || chr(10) || LTRIM(LTRIM(dbms_metadata.get_dependent_ddl('INDEX',l_backup(i).object_name),chr(13)||chr(10)));
+                        END IF;                        
                     END IF; 
             END CASE;
 
