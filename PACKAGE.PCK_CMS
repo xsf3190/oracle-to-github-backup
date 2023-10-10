@@ -1363,15 +1363,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             RETURN('Domain name must be entered');
         END IF;
 
-        SELECT COUNT(*) INTO n FROM website WHERE domain_name=pName;
-        IF (n=1) THEN
-            RETURN('Name already in use');
-        END IF;
-
         apex_web_service.clear_request_headers;
-        l_return := apex_web_service.make_rest_request(p_url=>'https://' || pName || '.netlify.app', p_http_method=>'HEAD');
+        l_return := apex_web_service.make_rest_request(p_url=>'https://' || REPLACE(pName,'.','-') || '.netlify.app', p_http_method=>'HEAD');
         IF (apex_web_service.g_status_code=200) THEN
-            RETURN('Name is existing Netlify subdomain');
+            RETURN('Name already taken');
         END IF;
 
         RETURN NULL;
@@ -1392,7 +1387,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_user_id:=pck_core.getUserId();
 
-        FOR C IN (SELECT t.id, t.table_column, CASE WHEN t.table_column='website.domain_name' THEN regexp_replace(t.value,'[^a-zA-Z0-9-]',null) ELSE t.value END value
+        FOR C IN (SELECT t.id, t.table_column, t.value
                     FROM users, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value)) t
                    WHERE users.id=l_user_id)
         LOOP
