@@ -20,3 +20,5 @@ CREATE TABLE "ASSET"
 	  REFERENCES "ARTICLE" ("ID") ON DELETE CASCADE ENABLE
    ) ;
 COMMENT ON TABLE "ASSET"  IS 'Assets contain the metadata of digital media (photos, videos, audio files) uploaded to the Cloudinary account of an authenticated user.';
+CREATE UNIQUE INDEX "PK_ASSET" ON "ASSET" ("ID") 
+  ;
