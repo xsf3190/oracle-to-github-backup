@@ -16,3 +16,7 @@ CREATE TABLE "PERFORMANCE"
   USING INDEX  ENABLE
    ) ;
 COMMENT ON TABLE "PERFORMANCE"  IS 'Registers network performance details of viewed digital assets (captured through Performance Observer). Includes transfer size, duration.';
+CREATE UNIQUE INDEX "IX_PERFORMANCE" ON "PERFORMANCE" ("SESSION_ID", "URL") 
+  ;
+  CREATE UNIQUE INDEX "PK_PERFORMANCE" ON "PERFORMANCE" ("ID") 
+  ;
