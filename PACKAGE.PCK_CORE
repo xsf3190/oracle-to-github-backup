@@ -604,10 +604,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </div>
             </div>' ||
             buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email) || '
-            <button type="button" class="deploy-website cta">DEPLOY ' || l_domains(1).domain_name || '.netlify.app</button>' ||
+            <fieldset class="deploy-buttons">
+                <legend>Build & Deploy Website</legend>
+                <button type="button" class="deploy-website cta">https://' || REPLACE(l_domains(1).domain_name,'.','-') || '.netlify.app</button>' ||
             CASE WHEN l_domains(1).domain_name=l_domains(1).dns_zone_name THEN 
-                '<button type="button" class="deploy-website-live cta">DEPLOY www.' || l_domains(1).dns_zone_name || '</button>'
+                '<button type="button" class="deploy-website-live cta">https://www.' || l_domains(1).dns_zone_name || '</button>'
             END || '
+            </fieldset>
         </form>
         <hr>
         <nav>
