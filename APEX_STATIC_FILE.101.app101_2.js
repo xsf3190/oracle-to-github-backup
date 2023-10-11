@@ -18,7 +18,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       newWebsite = website.querySelector(".new-website"),
       copyWebsite = website.querySelector(".copy-website"),
       editWebsite = website.querySelectorAll(".edit-website"),
-      deployWebsite = website.querySelector(".deploy-website"),
+      deployWebsite = website.querySelectorAll(".deploy-website"),
       listBtn = document.querySelector(".list-view"),
       articleList = document.querySelector(".article-list"),
       cards = document.querySelector(".cards"),
@@ -198,6 +198,50 @@ editWebsite.forEach((button) => {
         });
     });
 });
+
+/* 
+ ** DEPLOY WEBSITE - template must mut be selected
+ */
+deployWebsite.forEach((button) => {
+    button.addEventListener('click',  (e) => {
+        if (!domainName.value) {
+            domainNameResult.textContent = "MUST HAVE A DOMAIN NAME";
+            domainNameResult.style.opacity = "1";
+            domainNameResult.style.color = "red";
+            return;
+        }
+
+        const template = website.querySelector("[name='template']:checked");
+        if (!template) {
+            let templateResult = website.querySelector("[name='template']").closest("fieldset").nextElementSibling.querySelector(".result");
+            templateResult.textContent = "SELECT TEMPLATE FOR DEPLOYMENT";
+            templateResult.style.opacity = "1";
+            templateResult.style.color = "red";
+            return;
+        }
+
+        execProcess("deploy/" + website.dataset.id,"POST",{custom_domain:e.target.dataset.custom_domain}).then( () => {
+            popupOpen("Building Website "+e.target.textContent,"Patience required...");
+            if (gIntervalId) {
+                clearInterval(gIntervalId);
+            }
+            gIntervalId = setInterval(getDeploymentStatus,2000,website.dataset.id);
+        });
+    });
+});
+
+getDeploymentStatus = (websiteid) => {
+    const status = popup.querySelector("p");
+    execProcess("deploy-status/" + websiteid,"GET").then( (data) => {
+        if (data.status) {
+            status.replaceChildren();
+            status.insertAdjacentHTML('afterbegin',data.status);
+            if (data.completed) {
+                clearInterval(gIntervalId);
+            }
+        }
+    });
+}
 
 /*
  **  LIST VIEW
@@ -988,47 +1032,6 @@ const add_content = (target, position) => {
   clone.dataset.id = "0";
   selected_card.insertAdjacentElement(position, clone);
 };
-
-/* 
- ** DEPLOY WEBSITE - template must mut be selected
- */
-deployWebsite.addEventListener('click',  () => {
-    if (!domainName.value) {
-        domainNameResult.textContent = "MUST HAVE A DOMAIN NAME";
-        domainNameResult.style.opacity = "1";
-        domainNameResult.style.color = "red";
-        return;
-    }
-
-    const template = website.querySelector("[name='template']:checked");
-    if (!template) {
-        let templateResult = website.querySelector("[name='template']").closest("fieldset").nextElementSibling.querySelector(".result");
-        templateResult.textContent = "SELECT TEMPLATE FOR DEPLOYMENT";
-        templateResult.style.opacity = "1";
-        templateResult.style.color = "red";
-        return;
-    }
-    execProcess("deploy/" + website.dataset.id,"POST").then( () => {
-        popupOpen("Website deployment","Starting...could take a while");
-        if (gIntervalId) {
-            clearInterval(gIntervalId);
-        }
-        gIntervalId = setInterval(getDeploymentStatus,2000,website.dataset.id);
-    });
-});
-
-getDeploymentStatus = (websiteid) => {
-    const status = popup.querySelector("p");
-    execProcess("deploy-status/" + websiteid,"GET").then( (data) => {
-        if (data.status) {
-            status.replaceChildren();
-            status.insertAdjacentHTML('afterbegin',data.status);
-            if (data.completed) {
-                clearInterval(gIntervalId);
-            }
-        }
-    });
-}
 
 /* 
  ** UPLOAD MEDIA TO CLOUDINARY
