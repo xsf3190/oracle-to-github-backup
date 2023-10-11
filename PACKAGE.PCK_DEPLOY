@@ -2,13 +2,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE deployInfrastructure;
     --
-    PROCEDURE deployWebsite(pWebsiteId IN website.id%type);
+    PROCEDURE deployWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB);
     --
     PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type);
     --
     PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type);
     --
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2);
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2, pCustomDomain IN VARCHAR2);
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as 
@@ -16,8 +16,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     /*
     ** Build and deploy website to Netlify by submitting Github action
     */    
-    PROCEDURE deployWebsite(pWebsiteId IN website.id%type) IS
+    PROCEDURE deployWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
         l_user_id website.user_id%type;
+        l_bodytext CLOB:=pBodyText;
+        l_custom_domain VARCHAR2(100);
         l_template website.template%type;
         l_clob CLOB;
         l_job_name VARCHAR2(30);
@@ -27,6 +29,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         n PLS_INTEGER;
     BEGIN
         l_user_id:=pck_core.getUserId();
+
+
 
         /* Template must exist in Deploy repository */
         SELECT template
@@ -41,6 +45,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             RAISE_APPLICATION_ERROR(-20021,'NO TEMPLATE "' || l_template || '" IN DEPLOY REPOSITORY');
         END IF;
 
+        /* custom_url indicates build website for user purchased domain name */
+        SELECT custom_domain INTO l_custom_domain FROM JSON_TABLE(l_bodytext, '$' COLUMNS(custom_domain));
+
         /* apex session header included in payload sent to Github action in order to authenticate content retrieval */
         pck_core.getApexSession(l_app_id,l_session_id,l_page_id);
 
@@ -50,7 +57,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             job_name   => l_job_name,
             job_type   =>'STORED_PROCEDURE',
             job_action =>'pck_deploy.runDeployment',
-            number_of_arguments=>4,
+            number_of_arguments=>5,
             start_date=>systimestamp
         );
         dbms_scheduler.set_job_argument_value(
@@ -73,6 +80,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             argument_position => 4,
             argument_value => pck_core.getRestUrl()
         );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 5,
+            argument_value => l_custom_domain
+        );
         dbms_scheduler.enable(l_job_name);
 
         apex_json.open_object; 
@@ -81,7 +93,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     END;
 
 
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2) is
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2, pCustomDomain IN VARCHAR2) is
         l_domain_name website.domain_name%type;
         l_template website.template%type;
         l_netlify_site_id website.netlify_site_id%type;
@@ -141,6 +153,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /* create JSON payload for new Netlify site */
         l_json:=new JSON_OBJECT_T;
         l_json.put('name', l_domain_name);
+        IF (pCustomDomain IS NOT NULL) THEN
+            l_json.put('custom_domain', pCustomDomain);
+        END IF;
 
         l_repo:=new JSON_OBJECT_T;
         l_repo.put('provider', 'github');
