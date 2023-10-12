@@ -177,7 +177,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
             pData := apex_web_service.make_rest_request(p_url=>l_netlify_url, p_http_method=>pMethod, p_body=>pBody);
         END IF;
 
-        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) AND (apex_web_service.g_status_code<>404) THEN
+        IF (apex_web_service.g_status_code NOT BETWEEN 200 AND 299) AND (apex_web_service.g_status_code NOT IN (404,422)) THEN
             l_error_message:=pMethod || ' ' || l_netlify_url || ' https status:' || apex_web_service.g_status_code;
             FOR C IN (SELECT message FROM JSON_TABLE(pData,'$' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
                 l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
