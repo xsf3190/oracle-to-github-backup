@@ -1383,6 +1383,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_message VARCHAR2(50);
         l_color VARCHAR2(5);
         l_website_id website.id%type;
+        l_json JSON_OBJECT_T;
+        l_clob CLOB;
+        l_netlify_site_id website.netlify_site_id%type;
         n PLS_INTEGER:=0;
     BEGIN
         l_user_id:=pck_core.getUserId();
@@ -1398,15 +1401,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
             CASE C.table_column
                 WHEN 'website.domain_name' THEN
-                    l_message:=domainExists(l_user_id, C.value);
-                    IF (l_message IS NOT NULL) THEN
-                        EXIT;
-                    END IF;
+                    l_json:=new JSON_OBJECT_T;
+                    l_json.put('name', C.value);
                     IF (C.id IS NULL) THEN
-                        INSERT INTO website (id, user_id, domain_name, template) VALUES (seq_website.nextval, l_user_id, C.value,'-1');
+                        pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+                        IF (apex_web_service.g_status_code=422) THEN
+                            l_message:='Name already taken';
+                            EXIT;
+                        END IF;
+                        SELECT site_id INTO l_netlify_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
+                        INSERT INTO website (id, user_id, domain_name, netlify_site_id, template) VALUES (seq_website.nextval, l_user_id, C.value, l_netlify_site_id, '-1');
                         l_website_id:=seq_website.currval;
                         l_message:='Created OK';
                     ELSE
+                        SELECT netlify_site_id INTO l_netlify_site_id FROM website WHERE id=C.id;
+                        pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'PATCH', pBody=>l_json.stringify, pData=>l_clob);
+                        IF (apex_web_service.g_status_code=422) THEN
+                            l_message:='Name already taken';
+                            EXIT;
+                        END IF;
                         UPDATE website SET domain_name=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
                     END IF;
                 WHEN 'website.contact_email' THEN
