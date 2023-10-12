@@ -30,8 +30,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     BEGIN
         l_user_id:=pck_core.getUserId();
 
-
-
         /* Template must exist in Deploy repository */
         SELECT template
           INTO l_template
@@ -119,13 +117,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
          WHERE id=pWebsiteId
            AND user_id=pUserId;
 
-        /* Delete Netlify site if previously deployed */
+        /* Delete Netlify site if previously deployed - removes site from Netlify CDN !! */
+        /*
         IF (l_netlify_site_id IS NOT NULL) THEN
             logDeployment('{"status":"Deleting previously deployed Netlify site"}',pWebsiteId);
             pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pData=>l_clob);
         END IF;
+        */
 
-        /* Github directory must exist for the website in order to enable auto-deploy from Netlify */
+        /* Github directory for the website must exist in DEPLOY repository in order to enable auto-deploy from Netlify */
+        /* Have to handle case where domain name changed after deploy so we don't keep unused directories */
+
         pck_api.callGithubAPI(pUserId=>pUserId, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pData=>l_clob);
         IF (apex_web_service.g_status_code=404) THEN
             logDeployment('{"status":"Creating Github repository folder DEPLOY/' || l_domain_name || '"}',pWebsiteId);
@@ -140,7 +142,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         ** 1. Create Netlify Site with deployment id if not already exists
         ** 2. Trigger Github action build
         */
-        logDeployment('{"status":"Creating site in Netlify"}',pWebsiteId);
+        --logDeployment('{"status":"Creating site in Netlify"}',pWebsiteId);
 
         /* get id of the DEPLOY github repository */
         pck_api.callGithubAPI(pUserId=>pUserId, pEndpoint=>NULL, pMethod=>'GET', pData=>l_clob);
@@ -152,10 +154,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         /* create JSON payload for new Netlify site */
         l_json:=new JSON_OBJECT_T;
-        l_json.put('name', l_domain_name);
-        IF (pCustomDomain IS NOT NULL) THEN
+        --l_json.put('name', l_domain_name);
+        --IF (pCustomDomain IS NOT NULL) THEN
             l_json.put('custom_domain', pCustomDomain);
-        END IF;
+        --END IF;
 
         l_repo:=new JSON_OBJECT_T;
         l_repo.put('provider', 'github');
@@ -170,12 +172,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json.put('repo', l_repo);
 
         /* Create Netlify site and store the site_id in website table */
-        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'PATCH', pBody=>l_json.stringify, pData=>l_clob);
+        logDeployment('{"status":"Netlify site linked to github"}',pWebsiteId);
 
         /* Update website table with Netlify site id */
-        SELECT site_id INTO l_netlify_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
-        logDeployment('{"status":"Netlify site created and linked to github"}',pWebsiteId);
-        UPDATE website SET netlify_site_id=l_netlify_site_id WHERE id=pWebsiteId;
+        --SELECT site_id INTO l_netlify_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
+        --logDeployment('{"status":"Netlify site created and linked to github"}',pWebsiteId);
+        --UPDATE website SET netlify_site_id=l_netlify_site_id WHERE id=pWebsiteId;
 
         /* trigger deployment by dispatching Github action */          
         l_json:=new JSON_OBJECT_T;
