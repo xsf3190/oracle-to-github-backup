@@ -441,12 +441,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_printed_separator BOOLEAN:=FALSE;
 
         TYPE t_domain IS RECORD (
-            id              website.id%type,
-            domain_name     website.domain_name%type,
-            template        website.template%type,
-            favicon_url     website.favicon_url%type,
-            contact_email   website.contact_email%type,
-            dns_zone_name   website.domain_name%type
+            id                      website.id%type,
+            domain_name             website.domain_name%type,
+            template                website.template%type,
+            favicon_url             website.favicon_url%type,
+            contact_email           website.contact_email%type,
+            netlify_site_id         website.netlify_site_id%type,
+            netlify_site_id_custom  website.netlify_site_id%type
         );
         TYPE tt_domain IS TABLE OF t_domain;
         l_domains tt_domain;  
@@ -506,7 +507,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         </div>');
 
-
+        -- should use this to show users available custom domains
         pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_dns_zones);
 
         /* Get templates from Administrator's github DEPLOY repository. Do it now so we can print at least the <nav> in case templates are not defined.
@@ -514,11 +515,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
          */
         pck_api.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_templates);
 
-        SELECT w.id, w.domain_name, w.template, w.favicon_url, w.contact_email, d.name
+        SELECT w.id, w.domain_name, w.template, w.favicon_url, w.contact_email, w.netlify_site_id, w.netlify_site_id_custom
           BULK COLLECT INTO l_domains
-          FROM website w, JSON_TABLE(l_dns_zones, '$[*]' COLUMNS (name)) d
+          FROM website w
          WHERE w.user_id=l_user_id
-           AND w.domain_name=d.name(+)
          ORDER BY COALESCE(w.updated_date, w.created_date) DESC;
 
         IF (l_domains.COUNT=0) THEN
@@ -606,10 +606,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email) || '
             <fieldset class="deploy-buttons">
                 <legend>Build & Deploy Website</legend>
-                <button type="button" class="deploy-website cta" data-custom_domain="">https://' || REPLACE(l_domains(1).domain_name,'.','-') || '.netlify.app</button>' ||
-            CASE WHEN l_domains(1).domain_name=l_domains(1).dns_zone_name THEN 
-                '<button type="button" class="deploy-website cta" data-custom_domain="'|| l_domains(1).domain_name ||'">https://www.' || l_domains(1).dns_zone_name || '</button>'
-            END || '
+                <div>
+                    <button type="button" class="deploy-website cta" data-site_id="' || l_domains(1).netlify_site_id || '">https://' || REPLACE(l_domains(1).domain_name,'.','-') || '.netlify.app</button>' ||
+                    CASE WHEN l_domains(1).netlify_site_id_custom IS NOT NULL THEN 
+                    '<button type="button" class="deploy-website cta" data-site_id="'|| l_domains(1).netlify_site_id_custom ||'">https://www.' || l_domains(1).domain_name || '</button>'
+                    END || '
+                </div>
             </fieldset>
         </form>
         <hr>
