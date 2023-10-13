@@ -128,7 +128,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /* Github directory for the website must exist in DEPLOY repository in order to enable auto-deploy from Netlify */
         /* Have to handle case where domain name changed after deploy so we don't keep unused directories */
 
-        pck_api.callGithubAPI(pUserId=>pUserId, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pData=>l_clob);
+        pck_api.callGithubAPI(pUserId=>pUserId, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pStatusAllowed=>404, pData=>l_clob);
         IF (apex_web_service.g_status_code=404) THEN
             logDeployment('{"status":"Creating Github repository folder DEPLOY/' || l_domain_name || '"}',pWebsiteId);
             l_json:=new JSON_OBJECT_T;
