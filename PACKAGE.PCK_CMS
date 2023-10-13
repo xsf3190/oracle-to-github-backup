@@ -207,13 +207,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     */
     PROCEDURE getWebsite(pWebsiteId IN website.id%type) IS
         l_user_id users.id%type;
+        l_deploy_buttons_html VARCHAR2(500);
     BEGIN
         l_user_id:=pck_core.getUserId();
 
         apex_json.open_object;
 
         FOR C IN (
-            SELECT domain_name, contact_email, template, favicon_url, trade_name, affiliation_link_img, affiliation_link_url
+            SELECT domain_name, contact_email, template, favicon_url, trade_name, affiliation_link_img, affiliation_link_url, netlify_site_id, netlify_site_id_custom
               FROM website 
              WHERE id=pWebsiteId
                AND user_id=l_user_id) 
@@ -223,6 +224,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             IF (C.template<>'-1') THEN
                 apex_json.write('template', 'template-' || LOWER(C.template));
             END IF;
+            l_deploy_buttons_html:='<button type="button" class="deploy-website cta" data-site-id="' || C.netlify_site_id || '">https://' || REPLACE(C.domain_name,'.','-') || '.netlify.app</button>';
+            IF (C.netlify_site_id_custom IS NOT NULL) THEN 
+                l_deploy_buttons_html:=l_deploy_buttons_html ||
+                '<button type="button" class="deploy-website cta" data-site-id="' || C.netlify_site_id_custom || '">https://www.' || C.domain_name || '</button>';
+            END IF;
+            apex_json.write('deploy_buttons', l_deploy_buttons_html);
             apex_json.write('cards',pck_core.buildWebsiteArticles(pWebsiteId));
         END LOOP;
 
@@ -1146,7 +1153,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_website_articles t_website_article;
         l_domain_name website.domain_name%type;
         l_netlify_site_id website.netlify_site_id%type;
-        l_api_return CLOB;
+        l_netlify_site_id_custom website.netlify_site_id%type;
+        l_clob CLOB;
         l_github CLOB;
         l_json JSON_OBJECT_T;
     BEGIN
@@ -1156,25 +1164,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             deleteArticle(pUserId, l_website_articles(i).article_id, l_website_articles(i).website_id, pSendResponse=>FALSE);
         END LOOP;
 
-        DELETE website WHERE id=pWebsiteId AND user_id=pUserId RETURNING domain_name, netlify_site_id INTO l_domain_name, l_netlify_site_id;
+        DELETE website WHERE id=pWebsiteId AND user_id=pUserId 
+            RETURNING domain_name, netlify_site_id, netlify_site_id_custom INTO l_domain_name, l_netlify_site_id, l_netlify_site_id_custom;
 
         IF (l_netlify_site_id IS NOT NULL) THEN
-            /* Delete Netlify site - disconnects from Github */
-            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pData=>l_api_return);
-
-            /* Delete website files from Github DEPLOY repository - directory name is automatically deleted */
-            pck_api.callGithubAPI(pUserId=>pUserid, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pData=>l_api_return);
-            FOR C IN (SELECT name, sha, message FROM JSON_TABLE(l_api_return FORMAT JSON, '$[*]' COLUMNS (name, sha, message))) LOOP
-                IF (C.message IS NOT NULL) THEN 
-                    pck_core.log(C.message);
-                ELSE
-                    l_json:=JSON_OBJECT_T.parse('{"message":"Commit by PLSQL"}');
-                    l_json.put('sha',C.sha);
-                    l_github:=l_json.to_clob; 
-                    pck_api.callGithubAPI(pUserId=>pUserid, pEndpoint=>'contents/' || l_domain_name || '/'||C.name, pMethod=>'DELETE', pBody=>l_github, pData=>l_api_return);
-                END IF;
-            END LOOP;
+            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
         END IF;
+
+        IF (l_netlify_site_id_custom IS NOT NULL) THEN
+            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id_custom, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
+        END IF;
+
+        /* Delete Github DEPLOY repository directory for the website. nb: Github deletes the directory after all of its files have been deleted */
+        pck_api.callGithubAPI(pUserId=>pUserid, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pStatusAllowed=>404, pData=>l_clob);
+        FOR C IN (SELECT name, sha, message FROM JSON_TABLE(l_clob FORMAT JSON, '$[*]' COLUMNS (name, sha, message))) LOOP
+            IF (C.message IS NOT NULL) THEN 
+                pck_core.log(C.message);
+            ELSE
+                l_json:=JSON_OBJECT_T.parse('{"message":"Commit by PLSQL"}');
+                l_json.put('sha',C.sha);
+                l_github:=l_json.to_clob; 
+                pck_api.callGithubAPI(pUserId=>pUserid, pEndpoint=>'contents/' || l_domain_name || '/'||C.name, pMethod=>'DELETE', pBody=>l_github, pData=>l_clob);
+            END IF;
+        END LOOP;
 
         apex_json.open_object;  
         apex_json.write('success',TRUE);
@@ -1353,27 +1365,103 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-    **  Check domain name not already exists in this database or is an existing subdomain of netlify.app
+    **  Check new domain name is not an existing subdomain of netlify.app
     */
-    FUNCTION domainExists(pUserid IN users.id%type, pName IN VARCHAR2) RETURN VARCHAR2 IS
-        n PLS_INTEGER;
-        l_return CLOB;
+    PROCEDURE processDomainName(pUserId IN website.user_id%type, pWebsiteId IN website.id%type, pDomainName IN website.domain_name%type) IS
+        l_json JSON_OBJECT_T;
+        l_clob CLOB;
+        l_dns_zones CLOB;
+        l_netlify_site_id               website.netlify_site_id%type;
+        l_netlify_site_id_custom        website.netlify_site_id%type;
+        l_new_netlify_site_id_custom    website.netlify_site_id%type;
+        l_website_id website.id%type;
+        l_message VARCHAR2(50);
+        l_deploy_buttons_html LONG;
     BEGIN
-        IF (pName IS NULL) THEN
-            RETURN('Domain name must be entered');
+        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_dns_zones);
+
+        IF (pWebsiteId IS NOT NULL) THEN
+            SELECT netlify_site_id, netlify_site_id_custom INTO l_netlify_site_id, l_netlify_site_id_custom FROM website WHERE id=pWebsiteId;
         END IF;
 
-        apex_web_service.clear_request_headers;
-        l_return := apex_web_service.make_rest_request(p_url=>'https://' || REPLACE(pName,'.','-') || '.netlify.app', p_http_method=>'HEAD');
-        IF (apex_web_service.g_status_code=200) THEN
-            RETURN('Name already taken');
+        /* 1. Create Netlify site for the domain name and store site_id in website.netlify_site_id */
+
+        l_json:=new JSON_OBJECT_T;
+        l_json.put('name', pDomainName);
+
+        pck_api.callNetlifyAPI(pUserId=>pUserId, 
+            pEndpoint=>'sites' || CASE WHEN l_netlify_site_id IS NOT NULL THEN '/' || l_netlify_site_id END, 
+            pMethod=>CASE WHEN l_netlify_site_id IS NULL THEN 'POST' ELSE 'PATCH' END, 
+            pBody=>l_json.stringify, 
+            pStatusAllowed=>422, 
+            pData=>l_clob);
+        IF (apex_web_service.g_status_code=422) THEN
+            apex_json.open_object;
+            apex_json.write('success', TRUE);
+            apex_json.write('message', 'Name already taken');
+            apex_json.write('color', 'red');
+            apex_json.close_object;
+            RETURN;
         END IF;
 
-        RETURN NULL;
+        SELECT site_id INTO l_netlify_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
+
+        /* 2. Create Netlify site with custom_domain If domain_name in dns_zones */
+
+        FOR C IN (SELECT name FROM JSON_TABLE(l_dns_zones, '$[*]' COLUMNS(name)) WHERE name=pDomainName) LOOP
+            l_json.put('name', pDomainName || ' custom domain');
+            l_json.put('custom_domain', pDomainName);
+            pck_api.callNetlifyAPI(pUserId=>pUserId, 
+                pEndpoint=>'sites' || CASE WHEN l_netlify_site_id_custom IS NOT NULL THEN '/' || l_netlify_site_id_custom END, 
+                pMethod=>CASE WHEN l_netlify_site_id_custom IS NULL THEN 'POST' ELSE 'PATCH' END, 
+                pBody=>l_json.stringify, 
+                pData=>l_clob);
+            SELECT site_id INTO l_new_netlify_site_id_custom FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
+        END LOOP;
+
+        IF (l_netlify_site_id_custom IS NOT NULL AND l_new_netlify_site_id_custom IS NULL) THEN
+            pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || l_netlify_site_id_custom, pMethod=>'DELETE', pData=>l_clob);
+        END IF;
+
+        IF (pWebsiteId IS NULL) THEN
+            INSERT INTO website (id, user_id, domain_name, netlify_site_id, netlify_site_id_custom, template) 
+                VALUES (seq_website.nextval, pUserId, pDomainName, l_netlify_site_id, l_new_netlify_site_id_custom, '-1');
+            l_website_id:=seq_website.currval;
+            l_message:='Created OK';
+        ELSE
+            UPDATE website SET 
+                    domain_name=pDomainName, 
+                    netlify_site_id_custom=l_new_netlify_site_id_custom, 
+                    updated_date=current_timestamp 
+             WHERE id=pWebsiteId 
+               AND user_id=pUserId;
+            l_message:='Updated OK';
+        END IF;
+
+        /* build HTML for deploy button(s) */
+        l_deploy_buttons_html:='<button type="button" class="deploy-website cta" data-site-id="' || l_netlify_site_id || '">https://' || REPLACE(pDomainName,'.','-') || '.netlify.app</button>';
+        IF (l_new_netlify_site_id_custom IS NOT NULL) THEN 
+            l_deploy_buttons_html:=l_deploy_buttons_html ||
+            '<button type="button" class="deploy-website cta" data-site-id="' || l_new_netlify_site_id_custom || '">https://www.' || pDomainName || '</button>';
+        END IF;
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE);
+        apex_json.write('message', l_message);
+        apex_json.write('color', 'green');
+        apex_json.write('deploy_buttons', l_deploy_buttons_html);
+        IF (l_website_id IS NOT NULL) THEN
+            apex_json.write('website_id', l_website_id);
+            apex_json.write('dropdown', '<li><button type="button" class="with-icon edit-website" data-id="' || l_website_id || '"><svg class="icon"><use href="#pen-to-square"></use></svg>' || pDomainName || '</button></li>');
+        END IF;
+
+        apex_json.close_object;
+
     END;
 
     /**
-     **    Update the column value of 1 row
+     **    Update the column value of 1 row.
+     **    Complex processing for Domain name change
      */
     PROCEDURE updateField(pBodyText IN CLOB) IS
         l_user_id users.id%type;
@@ -1383,9 +1471,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_message VARCHAR2(50);
         l_color VARCHAR2(5);
         l_website_id website.id%type;
-        l_json JSON_OBJECT_T;
-        l_clob CLOB;
-        l_netlify_site_id website.netlify_site_id%type;
         n PLS_INTEGER:=0;
     BEGIN
         l_user_id:=pck_core.getUserId();
@@ -1401,27 +1486,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
             CASE C.table_column
                 WHEN 'website.domain_name' THEN
-                    l_json:=new JSON_OBJECT_T;
-                    l_json.put('name', C.value);
-                    IF (C.id IS NULL) THEN
-                        pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
-                        IF (apex_web_service.g_status_code=422) THEN
-                            l_message:='Name already taken';
-                            EXIT;
-                        END IF;
-                        SELECT site_id INTO l_netlify_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
-                        INSERT INTO website (id, user_id, domain_name, netlify_site_id, template) VALUES (seq_website.nextval, l_user_id, C.value, l_netlify_site_id, '-1');
-                        l_website_id:=seq_website.currval;
-                        l_message:='Created OK';
-                    ELSE
-                        SELECT netlify_site_id INTO l_netlify_site_id FROM website WHERE id=C.id;
-                        pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'PATCH', pBody=>l_json.stringify, pData=>l_clob);
-                        IF (apex_web_service.g_status_code=422) THEN
-                            l_message:='Name already taken';
-                            EXIT;
-                        END IF;
-                        UPDATE website SET domain_name=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
-                    END IF;
+                    processDomainName(l_user_id, C.id, C.value);
+                    RETURN;
                 WHEN 'website.contact_email' THEN
                     UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
                 WHEN 'website.template' THEN
@@ -1440,25 +1506,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             n:=sql%rowcount;
         END LOOP;
 
-        IF (n=1) THEN  /* means update or insert was successful */
+        IF (n=1) THEN  /* means last DML was successful */
             l_color:='green';
-            IF (l_message IS NULL) THEN
-                l_message:='Updated OK';
-            END IF;
+            l_message:='Updated OK';
         ELSE  /* means update or insert failed */
             l_color:='red';
-            IF (l_message IS NULL) THEN
-                l_message:='Updated NOK';
-            END IF;
+            l_message:='Updated NOK';
         END IF;
 
         apex_json.open_object;
         apex_json.write('success', TRUE);
-        apex_json.write('message', l_message);
-        apex_json.write('color', l_color);
-        IF (l_website_id IS NOT NULL) THEN
-            apex_json.write('website_id', l_website_id);
-        END IF;
+        apex_json.write('message', CASE WHEN n=1 THEN 'Updated OK' ELSE 'Updated NOK' END);
+        apex_json.write('color', CASE WHEN n=1 THEN 'green' ELSE 'red' END);
         apex_json.close_object;
 
         EXCEPTION
