@@ -18,6 +18,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       newWebsite = website.querySelector(".new-website"),
       copyWebsite = website.querySelector(".copy-website"),
       editWebsite = website.querySelectorAll(".edit-website"),
+      deployButtons = website.querySelector(".deploy-buttons > div"),
       deployWebsite = website.querySelectorAll(".deploy-website"),
       listBtn = document.querySelector(".list-view"),
       articleList = document.querySelector(".article-list"),
@@ -101,7 +102,14 @@ const changeHandler = (e) => {
                     inputs[i].dataset.id = data.website_id;
                 }
             }
-        }     
+            const li = e.target.previousElementSibling.querySelector(".dropdown-items .separator");
+            console.log("data.dropdown",data.dropdown);
+            li.insertAdjacentHTML('afterend',data.dropdown);
+        }
+        if (data.deploy_buttons) {
+            deployButtons.replaceChildren();
+            deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
+        }
     });
 }
 
@@ -192,6 +200,8 @@ editWebsite.forEach((button) => {
             if (data.template) {
                 document.getElementById(data.template).checked = true;
             }
+            deployButtons.replaceChildren();
+            deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
 
             cards.replaceChildren();
             cards.insertAdjacentHTML('afterbegin',data.cards);
@@ -220,7 +230,7 @@ deployWebsite.forEach((button) => {
             return;
         }
 
-        execProcess("deploy/" + website.dataset.id,"POST",{custom_domain:e.target.dataset.custom_domain}).then( () => {
+        execProcess("deploy/" + website.dataset.id,"POST",{site_id:e.target.dataset.site_id}).then( () => {
             popupOpen("Building Website "+e.target.textContent,"Patience required...");
             if (gIntervalId) {
                 clearInterval(gIntervalId);
@@ -1196,14 +1206,12 @@ const delete_table = (id, e) => {
                     break;
                 case "website":
                     resetWebsite();
-                    
                     setTimeout( () => {
                         cards.replaceChildren();
-                        //domainName.focus();
-                        e.target.closest(".dropdown").querySelector(".show-dropdown").click();
                         domainNameResult.style.opacity = "1";
                         domainNameResult.style.color = "green";
                         domainNameResult.textContent = "WEBSITE DELETED OK";
+                        deployButtons.replaceChildren();
                     },1000);
                     break;                    
             }
