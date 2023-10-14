@@ -64,14 +64,6 @@
 /* PAGE CONTAINER */
 /******************/
 
-#application-container > form {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-around;
-    align-items: center;
-    margin: 2rem;
-}
-
 h4, ul {
     margin-block-start: 0;
     margin-block-end: 0;
@@ -108,6 +100,15 @@ nav {
 nav:first-of-type {
     position: sticky;
     top: 0;
+}
+
+form.website {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    align-items: center;
+    margin: 2rem;
+    gap: 1rem;
 }
 
 label {
@@ -245,11 +246,64 @@ form legend {
 /* DIALOG STYLES */
 /* ************* */
 
+/*
 dialog {
     border: none !important;
     border-radius: 0.7em;
     box-shadow: 0 0 #0000, 0 0 #0000, 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    font-size: var(--step-0);
+    font-size: var(--step-0);    
+}
+*/
+dialog,
+::backdrop{
+  opacity: 0;
+  transition: opacity 1s, display 1s allow-discrete, overlay 1s allow-discrete;
+  overscroll-behavior: contain;
+  border: 1px solid lightgray;
+  border-radius: 1rem;
+  padding: 1rem;
+}
+
+[open],
+[open]::backdrop {
+  opacity: 1;
+}
+
+@starting-style {
+  [open],
+  [open]::backdrop {
+    opacity: 0;
+  }
+}
+
+::backdrop {
+  background-color: rgba(0,0,0,.6);
+}
+
+dialog.delete-confirm h2 {
+    margin: 0;
+}
+
+dialog form {
+    margin:0;
+    padding: 0;
+    border: none;
+}
+
+button.confirmation {
+  display: block;
+  background: white;
+  color: red;
+  border: 1px solid red;
+  padding: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  transition-duration: 0.25s;
+  
+  &:hover {
+    background: red;
+    color: white;
+  }
 }
 
 dialog.popup > div {
@@ -260,7 +314,7 @@ dialog.popup > div {
 dialog.popup {
     color: var(--color-secondary);
     text-align: center;
-    inline-size: 50vw;
+    min-inline-size: 50vw;
 }
 
 dialog.perftable > div, dialog.gallery > div {
@@ -586,7 +640,6 @@ nav button {
 
 div.editor {
     display: none;
-    opacity: 0;
     position: fixed;
     z-index: 1;
     inset:0;
@@ -594,7 +647,6 @@ div.editor {
     max-width: 70ch;
     padding: 0 2ch;
     background: rgba(255,255,255, .95);
-    transition: opacity 2s;
     border: solid 1px var(--color-solid);
 }
 
