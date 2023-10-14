@@ -207,7 +207,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     */
     PROCEDURE getWebsite(pWebsiteId IN website.id%type) IS
         l_user_id users.id%type;
-        l_deploy_buttons_html VARCHAR2(500);
     BEGIN
         l_user_id:=pck_core.getUserId();
 
@@ -224,12 +223,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             IF (C.template<>'-1') THEN
                 apex_json.write('template', 'template-' || LOWER(C.template));
             END IF;
-            l_deploy_buttons_html:='<button type="button" class="deploy-website cta" data-site-id="' || C.netlify_site_id || '">https://' || REPLACE(C.domain_name,'.','-') || '.netlify.app</button>';
-            IF (C.netlify_site_id_custom IS NOT NULL) THEN 
-                l_deploy_buttons_html:=l_deploy_buttons_html ||
-                '<button type="button" class="deploy-website cta" data-site-id="' || C.netlify_site_id_custom || '">https://www.' || C.domain_name || '</button>';
-            END IF;
-            apex_json.write('deploy_buttons', l_deploy_buttons_html);
+            apex_json.write('deploy_buttons', pck_core.buildDeployButtons(C.domain_name, C.netlify_site_id, C.netlify_site_id_custom));
             apex_json.write('cards',pck_core.buildWebsiteArticles(pWebsiteId));
         END LOOP;
 
@@ -1117,16 +1111,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE copyWebsite(pWebsiteId IN website.id%type) IS
         l_user_id users.id%type;
         l_domain_name_copy website.domain_name%type;
+        l_json JSON_OBJECT_T;
+        l_clob CLOB;
     BEGIN
         l_user_id:=pck_core.getUserId();
 
         SELECT SUBSTR(domain_name,1,25) || '_COPY' INTO l_domain_name_copy FROM website WHERE id=pWebsiteId AND user_id=l_user_id;
 
-        INSERT INTO website (id,domain_name,user_id,favicon_url,template,contact_email,trade_name,affiliation_link_img,affiliation_link_url)
-        SELECT seq_website.nextval,l_domain_name_copy,user_id,favicon_url,template,contact_email,trade_name,affiliation_link_img,affiliation_link_url
-          FROM website
-         WHERE id=pWebsiteId
-           AND user_id=l_user_id;
+        /* Create Netlify site and store site_id */
+        l_json:=new JSON_OBJECT_T;
+        l_json.put('name', l_domain_name_copy);
+
+        pck_api.callNetlifyAPI(pUserId=>l_user_id, 
+            pEndpoint=>'sites', 
+            pMethod=>'POST', 
+            pBody=>l_json.stringify, 
+            pData=>l_clob);
+
+        INSERT INTO website (id,domain_name,user_id,favicon_url,template,contact_email,trade_name,affiliation_link_img,affiliation_link_url,netlify_site_id)
+        SELECT seq_website.nextval,l_domain_name_copy,w.user_id,w.favicon_url,w.template,w.contact_email,w.trade_name,w.affiliation_link_img,w.affiliation_link_url,s.site_id
+          FROM website w, JSON_TABLE(l_clob, '$' COLUMNS(site_id)) s
+         WHERE w.id=pWebsiteId
+           AND w.user_id=l_user_id;
 
         INSERT INTO website_article (website_id,article_id,display_order,nav_name,page_title,page_description,user_id)
         SELECT seq_website.currval, article_id,display_order,nav_name,page_title,page_description,user_id
@@ -1376,7 +1382,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_new_netlify_site_id_custom    website.netlify_site_id%type;
         l_website_id website.id%type;
         l_message VARCHAR2(50);
-        l_deploy_buttons_html LONG;
     BEGIN
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_dns_zones);
 
@@ -1438,18 +1443,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_message:='Updated OK';
         END IF;
 
-        /* build HTML for deploy button(s) */
-        l_deploy_buttons_html:='<button type="button" class="deploy-website cta" data-site-id="' || l_netlify_site_id || '">https://' || REPLACE(pDomainName,'.','-') || '.netlify.app</button>';
-        IF (l_new_netlify_site_id_custom IS NOT NULL) THEN 
-            l_deploy_buttons_html:=l_deploy_buttons_html ||
-            '<button type="button" class="deploy-website cta" data-site-id="' || l_new_netlify_site_id_custom || '">https://www.' || pDomainName || '</button>';
-        END IF;
-
         apex_json.open_object;
         apex_json.write('success', TRUE);
         apex_json.write('message', l_message);
         apex_json.write('color', 'green');
-        apex_json.write('deploy_buttons', l_deploy_buttons_html);
+        apex_json.write('deploy_buttons', pck_core.buildDeployButtons(pDomainName, l_netlify_site_id, l_new_netlify_site_id_custom));
         IF (l_website_id IS NOT NULL) THEN
             apex_json.write('website_id', l_website_id);
             apex_json.write('dropdown', '<li><button type="button" class="with-icon edit-website" data-id="' || l_website_id || '"><svg class="icon"><use href="#pen-to-square"></use></svg>' || pDomainName || '</button></li>');
