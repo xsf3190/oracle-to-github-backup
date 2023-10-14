@@ -28,6 +28,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
         pWidth IN INTEGER, 
         pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
     --
+    FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
+    --
     FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type) RETURN CLOB;
@@ -193,6 +195,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         ELSE
             RETURN ( TO_CHAR(pTimestamp, 'dd Mon yyyy'));
         END IF;
+    END;
+
+    FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2 is
+        l_html VARCHAR2(500);
+    BEGIN
+        l_html:='<button type="button" class="deploy-website cta" data-site_id="' || pNetlifySiteId || '">https://' || REPLACE(pDomainName,'.','-') || '.netlify.app</button>';
+        IF (pNetlifySiteIdCustom IS NOT NULL) THEN 
+            l_html:=l_html || '<button type="button" class="deploy-website cta" data-site_id="'|| pNetlifySiteIdCustom || '">https://www.' || pDomainName || '</button>';
+        END IF;
+        RETURN(l_html);
     END;
 
     /*
@@ -591,7 +603,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END LOOP;
 
         l_clob:=l_clob || TO_CLOB('
-        <form class="card" data-id="' || l_domains(1).id || '">' ||
+        <form class="website" data-id="' || l_domains(1).id || '">' ||
             buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_domain_dropdown) || '
             <div class="radio-wrapper">
                 <fieldset>
@@ -606,12 +618,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email) || '
             <fieldset class="deploy-buttons">
                 <legend>Build & Deploy Website</legend>
-                <div>
-                    <button type="button" class="deploy-website cta" data-site_id="' || l_domains(1).netlify_site_id || '">https://' || REPLACE(l_domains(1).domain_name,'.','-') || '.netlify.app</button>' ||
-                    CASE WHEN l_domains(1).netlify_site_id_custom IS NOT NULL THEN 
-                    '<button type="button" class="deploy-website cta" data-site_id="'|| l_domains(1).netlify_site_id_custom ||'">https://www.' || l_domains(1).domain_name || '</button>'
-                    END || '
-                </div>
+                <div>' ||
+                buildDeployButtons(l_domains(1).domain_name, l_domains(1).netlify_site_id, l_domains(1).netlify_site_id_custom) ||
+                '</div>
             </fieldset>
         </form>
         <hr>
@@ -666,6 +675,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <button type="button" class="close">&times;</button>
                 <h2></h2>
                 <p></p>
+            </div>
+        </dialog>
+        <dialog class="delete-confirm">
+            <div>
+                <button type="button" class="close">&times;</button>
+                <h2></h2>
+                <p></p>
+                <form method="dialog">
+                    <button class="confirmation">Confirm deletion</button>
+                </form>
             </div>
         </dialog>
         <dialog class="list">
