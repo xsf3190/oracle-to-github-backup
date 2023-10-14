@@ -4,11 +4,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE deployWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB);
     --
-    PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type);
+    PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB);
     --
     PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type);
     --
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2, pCustomDomain IN VARCHAR2);
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2, pSiteId IN website.netlify_site_id%type);
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as 
@@ -19,7 +19,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     PROCEDURE deployWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
         l_user_id website.user_id%type;
         l_bodytext CLOB:=pBodyText;
-        l_custom_domain VARCHAR2(100);
+        l_site_id website.netlify_site_id%type;
         l_template website.template%type;
         l_clob CLOB;
         l_job_name VARCHAR2(30);
@@ -44,7 +44,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END IF;
 
         /* custom_url indicates build website for user purchased domain name */
-        SELECT custom_domain INTO l_custom_domain FROM JSON_TABLE(l_bodytext, '$' COLUMNS(custom_domain));
+        SELECT site_id INTO l_site_id FROM JSON_TABLE(l_bodytext, '$' COLUMNS(site_id));
 
         /* apex session header included in payload sent to Github action in order to authenticate content retrieval */
         pck_core.getApexSession(l_app_id,l_session_id,l_page_id);
@@ -81,7 +81,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
             argument_position => 5,
-            argument_value => l_custom_domain
+            argument_value => l_site_id
         );
         dbms_scheduler.enable(l_job_name);
 
@@ -91,10 +91,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     END;
 
 
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2, pCustomDomain IN VARCHAR2) is
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2, pSiteId IN website.netlify_site_id%type) is
         l_domain_name website.domain_name%type;
         l_template website.template%type;
-        l_netlify_site_id website.netlify_site_id%type;
         l_clob CLOB;
         l_json_clob CLOB;
 
@@ -111,8 +110,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         logDeployment('{"status":"Starting Deployment"}',pWebsiteId);
 
-        SELECT domain_name, template, netlify_site_id
-          INTO l_domain_name, l_template, l_netlify_site_id
+        SELECT domain_name, template
+          INTO l_domain_name, l_template
           FROM website
          WHERE id=pWebsiteId
            AND user_id=pUserId;
@@ -153,12 +152,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         SELECT id INTO l_deploy_key_id FROM JSON_TABLE(l_clob, '$' COLUMNS (id));
 
         /* create JSON payload for new Netlify site */
-        l_json:=new JSON_OBJECT_T;
-        --l_json.put('name', l_domain_name);
-        --IF (pCustomDomain IS NOT NULL) THEN
-            l_json.put('custom_domain', pCustomDomain);
-        --END IF;
-
         l_repo:=new JSON_OBJECT_T;
         l_repo.put('provider', 'github');
         l_repo.put('repo_type', 'git');
@@ -169,16 +162,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_repo.put('deploy_key_id', l_deploy_key_id);
         l_repo.put('installation_id', pck_api.getNetlifyIntallationId(pUserId));
         l_repo.put('base', l_domain_name);   
+
+        l_json:=new JSON_OBJECT_T;
         l_json.put('repo', l_repo);
 
-        /* Create Netlify site and store the site_id in website table */
-        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'PATCH', pBody=>l_json.stringify, pData=>l_clob);
+        /* Link Netlify site to Github repository */
+        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId, pMethod=>'PATCH', pBody=>l_json.stringify, pData=>l_clob);
         logDeployment('{"status":"Netlify site linked to github"}',pWebsiteId);
-
-        /* Update website table with Netlify site id */
-        --SELECT site_id INTO l_netlify_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
-        --logDeployment('{"status":"Netlify site created and linked to github"}',pWebsiteId);
-        --UPDATE website SET netlify_site_id=l_netlify_site_id WHERE id=pWebsiteId;
 
         /* trigger deployment by dispatching Github action */          
         l_json:=new JSON_OBJECT_T;
@@ -199,6 +189,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         EXCEPTION
             WHEN OTHERS THEN
+                logDeployment('{"status":"UNEXPECTED ERROR", "exitcode": 1}',pWebsiteId);
                 pck_core.log_error;
     END;
 
@@ -227,26 +218,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     /*
      **  Get deployment status from website_deploy logging table
      */      
-    PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type) IS 
+    PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS 
         l_user_id users.id%type;
+        l_site_id website.netlify_site_id%type;
         l_status CLOB;
         l_clob CLOB;
         l_ssl_url VARCHAR2(100);
         l_deployment_complete BOOLEAN:=FALSE;
         l_netlify_status website_deploy.status%type;
+        l_clob_tmp clob:=pBodyText;
     BEGIN
         l_user_id:=pck_core.getUserId();
 
         /* If github action completed get latest Netlify deployment status and add this to the website_deploy table */
 
-        FOR C IN (SELECT w.netlify_site_id, wd.log_time
+        FOR C IN (SELECT wd.log_time
                     FROM website w, website_deploy wd
                    WHERE w.id=pWebsiteId 
                      AND w.user_id=l_user_id
                      AND wd.website_id=w.id
                      AND wd.status='Github action completed - OK') 
         LOOP
-            pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites/'|| C.netlify_site_id || '/deploys', pMethod=>'GET', pData=>l_clob);
+            pck_core.log(l_clob_tmp);
+            SELECT site_id INTO l_site_id FROM JSON_TABLE(l_clob_tmp, '$' COLUMNS(site_id));
+
+            pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys', pMethod=>'GET', pData=>l_clob);
 
             FOR C1 IN (SELECT state, ssl_url, error_message, created_at
                          FROM JSON_TABLE(l_clob, '$[0]' COLUMNS (state, ssl_url, created_at, error_message))) 
@@ -292,6 +288,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         apex_json.write('completed', l_deployment_complete);
         apex_json.write('status', l_status);
         apex_json.close_object;
+
+        IF (l_deployment_complete) THEN
+            pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites/'|| l_site_id || '/unlink_repo', pMethod=>'GET', pData=>l_clob);
+        END IF;
 
         EXCEPTION
             WHEN OTHERS THEN
