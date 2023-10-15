@@ -1452,7 +1452,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('website_id', l_website_id);
             apex_json.write('dropdown', '<li><button type="button" class="with-icon edit-website" data-id="' || l_website_id || '"><svg class="icon"><use href="#pen-to-square"></use></svg>' || pDomainName || '</button></li>');
         END IF;
-
         apex_json.close_object;
 
     END;
