@@ -2,9 +2,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE deployInfrastructure;
     --
-    PROCEDURE deployWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB);
+    PROCEDURE deployWebsite(pBodyText IN CLOB);
     --
-    PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB);
+    PROCEDURE updateDeploymentStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB);
     --
     PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type);
     --
@@ -16,10 +16,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     /*
     ** Build and deploy website to Netlify by submitting Github action
     */    
-    PROCEDURE deployWebsite(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
+    PROCEDURE deployWebsite(pBodyText IN CLOB) IS
         l_user_id website.user_id%type;
-        l_bodytext CLOB:=pBodyText;
-        l_site_id website.netlify_site_id%type;
         l_template website.template%type;
         l_clob CLOB;
         l_job_name VARCHAR2(30);
@@ -27,14 +25,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_session_id NUMBER;
         l_page_id NUMBER;
         n PLS_INTEGER;
+        l_body_text CLOB:=pBodyText;
+        l_website_id website.id%type;
+        l_site_id website.netlify_site_id%type;
     BEGIN
         l_user_id:=pck_core.getUserId();
+
+        SELECT websiteid, siteid INTO l_website_id, l_site_id FROM JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid));
 
         /* Template must exist in Deploy repository */
         SELECT template
           INTO l_template
           FROM website
-         WHERE id=pWebsiteId
+         WHERE id=l_website_id
            AND user_id=l_user_id;
 
         pck_api.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_clob);
@@ -43,11 +46,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             RAISE_APPLICATION_ERROR(-20021,'NO TEMPLATE "' || l_template || '" IN DEPLOY REPOSITORY');
         END IF;
 
-        /* custom_url indicates build website for user purchased domain name */
-        SELECT site_id INTO l_site_id FROM JSON_TABLE(l_bodytext, '$' COLUMNS(site_id));
-
         /* apex session header included in payload sent to Github action in order to authenticate content retrieval */
         pck_core.getApexSession(l_app_id,l_session_id,l_page_id);
+
+        DELETE website_deploy WHERE website_id=l_website_id AND site_id=l_site_id;
+
+        logDeployment('{"site_id":"' || l_site_id || '","status":"Submitting Deployment Job"}',l_website_id);
 
         /* Submit background job to run the deployment - can take some time depending on number of pages to build */
         l_job_name:=dbms_scheduler.generate_job_name('DEPLOY_');
@@ -61,7 +65,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
             argument_position => 1,
-            argument_value => pWebsiteId
+            argument_value => l_website_id
         );
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
@@ -106,23 +110,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_repo JSON_OBJECT_T;
         l_action JSON_OBJECT_T;
     BEGIN
-        DELETE website_deploy WHERE website_id=pWebsiteId;
-
-        logDeployment('{"status":"Starting Deployment"}',pWebsiteId);
+        logDeployment('{"site_id":"' || pSiteId || '","status":"Starting Deployment"}',pWebsiteId);
 
         SELECT domain_name, template
           INTO l_domain_name, l_template
           FROM website
          WHERE id=pWebsiteId
            AND user_id=pUserId;
-
-        /* Delete Netlify site if previously deployed - removes site from Netlify CDN !! */
-        /*
-        IF (l_netlify_site_id IS NOT NULL) THEN
-            logDeployment('{"status":"Deleting previously deployed Netlify site"}',pWebsiteId);
-            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pData=>l_clob);
-        END IF;
-        */
 
         /* Github directory for the website must exist in DEPLOY repository in order to enable auto-deploy from Netlify */
         /* Have to handle case where domain name changed after deploy so we don't keep unused directories */
@@ -168,7 +162,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         /* Link Netlify site to Github repository */
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId, pMethod=>'PATCH', pBody=>l_json.stringify, pData=>l_clob);
-        logDeployment('{"status":"Netlify site linked to github"}',pWebsiteId);
+        logDeployment('{"site_id":"' || pSiteId || '","status":"Netlify site linked to github"}',pWebsiteId);
 
         /* trigger deployment by dispatching Github action */          
         l_json:=new JSON_OBJECT_T;
@@ -180,16 +174,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_action.put('fetch_url', pRestURL || 'content/' || pWebsiteId);  
         l_action.put('log_url', pRestURL || 'deploy-status/' || pWebsiteId);
         l_action.put('apex_session', pApexSession);
+        l_action.put('site_id', pSiteId);
         l_json.put('client_payload', l_action);
 
         /* Note that Github API 'dispatches' endpoint does not send a response */
         l_json_clob:=l_json.stringify;
-        logDeployment('{"status":"Triggering github action to build site"}',pWebsiteId);
+        logDeployment('{"site_id":"' || pSiteId || '","status":"Triggering github action to build site"}',pWebsiteId);
         pck_api.callGithubAPI(pUserId=>pUserId, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json_clob, pData=>l_clob);
 
         EXCEPTION
             WHEN OTHERS THEN
-                logDeployment('{"status":"UNEXPECTED ERROR", "exitcode": 1}',pWebsiteId);
+                logDeployment('{"site_id":"' || pSiteId || '","status":"' || SUBSTR(SQLERRM,1,100) || '", "exitcode": 1}',pWebsiteId);
                 pck_core.log_error;
     END;
 
@@ -199,14 +194,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
      **  2) called internally within this package to log Netlify actions
      */      
     PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type) IS 
+        l_site_id website_deploy.site_id%type;
         l_exitcode PLS_INTEGER;
         l_status website_deploy.status%type;
     BEGIN
-        SELECT status, NVL(exitcode,0)
-          INTO l_status, l_exitcode
-          FROM JSON_TABLE(pBodyText, '$' COLUMNS (status, exitcode));
+        SELECT site_id, status, NVL(exitcode,0)
+          INTO l_site_id, l_status, l_exitcode
+          FROM JSON_TABLE(pBodyText, '$' COLUMNS (site_id, status, exitcode));
 
-        INSERT INTO website_deploy(id, website_id, status) VALUES (seq_log.nextval, pWebsiteId, l_status || ' - ' || CASE WHEN l_exitcode=0 THEN 'OK' ELSE 'NOK' END);
+        INSERT INTO website_deploy(id, website_id, site_id, status) VALUES (seq_log.nextval, pWebsiteId, l_site_id, l_status || ' - ' || CASE WHEN l_exitcode=0 THEN 'OK' ELSE 'NOK' END);
         COMMIT;
 
         EXCEPTION
@@ -217,18 +213,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
     /*
      **  Get deployment status from website_deploy logging table
-     */      
-    PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS 
+     */
+    PROCEDURE updateDeploymentStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS 
         l_user_id users.id%type;
-        l_site_id website.netlify_site_id%type;
+        l_site_id website_deploy.site_id%type;
         l_status CLOB;
-        l_clob CLOB;
+        l_clob CLOB:=pBodyText;
         l_ssl_url VARCHAR2(100);
         l_deployment_complete BOOLEAN:=FALSE;
         l_netlify_status website_deploy.status%type;
-        l_clob_tmp clob:=pBodyText;
     BEGIN
         l_user_id:=pck_core.getUserId();
+
+        SELECT site_id INTO l_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
+
+        pck_core.log(pWebsiteId || ',' || l_site_id);
 
         /* If github action completed get latest Netlify deployment status and add this to the website_deploy table */
 
@@ -237,11 +236,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                    WHERE w.id=pWebsiteId 
                      AND w.user_id=l_user_id
                      AND wd.website_id=w.id
+                     AND wd.site_id=l_site_id
                      AND wd.status='Github action completed - OK') 
         LOOP
-            pck_core.log(l_clob_tmp);
-            SELECT site_id INTO l_site_id FROM JSON_TABLE(l_clob_tmp, '$' COLUMNS(site_id));
-
             pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys', pMethod=>'GET', pData=>l_clob);
 
             FOR C1 IN (SELECT state, ssl_url, error_message, created_at
@@ -253,8 +250,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         l_ssl_url:=C1.ssl_url;
                     END IF;
                     l_netlify_status:='Netlify ' || C1.state;
-                    DELETE website_deploy WHERE website_id=pWebsiteId AND status LIKE l_netlify_status||'%';
-                    logDeployment('{"status":"' || l_netlify_status || '","exitocde":' || CASE WHEN C1.error_message IS NULL THEN 0 ELSE 1 END || '}',pWebsiteId);
+                    DELETE website_deploy WHERE website_id=pWebsiteId AND status LIKE l_netlify_status||'%' AND site_id=l_site_id;
+                    logDeployment('{"site_id":"' || l_site_id || '","status":"' || l_netlify_status || '","exitcode":' || CASE WHEN C1.error_message IS NULL THEN 0 ELSE 1 END || '}',pWebsiteId);
                 END IF;
             END LOOP;
         END LOOP;
@@ -266,6 +263,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                          SELECT id, status, log_time, NVL(LEAD(log_time) OVER (ORDER BY id),current_date) next_log_time
                            FROM website_deploy 
                           WHERE website_id=pWebsiteId
+                            AND site_id=l_site_id
                         )
                    ORDER BY id) 
         LOOP
@@ -277,10 +275,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END LOOP;
 
         IF (l_ssl_url IS NOT NULL) THEN
-            FOR C IN (SELECT ROUND((MAX(log_time)-MIN(log_time))*86400) total_elapsed FROM website_deploy WHERE website_id=pWebsiteId) LOOP
+            FOR C IN (SELECT ROUND((MAX(log_time)-MIN(log_time))*86400) total_elapsed FROM website_deploy WHERE website_id=pWebsiteId AND site_id=l_site_id) LOOP
                 l_status:=l_status || TO_CLOB('<span>DEPLOYMENT COMPLETE  - ' || C.total_elapsed || ' seconds</span><br>');
             END LOOP;
             l_status:=l_status || TO_CLOB('<a target="_blank" href="' || l_ssl_url || '">' || l_ssl_url || '<a>');
+        END IF;
+
+        IF (l_deployment_complete) THEN
+            pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites/'|| l_site_id || '/unlink_repo', pMethod=>'PUT', pData=>l_clob);
         END IF;
 
         apex_json.open_object; 
@@ -288,10 +290,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         apex_json.write('completed', l_deployment_complete);
         apex_json.write('status', l_status);
         apex_json.close_object;
-
-        IF (l_deployment_complete) THEN
-            pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites/'|| l_site_id || '/unlink_repo', pMethod=>'GET', pData=>l_clob);
-        END IF;
 
         EXCEPTION
             WHEN OTHERS THEN
