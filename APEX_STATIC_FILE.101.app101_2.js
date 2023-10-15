@@ -229,25 +229,19 @@ const deploy_website = (e) => {
         templateResult.style.color = "red";
         return;
     }
-
-    console.log("e.target",e.target);
-
-    execProcess("deploy/" + website.dataset.id,"POST",{site_id:e.target.dataset.site_id}).then( () => {
+ 
+    execProcess("deploy","POST",{"websiteid":website.dataset.id,"siteid":e.target.dataset.site_id}).then( () => {
         popupOpen("Building Website "+e.target.textContent,"Patience required...");
         if (gIntervalId) {
             clearInterval(gIntervalId);
         }
-        gIntervalId = setInterval(getDeploymentStatus,3000,website.dataset.id, e.target.dataset.site_id);
+        gIntervalId = setInterval(updateDeploymentStatus,3000,website.dataset.id, e.target.dataset.site_id);
     });
 };
 
-/* websiteid is the database id of the website. siteid is the netlify site_id (can be Test and Prod site_idd for single database website*/
-getDeploymentStatus = (websiteid, siteid) => {
-
-    console.log("siteid",siteid);
-    
+updateDeploymentStatus = (websiteid, siteid) => {
     const status = popup.querySelector("p");
-    execProcess("deploy-status/" + websiteid,"GET",{site_id:siteid}).then( (data) => {
+    execProcess("deploy-status/"+websiteid,"PUT",{"site_id":siteid}).then( (data) => {
         if (data.status) {
             status.replaceChildren();
             status.insertAdjacentHTML('afterbegin',data.status);
