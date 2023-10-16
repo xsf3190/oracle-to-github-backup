@@ -198,6 +198,13 @@ const edit_website = (e) => {
 
         domainName.value = data.domain_name;
         contactEmail.value = data.contact_email ? data.contact_email : "";
+
+        for (let i = 0; i < inputs.length; i++) {
+            if (inputs[i].type === "textarea") {
+                inputs[i].nextElementSibling.querySelector(".charcounter").textContent = inputs[i].value.length + "/" + inputs[i].getAttribute("maxlength");
+            }
+        }
+
         if (data.template) {
             document.getElementById(data.template).checked = true;
         }
@@ -231,7 +238,7 @@ const deploy_website = (e) => {
     }
  
     execProcess("deploy","POST",{"websiteid":website.dataset.id,"siteid":e.target.dataset.site_id}).then( () => {
-        popupOpen("Building Website "+e.target.textContent,"Patience required...");
+        popupOpen("Building "+e.target.textContent,"Patience required...");
         if (gIntervalId) {
             clearInterval(gIntervalId);
         }
