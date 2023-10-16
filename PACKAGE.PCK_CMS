@@ -924,30 +924,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error;
-    END;
-
-    /*
-     **  Delete all Cloudinary assets uploaded for a given article
-     */   
-    FUNCTION deleteUploadedMedia(pArticleId IN NUMBER, pResourceType IN asset.resource_type%type DEFAULT NULL) RETURN NUMBER IS
-        l_clob CLOB;
-        l_url VARCHAR2(500);
-        nb_deleted PLS_INTEGER:=0;
-        n PLS_INTEGER;
-    BEGIN
-        FOR C IN (SELECT DISTINCT a.resource_type, u.cld_cloud_name, u.cld_api_key, u.cld_api_secret 
-                    FROM users u, article t, asset a
-                   WHERE t.id=pArticleId
-                     AND t.author_user_id=u.id
-                     AND t.id=a.article_id
-                     AND a.resource_type=NVL(pResourceType,a.resource_type))
-        LOOP
-            l_url:='https://api.cloudinary.com/v1_1/' || C.cld_cloud_name || '/resources/' || C.resource_type || '/tags/' || pArticleId;
-            l_clob := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'DELETE',p_username=>C.cld_api_key,p_password=>C.cld_api_secret); 
-            SELECT SUM(original) INTO n FROM JSON_TABLE(l_clob FORMAT JSON, '$.deleted_counts.*' COLUMNS (original NUMBER PATH '$.original'));
-            nb_deleted:=nb_deleted+n;
-        END LOOP;
-        RETURN(nb_deleted);
     END;    
 
     /*
@@ -972,23 +948,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             IF (n=0) THEN
                 /* Delete externally managed assets first to avoid potential cost and inconvenience of orphans */
 
-                FOR C IN (SELECT DISTINCT a.resource_type, a.cld_cloud_name, u.cld_api_key, u.cld_api_secret 
-                            FROM users u, asset a
-                           WHERE a.article_id=pArticleId
-                            AND a.cld_cloud_name=u.cld_cloud_name)
+                FOR C IN (SELECT DISTINCT cld_cloud_name || '/resources/' || resource_type || '/tags/' || pArticleId AS endpoint
+                            FROM asset
+                           WHERE article_id=pArticleId)
                 LOOP
-                    /* Cloudinary Admin API used for bulk delete of all assets tagged by article id. Uses Basic Authentication. */
-                    l_url:='https://api.cloudinary.com/v1_1/' || C.cld_cloud_name || '/resources/' || C.resource_type || '/tags/' || pArticleId;
-                    l_clob := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'DELETE',p_username=>C.cld_api_key,p_password=>C.cld_api_secret); 
-                    IF (apex_web_service.g_status_code<>200) THEN
-                        pck_core.log('HTTPS status ' || apex_web_service.g_status_code || ' url:' || l_url);
-                        RAISE_APPLICATION_ERROR(-20001,'ERROR DELETING CLOUDINARY ASSET');
-                    END IF;
-                    SELECT error_message INTO l_error_message FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS error_message VARCHAR2(500) PATH '$.error.message');
-                    pck_core.log(l_error_message);
-                    IF (l_error_message IS NOT NULL) THEN
-                        RAISE_APPLICATION_ERROR(-20001,l_error_message);
-                    END IF;
+                    pck_api.callCloudinaryAPI(pUserId=>pUserId, pEndpoint=>C.endpoint, pMethod=>'DELETE', pData=>l_clob);
                 END LOOP;
 
                 /* Delete the article. Referential integrity constraint cascades to linked asset rows */
@@ -1026,8 +990,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_error_message VARCHAR2(500);
         l_updated_date VARCHAR2(20);
         l_nb_assets article.nb_assets%type;
+        l_json JSON_OBJECT_T;
     BEGIN
-        pck_core.log(pUserId||'-'||pId);
         SELECT a.article_id, a.cld_cloud_name, a.public_id, u.cld_api_key, u.cld_api_secret
           INTO l_article_id, l_cld_cloud_name, l_public_id, l_cld_api_key, l_cld_api_secret
           FROM asset a, users u
@@ -1050,8 +1014,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_parm_names(4):='signature';
         l_parm_values(4):=dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign), dbms_crypto.HASH_SH1);   
         l_parm_names(5):='api_key';
-        l_parm_values(5):=l_cld_api_key;            
+        l_parm_values(5):=l_cld_api_key;    
 
+        l_json:=new JSON_OBJECT_T;
+        FOR i IN 1..l_parm_names.COUNT LOOP
+            l_json.put(l_parm_names(i), l_parm_values(i));
+        END LOOP;        
+
+        pck_api.callCloudinaryAPI(pUserId=>pUserId, pEndpoint=>l_cld_cloud_name || '/image/destroy', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+        /*
         l_clob := apex_web_service.make_rest_request(
             p_url=>'https://api.cloudinary.com/v1_1/' || l_cld_cloud_name || '/image/destroy', 
             p_http_method=>'POST',
@@ -1064,6 +1035,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             pck_core.log(l_clob);
             RAISE_APPLICATION_ERROR(-20001, l_error_message);
         END IF;
+        */
 
         DELETE asset WHERE id=pId;
         UPDATE article SET nb_assets = nb_assets-1, updated_date=current_date WHERE id=l_article_id RETURNING nb_assets INTO l_nb_assets;
@@ -1074,31 +1046,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
         apex_json.write('nb-assets', l_nb_assets || ' media');
         apex_json.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-    END;
-
-    /*
-     **  Remove user and all articles, assets,grants etc. Runs as a background job 
-     */   
-    PROCEDURE deleteAll(pUserId IN users.id%type) IS
-        nb_articles PLS_INTEGER;
-        nb_assets NUMBER:=0;
-        n NUMBER;
-    BEGIN
-        FOR C IN (SELECT id FROM article WHERE author_user_id=pUserId) LOOP
-            n:=deleteUploadedMedia(C.id);
-            nb_assets:=nb_assets+n;
-        END LOOP;
-
-        DELETE article WHERE author_user_id=pUserId;
-        nb_articles:=SQL%ROWCOUNT;
-
-        DELETE users WHERE id=pUserId;
-
-        pck_core.log('Deleted ' || nb_articles || ' articles and ' || nb_assets || ' images/videos.');
 
         EXCEPTION
             WHEN OTHERS THEN
