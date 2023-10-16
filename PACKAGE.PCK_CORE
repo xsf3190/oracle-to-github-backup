@@ -33,6 +33,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type) RETURN CLOB;
+    --
+    PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
+    --
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
@@ -200,9 +203,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2 is
         l_html VARCHAR2(500);
     BEGIN
-        l_html:='<button type="button" class="deploy-website cta" data-site_id="' || pNetlifySiteId || '">https://' || REPLACE(pDomainName,'.','-') || '.netlify.app</button>';
-        IF (pNetlifySiteIdCustom IS NOT NULL) THEN 
-            l_html:=l_html || '<button type="button" class="deploy-website cta" data-site_id="'|| pNetlifySiteIdCustom || '">https://www.' || pDomainName || '</button>';
+        IF (pNetlifySiteId IS NOT NULL) THEN 
+            l_html:='<button type="button" class="deploy-website cta" data-site_id="' || pNetlifySiteId || '">https://' || REPLACE(pDomainName,'.','-') || '.netlify.app</button>';
+            IF (pNetlifySiteIdCustom IS NOT NULL) THEN 
+                l_html:=l_html || '<button type="button" class="deploy-website cta" data-site_id="'|| pNetlifySiteIdCustom || '">https://www.' || pDomainName || '</button>';
+            END IF;
         END IF;
         RETURN(l_html);
     END;
@@ -786,6 +791,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             WHEN OTHERS THEN
                 log_error;
                 RAISE;
+    END;
+
+    /*
+    **  Administrator function to transfer ownership of a specified website and all dependent table rows to a different User 
+    */
+    PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type) IS
+        l_transfer_from_user_id users.id%type;
+        l_transfer_to_user_id users.id%type;
+    BEGIN
+        SELECT user_id INTO l_transfer_from_user_id FROM website WHERE id=pWebsiteId;
+        SELECT id INTO l_transfer_to_user_id FROM users WHERE id=pUserId;
+
+        /* Don't let this happen of any article in the website has been copied to another website */
+
+        UPDATE website 
+           SET user_id=l_transfer_to_user_id 
+         WHERE id=pWebsiteId AND user_id=l_transfer_from_user_id;
+
+        UPDATE article 
+           SET author_user_id=l_transfer_to_user_id 
+         WHERE id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteid AND user_id=l_transfer_from_user_id);
+
+        UPDATE asset 
+           SET user_id=l_transfer_to_user_id 
+         WHERE article_id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteid AND user_id=l_transfer_from_user_id);
+
+        UPDATE website_article SET user_id=l_transfer_to_user_id 
+         WHERE website_id=pWebsiteId AND user_id=l_transfer_from_user_id;
+
+        COMMIT;
     END;
 
 END;
