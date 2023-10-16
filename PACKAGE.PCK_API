@@ -12,6 +12,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
     --
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
     --
+    PROCEDURE callCloudinaryAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
+    --
     PROCEDURE callTerraformAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB);
     --
 END;
@@ -87,6 +89,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
 
     END;
 
+    /*
+    **  GITHUB API
+    */
     PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
         l_github_repos_owner users.github_repos_owner%type;
         l_github_token users.github_token%type;
@@ -128,6 +133,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
             pData := apex_web_service.make_rest_request(p_url=>l_github_url, p_http_method=>pMethod, p_body=>pBody);
         END IF;
 
+        pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_github_url);
+
         IF (apex_web_service.g_status_code BETWEEN 200 AND 299) OR (apex_web_service.g_status_code=pStatusAllowed) THEN
             RETURN;
         END IF;
@@ -148,7 +155,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         callGithubAPI(pUserId=>pUserId,pRepository=>pRepository,pEndpoint=>pEndpoint,pMethod=>pMethod,pBody=>l_clob,pStatusAllowed=>pStatusAllowed,pData=>pData);
     END;
 
-
+    /*
+    **  NETLIFY API
+    */
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
         l_netlify_token users.netlify_token%type;
         l_netlify_url VARCHAR2(100):='https://api.netlify.com/api/v1/';
@@ -183,6 +192,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
             pData := apex_web_service.make_rest_request(p_url=>l_netlify_url, p_http_method=>pMethod, p_body=>pBody);
         END IF;
 
+        pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_netlify_url);
+
         IF (apex_web_service.g_status_code BETWEEN 200 AND 299) OR (apex_web_service.g_status_code=pStatusAllowed) THEN
             RETURN;
         END IF;
@@ -192,6 +203,67 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
             l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
         END LOOP;
         RAISE_APPLICATION_ERROR(-20030,l_error_message);
+    END;
+
+    /*
+    **  CLOUDINARY API
+    */
+    PROCEDURE callCloudinaryAPI(
+        pUserId IN users.id%type, 
+        pEndpoint IN VARCHAR2, 
+        pMethod IN VARCHAR2, 
+        pBody IN VARCHAR2 DEFAULT NULL,
+        pStatusAllowed IN INTEGER DEFAULT NULL, 
+        pData IN OUT NOCOPY CLOB)
+    IS
+        l_cloudinary_url VARCHAR2(100):='https://api.cloudinary.com/v1_1/';
+        l_cld_api_key users.cld_api_key%type;
+        l_cld_api_secret users.cld_api_secret%type;
+        l_error_message LONG;
+    BEGIN
+        /* Get user's API authentication details if using ADMIN API
+        ** Otherwise the calling routine will have signed the parameter values
+        */
+        IF (pBody IS NULL) THEN
+            FOR C IN (SELECT cld_api_key, cld_api_secret FROM users WHERE id=pUserId) LOOP 
+                l_cld_api_key:=C.cld_api_key;
+                l_cld_api_secret:=C.cld_api_secret;
+            END LOOP;
+
+            /* Use Administrator's token if user does not have token */
+            IF (l_cld_api_key IS NULL) THEN
+                SELECT u.cld_api_key, u.cld_api_secret
+                INTO l_cld_api_key, l_cld_api_secret
+                FROM apex_workspace_apex_users w, users u 
+                WHERE w.email=u.email
+                AND w.is_admin='Yes'
+                FETCH FIRST ROW ONLY;
+            END IF;
+        END IF;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'Content-Type';
+        apex_web_service.g_request_headers(1).value := 'application/json';
+
+        l_cloudinary_url:=l_cloudinary_url || pEndpoint;
+
+        IF (pBody IS NULL) THEN
+            pData := apex_web_service.make_rest_request(p_url=>l_cloudinary_url, p_http_method=>pMethod, p_username=>l_cld_api_key, p_password=>l_cld_api_secret);
+        ELSE
+            pData := apex_web_service.make_rest_request(p_url=>l_cloudinary_url, p_http_method=>pMethod, p_body=>pBody);
+        END IF;
+
+        pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_cloudinary_url);
+
+        IF (apex_web_service.g_status_code BETWEEN 200 AND 299) OR (apex_web_service.g_status_code=pStatusAllowed) THEN
+            RETURN;
+        END IF;
+
+        l_error_message:=pMethod || ' ' || l_cloudinary_url || ' https status:' || apex_web_service.g_status_code;
+        FOR C IN (SELECT message FROM JSON_TABLE(pData,'$.error' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
+            l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
+        END LOOP;
+        RAISE_APPLICATION_ERROR(-20040,l_error_message);
     END;
 
     PROCEDURE callTerraformAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
@@ -232,7 +304,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
             FOR C IN (SELECT message FROM JSON_TABLE(pData,'$' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
                 l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
             END LOOP;
-            RAISE_APPLICATION_ERROR(-20040,l_error_message);
+            RAISE_APPLICATION_ERROR(-20050,l_error_message);
         END IF;
     END;
 END;
