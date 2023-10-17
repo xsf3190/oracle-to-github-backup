@@ -32,7 +32,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type) RETURN CLOB;
+    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB;
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
@@ -200,13 +200,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END IF;
     END;
 
+    /*
+     **  Build at most 2 deploy buttons same width as first.
+     */
     FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2 is
-        l_html VARCHAR2(500);
+        l_html VARCHAR2(1000);
+        l_text VARCHAR2(50);
+        l_text_custom VARCHAR2(50);
+        l_width VARCHAR2(50);
     BEGIN
+
+        l_text:='https://' || REPLACE(pDomainName,'.','-') || '.netlify.app';
+        l_width:='style="--width:' || LENGTH(l_text) || 'ch';
+
         IF (pNetlifySiteId IS NOT NULL) THEN 
-            l_html:='<button type="button" class="deploy-website cta" data-site_id="' || pNetlifySiteId || '">https://' || REPLACE(pDomainName,'.','-') || '.netlify.app</button>';
+            l_html:=
+            '<button type="button" class="deploy-website cta" data-site_id="' || pNetlifySiteId || '" '|| l_width || '">
+                <span style="--content:''\2192''">' || l_text || '</span>
+             </button>';
             IF (pNetlifySiteIdCustom IS NOT NULL) THEN 
-                l_html:=l_html || '<button type="button" class="deploy-website cta" data-site_id="'|| pNetlifySiteIdCustom || '">https://www.' || pDomainName || '</button>';
+                l_html:=l_html || 
+                '<button type="button" class="deploy-website cta" data-site_id="'|| pNetlifySiteIdCustom || '" ' || l_width || '">
+                    <span style="--content:''\2192''">https://www.' || pDomainName || '</span>
+                 </button>';
             END IF;
         END IF;
         RETURN(l_html);
@@ -366,7 +382,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_url);
     END;    
 
-    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type) RETURN CLOB IS
+    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB IS
         l_clob CLOB;
     BEGIN
         FOR C IN (SELECT a.id,
@@ -384,23 +400,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
               FROM article a, website_article wa, asset c
              WHERE wa.website_id=pWebsiteId
                AND a.id=wa.article_id
+               AND a.id=NVL(pArticleId,a.id)
                AND a.cover_asset_id=c.id(+)
-             UNION ALL
-             SELECT -1, null,null,null,null,null,null,0,null,null,null,null,null,0,systimestamp,-1 from dual
+             --UNION ALL
+             --SELECT -1, null,null,null,null,null,null,0,null,null,null,null,null,0,systimestamp,-1 from dual
              ORDER BY display_order)
         LOOP
             l_clob:=l_clob || TO_CLOB('
             <li class="card" tabindex="0" data-id="' || C.id || '">
                 <div class="button-container">
-                    <div>
-                        <button type="button" class="new-before">
-                            <svg class="icon"><use href="#left-long"></use></svg>
-                        </button>
-                        <span>NEW CONTENT</span>
-                        <button type="button" class="new-after">
-                            <svg class="icon"><use href="#right-long"></use></svg>
-                        </button>
-                    </div>
                     <div class="dropdown">
                         <button type="button" class="show-dropdown">&blacktriangledown;</button>
                         <ul class="dropdown-items">
@@ -630,6 +638,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </form>
         <hr>
         <nav>
+            <button type="button" class="cta new-content" style="--width:20ch">
+                <span style="--content:''\002B''">NEW CONTENT</span>
+            </button>
             <div class="dropdown">
                 <span>View Options</span>
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
