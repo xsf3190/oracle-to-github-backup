@@ -866,6 +866,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */        
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
         l_user_id users.id%type;
+        l_website_id website_article.website_id%type;
         l_article_id article.id%type;
         l_title article.title%type;
         l_excerpt varchar2(1000);
@@ -878,13 +879,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_user_id:=pck_core.getUserId();
 
-        SELECT SUBSTR(title,1,60) title, 
+        SELECT website_id,
+               SUBSTR(title,1,60) title, 
                REGEXP_SUBSTR(word_count,'(\d)+') word_count,
                edit_text,
                u.name,
                u.client_TZ
-          INTO l_title, l_word_count, l_edit_text, l_name, l_client_TZ
-          FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (title, word_count, edit_text CLOB))
+          INTO l_website_id, l_title, l_word_count, l_edit_text, l_name, l_client_TZ
+          FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (website_id, title, word_count, edit_text CLOB))
           WHERE u.id=l_user_id;
 
         apex_escape.set_html_escaping_mode('E');
@@ -909,11 +911,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END IF;
         END LOOP;
 
-        UPDATE article SET title=l_title, excerpt=l_excerpt, word_count=l_word_count, body_html=l_edit_text, updated_date=current_timestamp
-         WHERE id=pArticleId;
+        IF (pArticleId=0) THEN
+            INSERT INTO article (id, title, excerpt, word_count, body_html, author_user_id, created_date) VALUES (seq_article.nextval, l_title, l_excerpt, l_word_count, l_edit_text, l_user_id, current_timestamp);
+            INSERT INTO website_article(article_id, website_id, display_order, user_id) VALUES (seq_article.currval, l_website_id, seq_article.currval*-1, l_user_id);
+        ELSE
+            UPDATE article SET title=l_title, excerpt=l_excerpt, word_count=l_word_count, body_html=l_edit_text, updated_date=current_timestamp
+             WHERE id=pArticleId;
+        END IF;
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
+        IF (pArticleId=0) THEN
+            APEX_JSON.write('articleId',seq_article.currval);
+            APEX_JSON.write('new_card',pck_core.buildWebsiteArticles(l_website_id,seq_article.currval));
+        END IF;
         APEX_JSON.write('title', l_title);
         APEX_JSON.write('excerpt', l_excerpt);
         APEX_JSON.write('words', l_word_count || ' words');
