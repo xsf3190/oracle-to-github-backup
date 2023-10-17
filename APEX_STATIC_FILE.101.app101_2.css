@@ -102,6 +102,10 @@ nav:first-of-type {
     top: 0;
 }
 
+nav:has(.cta) {
+    justify-content: space-between;
+}
+
 form.website {
     display: flex;
     flex-wrap: wrap;
@@ -142,11 +146,37 @@ button {
 }
 
 button.cta {
-    min-width:14ch;
+    inline-size: var(--width);
     background-color: var(--color-solid);
     padding: 1ch 2ch;
     color: white;
     border-radius: 1ch;
+}
+
+button.cta span {
+  cursor: pointer;
+  display: inline-block;
+  position: relative;
+  transition: 0.5s;
+}
+
+button.cta span:after {
+  content: var(--content);
+  font-weight: 900;
+  position: absolute;
+  opacity: 0;
+  top: 0;
+  right: -2rem;
+  transition: 0.5s;
+}
+
+button.cta:hover span {
+  padding-right: 2.5rem;
+}
+
+button.cta:hover span:after {
+  opacity: 1;
+  right: 0;
 }
 
 .show-dropdown, .new-before, .new-after {
@@ -553,6 +583,11 @@ nav button {
     transition: opacity 1s ease-in-out;
 }
 
+.card > div:first-of-type {
+    display: flex;
+    justify-content: flex-end;
+}
+
 .card span {
     font-family: monospace;
 }
@@ -755,11 +790,12 @@ div.editor {
   object-fit: scale-down;
   max-height: 20ch; /* bollox safari */
 }
-
+/*
 .gallery-container .card > div:first-of-type {
     display: flex;
     justify-content: flex-end;
 }
+*/
 
 video, audio {
     inline-size: 100%;
