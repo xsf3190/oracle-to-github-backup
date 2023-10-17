@@ -19,6 +19,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       copyWebsite = website.querySelector(".copy-website"),
       deployButtons = website.querySelector(".deploy-buttons > div"),
       deployWebsite = website.querySelectorAll(".deploy-website"),
+      newContent = document.querySelector(".new-content"),
       listBtn = document.querySelector(".list-view"),
       articleList = document.querySelector(".article-list"),
       cards = document.querySelector(".cards"),
@@ -179,6 +180,14 @@ copyWebsite.addEventListener("click",  () => {
         domainNameResult.textContent = "WEBSITE COPIED";
         //domain_name.focus();
     });
+});
+
+/*
+ **  NEW CONTENT
+ */
+newContent.addEventListener("click",  () => {
+    gArticleId = 0;
+    editorContainer.style.display = "block";
 });
 
 /*
@@ -977,9 +986,13 @@ const saveData = async ( data ) => {
     const word_count = document.querySelector(".ck-word-count__words").textContent;
     
     const title = document.querySelector(".ck > h1").textContent;
-    await execProcess("article/"+gArticleId, "PUT",  {edit_text: data, title: title, word_count: word_count}).then( (data) => {
+    await execProcess("article/"+gArticleId, "PUT",  {website_id: website.dataset.id, edit_text: data, title: title, word_count: word_count}).then( (data) => {
         pendingActions.remove( action );
         editor_status_text.textContent = "Saved " + data.words;
+        if (data.new_card) {
+            gArticleId = data.articleId;
+            cards.insertAdjacentHTML('afterbegin',data.new_card);
+        }
         update_card_elements(data);
     }).catch( (error) => console.error(error));
 }
