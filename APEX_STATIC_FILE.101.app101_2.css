@@ -437,13 +437,13 @@ dialog legend > button {
 }
 
 
-dialog.list > div{
+dialog.log > div{
     inline-size: 90vw;
     display: grid;
     grid-template-columns: 1fr 44px;
 }
 
-dialog.list table {
+dialog.log table {
     table-layout: fixed;
     width: 100%;
     white-space: nowrap;
@@ -453,22 +453,22 @@ dialog.list table {
     font-size: 1ch;
 }
 
-dialog.list th:nth-of-type(1) {
+dialog.log th:nth-of-type(1) {
     width: 10%;
     text-align: left;
     vertical-align: top;
 }
 
-dialog.list th:nth-of-type(2) {
+dialog.log th:nth-of-type(2) {
     width: 90%;
     text-align: left;
 }
 
-dialog.list td {
+dialog.log td {
     vertical-align: top;
 }
 
-dialog.list tr {
+dialog.log tr {
     border-bottom: 1px solid var(--color-pale);
 }
 
@@ -541,7 +541,8 @@ dialog.list tr {
 }
 
 button svg,
-button use {
+button use,
+button span {
   pointer-events: none;
 }
 
@@ -567,17 +568,12 @@ nav button {
     gap: 3ch;
 }
 
-
-.card[data-id="-1"] {
-  display:none;
-}
-
 .card {
     border: 0.1em solid;
     border-radius: 0.5em;
     padding: 0.5em;
     display: grid;
-    grid-template-rows: max-content max-content max-content 1fr;
+    grid-template-rows: max-content max-content 1fr;
     gap: 0.75em;
     opacity: 1;
     transition: opacity 1s ease-in-out;
@@ -724,6 +720,14 @@ div.editor {
 
 .ck-content h4 {
     font-size: var(--step--1);
+}
+
+.ck-content ul {
+    margin-inline-start: 1ch;
+}
+
+.ck-content li {
+    margin-block-start: 1ch;
 }
 
 .ck-content pre code {
