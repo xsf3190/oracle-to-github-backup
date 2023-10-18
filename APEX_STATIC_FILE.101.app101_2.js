@@ -11,6 +11,8 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       vitalsQueue = new Set(),
       mediaQueue = new Set(),
       container = document.querySelector(".container"),
+      logDialog = document.querySelector("dialog.log"),
+      logContent = logDialog.querySelector(".content"),
       website = document.querySelector("form.website"),
       domainName = website.querySelector("#domain_name"),
       domainNameResult = domainName.nextElementSibling.querySelector(".result"),
@@ -18,10 +20,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       newWebsite = website.querySelector(".new-website"),
       copyWebsite = website.querySelector(".copy-website"),
       deployButtons = website.querySelector(".deploy-buttons > div"),
-      deployWebsite = website.querySelectorAll(".deploy-website"),
       newContent = document.querySelector(".new-content"),
-      listBtn = document.querySelector(".list-view"),
-      articleList = document.querySelector(".article-list"),
       cards = document.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
@@ -40,7 +39,6 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       galleryFullCloseFieldset = galleryFull.querySelector("button.close-fieldset"),
       galleryFullLegend = galleryFull.querySelector("legend > span"),
       galleryFullDimensions = galleryFull.querySelectorAll("fieldset button.dimensions"),
-      list = document.querySelector("dialog.list"),
       listPerformance = gallery.querySelector(".list-performance"),      
       perftable = document.querySelector("dialog.perftable");
 
@@ -187,6 +185,9 @@ copyWebsite.addEventListener("click",  () => {
  */
 newContent.addEventListener("click",  () => {
     gArticleId = 0;
+    editor.setData("");
+    editor_status = "init";
+    editor_status_text.textContent = "";
     editorContainer.style.display = "block";
 });
 
@@ -271,10 +272,12 @@ updateDeploymentStatus = (websiteid, siteid) => {
 /*
  **  LIST VIEW
  */
-listBtn.addEventListener("click",  () => {
-    execProcess( "website-list/"+website.dataset.id,"GET").then( (data) => {
-        cards.replaceChildren();
-        cards.insertAdjacentHTML('afterbegin',data.content);
+document.querySelectorAll("button.view-option").forEach((button) => {
+    button.addEventListener("click",  (e) => {
+        execProcess( "website-list/"+website.dataset.id + "?view="+e.target.dataset.view,"GET").then( (data) => {
+            cards.replaceChildren();
+            cards.insertAdjacentHTML('afterbegin',data.content);
+        });
     });
 });
 
@@ -296,6 +299,7 @@ document.querySelectorAll("button.close").forEach((button) => {
         e.stopPropagation();
         if (e.target.dataset.sqlcode) {
             if (Number(e.target.dataset.sqlcode) === -20000) {
+                console.log("button.close click handler finds sqlcode=20000");
                 window.location.href = gHomeUrl;
             }
         }
@@ -571,11 +575,7 @@ const cardHandler = (e) => {
         id = website.dataset.id;
     }
 
-    if (e.target.matches(".new-before")) {
-        add_content(e.target, "beforebegin");
-    } else if (e.target.matches(".new-after")) {
-        add_content(e.target, "afterend");
-    } else if (e.target.matches(".show-gallery")) {
+    if (e.target.matches(".show-gallery")) {
         show_gallery(id);                                
     } else if (e.target.matches(".delete")) {
         delete_object(id, e);
@@ -937,7 +937,7 @@ new Sortable(cards, {
     store: {
         set: async function (sortable) {
             execProcess("website-list/" + website.dataset.id, "PUT", {dbid_string: sortable.toArray().join(":")} ).then( () => {
-                console.log("articleList reordered");
+                console.log("cards reordered");
             });
         }
     }
@@ -953,17 +953,20 @@ signout.addEventListener('click',  () => {
         return;
     }
     execProcess("signout","DELETE").then( () => {
+        console.log("User clicked Log Off");
         window.location.href = gHomeUrl;
-    }).catch( ()=>window.location.href = gHomeUrl);
+    }).catch( ()=>{
+        console.log("Log Off click handler caught error");
+        window.location.href = gHomeUrl;
+    })
 });
 
 const sessionLog = document.querySelector(".session-log");
 sessionLog.addEventListener('click',  () => {
     execProcess("log/"+apex_session,"GET").then( (data) => {
-        const log = list.querySelector(".content");
-        log.replaceChildren();
-        log.insertAdjacentHTML('afterbegin',data.content);
-        list.showModal();
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('afterbegin',data.content);
+        logDialog.showModal();
     });
 });
 
@@ -989,11 +992,10 @@ const saveData = async ( data ) => {
     await execProcess("article/"+gArticleId, "PUT",  {website_id: website.dataset.id, edit_text: data, title: title, word_count: word_count}).then( (data) => {
         pendingActions.remove( action );
         editor_status_text.textContent = "Saved " + data.words;
-        if (data.new_card) {
+        if (gArticleId === 0) {
             gArticleId = data.articleId;
             cards.insertAdjacentHTML('afterbegin',data.new_card);
         }
-        update_card_elements(data);
     }).catch( (error) => console.error(error));
 }
 
@@ -1028,18 +1030,6 @@ ClassicEditor.create(document.querySelector("#editor"), {
         console.error(error);
     });
 
-/* 
- ** CARD 0 HAS CONTENT - MEDIA OR TEXT - SO ENABLE BUTTONS AND SET ARTICLE ID IN DROPDOWN LIST
- */
-const enable_card_zero = (articleId) => {
-    li = document.querySelector("[data-id='0']");
-    li.dataset.id = articleId;
-    li.querySelectorAll(".dropdown-items button:disabled").forEach((btn) => {
-        btn.disabled = false;
-    });
-    gArticleId=articleId;
-    return li;
-}
 
 if (window.location.hash === "#_=_"){
     history.replaceState 
@@ -1047,19 +1037,6 @@ if (window.location.hash === "#_=_"){
         : window.location.hash = "";
 }
 
-/* 
- ** ADD NEW CARD
- */
-const add_content = (target, position) => {
-  if (cards.querySelector("[data-id='0']")) {
-        popupOpen("No need for that","... add content to the card you already created");
-        return;
-  }
-  const selected_card = target.closest(".card");
-  const clone = cards.querySelector("[data-id='-1']").cloneNode(true);
-  clone.dataset.id = "0";
-  selected_card.insertAdjacentElement(position, clone);
-};
 
 /* 
  ** UPLOAD MEDIA TO CLOUDINARY
@@ -1086,85 +1063,18 @@ const edit_text = (articleId,button) => {
     if ( pendingActions.hasAny ) {
         return;
     }
-    if (articleId === "0") {
-        const websiteId = document.querySelector("form").dataset.id;
-        execProcess( "article/"+articleId,"POST",{websiteid:websiteId}).then( (data) => {
-            enable_card_zero(data.articleId);
-            editor.setData("");
-            editor_status = "init";
-            editor_status_text.textContent = "";
-            //editorDialog.showModal();
-            editorContainer.style.display = "block";
-
-        });
-    } else {
-        execProcess( "article/"+articleId,"GET").then( (data) => {
-            gArticleId = articleId;
-            editor_status = "init";
-            editor_status_text.textContent = "";
-            if (data.content) {
-                editor.setData(data.content);
-            } else {
-                editor.setData("");
-            }
-            editorContainer.style.display = "block";
-        });
-    }
-}
-
-/* 
- ** UPDATE CARD ELEMENTS AFTER SAVING TEXT
- */
-const update_card_elements = (data) => {
-    // depending on whether any content was saved
-    // exchange <br> and <h4> with <button> and <p>
-    const li = document.querySelector("[data-id='" + gArticleId + "']");
-    let br = li.querySelector("br"),
-        button = li.querySelector("button.no-media.edit-text"),
-        h4 = li.querySelector('h4'),
-        p = li.querySelector('p'),
-        span = li.querySelector(".word-count");
-
-    if (data.title) {
-        if (!h4) {
-            h4 = document.createElement("h4");
-            h4.classList.add("edit-text","title")
-            br.replaceWith(h4);
-        }
-        h4.textContent = data.title;
-    } else {
-        if (h4) {
-            br = document.createElement("br");
-            h4.replaceWith(br);
-        }
-    }
-
-    if (data.excerpt) {
-        if (!p) {
-            p = document.createElement("p");
-            p.textContent = data.excerpt;
-            const span = document.createElement("span");
-            span.classList.add("word-count");
-            span.textContent = data.words;
-            p.append(span);
-            button.replaceWith(p);
+    execProcess( "article/"+articleId,"GET").then( (data) => {
+        gArticleId = articleId;
+        editor_status = "init";
+        editor_status_text.textContent = "";
+        if (data.content) {
+            editor.setData(data.content);
         } else {
-            p.textContent = data.excerpt;
-            const span = document.createElement("span");
-            span.classList.add("word-count");
-            span.textContent = data.words;
-            p.append(span);
+            editor.setData("");
         }
-    } else {
-        if (p) {
-            button = document.createElement("button");
-            button.textContent = "CREATE TEXT";
-            button.classList.add("edit-text","no-media");
-            p.replaceWith(button);                
-        }
-    }
-    li.querySelector(".updated-date").textContent = data.updated; 
-};
+        editorContainer.style.display = "block";
+    });
+}
 
 /*
 **  REMOVE CARD FROM DOM
