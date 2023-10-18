@@ -32,7 +32,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB;
+    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pViewOption IN VARCHAR2 DEFAULT NULL, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB;
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
@@ -382,7 +382,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_url);
     END;    
 
-    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB IS
+    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pViewOption IN VARCHAR2 DEFAULT NULL, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB IS
         l_clob CLOB;
     BEGIN
         FOR C IN (SELECT a.id,
@@ -441,9 +441,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     THEN '<br>
                         <button type="button" class="no-media edit-text">CREATE TEXT</button>'
                     ELSE '<p class="title edit-text">' || NVL(C.title, C.excerpt) || '</p> ' 
-                            || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.nav_name',C.nav_name)
-                            || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_title',C.page_title) 
-                            || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_description',C.page_description)  
+                            || CASE WHEN pViewoption='nav' THEN buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.nav_name',C.nav_name) END
+                            || CASE WHEN pViewoption='seo' THEN buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_title',C.page_title) ||
+                                                                buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_description',C.page_description)  END
                 END || '   
                 <footer class="button-container"><div><span class="word-count">' || NVL(C.word_count,0) || ' words' || '</span> | <span class="nb-assets">' || NVL(C.nb_assets,0) || ' media</span></div><span class="updated-date">' || fmtUpdatedDate(C.updated_date)  || '</span></footer>
             </li>');
@@ -646,7 +646,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
                 <ul class="dropdown-items">
                     <li>
-                        <button type="button" class="with-icon list-view">
+                        <button type="button" class="with-icon view-option" data-view="thumbs">
                             <svg class="icon">
                                 <use href="#thumbtack"></use>
                             </svg>
@@ -654,7 +654,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         </button>
                     </li>                    
                     <li>
-                        <button type="button" class="with-icon nav-view">
+                        <button type="button" class="with-icon view-option" data-view="nav">
                             <svg class="icon">
                                 <use href="#bars"></use>
                             </svg>
@@ -662,7 +662,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         </button>
                     </li>
                     <li>
-                        <button type="button" class="with-icon seo-view">
+                        <button type="button" class="with-icon view-option" data-view="seo">
                             <svg class="icon">
                                 <use href="#searchengin"></use>
                             </svg>
@@ -670,7 +670,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         </button>
                     </li>
                     <li>
-                        <button type="button" class="with-icon edit-view">
+                        <button type="button" class="with-icon view-option" data-view="">
                             <svg class="icon">
                                 <use href="#pencil"></use>
                             </svg>
@@ -680,9 +680,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </ul>
             </div>
         </nav>
-        <ul class="cards" style="display:grid">' || buildWebsiteArticles(l_domains(1).id) || '
-        </ul>
-        <ul class="article-list" style="display:none">
+        <ul class="cards">' || buildWebsiteArticles(l_domains(1).id) || '
         </ul>');
 
         l_clob:=l_clob || TO_CLOB('
@@ -703,7 +701,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </form>
             </div>
         </dialog>
-        <dialog class="list">
+        <dialog class="log">
             <div>
                 <div class="content"></div>
                 <button type="button" class="close">&times;</button>
