@@ -697,7 +697,8 @@ div.editor {
 /* ******************************** */
 
 .ck-editor__editable_inline {
-    max-height:calc(100dvh - 9rem);
+    max-height:75dvh;
+    min-height: 50dvh;
     overscroll-behavior: contain;
 }
 
