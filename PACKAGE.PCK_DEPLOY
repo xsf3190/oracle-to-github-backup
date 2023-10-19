@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as 
     --
+    PROCEDURE deleteDirectory(pWebsiteId IN website.id%type, pUserId IN users.id%type);
+    --
     PROCEDURE deployInfrastructure;
     --
     PROCEDURE deployWebsite(pBodyText IN CLOB);
@@ -222,12 +224,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_ssl_url VARCHAR2(100);
         l_deployment_complete BOOLEAN:=FALSE;
         l_netlify_status website_deploy.status%type;
+        l_job_name VARCHAR2(30);
     BEGIN
         l_user_id:=pck_core.getUserId();
 
         SELECT site_id INTO l_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
-
-        pck_core.log(pWebsiteId || ',' || l_site_id);
 
         /* If github action completed get latest Netlify deployment status and add this to the website_deploy table */
 
@@ -283,6 +284,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         IF (l_deployment_complete) THEN
             pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites/'|| l_site_id || '/unlink_repo', pMethod=>'PUT', pData=>l_clob);
+
+            /* Submit background job to delete Github build directory */
+            l_job_name:=dbms_scheduler.generate_job_name('DELETE_');
+
+            dbms_scheduler.create_job(
+                job_name   => l_job_name,
+                job_type   =>'STORED_PROCEDURE',
+                job_action =>'pck_deploy.deleteDirectory',
+                number_of_arguments=>2,
+                start_date=>systimestamp
+            );
+            dbms_scheduler.set_job_argument_value(
+                job_name => l_job_name,
+                argument_position => 1,
+                argument_value => pWebsiteId
+            );
+            dbms_scheduler.set_job_argument_value(
+                job_name => l_job_name,
+                argument_position => 2,
+                argument_value => l_user_id
+            );
+            dbms_scheduler.enable(l_job_name);
         END IF;
 
         apex_json.open_object; 
@@ -294,7 +317,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error;
-    END;  
+    END;   
+
+    /*
+    ** Delete Github build directory - have to delete files individually before Github removes directory
+    */    
+    PROCEDURE deleteDirectory(pWebsiteId IN website.id%type, pUserId IN users.id%type) IS
+        l_clob CLOB;
+        l_domain_name website.domain_name%type;
+        l_github CLOB;
+        l_json JSON_OBJECT_T;
+    BEGIN
+        SELECT domain_name INTO l_domain_name FROM website WHERE id=pWebsiteId;
+        pck_api.callGithubAPI(pUserId=>pUserId, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pData=>l_clob);
+        FOR C IN (SELECT name, sha, message FROM  JSON_TABLE(l_clob FORMAT JSON, '$[*]' COLUMNS (name, sha, message))) LOOP
+            IF (C.message IS NOT NULL) THEN 
+                pck_core.log(C.message);
+                RAISE_APPLICATION_ERROR(-20050,'Error in deleteDirectory - '|| C.message);
+            ELSE
+                l_json:=JSON_OBJECT_T.parse('{"message":"Commit by PLSQL"}');
+                l_json.put('sha',C.sha);
+                l_github:=l_json.to_clob; 
+                pck_api.callGithubAPI(pUserId=>pUserId, pEndpoint=>'contents/' || l_domain_name || '/'||C.name, pMethod=>'DELETE', pBody=>l_github, pData=>l_clob);
+            END IF;
+        END LOOP;
+    END;
 
     /*
     ** Build and deploy infrastructure through Terraform by submitting Github action. 
@@ -337,7 +384,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error;
-    END;    
-
+    END;       
 end;
 /
