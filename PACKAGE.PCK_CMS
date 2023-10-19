@@ -203,7 +203,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
 
     /*
-    ** GET ARTICLE (PAGE) CONTENT FOR WEBSITE
+    ** GET ALL ARTICLE (PAGE) CONTENT FOR A WEBSITE
     */
     PROCEDURE getWebsite(pWebsiteId IN website.id%type) IS
         l_user_id users.id%type;
@@ -308,7 +308,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
-        apex_json.write('content', pck_core.buildWebsiteArticles(pWebsiteId,pViewOption));
+        apex_json.write('content', pck_core.buildWebsiteArticles(pWebsiteId,pViewOption=>pViewOption));
         apex_json.close_object;
 
         EXCEPTION
@@ -762,10 +762,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     l_article_object.put('text',stripHeading(C1.title, C1.body_html));
                 END IF;
 
-                FOR C2 IN (SELECT rn, nb, cld_cloud_name, resource_type, public_id, format, width, alt_text 
+                FOR C2 IN (SELECT rn, nb, cld_cloud_name, resource_type, public_id, format, width, height, alt_text 
                              FROM
                                 (
-                                 SELECT cld_cloud_name, resource_type, public_id, format, width, alt_text, display_order, ROW_NUMBER() OVER (ORDER BY display_order) rn, COUNT(*) OVER () nb
+                                 SELECT cld_cloud_name, resource_type, public_id, format, width, height, alt_text, display_order, ROW_NUMBER() OVER (ORDER BY display_order) rn, COUNT(*) OVER () nb
                                    FROM asset 
                                   WHERE article_id=C1.id
                                 ) 
@@ -782,6 +782,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     l_url_img:=pck_core.getCloudinaryUrl(C2.cld_cloud_name, C2.resource_type, C2.public_id, C2.format, C2.width, C.image_dimension);
                     l_asset_object.put('media',l_media_type);
                     l_asset_object.put('url',l_url_img);
+                    l_asset_object.put('width',ROUND(C2.width*.25));
+                    l_asset_object.put('height',ROUND(C2.height*.25));
                     l_asset_array.append(l_asset_object);
                     IF (C2.rn=C2.nb) THEN
                         l_article_object.put('assets',l_asset_array);
@@ -896,7 +898,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         APEX_JSON.write('success', TRUE);
         IF (pArticleId=0) THEN
             APEX_JSON.write('articleId',seq_article.currval);
-            APEX_JSON.write('new_card',pck_core.buildWebsiteArticles(l_website_id,seq_article.currval));
+            APEX_JSON.write('new_card',pck_core.buildWebsiteArticles(l_website_id,pArticleId=>seq_article.currval));
         END IF;
         APEX_JSON.write('title', l_title);
         APEX_JSON.write('excerpt', l_excerpt);
@@ -1083,17 +1085,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Delete Website and articles from schema, Netlify and Github repository folder
+     **  Delete Website and articles from schema and Netlify
      */  
     PROCEDURE deleteWebsite(pUserId IN website.user_id%type, pWebsiteId IN website.id%type) IS
         TYPE t_website_article IS TABLE OF website_article%rowtype;
         l_website_articles t_website_article;
-        l_domain_name website.domain_name%type;
         l_netlify_site_id website.netlify_site_id%type;
         l_netlify_site_id_custom website.netlify_site_id%type;
         l_clob CLOB;
-        l_github CLOB;
-        l_json JSON_OBJECT_T;
     BEGIN
         SELECT * BULK COLLECT INTO l_website_articles FROM website_article WHERE website_id=pWebsiteId AND user_id=pUserId;
 
@@ -1102,7 +1101,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;
 
         DELETE website WHERE id=pWebsiteId AND user_id=pUserId 
-            RETURNING domain_name, netlify_site_id, netlify_site_id_custom INTO l_domain_name, l_netlify_site_id, l_netlify_site_id_custom;
+            RETURNING netlify_site_id, netlify_site_id_custom INTO l_netlify_site_id, l_netlify_site_id_custom;
 
         IF (l_netlify_site_id IS NOT NULL) THEN
             pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
@@ -1111,19 +1110,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         IF (l_netlify_site_id_custom IS NOT NULL) THEN
             pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id_custom, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
         END IF;
-
-        /* Delete Github DEPLOY repository directory for the website. nb: Github deletes the directory after all of its files have been deleted */
-        pck_api.callGithubAPI(pUserId=>pUserid, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pStatusAllowed=>404, pData=>l_clob);
-        FOR C IN (SELECT name, sha, message FROM JSON_TABLE(l_clob FORMAT JSON, '$[*]' COLUMNS (name, sha, message))) LOOP
-            IF (C.message IS NOT NULL) THEN 
-                pck_core.log(C.message);
-            ELSE
-                l_json:=JSON_OBJECT_T.parse('{"message":"Commit by PLSQL"}');
-                l_json.put('sha',C.sha);
-                l_github:=l_json.to_clob; 
-                pck_api.callGithubAPI(pUserId=>pUserid, pEndpoint=>'contents/' || l_domain_name || '/'||C.name, pMethod=>'DELETE', pBody=>l_github, pData=>l_clob);
-            END IF;
-        END LOOP;
 
         apex_json.open_object;  
         apex_json.write('success',TRUE);
@@ -1503,12 +1489,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */      
     PROCEDURE uploadPageVisit(pBodyText IN CLOB) IS
         l_bodytext CLOB:=pBodyText;
-        l_ip_address website_article_visit.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
+        l_ip_address website_article_cwv.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
     BEGIN
-        INSERT INTO website_article_visit (website_id, article_id, name, value, rating, ip_address)
-        SELECT website_id, article_id, name, value, rating, l_ip_address
-          FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' COLUMNS (website_id, article_id,
-                NESTED '$.cwv[*]' COLUMNS (name, value, rating)));    
+        INSERT INTO website_article_cwv (website_id, article_id, cwv_name, cwv_value, cwv_rating, referrer, ip_address)
+        SELECT website_id, article_id, cwv_name, cwv_value, cwv_rating, referrer, l_ip_address
+          FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' COLUMNS (website_id, article_id, cwv_name, cwv_value, cwv_rating, referrer));  
+
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error;
