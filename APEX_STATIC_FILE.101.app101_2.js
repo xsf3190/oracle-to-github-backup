@@ -143,14 +143,10 @@ const resetWebsite = () => {
  **  NEW WEBSITE
  */
 newWebsite.addEventListener("click",  () => {
-    const clone = cards.querySelector("[data-id='-1']").cloneNode(true),
-          clone0 = clone.cloneNode(true);
-    clone0.dataset.id = "0";
-
     resetWebsite();
     
     setTimeout( () => {
-        cards.replaceChildren(clone,clone0);
+        cards.replaceChildren();
         domainName.focus();
     },1000);
 });
@@ -270,7 +266,7 @@ updateDeploymentStatus = (websiteid, siteid) => {
 }
 
 /*
- **  LIST VIEW
+ **  CONTENT VIEW OPTIONS
  */
 document.querySelectorAll("button.view-option").forEach((button) => {
     button.addEventListener("click",  (e) => {
