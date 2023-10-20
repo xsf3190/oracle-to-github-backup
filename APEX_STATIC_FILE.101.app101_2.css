@@ -153,6 +153,11 @@ button.cta {
     border-radius: 1ch;
 }
 
+button:disabled.cta {
+    background-color: var(--color-pale);
+    cursor: none;
+}
+
 button.cta span {
   cursor: pointer;
   display: inline-block;
@@ -593,7 +598,6 @@ nav button {
     inline-size: 100%;
     aspect-ratio: 4/3;
     margin: auto;
-    cursor: pointer;
 }
 
 .card .no-media {
