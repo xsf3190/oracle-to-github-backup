@@ -417,6 +417,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                 </button>
                             </li>
                             <li>
+                                <button type="button" class="with-icon show-gallery">
+                                    <svg class="icon"><use href="#photo-film"></use></svg>
+                                Show Gallery
+                                </button>
+                            </li>
+                            <li>
                                 <button type="button" class="with-icon edit-text">
                                     <svg class="icon"><use href="#pen-to-square"></use></svg>
                                 Edit Text
@@ -433,7 +439,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </div>' ||
                 CASE WHEN NVL(C.nb_assets,0)=0
                     THEN '<button type="button" class="no-media upload-media">UPLOAD MEDIA</button>' 
-                    ELSE '<img class="show-gallery"' || CASE WHEN C.format='svg' THEN ' style="object-fit:scale-down"' END || ' src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">' 
+                    ELSE '<img' || CASE WHEN C.format='svg' THEN ' style="object-fit:scale-down"' END || ' src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">' 
                 END ||
                 CASE WHEN COALESCE(C.title, C.excerpt) IS NULL 
                     THEN '<br>
@@ -561,7 +567,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     </button>
                 </li>
                 <li>
-                    <button type="button" class="with-icon copy-website">
+                    <button type="button" class="with-icon copy-website"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
                         <svg class="icon">
                             <use href="#copy"></use>
                         </svg>
@@ -571,6 +577,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         FOR i IN 1..l_domains.COUNT LOOP
             IF (l_domains(i).id IS NULL) THEN
+                l_domain_dropdown:=l_domain_dropdown ||'<li class="separator"></li>';
                 CONTINUE;
             END IF;
             IF NOT (l_printed_separator) THEN
@@ -636,7 +643,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </form>
         <hr>
         <nav>
-            <button type="button" class="cta new-content" style="--width:20ch">
+            <button type="button" class="cta new-content" style="--width:20ch"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
                 <span style="--content:''\002B''">NEW CONTENT</span>
             </button>
             <div class="dropdown">
