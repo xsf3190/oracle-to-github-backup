@@ -104,6 +104,8 @@ const changeHandler = (e) => {
             }
             const li = e.target.previousElementSibling.querySelector(".dropdown-items .separator");
             li.insertAdjacentHTML('afterend',data.dropdown);
+            newContent.disabled = false;
+            copyWebsite.disabled = false;
         }
         if (data.deploy_buttons) {
             deployButtons.replaceChildren();
@@ -218,7 +220,9 @@ const edit_website = (e) => {
         deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
 
         cards.replaceChildren();
-        cards.insertAdjacentHTML('afterbegin',data.cards);
+        if (data.cards) {
+            cards.insertAdjacentHTML('afterbegin',data.cards);
+        }
     });
 };
 
@@ -404,12 +408,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
     if (!website.dataset.id) {
         website.querySelector(".new-website").click();
         popupOpen("WELCOME","Enter Domain name. Choose template. Create content. Deploy.");
-    } else if (cards.childElementCount === 1) {
-        const clone = cards.querySelector("[data-id='-1']").cloneNode(true);
-        clone.dataset.id = "0";
-        cards.insertAdjacentElement('afterbegin', clone);
     }
-
 });
 
 /*
@@ -808,6 +807,7 @@ galleryFull.querySelectorAll("button.dimensions").forEach((button) => {
  */
 const getCldSignature = async (callback, params_to_sign) => {
     execProcess("cld-signature","POST",params_to_sign).then( (data) => {
+        //console.log("data",data);
         callback(data.signature);
     });
 };
@@ -874,7 +874,6 @@ const widget=cloudinary.createUploadWidget(
                     });
                 }
             });
-            let newArticle = false;
             execProcess("cld-upload","POST",metadata).then( (data) => {
                 let li = document.querySelector("[data-id='" + data.articleId + "']");
                 if (!li) {
@@ -890,13 +889,6 @@ const widget=cloudinary.createUploadWidget(
                 }
                 li.querySelector(".nb-assets").textContent = data.nbAssets;
                 li.querySelector(".updated-date").textContent = data.updated;
-            }).then ( () => {
-                if (newArticle) {
-                    const list = cards.querySelectorAll(".card:not([data-id='-1'])");
-                    execProcess("website-list/" + website.dataset.id, "PUT", {dbid_string: Array.from(list, (id) => id.dataset.id).join(":")} ).then( () => {
-                        console.log("Website articles reordered");
-                    });
-                }
             });
         };
     }
@@ -1042,9 +1034,9 @@ const upload_media = (articleId) => {
         popupOpen("CANT DO THAT YET","Need a Domain Name");
         return;
     }
-    execProcess( "cld-details/"+articleId,"GET").then( (data) => {
+    execProcess( "cld-details","GET").then( (data) => {
         widget.open();
-        widget.update({tags: [data.articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
+        widget.update({tags: [articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
     });
 }
 
@@ -1127,6 +1119,7 @@ const delete_object_confirm = (e) => {
                     domainNameResult.style.color = "green";
                     domainNameResult.textContent = "WEBSITE DELETED OK";
                     deployButtons.replaceChildren();
+                    newContent.disabled = true;
                 },1000);
                 break;                    
         }
