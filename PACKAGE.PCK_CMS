@@ -6,7 +6,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getContent(pWebsiteId IN website.id%type);
     --
-    PROCEDURE getCldDetails(pArticleId IN article.id%type);
+    PROCEDURE getCldDetails;
     --
     PROCEDURE getCldSignature(pParamsToSign IN CLOB);
     --
@@ -83,47 +83,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         EXCEPTION WHEN OTHERS THEN pck_core.log_error;
     END;
 
-    PROCEDURE getCldDetails(pArticleId IN article.id%type) IS
+    PROCEDURE getCldDetails IS
         l_user_id users.id%type;
         l_cld_cloud_name users.cld_cloud_name%type;
         l_cld_api_key users.cld_api_key%type;
         l_cld_api_secret users.cld_api_secret%type;
-        l_app_id NUMBER;
-        l_session_id users.apex_session_id%type;
-        l_page_id NUMBER;
-        l_image_max_size usage.image_max_size%type;
-        l_video_max_size usage.video_max_size%type;
-        DEFAULT_IMAGE_MAX_SIZE CONSTANT NUMBER:=10*1024*1024;
-        DEFAULT_VIDEO_MAX_SIZE CONSTANT NUMBER:=100*1024*1024;
+        l_image_max_size INTEGER;
+        l_video_max_size INTEGER;
     BEGIN      
         l_user_id:=pck_core.getUserId();
 
-        /* get Cloudinary details either of logged on user of Administrator */
-        SELECT cld_cloud_name, cld_api_key, NVL(image_max_size,DEFAULT_IMAGE_MAX_SIZE), NVL(video_max_size, DEFAULT_VIDEO_MAX_SIZE)
-        INTO l_cld_cloud_name, l_cld_api_key, l_image_max_size, l_video_max_size
-        FROM 
-            (
-                SELECT ROW_NUMBER() OVER (ORDER BY g.usage_date DESC) rn, u.cld_cloud_name, u.cld_api_key, g.image_max_size, g.video_max_size
-                FROM users u, usage g 
-                WHERE u.id=l_user_id
-                AND g.user_id(+)=u.id
-            ) 
-        WHERE rn=1;
-
-        IF (l_cld_cloud_name IS NULL) THEN
-            pck_core.getApexSession(l_app_id, l_session_id, l_page_id);
-            SELECT cld_cloud_name, cld_api_key, NVL(image_max_size,DEFAULT_IMAGE_MAX_SIZE), NVL(video_max_size, DEFAULT_VIDEO_MAX_SIZE)
-                INTO l_cld_cloud_name, l_cld_api_key, l_image_max_size, l_video_max_size
-                FROM 
-                    (
-                        SELECT ROW_NUMBER() OVER (ORDER BY usage_date DESC) rn, u.cld_cloud_name, u.cld_api_key, g.image_max_size, g.video_max_size
-                        FROM apex_applications a, users u, usage g
-                        WHERE a.application_id=l_app_id 
-                        AND a.email_from=u.email
-                        AND g.user_id(+)=u.id
-                    ) 
-                WHERE rn=1;
-        END IF;  
+        pck_api.getCloudinaryData(pUserId=>l_user_id, pCloudName=>l_cld_cloud_name, pCldApiKey=>l_cld_api_key, pCldImageMaxSize=>l_image_max_size, pCldVideoMaxSize=>l_video_max_size);
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -131,7 +101,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('apikey', l_cld_api_key);
         apex_json.write('maxImageFileSize', l_image_max_size);
         apex_json.write('maxVideoFileSize', l_video_max_size);
-        apex_json.write('articleId', CASE WHEN pArticleId=0 THEN seq_article.nextval ELSE pArticleId END);
         apex_json.close_object;
 
         EXCEPTION
@@ -157,17 +126,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             COLUMNS filename_override,headers,source,tags,timestamp,use_filename                 
             );
 
-        /* get Cloudinary details either of logged on user OR the hosting Cloudinary user */
-        FOR C IN (SELECT NVL(u1.cld_cloud_name,u2.cld_cloud_name) cld_cloud_name, NVL(u1.cld_api_key, u2.cld_api_key) cld_api_key, NVL(u1.cld_api_secret,u2.cld_api_secret) cld_api_secret
-                    FROM users u1, users u2
-                   WHERE u1.id=l_user_id
-                     AND u2.hosting_user_ind='Y')
-        LOOP
-            apex_json.open_object; 
-            apex_json.write('success', TRUE);
-            apex_json.write('signature', dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign || C.cld_api_secret), dbms_crypto.HASH_SH1));
-            apex_json.close_object;
-        END LOOP;
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('signature', dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign || pck_api.getCloudinaryAPISecret(l_user_id)), dbms_crypto.HASH_SH1));
+        apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
