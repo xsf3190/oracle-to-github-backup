@@ -4,6 +4,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
     --
     FUNCTION getNetlifyIntallationId(pUserId IN users.id%type) RETURN VARCHAR2;
     --
+    FUNCTION getCloudinaryAPISecret(pUserId IN users.id%type) RETURN users.cld_api_secret%type;
+    --
+    PROCEDURE getCloudinaryData(pUserId IN users.id%type, pCloudName IN OUT users.cld_cloud_name%type, pCldApiKey IN OUT users.cld_api_key%type, pCldImageMaxSize IN OUT INTEGER, pCldVideoMaxSize IN OUT INTEGER);
+    --
     PROCEDURE getTerraformData(pUserId IN users.id%type, pTerraformOrganizationName IN OUT users.terraform_organization_name%type, pTerraformWorkspaceName IN OUT users.terraform_workspace_name%type, pTerraformPrivateKey IN OUT users.terraform_private_key%type);
     --
     PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
@@ -22,7 +26,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
     FUNCTION getGithubReposOwner(pUserId IN users.id%type) RETURN VARCHAR2 IS
         l_github_repos_owner users.github_repos_owner%type;
     BEGIN
-        /* Get user's github token and account name (repository owner) */
+        /* Get user's account name (repository owner) */
         FOR C IN (SELECT github_repos_owner FROM users WHERE id=pUserId) LOOP 
             l_github_repos_owner:=C.github_repos_owner;
         END LOOP;
@@ -86,7 +90,57 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         pTerraformOrganizationName:=l_terraform_organization_name;
         pTerraformWorkspaceName:=l_terraform_workspace_name;
         pTerraformPrivateKey:=l_terraform_private_key;
+    END;
 
+    PROCEDURE getCloudinaryData(pUserId IN users.id%type, pCloudName IN OUT users.cld_cloud_name%type, pCldApiKey IN OUT users.cld_api_key%type, pCldImageMaxSize IN OUT INTEGER, pCldVideoMaxSize IN OUT INTEGER) IS
+        l_cld_cloud_name users.cld_cloud_name%type;
+        l_cld_api_key users.cld_api_key%type;
+
+        /* Free Plan limits - we would have to use admin usage API to support higher limits on paid plans */
+        DEFAULT_IMAGE_MAX_SIZE CONSTANT NUMBER:=10*1024*1024; 
+        DEFAULT_VIDEO_MAX_SIZE CONSTANT NUMBER:=100*1024*1024;
+    BEGIN
+        /* Get user's Cloud name and API Key */
+        FOR C IN (SELECT cld_cloud_name, cld_api_key FROM users WHERE id=pUserId) LOOP 
+            l_cld_cloud_name:=C.cld_cloud_name;
+            l_cld_api_key:=C.cld_api_key;
+        END LOOP;
+
+        /* Get Administrator values if user not registered with Cloudinary */
+        IF (l_cld_cloud_name IS NULL) THEN
+            SELECT u.cld_cloud_name,u.cld_api_key
+              INTO l_cld_cloud_name,l_cld_api_key
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        END IF;
+
+        pCloudName:=l_cld_cloud_name;
+        pCldApiKey:=l_cld_api_key;
+        pCldImageMaxSize:=DEFAULT_IMAGE_MAX_SIZE;
+        pCldVideoMaxSize:=DEFAULT_VIDEO_MAX_SIZE;
+    END;
+
+    FUNCTION getCloudinaryAPISecret(pUserId IN users.id%type) RETURN users.cld_api_secret%type IS
+        l_cld_api_secret users.cld_api_secret%type;
+    BEGIN
+        /* Get user's Cloud name and API Key */
+        FOR C IN (SELECT cld_api_secret FROM users WHERE id=pUserId) LOOP 
+            l_cld_api_secret:=C.cld_api_secret;
+        END LOOP;
+
+        /* Get Administrator value if user not registered with Cloudinary */
+        IF (l_cld_api_secret IS NULL) THEN
+            SELECT u.cld_api_secret
+              INTO l_cld_api_secret
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        END IF;
+
+        RETURN (l_cld_api_secret);
     END;
 
     /*
@@ -266,6 +320,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         RAISE_APPLICATION_ERROR(-20040,l_error_message);
     END;
 
+    /*
+    **  TERRAFORM API
+    */
     PROCEDURE callTerraformAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
         l_terraform_token users.terraform_token%type;
         l_terraform_url VARCHAR2(100):='https://app.terraform.io/';
