@@ -62,7 +62,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 </tr>
             </thead>
             <tbody>';
-        FOR C IN (SELECT TO_CHAR(log_date AT TIME ZONE client_tz, 'fmhh:fmmi:fmss PM') log_date, message 
+        FOR C IN (SELECT TO_CHAR(log_date AT TIME ZONE client_tz, 'hh24:mi:ss') log_date, message 
                     FROM log, users 
                    WHERE users.id=l_user_id
                    ORDER BY log.id DESC) LOOP
@@ -1299,7 +1299,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pEndpoint=>'sites' || CASE WHEN l_netlify_site_id_custom IS NOT NULL THEN '/' || l_netlify_site_id_custom END, 
                 pMethod=>CASE WHEN l_netlify_site_id_custom IS NULL THEN 'POST' ELSE 'PATCH' END, 
                 pBody=>l_json.stringify, 
+                pStatusAllowed=>422, 
                 pData=>l_clob);
+            IF (apex_web_service.g_status_code=422) THEN
+                apex_json.open_object;
+                apex_json.write('success', TRUE);
+                apex_json.write('message', 'Name already taken');
+                apex_json.write('color', 'red');
+                apex_json.close_object;
+                RETURN;
+            END IF;
             SELECT site_id INTO l_new_netlify_site_id_custom FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
         END LOOP;
 
