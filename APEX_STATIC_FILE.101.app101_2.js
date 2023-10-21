@@ -219,6 +219,8 @@ const edit_website = (e) => {
         deployButtons.replaceChildren();
         deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
 
+        newContent.disabled = false;
+
         cards.replaceChildren();
         if (data.cards) {
             cards.insertAdjacentHTML('afterbegin',data.cards);
@@ -248,7 +250,7 @@ const deploy_website = (e) => {
     }
  
     execProcess("deploy","POST",{"websiteid":website.dataset.id,"siteid":e.target.dataset.site_id}).then( () => {
-        popupOpen("Building "+e.target.textContent,"Patience required...");
+        popupOpen("Building "+e.target.textContent,"Checking content...");
         if (gIntervalId) {
             clearInterval(gIntervalId);
         }
@@ -277,6 +279,15 @@ document.querySelectorAll("button.view-option").forEach((button) => {
         execProcess( "website-list/"+website.dataset.id + "?view="+e.target.dataset.view,"GET").then( (data) => {
             cards.replaceChildren();
             cards.insertAdjacentHTML('afterbegin',data.content);
+            cards.querySelectorAll("textarea").forEach( (textarea,indx) => {
+                if (e.target.dataset.view==="nav" && indx===0) return;
+                if (!textarea.value) {
+                    const result = textarea.nextElementSibling.querySelector(".result");
+                    result.textContent = "MUST HAVE A VALUE";
+                    result.style.opacity = "1";
+                    result.style.color = "red";
+                }
+            });
         });
     });
 });
