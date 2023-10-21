@@ -86,7 +86,7 @@ img {
     display: block;
 }
 
-input, button, textarea, select {
+textarea, button, input, select {
   font: inherit;
 }
 
@@ -289,7 +289,7 @@ dialog {
     font-size: var(--step-0);    
 }
 */
-dialog,
+dialog:,
 ::backdrop{
   opacity: 0;
   transition: opacity 1s, display 1s allow-discrete, overlay 1s allow-discrete;
@@ -311,7 +311,7 @@ dialog,
   }
 }
 
-::backdrop {
+dialog:not(.gallery)::backdrop {
   background-color: rgba(0,0,0,.6);
 }
 
