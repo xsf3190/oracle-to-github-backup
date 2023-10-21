@@ -6,6 +6,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
     --
     FUNCTION getCloudinaryAPISecret(pUserId IN users.id%type) RETURN users.cld_api_secret%type;
     --
+    PROCEDURE resetGithubCurrentBuild(pUserId IN users.id%type);
+    --
+    FUNCTION setGithubCurrentBuild(pUserId IN users.id%type, pSessionId IN users.current_build_session%type) RETURN NUMBER;
+    --
     PROCEDURE getCloudinaryData(pUserId IN users.id%type, pCloudName IN OUT users.cld_cloud_name%type, pCldApiKey IN OUT users.cld_api_key%type, pCldImageMaxSize IN OUT INTEGER, pCldVideoMaxSize IN OUT INTEGER);
     --
     PROCEDURE getTerraformData(pUserId IN users.id%type, pTerraformOrganizationName IN OUT users.terraform_organization_name%type, pTerraformWorkspaceName IN OUT users.terraform_workspace_name%type, pTerraformPrivateKey IN OUT users.terraform_private_key%type);
@@ -42,6 +46,64 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         END IF;
 
         RETURN (l_github_repos_owner);
+    END;
+
+    FUNCTION setGithubCurrentBuild(pUserId IN users.id%type, pSessionId IN users.current_build_session%type) RETURN NUMBER IS
+        l_github_repos_owner users.github_repos_owner%type;
+        l_user_id users.id%type;
+        l_current_build_session users.current_build_session%type;
+    BEGIN
+        /* Get user that manages the Github repository */
+        FOR C IN (SELECT github_repos_owner, id FROM users WHERE id=pUserId) LOOP 
+            l_github_repos_owner:=C.github_repos_owner;
+            l_user_id:=C.id;
+        END LOOP;
+
+        /* Use Administrator repository if user is not registered with github  */
+        IF (l_github_repos_owner IS NULL) THEN
+            SELECT u.github_repos_owner, u.id
+              INTO l_github_repos_owner, l_user_id
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        END IF;
+
+        /* Get value of current_build_session for user whose Github repository manages deployments */
+        SELECT current_build_session INTO l_current_build_session FROM users WHERE id=l_user_id FOR UPDATE;
+
+        /* Claim repository if available */
+        IF (l_current_build_session IS NULL) THEN
+            UPDATE users SET current_build_session=pSessionId, updated_date=current_timestamp WHERE id=l_user_id;
+            COMMIT;
+        END IF;
+
+        RETURN (l_current_build_session);
+    END;
+
+    PROCEDURE resetGithubCurrentBuild(pUserId IN users.id%type) IS
+        l_github_repos_owner users.github_repos_owner%type;
+        l_user_id users.id%type;
+        l_current_build_session users.current_build_session%type;
+    BEGIN
+        /* Get user that manages the Github repository */
+        FOR C IN (SELECT github_repos_owner, id FROM users WHERE id=pUserId) LOOP 
+            l_github_repos_owner:=C.github_repos_owner;
+            l_user_id:=C.id;
+        END LOOP;
+
+        /* Use Administrator repository if user is not registered with github  */
+        IF (l_github_repos_owner IS NULL) THEN
+            SELECT u.github_repos_owner, u.id
+              INTO l_github_repos_owner, l_user_id
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        END IF;
+
+        UPDATE users SET current_build_session=NULL, updated_date=current_timestamp  WHERE id=l_user_id;
+        COMMIT;
     END;
 
     FUNCTION getNetlifyIntallationId(pUserId IN users.id%type) RETURN VARCHAR2 IS
