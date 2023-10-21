@@ -33,7 +33,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     BEGIN
         l_user_id:=pck_core.getUserId();
 
-        SELECT websiteid, siteid INTO l_website_id, l_site_id FROM JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid));
+        SELECT websiteid, siteid INTO l_website_id, l_site_id FROM users, JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid)) WHERE users.id=l_user_id;
+
+        DELETE website_deploy WHERE website_id=l_website_id AND site_id=l_site_id;
+
+        /* All content except first article, which is the home page, must have a navigation label */
+        SELECT COUNT(*)
+        INTO n
+        FROM
+        (
+            SELECT MIN(display_order) OVER () first_display_order, nav_name, display_order
+            FROM website_article
+            WHERE website_id=l_website_id
+        )
+        WHERE nav_name IS NULL
+        AND display_order<>first_display_order;
+
+        IF (n>0) THEN
+            logDeployment('{"site_id":"' || l_site_id || '","status":"Missing ' || n || ' Navigation Labels ... see View Options","exitcode":1}',l_website_id);
+            apex_json.open_object; 
+            apex_json.write('success', TRUE);
+            apex_json.close_object;
+            RETURN;
+        END IF;
 
         /* Template must exist in Deploy repository */
         SELECT template
@@ -45,13 +67,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         pck_api.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_clob);
         SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name)) WHERE name=l_template);
         IF (n<>1) THEN
-            RAISE_APPLICATION_ERROR(-20021,'NO TEMPLATE "' || l_template || '" IN DEPLOY REPOSITORY');
+            logDeployment('{"site_id":"' || l_site_id || '","status":"TEMPLATE INCONSISTENCY","exitcode":1}',l_website_id);
+            apex_json.open_object; 
+            apex_json.write('success', TRUE);
+            apex_json.close_object;
+            RETURN;
         END IF;
 
         /* apex session header included in payload sent to Github action in order to authenticate content retrieval */
         pck_core.getApexSession(l_app_id,l_session_id,l_page_id);
 
-        DELETE website_deploy WHERE website_id=l_website_id AND site_id=l_site_id;
+        /* Check no other session currently building */
+        IF (pck_api.setGithubCurrentBuild(l_user_id, l_session_id) IS NOT NULL) THEN
+            logDeployment('{"site_id":"' || l_site_id || '","status":"Someone else is deploying ... try again later","exitcode":1}',l_website_id);
+            apex_json.open_object;
+            apex_json.write('success', TRUE);
+            apex_json.close_object;
+            RETURN;
+        END IF;
+
 
         logDeployment('{"site_id":"' || l_site_id || '","status":"Submitting Deployment Job"}',l_website_id);
 
@@ -199,12 +233,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_site_id website_deploy.site_id%type;
         l_exitcode PLS_INTEGER;
         l_status website_deploy.status%type;
+        l_user_id users.id%type;
     BEGIN
+        l_user_id:=pck_core.getUserId();
+
         SELECT site_id, status, NVL(exitcode,0)
           INTO l_site_id, l_status, l_exitcode
           FROM JSON_TABLE(pBodyText, '$' COLUMNS (site_id, status, exitcode));
 
         INSERT INTO website_deploy(id, website_id, site_id, status) VALUES (seq_log.nextval, pWebsiteId, l_site_id, l_status || ' - ' || CASE WHEN l_exitcode=0 THEN 'OK' ELSE 'NOK' END);
+
         COMMIT;
 
         EXCEPTION
@@ -341,6 +379,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 pck_api.callGithubAPI(pUserId=>pUserId, pEndpoint=>'contents/' || l_domain_name || '/'||C.name, pMethod=>'DELETE', pBody=>l_github, pData=>l_clob);
             END IF;
         END LOOP;
+        pck_api.resetGithubCurrentBuild(pUserId);
     END;
 
     /*
