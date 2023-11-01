@@ -1002,7 +1002,7 @@ const saveData = async ( data ) => {
 let editor;
 
 ClassicEditor.create(document.querySelector("#editor"), {
-        toolbar: [ 'heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote','insertImage','codeBlock' ],
+        toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote','insertImage','codeBlock','style' ],
         autosave: {
             waitingTime: 2000,
             save( editor ) {
@@ -1013,7 +1013,23 @@ ClassicEditor.create(document.querySelector("#editor"), {
             placeholder: 'Enter title for article'
         },
         placeholder: 'Enter article content',
-        wordCount: {displayCharacters: false}
+        wordCount: {displayCharacters: false},
+        list: {
+            properties: {
+                styles: true,
+                startIndex: true,
+                reversed: true
+            }
+        },
+        style: {
+            definitions: [
+                {
+                    name: 'Enclosed list item',
+                    element: 'li',
+                    classes: [ 'with-border' ]
+                },
+            ]
+        }
     })
     .then( (newEditor) => {
         editor = newEditor;
