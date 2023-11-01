@@ -735,6 +735,20 @@ div.editor {
     margin-block-start: 1ch;
 }
 
+.ck-editor ul:has(.with-border) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1ch;
+}
+
+.ck-content li.with-border {
+    padding: 1ch 2ch;
+    border: 1px solid red;
+    border-radius: 0.5ch;
+    inline-size: fit-content;
+    list-style: none;
+}
+
 .ck-content pre code {
     font-size: var(--step--2);
     white-space: pre-wrap;
