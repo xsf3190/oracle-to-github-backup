@@ -352,6 +352,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             l_arr(1):=pWidth*.25;
             l_arr(2):=pWidth*.625;
             l_arr(3):=pWidth;
+            IF (l_arr(1)>gWidthThumbnail) THEN
+                l_arr(1):=gWidthThumbnail;
+                l_arr(2):=(pWidth-gWidthThumbnail)/2;
+            END IF;
             l_left:=1;
             l_right:=3;
             WHILE (l_left<l_right) LOOP
