@@ -41,7 +41,7 @@
   --space-3xl:  clamp(6rem,5.13rem + 3.87vw,9rem);
 
   --font-base: Inter, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif;
-  --font-serif: Georgia, sans-serif;
+  --font-serif: Roboto Serif, serif;
 
     --hue: 270;
     --saturation: 50%;
@@ -63,6 +63,14 @@
 /******************/
 /* PAGE CONTAINER */
 /******************/
+
+[popover] {
+    font-family: var(--font-serif);
+    padding: var(--space-s) var(--space-m);
+    line-height: 1.5;
+    background-color: var(--color-pale-hover);
+    inline-size: min(95vw, 70ch);
+}
 
 h4, ul {
     margin-block-start: 0;
