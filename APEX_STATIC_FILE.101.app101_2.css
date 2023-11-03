@@ -17,7 +17,7 @@
   --minScale:  1.2;
   --maxFontSize:  1.5;
   --maxWidthPx:  1600;
-  --maxScale:  1.2;
+  --maxScale:  1.2;x
   
   /* Custom properties for fluid type */
   --step--2:  clamp(0.69rem,0.59rem + 0.45vw,1.04rem);
@@ -569,9 +569,12 @@ nav button {
 }
 
 .button-container {
-  display: flex;
-  justify-content: space-between;
-  /*margin-bottom: 0.5ch;*/
+    display: flex;
+    justify-content: space-between;
+}
+
+.button-container:has(.dropdown) {
+    margin-bottom: 0.5ch;
 }
 
 .cards {
