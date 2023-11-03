@@ -681,7 +681,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_article_array:= new JSON_ARRAY_T;
 
         /* Get details of website */
-        FOR C IN (SELECT w.id, w.domain_name, w.favicon_url, w.image_dimension, w.contact_email, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, u.name author_name
+        FOR C IN (SELECT w.id, w.domain_name, w.favicon_url, w.google_font, w.font_family, w.contact_email, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, u.name author_name
                     FROM website w, users u
                    WHERE w.id=pWebsiteId
                      AND w.user_id=l_user_id
@@ -690,6 +690,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_website_object.put('id',C.id);
             l_website_object.put('name',C.domain_name);
             l_website_object.put('favicon_url',C.favicon_url);
+            l_website_object.put('google_font',C.google_font);
+            l_website_object.put('font_family',C.font_family);
             l_website_object.put('contact_email',C.contact_email);
             l_website_object.put('trade_name',C.trade_name);
             l_website_object.put('affiliation_link_img',C.affiliation_link_img);
@@ -749,7 +751,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                         l_asset_object.put('alt_text',C2.alt_text);
                     END IF;
                     l_media_type:=pck_core.getMediaType(C2.resource_type, C2.format);
-                    l_url_img:=pck_core.getCloudinaryUrl(C2.cld_cloud_name, C2.resource_type, C2.public_id, C2.format, C2.width, C.image_dimension);
+                    l_url_img:=pck_core.getCloudinaryUrl(C2.cld_cloud_name, C2.resource_type, C2.public_id, C2.format, C2.width);
                     l_asset_object.put('media',l_media_type);
                     l_asset_object.put('url',l_url_img);
                     l_asset_object.put('width',ROUND(C2.width*.25));
