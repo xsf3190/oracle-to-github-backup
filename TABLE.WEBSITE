@@ -14,11 +14,12 @@ CREATE TABLE "WEBSITE"
 	"UPDATED_DATE" TIMESTAMP (6) WITH TIME ZONE, 
 	"NETLIFY_DEPLOY_ID" VARCHAR2(40), 
 	"NETLIFY_SITE_ID_CUSTOM" VARCHAR2(40), 
-	"GOOGLE_FONT" VARCHAR2(30), 
-	"FONT_FAMILY" VARCHAR2(50), 
+	"FONT" VARCHAR2(30), 
 	 CONSTRAINT "PK_WEBSITE" PRIMARY KEY ("ID")
   USING INDEX  ENABLE, 
-	 CONSTRAINT "CHECK_DOMAIN_NAME" CHECK (domain_name<>'TEMPLATES') ENABLE
+	 CONSTRAINT "CHECK_DOMAIN_NAME" CHECK (domain_name<>'TEMPLATES') ENABLE, 
+	 CONSTRAINT "FK_WEBSITE_FONT" FOREIGN KEY ("FONT")
+	  REFERENCES "WEBSITE_FONT" ("NAME") ENABLE
    ) ;
 COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'All websites are deployed as a subdomain of "netlify.app".<p>If the name corresponds to a purchased Netlify domain name you can also build and deploy your live website.</p>';
    COMMENT ON COLUMN "WEBSITE"."CONTACT_EMAIL" IS 'Email to receive details entered in any contact form included in your website.<p>Contact forms are created automatically for pages with navigation label set to "contact"';
