@@ -22,7 +22,9 @@ CREATE TABLE "WEBSITE"
 	  REFERENCES "WEBSITE_FONT" ("NAME") ENABLE
    ) ;
 COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'All websites are deployed as a subdomain of "netlify.app".<p>If the name corresponds to a purchased Netlify domain name you can also build and deploy your live website.</p>';
+   COMMENT ON COLUMN "WEBSITE"."TEMPLATE" IS 'Choose template for your website.';
    COMMENT ON COLUMN "WEBSITE"."CONTACT_EMAIL" IS 'Email to receive details entered in any contact form included in your website.<p>Contact forms are created automatically for pages with navigation label set to "contact"';
+   COMMENT ON COLUMN "WEBSITE"."FONT" IS 'Choose font for your website';
 CREATE UNIQUE INDEX "PK_WEBSITE" ON "WEBSITE" ("ID") 
   ;
   CREATE UNIQUE INDEX "IX_WEBSITE_DOMAIN_NAME" ON "WEBSITE" ("DOMAIN_NAME") 
