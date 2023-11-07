@@ -32,6 +32,21 @@ window.addEventListener("DOMContentLoaded", (event) => {
     console.log("apex_app_id",apex_app_id);
     console.log("apex_page_id",apex_page_id);
     console.log("apex_session",apex_session);
+
+    const browser = bowser.getParser(window.navigator.userAgent),
+          browserName = browser.getBrowserName(),
+          browserVersionParts = browser.getBrowserVersion().split(".");
+    let browserVersion=browserVersionParts[0];
+    if (browserVersionParts[1]!=="0") {
+        browserVersion+="."+browserVersionParts[1];
+    }
+
+    console.log("browser",browserName);
+    console.log("browserVersion",browserVersion);
+
+    execProcess( "client-info", "POST", {"session_id": apex_session, "timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, "maxtouchpoints": navigator.maxTouchPoints, "browser":browserName, "browser_version": browserVersion}).then( () => {
+        console.log("client info sent to server");
+    });
     
     addEventListener('visibilitychange', () => {
         if (document.visibilityState === "hidden") {
