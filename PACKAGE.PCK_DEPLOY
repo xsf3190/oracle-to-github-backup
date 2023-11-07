@@ -19,21 +19,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     ** Build and deploy website to Netlify by submitting Github action
     */    
     PROCEDURE deployWebsite(pBodyText IN CLOB) IS
-        l_user_id website.user_id%type;
         l_template website.template%type;
         l_clob CLOB;
         l_job_name VARCHAR2(30);
-        l_app_id NUMBER;
-        l_session_id NUMBER;
-        l_page_id NUMBER;
         n PLS_INTEGER;
         l_body_text CLOB:=pBodyText;
         l_website_id website.id%type;
         l_site_id website.netlify_site_id%type;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
-        SELECT websiteid, siteid INTO l_website_id, l_site_id FROM users, JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid)) WHERE users.id=l_user_id;
+        SELECT websiteid, siteid INTO l_website_id, l_site_id FROM users, JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid)) WHERE users.id=l_session_data.user_id;
 
         DELETE website_deploy WHERE website_id=l_website_id AND site_id=l_site_id;
 
@@ -62,9 +59,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
           INTO l_template
           FROM website
          WHERE id=l_website_id
-           AND user_id=l_user_id;
+           AND user_id=l_session_data.user_id;
 
-        pck_api.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_clob);
+        pck_api.callGithubAPI(pUserId=>l_session_data.user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_clob);
         SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name)) WHERE name=l_template);
         IF (n<>1) THEN
             logDeployment('{"site_id":"' || l_site_id || '","status":"TEMPLATE INCONSISTENCY","exitcode":1}',l_website_id);
@@ -74,11 +71,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             RETURN;
         END IF;
 
-        /* apex session header included in payload sent to Github action in order to authenticate content retrieval */
-        pck_core.getApexSession(l_app_id,l_session_id,l_page_id);
-
         /* Check no other session currently building */
-        IF (pck_api.setGithubCurrentBuild(l_user_id, l_session_id) IS NOT NULL) THEN
+        IF (pck_api.setGithubCurrentBuild(l_session_data.user_id, l_session_data.session_id) IS NOT NULL) THEN
             logDeployment('{"site_id":"' || l_site_id || '","status":"Someone else is deploying ... try again later","exitcode":1}',l_website_id);
             apex_json.open_object;
             apex_json.write('success', TRUE);
@@ -106,12 +100,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
             argument_position => 2,
-            argument_value => l_user_id
+            argument_value => l_session_data.user_id
         );
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
             argument_position => 3,
-            argument_value => l_app_id || ',' || l_session_id || ',' || l_page_id
+            argument_value => l_session_data.app_id || ',' || l_session_data.session_id || ',' || l_session_data.page_id
         );
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
@@ -233,9 +227,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_site_id website_deploy.site_id%type;
         l_exitcode PLS_INTEGER;
         l_status website_deploy.status%type;
-        l_user_id users.id%type;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         SELECT site_id, status, NVL(exitcode,0)
           INTO l_site_id, l_status, l_exitcode
@@ -255,7 +249,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
      **  Get deployment status from website_deploy logging table
      */
     PROCEDURE updateDeploymentStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS 
-        l_user_id users.id%type;
         l_site_id website_deploy.site_id%type;
         l_status CLOB;
         l_clob CLOB:=pBodyText;
@@ -263,8 +256,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deployment_complete BOOLEAN:=FALSE;
         l_netlify_status website_deploy.status%type;
         l_job_name VARCHAR2(30);
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         SELECT site_id INTO l_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
 
@@ -273,12 +267,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         FOR C IN (SELECT wd.log_time
                     FROM website w, website_deploy wd
                    WHERE w.id=pWebsiteId 
-                     AND w.user_id=l_user_id
+                     AND w.user_id=l_session_data.user_id
                      AND wd.website_id=w.id
                      AND wd.site_id=l_site_id
                      AND wd.status='Github action completed - OK') 
         LOOP
-            pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys', pMethod=>'GET', pData=>l_clob);
+            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys', pMethod=>'GET', pData=>l_clob);
 
             FOR C1 IN (SELECT state, ssl_url, error_message, created_at
                          FROM JSON_TABLE(l_clob, '$[0]' COLUMNS (state, ssl_url, created_at, error_message))) 
@@ -321,7 +315,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END IF;
 
         IF (l_deployment_complete) THEN
-            pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'sites/'|| l_site_id || '/unlink_repo', pMethod=>'PUT', pData=>l_clob);
+            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/unlink_repo', pMethod=>'PUT', pData=>l_clob);
 
             /* Submit background job to delete Github build directory */
             l_job_name:=dbms_scheduler.generate_job_name('DELETE_');
@@ -341,7 +335,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             dbms_scheduler.set_job_argument_value(
                 job_name => l_job_name,
                 argument_position => 2,
-                argument_value => l_user_id
+                argument_value => l_session_data.user_id
             );
             dbms_scheduler.enable(l_job_name);
         END IF;
@@ -389,15 +383,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     PROCEDURE deployInfrastructure IS
         l_clob CLOB;
         l_json_clob CLOB;
-        l_user_id users.id%type;
         l_json JSON_OBJECT_T;
         l_action JSON_OBJECT_T;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         FOR C IN (SELECT terraform_token, replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(terraform_public_key))),chr(13)||chr(10),null) terraform_public_key
                     FROM users
-                   WHERE id=l_user_id) 
+                   WHERE id=l_session_data.user_id) 
         LOOP
             /* trigger the deployment using Githib action */          
             l_json:=new JSON_OBJECT_T;
@@ -413,7 +407,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             /* nb; Github API 'dispatches' endpoint does not send a response */
             l_json_clob:=l_json.stringify;
-            pck_api.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json_clob, pData=>l_clob);
+            pck_api.callGithubAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json_clob, pData=>l_clob);
 
             apex_json.open_object; 
             apex_json.write('success', TRUE);
