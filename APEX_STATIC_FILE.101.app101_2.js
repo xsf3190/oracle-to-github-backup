@@ -399,10 +399,6 @@ window.addEventListener("DOMContentLoaded", (event) => {
         const observer = new PerformanceObserver(perfObserver);
         observer.observe({ type: "resource", buffered: true });
     }
-
-    execProcess( "client-info", "POST", {"timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, "maxtouchpoints": navigator.maxTouchPoints}).then( () => {
-        console.log("Client Time Zone set for page",apex_page_id);
-    });
     
     addEventListener('visibilitychange', () => {
         if (document.visibilityState === "hidden") {
