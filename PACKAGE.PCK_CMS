@@ -51,7 +51,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
     PROCEDURE getSessionLog(SessionId IN NUMBER) IS
         l_content CLOB;
+        l_session_data pck_core.session_data_rt;
     BEGIN
+        l_session_data:=pck_core.getSessionData();
+
         l_content:='
         <table>
             <thead>
@@ -60,13 +63,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 </tr>
             </thead>
             <tbody>';
-        FOR C IN (SELECT TO_CHAR(l.log_date AT TIME ZONE s.timezone, 'hh24:mi:ss') log_date, l.message 
-                    FROM log l, session_data s
-                   WHERE s.session_id=SessionId
-                   ORDER BY l.id DESC) LOOP
+        FOR C IN (SELECT log_date, message 
+                    FROM log
+                   ORDER BY id DESC) 
+        LOOP
             l_content:=l_content || '
                 <tr>
-                    <td>' || C.log_date || '</td><td>' || REPLACE(C.message,chr(10),'<br>') || '</td>
+                    <td>' || TO_CHAR(C.log_date AT TIME ZONE l_session_data.timezone, 'hh24:mi:ss') || '</td><td>' || REPLACE(C.message,chr(10),'<br>') || '</td>
                 </tr>';
         END LOOP;
         l_content:=l_content || '
@@ -88,10 +91,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_cld_api_secret users.cld_api_secret%type;
         l_image_max_size INTEGER;
         l_video_max_size INTEGER;
-    BEGIN      
-        l_user_id:=pck_core.getUserId();
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
 
-        pck_api.getCloudinaryData(pUserId=>l_user_id, pCloudName=>l_cld_cloud_name, pCldApiKey=>l_cld_api_key, pCldImageMaxSize=>l_image_max_size, pCldVideoMaxSize=>l_video_max_size);
+        pck_api.getCloudinaryData(pUserId=>l_session_data.user_id, pCloudName=>l_cld_cloud_name, pCldApiKey=>l_cld_api_key, pCldImageMaxSize=>l_image_max_size, pCldVideoMaxSize=>l_video_max_size);
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -110,8 +114,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_params_to_sign clob:=pParamsToSign;
         l_user_id users.id%type;
         l_string_to_sign varchar2(2000):=NULL; 
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         SELECT NVL2(filename_override,'filename_override='||filename_override||'&',NULL) ||
                NVL2(headers,'headers='||headers||'&',NULL) ||
@@ -120,9 +125,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                NVL2(timestamp,'timestamp='||timestamp||'&',NULL) ||
                NVL2(use_filename,'use_filename='||use_filename,NULL)
           INTO l_string_to_sign
-          FROM JSON_TABLE(l_params_to_sign FORMAT JSON, '$'
+          FROM users, JSON_TABLE(l_params_to_sign FORMAT JSON, '$'
             COLUMNS filename_override,headers,source,tags,timestamp,use_filename                 
-            );
+            )
+            WHERE users.id=l_session_data.user_id;
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -178,56 +184,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 apex_json.write('template', 'template-' || LOWER(C.template));
             END IF;
             apex_json.write('deploy_buttons', pck_core.buildDeployButtons(C.domain_name, C.netlify_site_id, C.netlify_site_id_custom));
-            apex_json.write('cards',pck_core.buildWebsiteArticles(pWebsiteId, l_session_data.caniuse_popover));
+            apex_json.write('cards',pck_core.buildWebsiteArticles(pWebsiteId, l_session_data.canuse_popover, l_session_data.timezone));
         END LOOP;
 
         apex_json.write('success', TRUE);
-        apex_json.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-    END;
-
-    /*
-    ** GET ARTICLE (PAGE) CONTENT FOR WEBSITE
-    */
-    PROCEDURE getWebsiteArticles(pWebsiteId IN website.id%type) IS
-        l_user_id users.id%type;
-        l_user_name users.name%type;
-        l_clob CLOB;
-    BEGIN
-        l_user_id:=pck_core.getUserId();
-        SELECT name INTO l_user_name FROM users WHERE id=l_user_id;
-        /*
-        FOR C IN (
-            SELECT a.id,
-                   a.is_public,
-                   c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
-                   NVL(a.nb_assets,0) nb_assets,
-                   a.title, 
-                   a.excerpt,
-                   wa.nav_name,
-                   wa.page_title,
-                   CASE WHEN a.excerpt IS NOT NULL AND a.word_count>0 THEN a.word_count || ' word' || CASE WHEN a.word_count>1 THEN 's' END END word_count,
-                   NVL(a.updated_date, a.created_date) updated_date,
-                   wa.display_order display_order
-              FROM article a, website_article wa, asset c
-             WHERE wa.website_id=pWebsiteId
-               AND a.id=wa.article_id
-               AND a.cover_asset_id=c.id(+)
-             UNION ALL
-             SELECT -1, null, null, null, null,null,null,0,null,null,null,null,null,systimestamp,-1 from dual
-             ORDER BY display_order) 
-        LOOP
-            l_clob:=l_clob || TO_CLOB(
-                pck_core.buildArticle(C.id, C.nb_assets, C.is_public, C.title, C.excerpt, C.nav_name, C.page_title, C.word_count, C.updated_date, pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width)));
-        END LOOP;
-        */
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('content', l_clob);
         apex_json.close_object;
 
         EXCEPTION
@@ -237,32 +197,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
     PROCEDURE getWebsiteList(pWebsiteId IN website.id%type, pViewOption IN VARCHAR2) IS
         l_clob CLOB;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        pck_core.log('pViewOption:'||pViewOption);
-        /*
-        FOR C IN (SELECT wa.article_id,
-                   c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
-                   NVL(a.title, a.excerpt) article_text,
-                   wa.display_order display_order
-              FROM article a, website_article wa, asset c
-             WHERE wa.website_id=pWebsiteId
-               AND a.id=wa.article_id
-               AND a.cover_asset_id=c.id(+)
-             ORDER BY display_order)
-        LOOP
-            l_clob:=l_clob || TO_CLOB('
-            <li data-id="' || C.article_id || '">
-                <figure>
-                    <img src="' || pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
-                    <figcaption>' || C.article_text || '</figcaption>
-                </figure>
-            </li>');
-        END LOOP;
-        */
+        l_session_data:=pck_core.getSessionData();
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
-        apex_json.write('content', pck_core.buildWebsiteArticles(pWebsiteId,pViewOption=>pViewOption));
+        apex_json.write('content', pck_core.buildWebsiteArticles(pWebsiteId,l_session_data.canuse_popover, l_session_data.timezone, pViewOption=>pViewOption));
         apex_json.close_object;
 
         EXCEPTION
@@ -282,15 +223,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_media_type VARCHAR2(5);
         l_dimensions VARCHAR2(50);
         l_aspect_ratio NUMBER;
-        n PLS_INTEGER:=0;   
+        n PLS_INTEGER:=0;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         FOR C IN (
             SELECT a.id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
                    DECODE(a.width,0,pck_core.gWidthThumbnail,a.width) width, DECODE(a.height,0,pck_core.gWidthThumbnail,a.height) height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format
               FROM asset a
              WHERE a.article_id=pArticleId
+               AND a.user_id=l_session_data.user_id
                AND NVL(a.format,'N/A')<>'clt'
              ORDER BY a.display_order )
         LOOP
@@ -346,19 +289,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 ELSE NULL;
             END CASE;
 
-            l_clob:=l_clob || TO_CLOB(pck_core.buildTextareaWrapper(C.id,'asset.alt_text',C.alt_text));
-            l_clob:=l_clob || TO_CLOB(pck_core.buildTextareaWrapper(C.id,'asset.description',C.description));
+            l_clob:=l_clob || TO_CLOB(pck_core.buildTextareaWrapper(C.id,'asset.alt_text',C.alt_text, l_session_data.canuse_popover));
+            l_clob:=l_clob || TO_CLOB(pck_core.buildTextareaWrapper(C.id,'asset.description',C.description, l_session_data.canuse_popover));
 
             l_clob:=l_clob || TO_CLOB('</li>');
 
         END LOOP;
 
-        FOR C IN (SELECT NVL(maxtouchpoints,0) maxtouchpoints FROM users WHERE id=l_user_id) LOOP
-            l_instruction:=CASE WHEN C.maxtouchpoints > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen';
-            IF (n > 1) THEN 
-                l_instruction:=l_instruction || '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover';
-            END IF;
-        END LOOP;
+        l_instruction:=CASE WHEN l_session_data.maxtouchpoints > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen';
+        IF (n > 1) THEN 
+            l_instruction:=l_instruction || '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover';
+        END IF;
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -384,10 +325,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_start_order PLS_INTEGER;
         l_start_order_website PLS_INTEGER;
         l_updated_date article.updated_date%type:=current_timestamp;
+        l_session_data pck_core.session_data_rt;
         nb_assets PLS_INTEGER;
         n PLS_INTEGER;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         SELECT article_id, website_id
           INTO l_article_id, l_website_id
@@ -397,7 +339,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         USING (SELECT l_article_id article_id FROM dual) s
            ON (t.id=s.article_id)
          WHEN MATCHED THEN UPDATE SET updated_date=current_timestamp
-         WHEN NOT MATCHED THEN INSERT (id, author_user_id, created_date) VALUES (s.article_id, l_user_id, current_timestamp);
+         WHEN NOT MATCHED THEN INSERT (id, author_user_id, created_date) VALUES (s.article_id, l_session_data.user_id, current_timestamp);
 
         /* upload into WEBSITE_ARTICLE table */
 
@@ -412,7 +354,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         SELECT NVL(MAX(display_order),0) INTO l_start_order FROM asset WHERE article_id=l_article_id;
 
         INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, created_date, display_order, user_id)
-        SELECT seq_asset.nextval, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, current_timestamp, l_start_order+ROWNUM, l_user_id
+        SELECT seq_asset.nextval, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, current_timestamp, l_start_order+ROWNUM, l_session_data.user_id
           FROM JSON_TABLE(l_metadata FORMAT JSON, '$.images[*]' COLUMNS (article_id, public_id, width, height, bytes, resource_type, format, cld_cloud_name));
 
         /* Return upload details to calling Javascript process in order to update front-end */
@@ -433,7 +375,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             APEX_JSON.write('articleId',l_article_id);
             APEX_JSON.write('nbAssets',C.nb_assets || ' media');
             APEX_JSON.write('imgurl',pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width));
-            APEX_JSON.write('updated', pck_core.fmtUpdatedDate(l_updated_date));
+            APEX_JSON.write('updated', TO_CHAR(l_updated_date AT TIME ZONE l_session_data.timezone,'dd Mon yyyy fmhh:fmmi PM'));
             APEX_JSON.close_object;
         END LOOP;
 
@@ -498,7 +440,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_ip_address performance.ip_address%type;
         l_session_id NUMBER:=APEX_CUSTOM_AUTH.GET_SESSION_ID;
         n PLS_INTEGER:=0;
-        l_timezone users.client_tz%type:=apex_util.get_session_state('APP_CLIENT_TZ');
         l_url_parts apex_t_varchar2;
         l_transformation VARCHAR(300);
     BEGIN
@@ -649,7 +590,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         l_user_id users.id%type;
         l_app_id NUMBER;
-        l_session_id users.apex_session_id%type;
+        l_session_data pck_core.session_data_rt;
         l_page_id NUMBER;
         l_aws_gateway_url VARCHAR2(200);
         l_signatureContactEmail VARCHAR2(4000);
@@ -666,7 +607,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END;
 
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         l_json:= new JSON_OBJECT_T;
         l_website_object:= new JSON_OBJECT_T;
@@ -677,7 +618,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     FROM website w, users u, website_font wf
                    WHERE w.id=pWebsiteId
                      AND w.font(+)=wf.name
-                     AND w.user_id=l_user_id
+                     AND w.user_id=l_session_data.user_id
                      AND u.id=w.user_id)
         LOOP
             l_website_object.put('id',C.id);
@@ -780,15 +721,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Get the selected article's content in HTML format
      */    
     PROCEDURE getArticle(pArticleId IN article.id%type)  IS
-        l_user_id users.id%type;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         FOR C IN (SELECT a.body_html, UPPER(u.name) name, apex_util.get_since(a.created_date) created, CASE WHEN a.word_count<200 THEN 'less than a minute' ELSE ROUND(a.word_count/200) || ' minute read' END minutes 
                     FROM article a, users u 
                    WHERE a.id=pArticleId 
-                     AND a.author_user_id=NVL(l_user_id,a.author_user_id)
-                     AND a.is_public=CASE WHEN l_user_id IS NULL THEN 'Y' ELSE a.is_public END
+                     AND a.author_user_id=NVL(l_session_data.user_id,a.author_user_id)
+                     AND a.is_public=CASE WHEN l_session_data.user_id IS NULL THEN 'Y' ELSE a.is_public END
                      AND a.author_user_id=u.id )
         LOOP
             apex_json.open_object; 
@@ -807,7 +748,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Procedure called by the autoSave feature of CKEditor
      */        
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
-        l_user_id users.id%type;
         l_website_id website_article.website_id%type;
         l_article_id article.id%type;
         l_title article.title%type;
@@ -815,21 +755,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_word_count article.word_count%type;
         l_edit_text article.body_html%type;
         l_name users.name%type;
-        l_client_TZ users.client_TZ%type;
         l_words apex_t_varchar2;
         l_rem PLS_INTEGER;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         SELECT website_id,
                SUBSTR(title,1,60) title, 
                REGEXP_SUBSTR(word_count,'(\d)+') word_count,
                edit_text,
-               u.name,
-               u.client_TZ
-          INTO l_website_id, l_title, l_word_count, l_edit_text, l_name, l_client_TZ
+               u.name
+          INTO l_website_id, l_title, l_word_count, l_edit_text, l_name
           FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (website_id, title, word_count, edit_text CLOB))
-          WHERE u.id=l_user_id;
+          WHERE u.id=l_session_data.user_id;
 
         apex_escape.set_html_escaping_mode('E');
         l_excerpt:=dbms_lob.substr(utl_i18n.unescape_reference(apex_escape.striphtml(l_edit_text)),200,NVL(LENGTHB(l_title),0)+1);
@@ -854,8 +793,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;
 
         IF (pArticleId=0) THEN
-            INSERT INTO article (id, title, excerpt, word_count, body_html, author_user_id, created_date) VALUES (seq_article.nextval, l_title, l_excerpt, l_word_count, l_edit_text, l_user_id, current_timestamp);
-            INSERT INTO website_article(article_id, website_id, display_order, user_id) VALUES (seq_article.currval, l_website_id, seq_article.currval*-1, l_user_id);
+            INSERT INTO article (id, title, excerpt, word_count, body_html, author_user_id, created_date) VALUES (seq_article.nextval, l_title, l_excerpt, l_word_count, l_edit_text, l_session_data.user_id, current_timestamp);
+            INSERT INTO website_article(article_id, website_id, display_order, user_id) VALUES (seq_article.currval, l_website_id, seq_article.currval*-1, l_session_data.user_id);
         ELSE
             UPDATE article SET title=l_title, excerpt=l_excerpt, word_count=l_word_count, body_html=l_edit_text, updated_date=current_timestamp
              WHERE id=pArticleId;
@@ -865,13 +804,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         APEX_JSON.write('success', TRUE);
         IF (pArticleId=0) THEN
             APEX_JSON.write('articleId',seq_article.currval);
-            APEX_JSON.write('new_card',pck_core.buildWebsiteArticles(l_website_id,pArticleId=>seq_article.currval));
+            APEX_JSON.write('new_card',pck_core.buildWebsiteArticles(pWebsiteId=>l_website_id,pCanUsePopover=>l_session_data.canuse_popover, pTimezone=>l_session_data.timezone, pArticleId=>seq_article.currval));
         END IF;
         APEX_JSON.write('title', l_title);
         APEX_JSON.write('excerpt', l_excerpt);
         APEX_JSON.write('words', l_word_count || ' words');
         APEX_JSON.write('author', l_name);
-        APEX_JSON.write('updated', TO_CHAR(current_timestamp AT TIME ZONE l_client_TZ,'dd Mon yyyy hh24:mi:ss'));
+        APEX_JSON.write('updated', TO_CHAR(current_timestamp AT TIME ZONE l_session_data.timezone,'dd Mon yyyy hh24:mi:ss'));
         APEX_JSON.close_object;
 
         EXCEPTION
@@ -975,20 +914,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;        
 
         pck_api.callCloudinaryAPI(pUserId=>pUserId, pEndpoint=>l_cld_cloud_name || '/image/destroy', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
-        /*
-        l_clob := apex_web_service.make_rest_request(
-            p_url=>'https://api.cloudinary.com/v1_1/' || l_cld_cloud_name || '/image/destroy', 
-            p_http_method=>'POST',
-            p_parm_name=>l_parm_names,
-            p_parm_value=>l_parm_values); 
-
-        SELECT error_message INTO l_error_message FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS error_message VARCHAR2(500) PATH '$.error.message');
-
-        IF (l_error_message IS NOT NULL) THEN
-            pck_core.log(l_clob);
-            RAISE_APPLICATION_ERROR(-20001, l_error_message);
-        END IF;
-        */
 
         DELETE asset WHERE id=pId;
         UPDATE article SET nb_assets = nb_assets-1, updated_date=current_date WHERE id=l_article_id RETURNING nb_assets INTO l_nb_assets;
@@ -996,7 +921,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('articleId', l_article_id);
-        apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
+        --apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
         apex_json.write('nb-assets', l_nb_assets || ' media');
         apex_json.close_object;
 
@@ -1009,20 +934,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Copy Website
      */  
     PROCEDURE copyWebsite(pWebsiteId IN website.id%type) IS
-        l_user_id users.id%type;
         l_domain_name_copy website.domain_name%type;
         l_json JSON_OBJECT_T;
         l_clob CLOB;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
-        SELECT SUBSTR(domain_name,1,25) || '_COPY' INTO l_domain_name_copy FROM website WHERE id=pWebsiteId AND user_id=l_user_id;
+        SELECT SUBSTR(domain_name,1,25) || '_COPY' INTO l_domain_name_copy FROM website WHERE id=pWebsiteId AND user_id=l_session_data.user_id;
 
         /* Create Netlify site and store site_id */
         l_json:=new JSON_OBJECT_T;
         l_json.put('name', l_domain_name_copy);
 
-        pck_api.callNetlifyAPI(pUserId=>l_user_id, 
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, 
             pEndpoint=>'sites', 
             pMethod=>'POST', 
             pBody=>l_json.stringify, 
@@ -1032,13 +957,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         SELECT seq_website.nextval,l_domain_name_copy,w.user_id,w.favicon_url,w.template,w.contact_email,w.trade_name,w.affiliation_link_img,w.affiliation_link_url,s.site_id
           FROM website w, JSON_TABLE(l_clob, '$' COLUMNS(site_id)) s
          WHERE w.id=pWebsiteId
-           AND w.user_id=l_user_id;
+           AND w.user_id=l_session_data.user_id;
 
         INSERT INTO website_article (website_id,article_id,display_order,nav_name,page_title,page_description,user_id)
         SELECT seq_website.currval, article_id,display_order,nav_name,page_title,page_description,user_id
           FROM website_article
          WHERE website_id=pWebsiteId
-           AND user_id=l_user_id;
+           AND user_id=l_session_data.user_id;
 
         apex_json.open_object;  
         apex_json.write('success',TRUE);
@@ -1092,9 +1017,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */   
     PROCEDURE publishArticle(pArticleId IN article.id%type) IS
         n PLS_INTEGER;
-        l_user_id users.id%type;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         /* Reject publication request if cover image does not have ALT description */
 
@@ -1112,10 +1037,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         IF (n=0) THEN
             apex_json.write('message', 'Cover Image ALT TEXT must be set before article can be published');
         ELSE
-            UPDATE article SET is_public='Y', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_user_id;
+            UPDATE article SET is_public='Y', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_session_data.user_id;
         END IF;
 
-        apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
+        --apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
         apex_json.write('success', TRUE);
         apex_json.close_object;        
 
@@ -1125,14 +1050,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Publish article
+     **  UnPublish article
      */   
     PROCEDURE unpublishArticle(pArticleId IN article.id%type) IS
-        l_user_id users.id%type;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
-        UPDATE article SET is_public='N', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_user_id;
+        UPDATE article SET is_public='N', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_session_data.user_id;
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -1156,9 +1081,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         TYPE tt_website_article IS TABLE OF t_website_article;
         l_website_articles tt_website_article; 
 
-        l_user_id users.id%type;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         SELECT dbid_string INTO l_dbid_string 
           FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (dbid_string));
@@ -1172,7 +1097,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
            SET display_order=l_website_articles(i).display_order 
          WHERE website_id = pWebsiteId
            AND article_id=l_website_articles(i).article_id
-           AND user_id=l_user_id;
+           AND user_id=l_session_data.user_id;
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -1202,12 +1127,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_format asset.format%type; 
         l_width asset.width%type;
 
-        l_user_id users.id%type;
         l_url VARCHAR2(500);
         l_na_number NUMBER;
         l_na_varchar VARCHAR2(500);
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         SELECT dbid_string INTO l_dbid_string 
           FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (dbid_string));
@@ -1220,14 +1145,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         SELECT article_id INTO l_article_id
           FROM asset 
          WHERE id=l_assets(1).id
-           AND user_id=l_user_id;
+           AND user_id=l_session_data.user_id;
 
         /* ... and get id of first asset as this may have been replaced */
         SELECT cover_asset_id 
           INTO l_first_dbid 
           FROM article 
          WHERE id=l_article_id
-           AND author_user_id=l_user_id;
+           AND author_user_id=l_session_data.user_id;
 
         FORALL i IN l_assets.first .. l_assets.last
         UPDATE asset SET display_order=l_assets(i).display_order WHERE id  = l_assets(i).id;
@@ -1237,7 +1162,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
               INTO l_cld_cloud_name, l_resource_type, l_public_id, l_format, l_width
               FROM asset 
               WHERE id=l_assets(1).id
-                AND user_id=l_user_id;
+                AND user_id=l_session_data.user_id;
             l_url:=pck_core.getCloudinaryUrl(l_cld_cloud_name, l_resource_type, l_public_id, l_format, l_width);
             UPDATE article SET updated_date=current_date, cover_asset_id=l_assets(1).id WHERE id=l_article_id;
         END IF;
@@ -1246,7 +1171,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('success', TRUE);
         apex_json.write('articleId', l_article_id);
         apex_json.write('url', l_url);
-        apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
+        --apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
         apex_json.close_object;
 
         EXCEPTION
@@ -1354,7 +1279,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **    Complex processing for Domain name change
      */
     PROCEDURE updateField(pBodyText IN CLOB) IS
-        l_user_id users.id%type;
         l_id_1 NUMBER;
         l_id_2 NUMBER;
 
@@ -1362,12 +1286,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_color VARCHAR2(5);
         l_website_id website.id%type;
         n PLS_INTEGER:=0;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         FOR C IN (SELECT t.id, t.table_column, t.value
                     FROM users, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value)) t
-                   WHERE users.id=l_user_id)
+                   WHERE users.id=l_session_data.user_id)
         LOOP
             IF (INSTR(C.id,',')>0) THEN
                 l_id_1:=SUBSTR(C.id,1,INSTR(C.id,',')-1);
@@ -1376,24 +1301,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
             CASE C.table_column
                 WHEN 'website.domain_name' THEN
-                    processDomainName(l_user_id, C.id, C.value);
+                    processDomainName(l_session_data.user_id, C.id, C.value);
                     RETURN;
                 WHEN 'website.contact_email' THEN
-                    UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                    UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website.template' THEN
-                    UPDATE website SET template=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                    UPDATE website SET template=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website.font' THEN
-                    UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                    UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website_article.nav_name' THEN
-                    UPDATE website_article SET nav_name=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
+                    UPDATE website_article SET nav_name=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'website_article.page_title' THEN
-                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
+                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'website_article.page_description' THEN
-                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
+                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'asset.alt_text' THEN
-                    UPDATE asset SET alt_text=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                    UPDATE asset SET alt_text=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'asset.description' THEN
-                    UPDATE asset SET description=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;               
+                    UPDATE asset SET description=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;               
             END CASE;
             n:=sql%rowcount;
         END LOOP;
@@ -1421,23 +1346,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **    Delete object
      */
     PROCEDURE deleteTable(pBodyText IN CLOB) IS
-        l_user_id users.id%type;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         FOR C IN (SELECT t.id, t.article_id, t.website_id, t.table_name
                     FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, article_id, website_id, table_name)) t
-                   WHERE u.id=l_user_id)
+                   WHERE u.id=l_session_data.user_id)
         LOOP
             CASE C.table_name
                 WHEN 'user' THEN
                     null;            
                 WHEN 'website' THEN
-                    deleteWebsite(l_user_id,C.id);
+                    deleteWebsite(l_session_data.user_id,C.id);
                 WHEN 'website_article' THEN
-                    deleteArticle(l_user_id,C.article_id,C.website_id);
+                    deleteArticle(l_session_data.user_id,C.article_id,C.website_id);
                 WHEN 'asset' THEN
-                    deleteAsset(l_user_id,C.id);               
+                    deleteAsset(l_session_data.user_id,C.id);               
             END CASE;
         END LOOP;
 
@@ -1482,16 +1407,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     ** Logout authenticated session
     */
     PROCEDURE signout IS
-        l_app_id NUMBER;
-        l_session_id NUMBER;
-        l_page_id NUMBER;
         session_ended EXCEPTION;
         PRAGMA EXCEPTION_INIT(session_ended,-20987);
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        pck_core.getApexSession(l_app_id, l_session_id, l_page_id);
+        l_session_data:=pck_core.getSessionData();
 
         BEGIN 
-            apex_session.delete_session(p_session_id=>l_session_id);
+            apex_session.delete_session(p_session_id=>l_session_data.session_id);
             EXCEPTION WHEN session_ended THEN NULL;
         END;
         /*
