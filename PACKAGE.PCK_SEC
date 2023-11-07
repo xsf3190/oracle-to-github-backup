@@ -27,7 +27,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 FROM apex_applications
                 WHERE application_id = APEX_APPLICATION.G_FLOW_ID
                 );
-
+        /*
         FOR C IN (
             SELECT apex_session_id
               FROM apex_workspace_sessions
@@ -39,6 +39,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             apex_session.delete_session(p_session_id => C.apex_session_id);
             DELETE session_data WHERE session_id=C.apex_session_id;
         END LOOP;
+        */
 
         INSERT INTO user_login(auth_provider,email,name,apex_session_id) VALUES (p_auth_provider, p_email, p_name, APEX_APPLICATION.G_INSTANCE);
 
