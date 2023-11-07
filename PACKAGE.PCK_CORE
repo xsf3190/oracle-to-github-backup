@@ -8,6 +8,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     PROCEDURE log_error;
     --
+    TYPE session_data_rt IS RECORD (
+        app_id NUMBER, 
+        session_id NUMBER,
+        page_id NUMBER,
+        timezone VARCHAR2(30),
+        canuse_popover BOOLEAN,
+        user_id NUMBER
+    );
+    --
+    FUNCTION getSessionData RETURN session_data_rt;
+    --
     PROCEDURE getApexSession(pAppId IN OUT NUMBER, pSessionId IN OUT NUMBER, pPageId IN OUT NUMBER);
     --
     FUNCTION getUserId(pSaveCookie BOOLEAN DEFAULT FALSE) RETURN users.id%type;
@@ -15,8 +26,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     FUNCTION getRestUrl RETURN VARCHAR2;
     --
     FUNCTION getPageContent RETURN CLOB;
-    --
-    FUNCTION fmtUpdatedDate(pTimestamp IN article.updated_date%type) RETURN VARCHAR2;
     --
     FUNCTION getMediaType(pResourceType IN VARCHAR2, pFormat IN VARCHAR2) RETURN VARCHAR2;
     --
@@ -30,9 +39,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
+    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanIUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pViewOption IN VARCHAR2 DEFAULT NULL, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB;
+    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pCanIUsePopover IN BOOLEAN, pTimezone IN session_data.timezone%type, pViewOption IN VARCHAR2 DEFAULT NULL, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB;
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
@@ -56,6 +65,48 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             pPageId:=l_parts(3);
         END IF;
         EXCEPTION WHEN VALUE_ERROR THEN NULL;  /* Raised when procedure is not called in internet session */
+    END;
+
+    FUNCTION getSessionData RETURN session_data_rt IS
+        l_apex_session VARCHAR2(50);
+        l_parts apex_t_varchar2;
+        l_session_data session_data_rt;
+    BEGIN
+        l_apex_session:=OWA_UTIL.get_cgi_env('Apex-Session');
+        IF (l_apex_session IS NULL) THEN
+            l_session_data.app_id:=apex_application.g_flow_id;
+            l_session_data.session_id:=APEX_CUSTOM_AUTH.GET_SESSION_ID;
+            l_session_data.page_id:=apex_application.g_flow_step_id;
+        ELSE        
+            l_parts:=apex_string.split(l_apex_session,',');
+            l_session_data.app_id:=l_parts(1);
+            l_session_data.session_id:=l_parts(2);
+            l_session_data.page_id:=l_parts(3);
+        END IF;
+
+        FOR C IN (SELECT browser, browser_version, timezone FROM session_data WHERE session_id=l_session_data.session_id) LOOP
+            l_session_data.timezone:=C.timezone;
+            l_session_data.canuse_popover:=TRUE;
+            IF (C.browser='Firefox' OR (C.browser='Safari' AND C.browser_version<17)) THEN
+                l_session_data.canuse_popover:=FALSE;
+            END IF;
+        END LOOP;
+
+        FOR C IN (
+            SELECT u.id
+              FROM apex_workspace_sessions s, users u
+             WHERE s.apex_session_id=l_session_data.session_id
+               AND s.user_name=u.email )
+        LOOP
+            l_session_data.user_id:=C.id;
+        END LOOP;
+
+        IF (l_session_data.user_id IS NULL AND l_session_data.page_id=2) THEN
+            RAISE_APPLICATION_ERROR(-20000,'YOUR SESSION HAS EXPIRED');
+        END IF;
+
+        RETURN l_session_data;
+        EXCEPTION WHEN VALUE_ERROR THEN RETURN l_session_data;
     END;
 
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB) IS PRAGMA AUTONOMOUS_TRANSACTION;
@@ -128,14 +179,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     ** Return id of authenticated user for the session
     */
     FUNCTION getUserId(pSaveCookie BOOLEAN DEFAULT FALSE) RETURN users.id%type IS
-        l_names owa_cookie.vc_arr;
-        l_vals owa_cookie.vc_arr;
-        l_num_vals INTEGER;
+        --l_names owa_cookie.vc_arr;
+        --l_vals owa_cookie.vc_arr;
+        --l_num_vals INTEGER;
 
         l_app_id NUMBER;
-        l_session_id users.apex_session_id%type;
+        l_session_id NUMBER;
         l_page_id NUMBER;
-        l_apex_cookie_value users.apex_cookie_value%type;
         l_user_id users.id%type;
     BEGIN
         l_user_id:=NULL;
@@ -143,7 +193,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         getApexSession(l_app_id, l_session_id, l_page_id);
 
         FOR C IN (
-            SELECT u.id, apex_cookie_value
+            SELECT u.id
               FROM apex_workspace_sessions s, users u
              WHERE s.apex_session_id=l_session_id
                AND s.user_name=u.email )
@@ -151,7 +201,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             /* We have an authenticated session */
             l_user_id:=C.id;
 
-            /* Additional check that session cookie is valid */
+            /* Additional check that session cookie is valid ... cant do this because same user can have multiple different sessions */
+            /*
             owa_cookie.get_all(names => l_names, vals => l_vals, num_vals => l_num_vals);
             FOR i IN 1..l_names.COUNT LOOP
                 IF (l_names(i)='ORA_WWV_APP_' || l_app_id) THEN
@@ -161,7 +212,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         RAISE_APPLICATION_ERROR(-20000,'SESSION COOKIE VALUE HAS CHANGED');
                     END IF;
                 END IF;
-            END LOOP;            
+            END LOOP;
+            */            
         END LOOP;
 
         IF (l_user_id IS NULL AND l_page_id=2) THEN
@@ -184,20 +236,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
            AND m.name='public';
 
         RETURN (l_rest_url);
-    END;    
-
-    /*
-     **  Format timestamp according to user's current time zone
-     */
-    FUNCTION fmtUpdatedDate(pTimestamp IN article.updated_date%type) RETURN VARCHAR2
-    IS
-        l_timezone users.client_tz%type:=apex_util.get_session_state('APP_CLIENT_TZ');
-    BEGIN
-        IF (l_timezone IS NOT NULL) THEN
-            RETURN ( TO_CHAR(pTimestamp AT TIME ZONE l_timezone, 'dd Mon yyyy fmhh:fmmi PM') );
-        ELSE
-            RETURN ( TO_CHAR(pTimestamp, 'dd Mon yyyy'));
-        END IF;
     END;
 
     /*
@@ -231,7 +269,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     /*
      **  Create wrapper html for textarea element, optionally including dropdown
      */
-    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
+    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanIUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
         l_table_name user_tab_columns.table_name%type;
         l_column_name user_tab_columns.column_name%type;
         l_data_length user_tab_columns.data_length%type;
@@ -254,8 +292,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         <div style="min-width:min(' || l_data_length || 'ch,100%)" class="textarea-wrapper">' ||
             CASE WHEN pDropdown IS NOT NULL THEN '<div class="button-container">' END || '
             <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
-                '<button type="button" popovertarget="' || l_column_name || '_popover"><svg class="icon"><use href="#info"></use></svg></button>
-                 <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>
+                CASE WHEN pCanIUsePopover 
+                        THEN '<button type="button" popovertarget="' || l_column_name || '_popover"><svg class="icon"><use href="#info"></use></svg></button>
+                              <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' END ||'
             </label>' || pDropdown || 
             CASE WHEN pDropdown IS NOT NULL THEN '</div>' END || '
             <textarea placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || '" maxlength="' || l_data_length || '" rows="1" data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>        
@@ -264,6 +303,44 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <span class="charcounter">' || NVL(LENGTH(pValue),0) || '/' || l_data_length || '</span>
             </div>
         </div>');
+    END;
+
+    /*
+     **  Create wrapper html for radio elements
+     */
+    FUNCTION buildRadioWrapper(pColumn IN VARCHAR2, pRadioButtons IN VARCHAR2, pCanIUsePopover IN BOOLEAN) RETURN VARCHAR2 IS
+        l_table_name user_tab_columns.table_name%type;
+        l_column_name user_tab_columns.column_name%type;
+        l_comments user_col_comments.comments%type;
+    BEGIN
+        l_table_name:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
+        l_column_name:=UPPER(SUBSTR(pColumn,INSTR(pColumn,'.')+1));
+
+        SELECT NVL(i.comments,'Info not defined yet') 
+          INTO l_comments
+          FROM user_tab_columns c, user_col_comments i
+         WHERE c.table_name=l_table_name
+           AND c.column_name=l_column_name
+           AND i.table_name=c.table_name
+           AND i.column_name=c.column_name;
+
+        l_column_name:=LOWER(l_column_name);
+
+        RETURN('
+        <div class="radio-wrapper">
+                <fieldset>
+                    <legend>' || INITCAP(l_table_name) || ' ' || INITCAP(l_column_name) || 
+                    CASE WHEN pCanIUsePopover 
+                        THEN '<button type="button" popovertarget="' || l_column_name || '_popover"><svg class="icon"><use href="#info"></use></svg></button>
+                              <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' END || '
+                    </legend>
+                    <div class="cluster">' || pRadioButtons || '
+                    </div>
+                </fieldset>
+                <div class="button-container">
+                    <span class="result"></span><span>&nbsp;</span>
+                </div>
+            </div>');
     END;
 
     /*
@@ -386,7 +463,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_url);
     END;    
 
-    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pViewOption IN VARCHAR2 DEFAULT NULL, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB IS
+    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pCanIUsePopover IN BOOLEAN, pTimezone IN session_data.timezone%type, pViewOption IN VARCHAR2 DEFAULT NULL, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB IS
         l_clob CLOB;
     BEGIN
         FOR C IN (SELECT a.id,
@@ -449,11 +526,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     THEN '<br>
                         <button type="button" class="no-media edit-text">CREATE TEXT</button>'
                     ELSE '<p class="title edit-text">' || NVL(C.title, C.excerpt) || '</p> ' 
-                            || CASE WHEN pViewoption='nav' THEN buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.nav_name',C.nav_name) END
-                            || CASE WHEN pViewoption='seo' THEN buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_title',C.page_title) ||
-                                                                buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_description',C.page_description)  END
+                            || CASE WHEN pViewoption='nav' THEN buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.nav_name',C.nav_name, pCanIUsePopover) END
+                            || CASE WHEN pViewoption='seo' THEN buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_title',C.page_title, pCanIUsePopover) ||
+                                                                buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_description',C.page_description, pCanIUsePopover)  END
                 END || '   
-                <footer class="button-container"><div><span class="word-count">' || NVL(C.word_count,0) || ' words' || '</span> | <span class="nb-assets">' || NVL(C.nb_assets,0) || ' media</span></div><span class="updated-date">' || fmtUpdatedDate(C.updated_date)  || '</span></footer>
+                <footer class="button-container"><div><span class="word-count">' || NVL(C.word_count,0) || ' words' || '</span> | <span class="nb-assets">' || NVL(C.nb_assets,0) 
+                || ' media</span></div><span class="updated-date">' || TO_CHAR(C.updated_date AT TIME ZONE pTimezone, 'dd Mon yyyy fmhh:fmmi PM')  || '</span></footer>
             </li>');
         END LOOP;
         RETURN l_clob;
@@ -464,10 +542,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
      */
     FUNCTION buildAuthPage RETURN CLOB IS
         l_clob CLOB;
-        l_user_id users.id%type;
         l_user_name users.name%type;
         l_templates CLOB;
         l_template_html LONG;
+        l_font_html LONG;
         l_edit_websites CLOB;
         l_dns_zones CLOB;
         l_domain_dropdown LONG;
@@ -477,6 +555,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             id                      website.id%type,
             domain_name             website.domain_name%type,
             template                website.template%type,
+            font                    website.font%type,
             favicon_url             website.favicon_url%type,
             contact_email           website.contact_email%type,
             netlify_site_id         website.netlify_site_id%type,
@@ -484,11 +563,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         );
         TYPE tt_domain IS TABLE OF t_domain;
         l_domains tt_domain;  
+        l_session_data session_data_rt;
     BEGIN
-        SELECT id
-          INTO l_user_id
-          FROM users
-         WHERE email=apex_application.g_user;
+        l_session_data:=getSessionData();
 
         l_clob:= TO_CLOB(pck_icons.g_icons_svg);
 
@@ -541,17 +618,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </div>');
 
         -- should use this to show users available custom domains
-        pck_api.callNetlifyAPI(pUserId=>l_user_id, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_dns_zones);
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_dns_zones);
 
         /* Get templates from Administrator's github DEPLOY repository. Do it now so we can print at least the <nav> in case templates are not defined.
         ** Data returned in variable l_temmplates which we use to build the radio controls later in the code
          */
-        pck_api.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_templates);
+        pck_api.callGithubAPI(pUserId=>l_session_data.user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_templates);
 
-        SELECT w.id, w.domain_name, w.template, w.favicon_url, w.contact_email, w.netlify_site_id, w.netlify_site_id_custom
+        SELECT w.id, w.domain_name, w.template, w.font, w.favicon_url, w.contact_email, w.netlify_site_id, w.netlify_site_id_custom
           BULK COLLECT INTO l_domains
           FROM website w
-         WHERE w.user_id=l_user_id
+         WHERE w.user_id=l_session_data.user_id
          ORDER BY COALESCE(w.updated_date, w.created_date) DESC;
 
         IF (l_domains.COUNT=0) THEN
@@ -624,20 +701,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </div>';
         END LOOP;
 
+        /* FONTS are Google font family names */
+        FOR C IN (SELECT name FROM website_font ORDER BY name) LOOP
+            l_font_html:=l_font_html || 
+            '<div>
+                <input type="radio" data-column="website.font" data-id="' || l_domains(1).id || '" id="font-' || LOWER(C.name) || '" name="font" value="' || C.name || '"' ||
+                CASE WHEN l_domains(1).font=C.name THEN ' checked' END || '>
+                </input> <label for="font-' || LOWER(C.name) || '">' || C.name || '</label>
+            </div>';
+        END LOOP;
+
         l_clob:=l_clob || TO_CLOB('
         <form class="website" data-id="' || l_domains(1).id || '">' ||
-            buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_domain_dropdown) || '
-            <div class="radio-wrapper">
-                <fieldset>
-                    <legend>Website Template</legend>
-                    <div class="cluster">' || l_template_html || '
-                    </div>
-                </fieldset>
-                <div class="button-container">
-                    <span class="result"></span><span>&nbsp;</span>
-                </div>
-            </div>' ||
-            buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email) || '
+            buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
+            buildRadioWrapper('website.template',l_template_html, l_session_data.canuse_popover) ||
+            buildRadioWrapper('website.font',l_font_html, l_session_data.canuse_popover) ||
+            buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email, l_session_data.canuse_popover) || '
             <fieldset class="deploy-buttons">
                 <legend>Build & Deploy Website</legend>
                 <div>' ||
@@ -689,7 +768,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </ul>
             </div>
         </nav>
-        <ul class="cards">' || buildWebsiteArticles(l_domains(1).id) || '
+        <ul class="cards">' || buildWebsiteArticles(l_domains(1).id, l_session_data.canuse_popover, l_session_data.timezone) || '
         </ul>');
 
         l_clob:=l_clob || TO_CLOB('
