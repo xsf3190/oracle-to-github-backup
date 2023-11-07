@@ -51,9 +51,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
     PROCEDURE getSessionLog(SessionId IN NUMBER) IS
         l_content CLOB;
-        l_user_id users.id%type;
     BEGIN
-        l_user_id:=pck_core.getUserId();
         l_content:='
         <table>
             <thead>
@@ -62,10 +60,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 </tr>
             </thead>
             <tbody>';
-        FOR C IN (SELECT TO_CHAR(log_date AT TIME ZONE client_tz, 'hh24:mi:ss') log_date, message 
-                    FROM log, users 
-                   WHERE users.id=l_user_id
-                   ORDER BY log.id DESC) LOOP
+        FOR C IN (SELECT TO_CHAR(l.log_date AT TIME ZONE s.timezone, 'hh24:mi:ss') log_date, l.message 
+                    FROM log l, session_data s
+                   WHERE s.session_id=SessionId
+                   ORDER BY l.id DESC) LOOP
             l_content:=l_content || '
                 <tr>
                     <td>' || C.log_date || '</td><td>' || REPLACE(C.message,chr(10),'<br>') || '</td>
@@ -137,22 +135,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     ** Set Time Zone according to client device. Procedure called on DOMContentLoaded event
+     ** Insert row in session_data table when user views home page.
      */
     PROCEDURE setClientInfo(pBodyText IN CLOB) IS
         l_bodytext CLOB:=pBodyText;
-        l_client_TZ users.client_tz%type;
-        l_maxtouchpoints NUMBER;
-        l_user_id users.id%type;
+        l_ip_address session_data.ip_address%type;
     BEGIN
-        l_user_id:=pck_core.getUserId(pSaveCookie=>TRUE);
-
-        IF (l_user_id IS NOT NULL) THEN
-            SELECT timezone, maxtouchpoints
-              INTO l_client_TZ, l_maxtouchpoints
-              FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' COLUMNS (timezone, maxtouchpoints));
-            UPDATE users SET client_tz=l_client_TZ, maxtouchpoints=l_maxtouchpoints, updated_date=current_timestamp WHERE id=l_user_id;          
-        END IF;
+        l_ip_address:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
+        INSERT INTO session_data (session_id, timezone, maxtouchpoints, browser, browser_version, ip_address)
+        SELECT session_id, timezone, maxtouchpoints, browser, browser_version, l_ip_address
+            FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' COLUMNS (session_id, timezone, maxtouchpoints, browser, browser_version));
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -168,17 +160,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     ** GET ALL ARTICLE (PAGE) CONTENT FOR A WEBSITE
     */
     PROCEDURE getWebsite(pWebsiteId IN website.id%type) IS
-        l_user_id users.id%type;
+        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_user_id:=pck_core.getUserId();
+        l_session_data:=pck_core.getSessionData();
 
         apex_json.open_object;
 
         FOR C IN (
-            SELECT domain_name, contact_email, template, favicon_url, trade_name, affiliation_link_img, affiliation_link_url, netlify_site_id, netlify_site_id_custom
-              FROM website 
-             WHERE id=pWebsiteId
-               AND user_id=l_user_id) 
+            SELECT w.domain_name, w.contact_email, w.template, w.font, w.favicon_url, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, w.netlify_site_id, w.netlify_site_id_custom
+              FROM website w
+             WHERE w.id=pWebsiteId
+               AND w.user_id=l_session_data.user_id) 
         LOOP
             apex_json.write('domain_name', C.domain_name);
             apex_json.write('contact_email', C.contact_email);
@@ -186,7 +178,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 apex_json.write('template', 'template-' || LOWER(C.template));
             END IF;
             apex_json.write('deploy_buttons', pck_core.buildDeployButtons(C.domain_name, C.netlify_site_id, C.netlify_site_id_custom));
-            apex_json.write('cards',pck_core.buildWebsiteArticles(pWebsiteId));
+            apex_json.write('cards',pck_core.buildWebsiteArticles(pWebsiteId, l_session_data.caniuse_popover));
         END LOOP;
 
         apex_json.write('success', TRUE);
@@ -681,17 +673,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_article_array:= new JSON_ARRAY_T;
 
         /* Get details of website */
-        FOR C IN (SELECT w.id, w.domain_name, w.favicon_url, w.google_font, w.font_family, w.contact_email, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, u.name author_name
-                    FROM website w, users u
+        FOR C IN (SELECT w.id, w.domain_name, w.favicon_url, w.font, wf.parameters, wf.fallback, w.contact_email, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, u.name author_name
+                    FROM website w, users u, website_font wf
                    WHERE w.id=pWebsiteId
+                     AND w.font(+)=wf.name
                      AND w.user_id=l_user_id
                      AND u.id=w.user_id)
         LOOP
             l_website_object.put('id',C.id);
             l_website_object.put('name',C.domain_name);
             l_website_object.put('favicon_url',C.favicon_url);
-            l_website_object.put('google_font',C.google_font);
-            l_website_object.put('font_family',C.font_family);
+            IF (C.font IS NOT NULL) THEN
+                l_website_object.put('google_font',C.font || C.parameters);
+                l_website_object.put('font_family',C.font || C.fallback);
+            END IF;
             l_website_object.put('contact_email',C.contact_email);
             l_website_object.put('trade_name',C.trade_name);
             l_website_object.put('affiliation_link_img',C.affiliation_link_img);
@@ -1387,6 +1382,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
                 WHEN 'website.template' THEN
                     UPDATE website SET template=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
+                WHEN 'website.font' THEN
+                    UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_user_id;
                 WHEN 'website_article.nav_name' THEN
                     UPDATE website_article SET nav_name=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_user_id;
                 WHEN 'website_article.page_title' THEN
