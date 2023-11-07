@@ -37,6 +37,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         )
         LOOP
             apex_session.delete_session(p_session_id => C.apex_session_id);
+            DELETE session_data WHERE session_id=C.apex_session_id;
         END LOOP;
 
         INSERT INTO user_login(auth_provider,email,name,apex_session_id) VALUES (p_auth_provider, p_email, p_name, APEX_APPLICATION.G_INSTANCE);
@@ -48,18 +49,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
              WHERE email=p_email;
 
             UPDATE users 
-               SET name=p_name, apex_session_id=APEX_APPLICATION.G_INSTANCE, last_login_date=current_timestamp, last_login_provider=p_auth_provider 
+               SET name=p_name, last_login_date=current_timestamp, last_login_provider=p_auth_provider 
              WHERE id=l_user_id;
 
             EXCEPTION WHEN NO_DATA_FOUND 
             THEN
-                INSERT INTO users(email, name, apex_session_id, last_login_date, last_login_provider) 
-                VALUES (p_email, p_name, APEX_APPLICATION.G_INSTANCE, current_timestamp, p_auth_provider);
-                --RETURNING id, name INTO l_user_id, l_user_name;
+                INSERT INTO users(email, name, last_login_date, last_login_provider) 
+                VALUES (p_email, p_name, current_timestamp, p_auth_provider);
         END;
-        --apex_util.set_session_state('APP_USER_ID',l_user_id);
-        --apex_util.set_session_state('APP_USER_NAME',l_user_name);
-
         COMMIT;
     END;    
 
