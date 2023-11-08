@@ -451,7 +451,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </div>' ||
                 CASE WHEN NVL(C.nb_assets,0)=0
                     THEN '<button type="button" class="no-media upload-media">UPLOAD MEDIA</button>' 
-                    ELSE '<img' || CASE WHEN C.format='svg' THEN ' style="object-fit:scale-down"' END || ' src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">' 
+                    ELSE '<img' || CASE WHEN C.format='svg' THEN ' style="object-fit:scale-down"' END || ' data-src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">' 
                 END ||
                 CASE WHEN COALESCE(C.title, C.excerpt) IS NULL 
                     THEN '<br>
@@ -462,7 +462,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                                                 buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_description',C.page_description, pCanUsePopover)  END
                 END || '   
                 <footer class="button-container"><div><span class="word-count">' || NVL(C.word_count,0) || ' words' || '</span> | <span class="nb-assets">' || NVL(C.nb_assets,0) 
-                || ' media</span></div><span class="updated-date">' || TO_CHAR(C.updated_date AT TIME ZONE pTimezone, 'dd Mon yyyy fmhh:fmmi PM')  || '</span></footer>
+                || ' media</span></div><span class="updated-date">' || TO_CHAR(C.updated_date AT TIME ZONE pTimezone, 'fmdd Mon yyyy, hh24:fmmi')  || '</span></footer>
             </li>');
         END LOOP;
         RETURN l_clob;
