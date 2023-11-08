@@ -265,7 +265,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END IF;
 
             l_clob:=l_clob || TO_CLOB('<img class="fullscreen" data-dimensions="'  || l_dimensions || 
-                                C.width || 'x' || C.height || '" src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>');
+                                C.width || 'x' || C.height || '" data-src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>');
 
             CASE l_media_type
 
