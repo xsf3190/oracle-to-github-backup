@@ -442,7 +442,7 @@ const lazyload = () => {
 
     const preloadImage = (img) => {
         const src = img.getAttribute('data-src');
-        if (!src) { 
+        if (!src) {
             return; 
         }
         img.src = src;
@@ -687,6 +687,9 @@ const counter = () => {
 const setImgSrc = (img) => {
     galleryFullCounter.textContent = counter();
     galleryFullImg.style.width = "";
+    if (!img.src) {
+        img.src = img.getAttribute('data-src');
+    }
     galleryFullImg.src = img.src;
 
     const dimensions = img.dataset.dimensions.split(':'),
