@@ -398,7 +398,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_clob CLOB;
     BEGIN
         FOR C IN (SELECT a.id,
-                   a.is_public,
                    c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
                    a.nb_assets,
                    a.title, 
@@ -438,6 +437,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                 <button type="button" class="with-icon edit-text">
                                     <svg class="icon"><use href="#pen-to-square"></use></svg>
                                 Edit Text
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="with-icon unpublish">
+                                    <svg class="icon"><use href="#link-slash"></use></svg>
+                                Unpublish
                                 </button>
                             </li>
                             <li>
