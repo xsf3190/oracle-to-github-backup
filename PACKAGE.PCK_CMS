@@ -729,7 +729,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     FROM article a, users u 
                    WHERE a.id=pArticleId 
                      AND a.author_user_id=NVL(l_session_data.user_id,a.author_user_id)
-                     AND a.is_public=CASE WHEN l_session_data.user_id IS NULL THEN 'Y' ELSE a.is_public END
                      AND a.author_user_id=u.id )
         LOOP
             apex_json.open_object; 
@@ -1016,31 +1015,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Publish article
      */   
     PROCEDURE publishArticle(pArticleId IN article.id%type) IS
-        n PLS_INTEGER;
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        /* Reject publication request if cover image does not have ALT description */
-
-        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS
-        (
-            SELECT alt_text, display_order FROM
-            (
-                SELECT MIN(display_order) OVER () cover, display_order, alt_text FROM asset WHERE article_id=pArticleId 
-            )
-            WHERE display_order=cover AND alt_text IS NOT NULL
-        );
+        UPDATE article SET is_public='Y', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_session_data.user_id;
 
         apex_json.open_object; 
-
-        IF (n=0) THEN
-            apex_json.write('message', 'Cover Image ALT TEXT must be set before article can be published');
-        ELSE
-            UPDATE article SET is_public='Y', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_session_data.user_id;
-        END IF;
-
-        --apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
         apex_json.write('success', TRUE);
         apex_json.close_object;        
 
