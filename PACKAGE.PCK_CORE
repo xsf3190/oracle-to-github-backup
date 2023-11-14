@@ -402,7 +402,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    a.nb_assets,
                    a.title, 
                    a.excerpt,
-                   wa.nav_name,
+                   wa.publish,
+                   wa.navigation_label,
                    wa.page_title,
                    wa.page_description,
                    a.word_count,
@@ -430,19 +431,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             <li>
                                 <button type="button" class="with-icon show-gallery">
                                     <svg class="icon"><use href="#photo-film"></use></svg>
-                                Show Gallery
+                                Media Gallery
                                 </button>
                             </li>
                             <li>
                                 <button type="button" class="with-icon edit-text">
                                     <svg class="icon"><use href="#pen-to-square"></use></svg>
                                 Edit Text
-                                </button>
-                            </li>
-                            <li>
-                                <button type="button" class="with-icon unpublish">
-                                    <svg class="icon"><use href="#link-slash"></use></svg>
-                                Unpublish
                                 </button>
                             </li>
                             <li>
@@ -459,12 +454,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     ELSE '<img' || CASE WHEN C.format='svg' THEN ' style="object-fit:scale-down"' END || ' data-src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">' 
                 END ||
                 CASE WHEN COALESCE(C.title, C.excerpt) IS NULL 
-                    THEN '<br>
-                        <button type="button" class="no-media edit-text">CREATE TEXT</button>'
+                    THEN '<button type="button" class="no-media edit-text">CREATE TEXT</button>'
                     ELSE '<p class="title edit-text">' || NVL(C.title, C.excerpt) || '</p> ' 
-                            || CASE WHEN pViewoption='nav' THEN buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.nav_name',C.nav_name, pCanUsePopover) END
-                            || CASE WHEN pViewoption='seo' THEN buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_title',C.page_title, pCanUsePopover) ||
-                                                                buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_description',C.page_description, pCanUsePopover)  END
+                            || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.navigation_label',C.navigation_label, pCanUsePopover)
+                            || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_title',C.page_title, pCanUsePopover)
+                            || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_description',C.page_description, pCanUsePopover)
                 END || '   
                 <footer class="button-container"><div><span class="word-count">' || NVL(C.word_count,0) || ' words' || '</span> | <span class="nb-assets">' || NVL(C.nb_assets,0) 
                 || ' media</span></div><span class="updated-date">' || TO_CHAR(C.updated_date AT TIME ZONE pTimezone, 'fmdd Mon yyyy, hh24:fmmi')  || '</span></footer>
@@ -665,6 +659,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <button type="button" class="cta new-content" style="--width:20ch"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
                 <span style="--content:''\002B''">NEW CONTENT</span>
             </button>
+            <!--
             <div class="dropdown">
                 <span>View Options</span>
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
@@ -703,6 +698,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     </li>      
                 </ul>
             </div>
+            -->
         </nav>
         <ul class="cards">' || buildWebsiteArticles(l_domains(1).id, l_session_data.canuse_popover, l_session_data.timezone) || '
         </ul>');
