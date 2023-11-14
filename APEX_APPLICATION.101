@@ -33,7 +33,7 @@ prompt APPLICATION 101 - CMS application
 -- Application Export:
 --   Application:     101
 --   Name:            CMS application
---   Date and Time:   21:01 Monday November 13, 2023
+--   Date and Time:   21:01 Tuesday November 14, 2023
 --   Exported By:     EXAMPLE
 --   Flashback:       0
 --   Export Type:     Application Export
@@ -122,9 +122,9 @@ wwv_imp_workspace.create_flow(
 ,p_email_from=>'mark.russellbrown@gmail.com'
 ,p_tokenize_row_search=>'N'
 ,p_last_updated_by=>'EXAMPLE'
-,p_last_upd_yyyymmddhh24miss=>'20231109065517'
+,p_last_upd_yyyymmddhh24miss=>'20231114114249'
 ,p_file_prefix => nvl(wwv_flow_application_install.get_static_app_file_prefix,'')
-,p_files_version=>4494
+,p_files_version=>4498
 ,p_print_server_type=>'NATIVE'
 ,p_is_pwa=>'N'
 );
@@ -1485,7 +1485,7 @@ end;
 /
 begin
 wwv_flow_imp_shared.create_app_static_file(
- p_id=>wwv_flow_imp.id(12285333752942997)
+ p_id=>wwv_flow_imp.id(12446275422868232)
 ,p_file_name=>'app101_2.min.js'
 ,p_mime_type=>'text/javascript'
 ,p_file_charset=>'utf-8'
