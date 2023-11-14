@@ -643,7 +643,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_json.put('website',l_website_object);
 
             FOR C1 IN (SELECT a.id, a.created_date, a.word_count, a.title, a.body_html, 
-                              wa.display_order, wa.page_title, wa.page_description, NVL(apex_string_util.get_slug(wa.nav_name),'index') path_name, wa.nav_name
+                              wa.display_order, wa.page_title, wa.page_description, NVL(apex_string_util.get_slug(wa.navigation_label),'index') path_name, wa.navigation_label
                         FROM article a, website_article wa
                        WHERE wa.website_id=C.id
                          AND wa.article_id=a.id
@@ -657,8 +657,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_article_object.put('page_description',C1.page_description);
                 l_article_object.put('created',TO_CHAR(C1.created_date,'dd.mm.yyyy'));
 
-                IF (C1.nav_name IS NOT NULL) THEN
-                    l_article_object.put('nav_name',C1.nav_name);
+                IF (C1.navigation_label IS NOT NULL) THEN
+                    l_article_object.put('nav_name',C1.navigation_label);
                 END IF;
 
                 IF (C1.title IS NOT NULL) THEN
@@ -958,8 +958,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
          WHERE w.id=pWebsiteId
            AND w.user_id=l_session_data.user_id;
 
-        INSERT INTO website_article (website_id,article_id,display_order,nav_name,page_title,page_description,user_id)
-        SELECT seq_website.currval, article_id,display_order,nav_name,page_title,page_description,user_id
+        INSERT INTO website_article (website_id,article_id,display_order,navigation_label,page_title,page_description,user_id)
+        SELECT seq_website.currval, article_id,display_order,navigation_label,page_title,page_description,user_id
           FROM website_article
          WHERE website_id=pWebsiteId
            AND user_id=l_session_data.user_id;
@@ -1019,7 +1019,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        UPDATE article SET is_public='Y', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_session_data.user_id;
+        UPDATE website_article SET publish='Y', updated_date=current_date WHERE article_id=pArticleId AND user_id=l_session_data.user_id;
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -1038,7 +1038,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        UPDATE article SET is_public='N', updated_date=current_date WHERE id=pArticleId AND author_user_id=l_session_data.user_id;
+        UPDATE website_article SET publish='N', updated_date=current_date WHERE article_id=pArticleId AND user_id=l_session_data.user_id;
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -1290,8 +1290,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     UPDATE website SET template=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website.font' THEN
                     UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
-                WHEN 'website_article.nav_name' THEN
-                    UPDATE website_article SET nav_name=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+                WHEN 'website_article.navigation_label' THEN
+                    UPDATE website_article SET navigation_label=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'website_article.page_title' THEN
                     UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'website_article.page_description' THEN
