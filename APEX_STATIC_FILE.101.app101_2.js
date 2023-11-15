@@ -617,11 +617,7 @@ const cardHandler = (e) => {
     } else if (e.target.matches(".upload-media")) {
         upload_media(id);
     } else if (e.target.matches(".edit-text")) {
-        edit_text(id,e.srcElement);          
-    } else if (e.target.matches(".publish")) {
-        publish_article(id, e.srcElement);  
-    } else if (e.target.matches(".unpublish")) {
-        unpublish_article(id, e.srcElement);                                                             
+        edit_text(id,e.srcElement);                                                                     
     } else if (e.target.matches(".fullscreen")) {
         showFullScreen(e);                                 
     } else if (e.target.matches(".edit-website")) {
@@ -1181,32 +1177,6 @@ const delete_object_confirm = (e) => {
                 break;                    
         }
         ele.remove();
-    });
-}
-
-/*
- ** PUBLISH ARTICLE.
- */
-const publish_article = (articleId, button) => {
-    execProcess( "publish/"+articleId, "PUT").then( (data) => {
-        if (data.message) {
-            popupOpen("UNABLE TO PUBLISH ARTICLE", data.message);
-        } else {
-            button.classList.remove("publish");
-            button.classList.add("unpublish");
-            button.textContent = "Unpublish";
-        }
-    });
-}
-
-/*
- ** UNPUBLISH ARTICLE.
- */
-const unpublish_article = (articleId, button) => {
-    execProcess( "unpublish/"+articleId, "PUT").then( () => {
-        button.classList.remove("unpublish");
-        button.classList.add("publish");
-        button.textContent = "Publish";
     });
 }
 
