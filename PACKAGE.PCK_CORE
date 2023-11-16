@@ -396,8 +396,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
     FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pCanUsePopover IN BOOLEAN, pTimezone IN session_data.timezone%type, pViewOption IN VARCHAR2 DEFAULT NULL, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB IS
         l_clob CLOB;
-        TYPE t_publish IS VARRAY(2) OF VARCHAR2(1);
-        l_publish t_publish:=t_publish('Y','N');
+        TYPE t_publish IS VARRAY(2) OF VARCHAR2(3);
+        l_publish t_publish:=t_publish('YES','NO');
         l_publish_html VARCHAR2(500);
     BEGIN
         FOR C IN (SELECT a.id,
