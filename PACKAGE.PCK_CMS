@@ -647,6 +647,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                         FROM article a, website_article wa
                        WHERE wa.website_id=C.id
                          AND wa.article_id=a.id
+                         AND wa.publish='YES'
                        ORDER BY wa.display_order)
             LOOP
                 l_article_object:=new JSON_OBJECT_T;
@@ -1295,11 +1296,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 WHEN 'website_article.navigation_label' THEN
                     UPDATE website_article SET navigation_label=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'website_article.page_title' THEN
-                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+                    UPDATE website_article SET page_title=C.value WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'website_article.page_description' THEN
-                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+                    UPDATE website_article SET page_description=C.value WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'asset.alt_text' THEN
-                    UPDATE asset SET alt_text=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                    UPDATE asset SET alt_text=C.value WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'asset.description' THEN
                     UPDATE asset SET description=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;               
             END CASE;
