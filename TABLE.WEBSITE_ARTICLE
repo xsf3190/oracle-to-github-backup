@@ -16,5 +16,9 @@ CREATE TABLE "WEBSITE_ARTICLE"
 	 CONSTRAINT "FK_WEBSITE_WEBSITE_ARTICLE" FOREIGN KEY ("WEBSITE_ID")
 	  REFERENCES "WEBSITE" ("ID") ON DELETE CASCADE ENABLE
    ) ;
+COMMENT ON COLUMN "WEBSITE_ARTICLE"."NAVIGATION_LABEL" IS 'Navigation label for this content in the deployed website';
+   COMMENT ON COLUMN "WEBSITE_ARTICLE"."PAGE_TITLE" IS 'Title for this page to appear in Search Engine listings';
+   COMMENT ON COLUMN "WEBSITE_ARTICLE"."PAGE_DESCRIPTION" IS 'Description for this page to appear in Search Engine listings';
+   COMMENT ON COLUMN "WEBSITE_ARTICLE"."PUBLISH" IS 'Choose YES to include the content when deploying the website';
 CREATE UNIQUE INDEX "PK_WEBSITE_ARTICLE" ON "WEBSITE_ARTICLE" ("WEBSITE_ID", "ARTICLE_ID") 
   ;
