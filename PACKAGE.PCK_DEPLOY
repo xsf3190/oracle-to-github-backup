@@ -39,11 +39,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         INTO n
         FROM
         (
-            SELECT MIN(display_order) OVER () first_display_order, nav_name, display_order
+            SELECT MIN(display_order) OVER () first_display_order, navigation_label, display_order
             FROM website_article
             WHERE website_id=l_website_id
         )
-        WHERE nav_name IS NULL
+        WHERE navigation_label IS NULL
         AND display_order<>first_display_order;
 
         IF (n>0) THEN
