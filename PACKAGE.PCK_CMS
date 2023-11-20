@@ -624,9 +624,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_website_object.put('id',C.id);
             l_website_object.put('name',C.domain_name);
             l_website_object.put('favicon_url',C.favicon_url);
+            IF (C.font IS NOT NULL AND C.parameters IS NOT NULL) THEN
+                l_website_object.put('google_font',C.font || ':' || C.parameters);
+            END IF;
             IF (C.font IS NOT NULL) THEN
-                l_website_object.put('google_font',C.font || C.parameters);
-                l_website_object.put('font_family',C.font || C.fallback);
+                l_website_object.put('font_family',C.font || ',' || C.fallback);
             END IF;
             l_website_object.put('contact_email',C.contact_email);
             l_website_object.put('trade_name',C.trade_name);
