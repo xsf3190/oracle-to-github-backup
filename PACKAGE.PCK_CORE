@@ -398,7 +398,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_clob CLOB;
         TYPE t_publish IS VARRAY(2) OF VARCHAR2(3);
         l_publish t_publish:=t_publish('YES','NO');
-        l_publish_html VARCHAR2(500);
+        l_publish_html LONG;
     BEGIN
         FOR C IN (SELECT a.id,
                    c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
