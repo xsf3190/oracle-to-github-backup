@@ -193,6 +193,7 @@ newContent.addEventListener("click",  () => {
  **  EDIT WEBSITE
  */
 const edit_website = (e) => {
+    console.log("e.target.dataset.id",e.target.dataset.id)
     execProcess( "website/"+e.target.dataset.id,"GET").then( (data) => {
         resetWebsite();
         
@@ -943,10 +944,7 @@ new Sortable(galleryList, {
                 if (data.url) {
                     const li = document.querySelector("[data-id='" + data.articleId + "']");
                     li.querySelector("img").src = data.url;
-                    li.querySelector(".updated-date").textContent = data.updated;
                 }
-                galleryList.replaceChildren();
-                galleryList.insertAdjacentHTML('afterbegin',data.content);
             });
         }
     }
