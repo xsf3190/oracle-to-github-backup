@@ -1155,7 +1155,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('success', TRUE);
         apex_json.write('articleId', l_article_id);
         apex_json.write('url', l_url);
-        --apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
         apex_json.close_object;
 
         EXCEPTION
