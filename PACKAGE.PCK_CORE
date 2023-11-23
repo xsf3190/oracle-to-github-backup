@@ -550,16 +550,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </nav>
         <div class="editor" aria-hidden="true" tabindex="-1">
             <div>
-                <nav>
-                    <button type="button" class="close-editor">&times;</button>
-                </nav>
-                <div id="editor"></div>
-                <div class="button-container">
-                    <div id="editor-status"></div>
-                    <div id="word-count"></div>
-                </div>
+                <button type="button" class="close-editor">&times;</button>
             </div>
-
+            <div id="editor"></div>
+            <div>
+                <span id="word-count"></span>
+                <span id="editor-status"></span>
+            </div>
         </div>');
 
         -- should use this to show users available custom domains
