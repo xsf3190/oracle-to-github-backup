@@ -380,13 +380,13 @@ dialog.gallery legend {
     padding-inline-end: 0.5em;
 }
 
-dialog.preview, dialog.perftable, dialog.gallery, dialog.editor {
+dialog.preview, dialog.perftable, dialog.gallery {
     color: currentColor;
     inline-size: 100vw;
     block-size: 100vh;
 }
 
-dialog.preview > div, dialog.editor > div {
+dialog.preview > div {
   display: grid;
   grid-template-columns: minmax(1rem, 1fr) minmax(auto, var(--preview-width)) minmax(1rem, 1fr);
 }
@@ -684,22 +684,35 @@ nav button {
 /* EDITOR  STYLES */
 /* ************** */
 
-div.editor {
-    display: none;
-    position: fixed;
-    z-index: 1;
-    inset:0;
-    margin: 0 auto;
-    max-width: 70ch;
-    padding: 0 2ch;
-    background: rgba(255,255,255, .95);
-    border: solid 1px var(--color-solid);
+.editor {
+  inline-size: min(100%,70ch);
+  border: 0.25ch solid var(--color-solid);
+  display: grid;
+  grid-template-rows: min-content 1fr min-content;
+  height: 100dvh;
+  position: fixed;
+  top: 0;
+  left: 50%;
+  visibility: hidden;
+  background: white;
+  z-index: 1;
+  padding: 1rem;
 }
 
-.editor .button-container {
-    font-family: monspace;
-    color: green;
-    margin-top: 1ch;
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 2s;
+}
+
+.editor > div:first-of-type {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.editor > div:last-of-type {
+  display: flex;
+  justify-content: flex-start;
+  gap: 1ch;
 }
 
 .close-editor {
@@ -712,8 +725,7 @@ div.editor {
 /* ******************************** */
 
 .ck-editor__editable_inline {
-    max-height:75dvh;
-    min-height: 50dvh;
+    max-height: 80dvh;
     overscroll-behavior: contain;
 }
 
