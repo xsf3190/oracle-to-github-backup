@@ -178,6 +178,12 @@ copyWebsite.addEventListener("click",  () => {
     });
 });
 
+const transitionEditor = () => {
+  editorContainer.style.visibility = "visible";
+  editorContainer.style.transform = "translate(-50%)";
+  cards.style.filter = "blur(5px)";
+};
+
 /*
  **  NEW CONTENT
  */
@@ -186,7 +192,13 @@ newContent.addEventListener("click",  () => {
     editor.setData("");
     editor_status = "init";
     editor_status_text.textContent = "";
-    editorContainer.style.display = "block";
+    if (document.startViewTransition) {
+        document.startViewTransition(() => {
+        transitionEditor();
+        });
+    } else {
+        transitionEditor();
+    }
 });
 
 /*
@@ -298,7 +310,8 @@ document.querySelectorAll("button.view-option").forEach((button) => {
 **  CLOSE EDITOR 
 */
 document.querySelector("button.close-editor").addEventListener("click", (e) => {
-    editorContainer.style.display = "none";
+    editorContainer.style.visibility = "hidden";
+    cards.style.filter = "none";
 });
 
 /*
@@ -1008,13 +1021,16 @@ const saveData = async ( data ) => {
     const pendingActions = editor.plugins.get( 'PendingActions' );
     const action = pendingActions.add( 'Saving changes' );
 
-    editor_status_text.textContent = "Saving content ... ";
+    editor_status_text.textContent = "saving ...";
+    editor_status_text.style.color = "crimson";
     const word_count = document.querySelector(".ck-word-count__words").textContent;
+
     
     const title = document.querySelector(".ck > h1").textContent;
     await execProcess("article/"+gArticleId, "PUT",  {website_id: website.dataset.id, edit_text: data, title: title, word_count: word_count}).then( (data) => {
         pendingActions.remove( action );
-        editor_status_text.textContent = "Saved " + data.words;
+        editor_status_text.textContent = "saved successfully";
+        editor_status_text.style.color = "green";
         if (gArticleId === 0) {
             gArticleId = data.articleId;
             cards.insertAdjacentHTML('afterbegin',data.new_card);
@@ -1111,7 +1127,13 @@ const edit_text = (articleId,button) => {
         } else {
             editor.setData("");
         }
-        editorContainer.style.display = "block";
+        if (document.startViewTransition) {
+            document.startViewTransition(() => {
+            transitionEditor();
+            });
+        } else {
+            transitionEditor();
+        }
     });
 }
 
