@@ -334,7 +334,7 @@ dialog form {
     border: none;
 }
 
-button.confirmation {
+button.confirmBtn {
   display: block;
   background: white;
   color: red;
@@ -382,8 +382,10 @@ dialog.gallery legend {
 
 dialog.preview, dialog.perftable, dialog.gallery {
     color: currentColor;
+    max-inline-size: 100vw;
+    max-block-size: 100dvh;
     inline-size: 100vw;
-    block-size: 100vh;
+    block-size: 100dvh;
 }
 
 dialog.preview > div {
@@ -701,7 +703,7 @@ nav button {
 
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation-duration: 2s;
+  animation-duration: 1s;
 }
 
 .editor > div:first-of-type {
