@@ -25,7 +25,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
       confirm = container.querySelector("dialog.delete-confirm"),
-      confirmation = confirm.querySelector(".confirmation"),
+      confirmBtn = confirm.querySelector(".confirmBtn"),
       editorContainer = document.querySelector("div.editor"),
       gallery = document.querySelector("dialog.gallery"),
       galleryInstruction = gallery.querySelector(".instruction"),
@@ -182,6 +182,7 @@ const transitionEditor = () => {
   editorContainer.style.visibility = "visible";
   editorContainer.style.transform = "translate(-50%)";
   cards.style.filter = "blur(5px)";
+  newContent.disabled = true;
 };
 
 /*
@@ -312,6 +313,7 @@ document.querySelectorAll("button.view-option").forEach((button) => {
 document.querySelector("button.close-editor").addEventListener("click", (e) => {
     editorContainer.style.visibility = "hidden";
     cards.style.filter = "none";
+    newContent.disabled = false;
 });
 
 /*
@@ -626,7 +628,7 @@ const cardHandler = (e) => {
         show_gallery(id);                                
     } else if (e.target.matches(".delete")) {
         delete_object(id, e);
-    } else if (e.target.matches(".confirmation")) {
+    } else if (e.target.matches(".confirmBtn")) {
         delete_object_confirm(e);
     } else if (e.target.matches(".upload-media")) {
         upload_media(id);
@@ -1150,15 +1152,10 @@ const remove_card = (articleId) => {
  ** DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER - REQUIRES CONFIRMATION
  */
 const delete_object = (id, e) => {
-    confirmation.dataset.table = e.target.dataset.table;
-    confirm.querySelector("h2").textContent = e.target.dataset.table;
-    if (id) {
-        confirm.querySelector("p").textContent = id;
-        confirmation.dataset.id = id;
-    } else {
-        confirm.querySelector("p").textContent = e.target.dataset.id;
-        confirmation.dataset.id = e.target.dataset.id;
-    }
+    confirm.querySelector("h2").textContent = "Delete " + e.target.dataset.table.replace("_"," ");
+    confirm.querySelector("p").textContent = id ? id : e.target.dataset.id;
+    confirmBtn.dataset.id = id ? id : e.target.dataset.id;
+    confirmBtn.dataset.table = e.target.dataset.table;
     confirm.showModal();
 }
 
