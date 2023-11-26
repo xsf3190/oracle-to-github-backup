@@ -324,14 +324,17 @@ dialog:not(.gallery)::backdrop {
   background-color: rgba(0,0,0,.6);
 }
 
-dialog.delete-confirm h2 {
-    margin: 0;
+dialog.delete-confirm > div {
+    display: flex;
+    flex-direction: column;
 }
 
-dialog form {
-    margin:0;
-    padding: 0;
-    border: none;
+dialog.delete-confirm button.close {
+    place-self: flex-end;
+}
+
+dialog.delete-confirm form {
+    place-self: center;
 }
 
 button.confirmBtn {
