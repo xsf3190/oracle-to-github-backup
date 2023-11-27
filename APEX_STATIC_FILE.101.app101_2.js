@@ -1153,7 +1153,24 @@ const remove_card = (articleId) => {
  */
 const delete_object = (id, e) => {
     confirm.querySelector("h2").textContent = "Delete " + e.target.dataset.table.replace("_"," ");
-    confirm.querySelector("p").textContent = id ? id : e.target.dataset.id;
+    confirm.querySelector("img").style.display = "block";
+    confirm.querySelector("p").style.display = "block";
+    switch (e.target.dataset.table) {
+        case "website_article":
+            if (cards.querySelector("[data-id='" + id + "'] img")) {
+                confirm.querySelector("img").src = cards.querySelector("[data-id='" + id + "'] img").src;
+            } else {
+                confirm.querySelector("img").style.display = "none";
+            }
+            confirm.querySelector("p").textContent = cards.querySelector("[data-id='" + id + "'] .title").textContent;
+            break;
+        case "asset":
+            confirm.querySelector("img").src = gallery.querySelector("[data-id='" + id + "'] img").src;
+            confirm.querySelector("p").style.display = "none";
+            break;
+    }
+    
+
     confirmBtn.dataset.id = id ? id : e.target.dataset.id;
     confirmBtn.dataset.table = e.target.dataset.table;
     confirm.showModal();
