@@ -327,24 +327,41 @@ dialog:not(.gallery)::backdrop {
 dialog.delete-confirm > div {
     display: flex;
     flex-direction: column;
+    gap: 1rem;
+     place-items: center;
 }
 
 dialog.delete-confirm button.close {
     place-self: flex-end;
 }
 
+dialog.delete-confirm div.content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+dialog.delete-confirm div.content > img {
+    inline-size: 10ch;
+    aspect-ratio: 1;
+    object-fit: cover;
+}
+
+dialog.delete-confirm div.content > p {
+    inline-size: fit-content;
+}
+/*
 dialog.delete-confirm form {
     place-self: center;
 }
+*/
 
 button.confirmBtn {
-  display: block;
   background: white;
   color: red;
-  border: 1px solid red;
   padding: 0.5rem;
   font-weight: 800;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.25ch;
   transition-duration: 0.25s;
   
   &:hover {
@@ -418,6 +435,7 @@ dialog h2 {
     text-decoration: slateblue solid underline;
     text-underline-position: under;
     text-align: center;
+    margin: 0;
 }
 
 dialog p {
