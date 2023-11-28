@@ -63,12 +63,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             l_session_data.page_id:=l_parts(3);
         END IF;
 
-        FOR C IN (SELECT browser, browser_version, timezone FROM session_data WHERE session_id=l_session_data.session_id) LOOP
+        FOR C IN (SELECT supports_popover, timezone FROM session_data WHERE session_id=l_session_data.session_id) LOOP
             l_session_data.timezone:=C.timezone;
-            l_session_data.canuse_popover:=TRUE;
-            IF (C.browser='Firefox' OR (C.browser='Safari' AND C.browser_version<17)) THEN
-                l_session_data.canuse_popover:=FALSE;
-            END IF;
+            l_session_data.canuse_popover:=CASE WHEN C.supports_popover='true' THEN TRUE ELSe FALSE END;
         END LOOP;
 
         FOR C IN (
@@ -454,6 +451,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                 </button>
                             </li>
                             <li>
+                                <button type="button" class="with-icon edit-nav-label">
+                                    <svg class="icon"><use href="#list"></use></svg>
+                                Navigation Label
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="with-icon edit-seo-items">
+                                    <svg class="icon"><use href="#searchengin"></use></svg>
+                                Search Engine Items
+                                </button>
+                            </li>
+                            <li>
+                                <hr>
+                            </li>
+                            <li>
                                 <button type="button" class="with-icon delete" data-table="website_article">
                                     <svg class="icon"><use href="#delete"></use></svg>
                                 Delete
@@ -471,9 +483,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     ELSE '<p class="title edit-text">' || NVL(C.title, C.excerpt) || '</p> ' 
                 END
                 || buildRadioWrapper('website_article.publish',l_publish_html, pCanUsePopover)
-                || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.navigation_label',C.navigation_label, pCanUsePopover)
-                || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_title',C.page_title, pCanUsePopover)
-                || buildTextareaWrapper(pWebsiteId||','||C.id,'website_article.page_description',C.page_description, pCanUsePopover)
                 || '   
                 <footer class="button-container"><div><span class="word-count">' || NVL(C.word_count,0) || ' words' || '</span> | <span class="nb-assets">' || NVL(C.nb_assets,0) 
                 || ' media</span></div><span class="updated-date">' || TO_CHAR(C.updated_date AT TIME ZONE pTimezone, 'fmdd Mon yyyy, hh24:fmmi')  || '</span></footer>
@@ -671,46 +680,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <button type="button" class="cta new-content" style="--width:20ch"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
                 <span style="--content:''\002B''">NEW CONTENT</span>
             </button>
-            <!--
-            <div class="dropdown">
-                <span>View Options</span>
-                <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                <ul class="dropdown-items">
-                    <li>
-                        <button type="button" class="with-icon view-option" data-view="thumbs">
-                            <svg class="icon">
-                                <use href="#thumbtack"></use>
-                            </svg>
-                            Thumbnails
-                        </button>
-                    </li>                    
-                    <li>
-                        <button type="button" class="with-icon view-option" data-view="nav">
-                            <svg class="icon">
-                                <use href="#bars"></use>
-                            </svg>
-                            Navigation Labels
-                        </button>
-                    </li>
-                    <li>
-                        <button type="button" class="with-icon view-option" data-view="seo">
-                            <svg class="icon">
-                                <use href="#searchengin"></use>
-                            </svg>
-                            SEO Items
-                        </button>
-                    </li>
-                    <li>
-                        <button type="button" class="with-icon view-option" data-view="">
-                            <svg class="icon">
-                                <use href="#pencil"></use>
-                            </svg>
-                            Edit Content
-                        </button>
-                    </li>      
-                </ul>
-            </div>
-            -->
         </nav>
         <ul class="cards">' || buildWebsiteArticles(l_domains(1).id, l_session_data.canuse_popover, l_session_data.timezone) || '
         </ul>');
@@ -721,6 +690,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <button type="button" class="close">&times;</button>
                 <h2></h2>
                 <p></p>
+            </div>
+        </dialog>
+        <dialog class="edit-nav-label">
+            <div>
+                <button type="button" class="close">&times;</button>'
+                || buildTextareaWrapper(null, 'website_article.navigation_label', null, l_session_data.canuse_popover) || 
+                '<form method="dialog">
+                    <button>SAVE</button>
+                </form>
+            </div>
+        </dialog>
+        <dialog class="edit-seo-items">
+            <div>
+                <button type="button" class="close">&times;</button>'
+                || buildTextareaWrapper(null, 'website_article.page_title', null, l_session_data.canuse_popover)
+                || buildTextareaWrapper(null, 'website_article.page_description', null, l_session_data.canuse_popover) ||
+                '<form method="dialog">
+                    <button>SAVE</button>
+                </form>
             </div>
         </dialog>
         <dialog class="delete-confirm">
