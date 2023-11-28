@@ -12,6 +12,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getArticle(pArticleId IN article.id%type);
     --
+    PROCEDURE getNavigationLabel(pId IN VARCHAR2);
+    --
+    PROCEDURE getSeoItems(pId IN VARCHAR2);
+    --
     PROCEDURE getPerformance;
     --
     PROCEDURE getSessionLog(SessionId IN NUMBER);
@@ -19,8 +23,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     PROCEDURE getThumbnails(pArticleId IN article.id%type);
     --
     PROCEDURE getWebsite(pWebsiteId IN website.id%type);
-    --
-    PROCEDURE getWebsiteList(pWebsiteId IN website.id%type, pViewOption IN VARCHAR2);
     --
     PROCEDURE publishArticle(pArticleId IN article.id%type);
     --
@@ -147,10 +149,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_bodytext CLOB:=pBodyText;
         l_ip_address session_data.ip_address%type;
     BEGIN
+        pck_core.log(l_bodytext);
         l_ip_address:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
-        INSERT INTO session_data (session_id, timezone, maxtouchpoints, browser, browser_version, ip_address)
-        SELECT session_id, timezone, maxtouchpoints, browser, browser_version, l_ip_address
-            FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' COLUMNS (session_id, timezone, maxtouchpoints, browser, browser_version));
+        INSERT INTO session_data (session_id, timezone, maxtouchpoints, supports_popover, ip_address)
+        SELECT session_id, timezone, maxtouchpoints, supports_popover, l_ip_address
+            FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' COLUMNS (session_id, timezone, maxtouchpoints, supports_popover));
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -195,15 +198,50 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pck_core.log_error;
     END;
 
-    PROCEDURE getWebsiteList(pWebsiteId IN website.id%type, pViewOption IN VARCHAR2) IS
-        l_clob CLOB;
+    /*
+     **  Get navigation label for a website article
+     */
+    PROCEDURE getNavigationLabel(pId IN VARCHAR2) IS
         l_session_data pck_core.session_data_rt;
+        l_navigation_label website_article.navigation_label%type;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
+        SELECT navigation_label INTO l_navigation_label 
+          FROM website_article 
+         WHERE user_id=l_session_data.user_id
+           AND website_id=SUBSTR(pId,1,INSTR(pId,',')-1) AND article_id=SUBSTR(pId,INSTR(pId,',')+1);
+
         apex_json.open_object; 
         apex_json.write('success', TRUE);
-        apex_json.write('content', pck_core.buildWebsiteArticles(pWebsiteId,l_session_data.canuse_popover, l_session_data.timezone, pViewOption=>pViewOption));
+        apex_json.write('navigation_label', l_navigation_label);
+        apex_json.close_object;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
+    /*
+     **  Get SEO Items for a website article
+     */
+    PROCEDURE getSeoItems(pId IN VARCHAR2) IS
+        l_session_data pck_core.session_data_rt;
+        l_page_title website_article.page_title%type;
+        l_page_description website_article.page_description%type;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        SELECT page_title, page_description
+          INTO l_page_title, l_page_description
+          FROM website_article 
+         WHERE user_id=l_session_data.user_id
+           AND website_id=SUBSTR(pId,1,INSTR(pId,',')-1) AND article_id=SUBSTR(pId,INSTR(pId,',')+1);
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('page_title', l_page_title);
+        apex_json.write('page_description', l_page_description);
         apex_json.close_object;
 
         EXCEPTION
