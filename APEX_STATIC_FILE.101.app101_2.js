@@ -26,6 +26,8 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       popupClose = popup.querySelector("button.close"),
       confirm = container.querySelector("dialog.delete-confirm"),
       confirmBtn = confirm.querySelector(".confirmBtn"),
+      editNavLabel = container.querySelector("dialog.edit-nav-label"),
+      editSeoItems = container.querySelector("dialog.edit-seo-items"),
       editorContainer = document.querySelector("div.editor"),
       gallery = document.querySelector("dialog.gallery"),
       galleryInstruction = gallery.querySelector(".instruction"),
@@ -46,6 +48,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
 **  TEXT INPUT COMPONENT
 */
 const inputHandler = (e) => {
+    console.log(e);
     if (e.target.tagName !== "TEXTAREA") return;
 
     if (e.target.id==="domain_name") {
@@ -285,27 +288,6 @@ updateDeploymentStatus = (websiteid, siteid) => {
         }
     });
 }
-
-/*
- **  CONTENT VIEW OPTIONS
- */
-document.querySelectorAll("button.view-option").forEach((button) => {
-    button.addEventListener("click",  (e) => {
-        execProcess( "website-list/"+website.dataset.id + "?view="+e.target.dataset.view,"GET").then( (data) => {
-            cards.replaceChildren();
-            cards.insertAdjacentHTML('afterbegin',data.content);
-            cards.querySelectorAll("textarea").forEach( (textarea,indx) => {
-                if (e.target.dataset.view==="nav" && indx===0) return;
-                if (!textarea.value) {
-                    const result = textarea.nextElementSibling.querySelector(".result");
-                    result.textContent = "MUST HAVE A VALUE";
-                    result.style.opacity = "1";
-                    result.style.color = "red";
-                }
-            });
-        });
-    });
-});
 
 /*
 **  CLOSE EDITOR 
@@ -633,7 +615,11 @@ const cardHandler = (e) => {
     } else if (e.target.matches(".upload-media")) {
         upload_media(id);
     } else if (e.target.matches(".edit-text")) {
-        edit_text(id,e.srcElement);                                                                     
+        edit_text(id,e.srcElement);   
+    } else if (e.target.matches(".edit-nav-label")) {
+        edit_nav_label(id);
+    } else if (e.target.matches(".edit-seo-items")) {
+        edit_seo_items(id);                                                           
     } else if (e.target.matches(".fullscreen")) {
         showFullScreen(e);                                 
     } else if (e.target.matches(".edit-website")) {
@@ -974,7 +960,7 @@ new Sortable(cards, {
     ghostClass: 'drag-in-progress',
     store: {
         set: async function (sortable) {
-            execProcess("website-list/" + website.dataset.id, "PUT", {dbid_string: sortable.toArray().join(":")} ).then( () => {
+            execProcess("reorder-articles/" + website.dataset.id, "PUT", {dbid_string: sortable.toArray().join(":")} ).then( () => {
                 console.log("cards reordered");
             });
         }
@@ -1136,6 +1122,47 @@ const edit_text = (articleId,button) => {
         } else {
             transitionEditor();
         }
+    });
+}
+
+/* 
+ ** GET NAVIGATION LABEL FOR WEBSITE ARTICE AND SHOW MODAL DIALOG
+ */
+const edit_nav_label = (id) => {
+    const pk = website.dataset.id + "," + id;
+
+    execProcess( "navigation-label/"+pk,"GET").then( (data) => {
+        const textarea = editNavLabel.querySelector("textarea");
+        textarea.dataset.id = pk;
+        textarea.value = data.navigation_label ? data.navigation_label : "";
+        const navigation_label_len = data.navigation_label ? data.navigation_label.length : 0;
+        textarea.nextElementSibling.querySelector(".charcounter").textContent = navigation_label_len + "/" + textarea.getAttribute("maxlength");
+        textarea.nextElementSibling.querySelector(".result").textContent = "";
+        editNavLabel.showModal();
+    });
+}
+
+/* 
+ ** GET SEO ITEMS FOR WEBSITE ARTICE AND SHOW MODAL DIALOG
+ */
+const edit_seo_items = (id) => {
+    const pk = website.dataset.id + "," + id;
+    execProcess( "seo-items/"+pk,"GET").then( (data) => {
+        const page_title = editSeoItems.querySelector("#page_title");
+        page_title.dataset.id = pk;
+        page_title.value = data.page_title ? data.page_title : "";
+        const page_title_len = data.page_title ? data.page_title.length : 0;
+        page_title.nextElementSibling.querySelector(".charcounter").textContent = page_title_len + "/" + page_title.getAttribute("maxlength");
+        page_title.nextElementSibling.querySelector(".result").textContent = "";
+
+        const page_description = editSeoItems.querySelector("#page_description");
+        page_description.dataset.id = pk;
+        page_description.value = data.page_description ? data.page_description : "";
+        const page_description_len = data.page_description ? data.page_description.length : 0;
+        page_description.nextElementSibling.querySelector(".charcounter").textContent = page_description_len + "/" + page_description.getAttribute("maxlength");
+        page_description.nextElementSibling.querySelector(".result").textContent = "";
+        
+        editSeoItems.showModal();
     });
 }
 
