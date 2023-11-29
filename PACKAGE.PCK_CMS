@@ -206,6 +206,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_navigation_label website_article.navigation_label%type;
     BEGIN
         l_session_data:=pck_core.getSessionData();
+        --pck_core.log('pId:'||pId);
 
         SELECT navigation_label INTO l_navigation_label 
           FROM website_article 
