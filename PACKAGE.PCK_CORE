@@ -697,7 +697,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <button type="button" class="close">&times;</button>'
                 || buildTextareaWrapper(null, 'website_article.navigation_label', null, l_session_data.canuse_popover) || 
                 '<form method="dialog">
-                    <button>SAVE</button>
+                    <button type="button" class="saveBtn">SAVE</button>
                 </form>
             </div>
         </dialog>
@@ -707,7 +707,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 || buildTextareaWrapper(null, 'website_article.page_title', null, l_session_data.canuse_popover)
                 || buildTextareaWrapper(null, 'website_article.page_description', null, l_session_data.canuse_popover) ||
                 '<form method="dialog">
-                    <button>SAVE</button>
+                    <button type="button" class="saveBtn">SAVE</button>
                 </form>
             </div>
         </dialog>
