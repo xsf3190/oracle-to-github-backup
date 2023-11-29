@@ -48,7 +48,6 @@ const apex_app_id = document.querySelector("#pFlowId").value,
 **  TEXT INPUT COMPONENT
 */
 const inputHandler = (e) => {
-    console.log(e);
     if (e.target.tagName !== "TEXTAREA") return;
 
     if (e.target.id==="domain_name") {
@@ -385,9 +384,9 @@ window.addEventListener("DOMContentLoaded", (event) => {
     }
 
     if (navigator.maxTouchPoints > 1) {
-        container.addEventListener("touchstart",cardHandler);
+        container.addEventListener("touchstart",clickHandler);
     } else {
-        container.addEventListener("click",cardHandler);
+        container.addEventListener("click",clickHandler);
     }
     container.addEventListener("input",inputHandler);
     container.addEventListener("focusin",focusHandler);
@@ -585,7 +584,7 @@ const show_gallery = (articleId) => {
 /*
  ** CARD CLICK HANDLER
  */
-const cardHandler = (e) => {
+const clickHandler = (e) => {
 
     let open = e.target.matches(".show-dropdown") && e.target.nextElementSibling.classList.contains("visible");
 
@@ -598,13 +597,7 @@ const cardHandler = (e) => {
     }
 
     const card = e.srcElement.closest(".card");
-    let id;
-
-    if (card) {
-        id = card.dataset.id;
-    } else {
-        id = website.dataset.id;
-    }
+    const id = card ? card.dataset.id : website.dataset.id;
 
     if (e.target.matches(".show-gallery")) {
         show_gallery(id);                                
@@ -626,6 +619,8 @@ const cardHandler = (e) => {
         edit_website(e);
     } else if (e.target.matches(".deploy-website")) {
         deploy_website(e);
+    } else if (e.target.matches(".saveBtn")) {
+        console.log("saveBtn clicked - do nothing!");
     }
 }
 
@@ -1129,6 +1124,8 @@ const edit_text = (articleId,button) => {
  ** GET NAVIGATION LABEL FOR WEBSITE ARTICE AND SHOW MODAL DIALOG
  */
 const edit_nav_label = (id) => {
+    if (id === website.dataset.id) return;
+
     const pk = website.dataset.id + "," + id;
 
     execProcess( "navigation-label/"+pk,"GET").then( (data) => {
@@ -1146,7 +1143,10 @@ const edit_nav_label = (id) => {
  ** GET SEO ITEMS FOR WEBSITE ARTICE AND SHOW MODAL DIALOG
  */
 const edit_seo_items = (id) => {
+    if (id === website.dataset.id) return;
+
     const pk = website.dataset.id + "," + id;
+    
     execProcess( "seo-items/"+pk,"GET").then( (data) => {
         const page_title = editSeoItems.querySelector("#page_title");
         page_title.dataset.id = pk;
@@ -1189,7 +1189,11 @@ const delete_object = (id, e) => {
             } else {
                 confirm.querySelector("img").style.display = "none";
             }
-            confirm.querySelector("p").textContent = cards.querySelector("[data-id='" + id + "'] .title").textContent;
+            if (cards.querySelector("[data-id='" + id + "'] .title")) {
+                confirm.querySelector("p").textContent = cards.querySelector("[data-id='" + id + "'] .title").textContent;
+            } else {
+                confirm.querySelector("p").style.display = "none";
+            }
             break;
         case "asset":
             confirm.querySelector("img").src = gallery.querySelector("[data-id='" + id + "'] img").src;
