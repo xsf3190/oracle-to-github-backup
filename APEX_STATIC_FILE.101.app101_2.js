@@ -26,8 +26,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       popupClose = popup.querySelector("button.close"),
       confirm = container.querySelector("dialog.delete-confirm"),
       confirmBtn = confirm.querySelector(".confirmBtn"),
-      editNavLabel = container.querySelector("dialog.edit-nav-label"),
-      editSeoItems = container.querySelector("dialog.edit-seo-items"),
+      editField = container.querySelector("dialog.edit-field"),
       editorContainer = document.querySelector("div.editor"),
       gallery = document.querySelector("dialog.gallery"),
       galleryInstruction = gallery.querySelector(".instruction"),
@@ -609,10 +608,8 @@ const clickHandler = (e) => {
         upload_media(id);
     } else if (e.target.matches(".edit-text")) {
         edit_text(id,e.srcElement);   
-    } else if (e.target.matches(".edit-nav-label")) {
-        edit_nav_label(id);
-    } else if (e.target.matches(".edit-seo-items")) {
-        edit_seo_items(id);                                                           
+    } else if (e.target.matches(".edit-field")) {
+        edit_field(id, e);                                                         
     } else if (e.target.matches(".fullscreen")) {
         showFullScreen(e);                                 
     } else if (e.target.matches(".edit-website")) {
@@ -1117,6 +1114,22 @@ const edit_text = (articleId,button) => {
         } else {
             transitionEditor();
         }
+    });
+}
+
+/* 
+ ** GET HTML FOR SELECTED FIELD TO EDIT IN MODAL DIALOG
+ */
+const edit_field = (id, e) => {
+    if (id === website.dataset.id) return;
+
+    console.log();
+
+    execProcess( "edit-field","PUT",{"table_column":e.target.dataset.column, "website_id":website.dataset.id, "id":id}).then( (data) => {
+        const content = editField.querySelector(".content");
+        content.replaceChildren();
+        content.insertAdjacentHTML('afterbegin',data.content);
+        editField.showModal();
     });
 }
 
