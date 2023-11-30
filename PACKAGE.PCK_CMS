@@ -12,9 +12,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getArticle(pArticleId IN article.id%type);
     --
-    PROCEDURE getNavigationLabel(pId IN VARCHAR2);
-    --
-    PROCEDURE getSeoItems(pId IN VARCHAR2);
+    PROCEDURE getFieldHTML(pParams IN CLOB);
     --
     PROCEDURE getPerformance;
     --
@@ -197,6 +195,48 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             WHEN OTHERS THEN
                 pck_core.log_error;
     END;
+
+    /*
+     **  Get HTML to edit a selected website article field. ID i the row to retrieve
+     */
+    PROCEDURE getFieldHTML(pParams IN CLOB) IS
+        l_session_data pck_core.session_data_rt;
+        l_field_html LONG;
+        l_pk VARCHAR2(20);
+        l_value VARCHAR2(500);
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        FOR C IN (SELECT table_column, website_id, id FROM JSON_TABLE(pParams, '$[*]' COLUMNS (table_column, website_id, id))) LOOP
+            IF (C.table_column LIKE 'website_article%') THEN
+                l_pk:=C.website_id||','||C.id;
+            ELSE
+                l_pk:=C.id;
+            END IF;
+            CASE C.table_column
+                WHEN 'website_article.navigation_label' THEN
+                    SELECT navigation_label INTO l_value FROM website_article WHERE website_id=C.website_id AND article_id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website_article.page_title' THEN
+                    SELECT page_title INTO l_value FROM website_article WHERE website_id=C.website_id AND article_id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website_article.page_description' THEN
+                    SELECT page_description INTO l_value FROM website_article WHERE website_id=C.website_id AND article_id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'asset.alt_text' THEN
+                    SELECT alt_text INTO l_value FROM asset WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'asset.description' THEN
+                    SELECT description INTO l_value FROM asset WHERE id=C.id AND user_id=l_session_data.user_id;              
+            END CASE;
+            l_field_html:=pck_core.buildTextareaWrapper(l_pk,C.table_column,l_value,l_session_data.canuse_popover);
+        END LOOP;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('content', l_field_html);
+        apex_json.close_object;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;    
 
     /*
      **  Get navigation label for a website article
