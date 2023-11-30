@@ -451,15 +451,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                 </button>
                             </li>
                             <li>
-                                <button type="button" class="with-icon edit-nav-label">
+                                <button type="button" class="with-icon edit-field" data-column="website_article.navigation_label">
                                     <svg class="icon"><use href="#list"></use></svg>
                                 Navigation Label
                                 </button>
                             </li>
                             <li>
-                                <button type="button" class="with-icon edit-seo-items">
+                                <button type="button" class="with-icon edit-field" data-column="website_article.page_title">
                                     <svg class="icon"><use href="#searchengin"></use></svg>
-                                Search Engine Items
+                                Page Title (SEO)
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="with-icon edit-field" data-column="website_article.page_description">
+                                    <svg class="icon"><use href="#searchengin"></use></svg>
+                                Page Description (SEO)
                                 </button>
                             </li>
                             <li>
@@ -690,6 +696,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <button type="button" class="close">&times;</button>
                 <h2></h2>
                 <p></p>
+            </div>
+        </dialog>
+        <dialog class="edit-field">
+            <div>
+                <button type="button" class="close">&times;</button>
+                <div class="content"></div>
+                <form method="dialog">
+                    <button type="button" class="saveBtn">SAVE</button>
+                </form>
             </div>
         </dialog>
         <dialog class="edit-nav-label">
