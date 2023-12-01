@@ -707,25 +707,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </form>
             </div>
         </dialog>
-        <dialog class="edit-nav-label">
-            <div>
-                <button type="button" class="close">&times;</button>'
-                || buildTextareaWrapper(null, 'website_article.navigation_label', null, l_session_data.canuse_popover) || 
-                '<form method="dialog">
-                    <button type="button" class="saveBtn">SAVE</button>
-                </form>
-            </div>
-        </dialog>
-        <dialog class="edit-seo-items">
-            <div>
-                <button type="button" class="close">&times;</button>'
-                || buildTextareaWrapper(null, 'website_article.page_title', null, l_session_data.canuse_popover)
-                || buildTextareaWrapper(null, 'website_article.page_description', null, l_session_data.canuse_popover) ||
-                '<form method="dialog">
-                    <button type="button" class="saveBtn">SAVE</button>
-                </form>
-            </div>
-        </dialog>
         <dialog class="delete-confirm">
             <div>
                 <button type="button" class="close">&times;</button>
