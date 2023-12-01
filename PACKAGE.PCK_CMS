@@ -317,12 +317,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
              ORDER BY a.display_order )
         LOOP
             n:=n+1;
+            l_media_type:=pck_core.getMediaType(C.resource_type, C.format);
+
             l_clob:=l_clob || TO_CLOB('
                 <li class="card" tabindex="0" data-id="' || C.id || '">
                     <div>
                         <div class="dropdown">
                             <button type="button" class="show-dropdown">&blacktriangledown;</button>
                             <ul class="dropdown-items">
+                                <li>
+                                    <button type="button" class="with-icon edit-field" data-column="asset.description">
+                                        <svg class="icon"><use href="#searchengin"></use></svg>
+                                    Description
+                                    </button>
+                                </li>' ||
+                                CASE WHEN l_media_type='image' THEN '
+                                <li>
+                                    <button type="button" class="with-icon edit-field" data-column="asset.alt_text">
+                                        <svg class="icon"><use href="#searchengin"></use></svg>
+                                    Image Alt Text (SEO)
+                                    </button>
+                                </li>' 
+                                END ||'
+                                <li>
+                                    <hr>
+                                </li>
                                 <li>
                                     <button type="button" class="with-icon delete" data-table="asset">
                                         <svg class="icon"><use href="#delete"></use></svg>
@@ -332,8 +351,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                             </ul>
                         </div>
                     </div>');
+
             l_url_image:=pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
-            l_media_type:=pck_core.getMediaType(C.resource_type, C.format);
 
             IF (C.width>0 AND C.width*.25>pck_core.gWidthThumbnail) THEN
                 l_dimensions:=pck_core.gWidthThumbnail || 'xheight:' ||
@@ -367,9 +386,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
                 ELSE NULL;
             END CASE;
-
-            l_clob:=l_clob || TO_CLOB(pck_core.buildTextareaWrapper(C.id,'asset.alt_text',C.alt_text, l_session_data.canuse_popover));
-            l_clob:=l_clob || TO_CLOB(pck_core.buildTextareaWrapper(C.id,'asset.description',C.description, l_session_data.canuse_popover));
 
             l_clob:=l_clob || TO_CLOB('</li>');
 
