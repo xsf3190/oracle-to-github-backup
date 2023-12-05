@@ -859,13 +859,13 @@ video {
 .gallery-overlay > button {
     grid-area: overlay;
     background-color: transparent;
+    color: var(--color-light);
     font-size: var(--step-2);
-    color: var(--color-light) !important;
     outline: 0;
 }
 
 .gallery-overlay .copy-url {
-    background-color: transparent;
+    /*background-color: transparent;*/
     margin-left: -1em;
 }
 
@@ -887,7 +887,7 @@ video {
     display: inline-block;
     font-size: var(--step-0);
     padding: 1em;
-    background-color: var(--color-dark);
+    /*background-color: var(--color-dark);*/
     color: var(--color-light);
 }
 
