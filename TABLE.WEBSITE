@@ -15,6 +15,8 @@ CREATE TABLE "WEBSITE"
 	"NETLIFY_DEPLOY_ID" VARCHAR2(40), 
 	"NETLIFY_SITE_ID_CUSTOM" VARCHAR2(40), 
 	"FONT" VARCHAR2(30), 
+	"CSS" CLOB, 
+	"JAVASCRIPT" CLOB, 
 	 CONSTRAINT "PK_WEBSITE" PRIMARY KEY ("ID")
   USING INDEX  ENABLE, 
 	 CONSTRAINT "CHECK_DOMAIN_NAME" CHECK (domain_name<>'TEMPLATES') ENABLE, 
@@ -25,7 +27,11 @@ COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'All websites are deployed as a sub
    COMMENT ON COLUMN "WEBSITE"."TEMPLATE" IS 'Choose template for your website.';
    COMMENT ON COLUMN "WEBSITE"."CONTACT_EMAIL" IS 'Email to receive details entered in any contact form included in your website.<p>Contact forms are created automatically for pages with navigation label set to "contact"';
    COMMENT ON COLUMN "WEBSITE"."FONT" IS 'Choose font for your website';
-CREATE UNIQUE INDEX "PK_WEBSITE" ON "WEBSITE" ("ID") 
+CREATE UNIQUE INDEX "SYS_IL0000332838C00018$$" ON "WEBSITE" (
+  ;
+  CREATE UNIQUE INDEX "SYS_IL0000332838C00017$$" ON "WEBSITE" (
+  ;
+  CREATE UNIQUE INDEX "PK_WEBSITE" ON "WEBSITE" ("ID") 
   ;
   CREATE UNIQUE INDEX "IX_WEBSITE_DOMAIN_NAME" ON "WEBSITE" ("DOMAIN_NAME") 
   ;
