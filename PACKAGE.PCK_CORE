@@ -36,7 +36,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
+    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN CLOB, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
     FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pCanUsePopover IN BOOLEAN, pTimezone IN session_data.timezone%type, pViewOption IN VARCHAR2 DEFAULT NULL, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB;
     --
@@ -197,17 +197,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     /*
      **  Create wrapper html for textarea element, optionally including dropdown
      */
-    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
+    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN CLOB, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB IS
         l_table_name user_tab_columns.table_name%type;
         l_column_name user_tab_columns.column_name%type;
         l_data_length user_tab_columns.data_length%type;
         l_comments user_col_comments.comments%type;
+        l_data_type user_tab_columns.data_type%type;
     BEGIN
         l_table_name:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
         l_column_name:=UPPER(SUBSTR(pColumn,INSTR(pColumn,'.')+1));
 
-        SELECT c.data_length, NVL(i.comments,'Info not defined yet') 
-          INTO l_data_length, l_comments
+        SELECT c.data_length, NVL(i.comments,'Info not defined yet'), c.data_type
+          INTO l_data_length, l_comments, l_data_type
           FROM user_tab_columns c, user_col_comments i
          WHERE c.table_name=l_table_name
            AND c.column_name=l_column_name
@@ -225,7 +226,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                               <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' END ||'
             </label>' || pDropdown || 
             CASE WHEN pDropdown IS NOT NULL THEN '</div>' END || '
-            <textarea placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || '" maxlength="' || l_data_length || '" rows="1" data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>        
+            <textarea placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || CASE WHEN l_data_type<>'CLOB' THEN '" maxlength="' || l_data_length END || '" rows="1" data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>        
             <div class="button-container">
                 <span class="result"></span>
                 <span class="charcounter">' || NVL(LENGTH(pValue),0) || '/' || l_data_length || '</span>
@@ -451,6 +452,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                 </button>
                             </li>
                             <li>
+                                <button type="button" class="with-icon edit-field" data-column="article.body_html">
+                                    <svg class="icon"><use href="#pen-to-square"></use></svg>
+                                Upload Text 
+                                </button>
+                            </li>
+                            <li>
                                 <button type="button" class="with-icon edit-field" data-column="website_article.navigation_label">
                                     <svg class="icon"><use href="#list"></use></svg>
                                 Navigation Label
@@ -518,6 +525,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             font                    website.font%type,
             favicon_url             website.favicon_url%type,
             contact_email           website.contact_email%type,
+            css                     website.css%type,
+            javascript              website.javascript%type,
             netlify_site_id         website.netlify_site_id%type,
             netlify_site_id_custom  website.netlify_site_id%type
         );
@@ -535,15 +544,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <div class="dropdown">
                 <span>' || apex_application.g_user || '</span>
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                <ul class="dropdown-items">
-                    <li class="signout">
-                        <button type="button" class="with-icon">
-                            <svg class="icon">
-                                <use href="#signout"></use>
-                            </svg>
-                            Log Out
-                        </button>
-                    </li>                    
+                <ul class="dropdown-items">                    
                     <li class="api-keys">
                         <button type="button" class="with-icon">
                             <svg class="icon">
@@ -558,6 +559,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                 <use href="#list"></use>
                             </svg>
                             Session Log
+                        </button>
+                    </li>
+                    <li class="signout">
+                        <button type="button" class="with-icon">
+                            <svg class="icon">
+                                <use href="#signout"></use>
+                            </svg>
+                            Log Out
                         </button>
                     </li>      
                 </ul>
@@ -582,7 +591,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
          */
         pck_api.callGithubAPI(pUserId=>l_session_data.user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_templates);
 
-        SELECT w.id, w.domain_name, w.template, w.font, w.favicon_url, w.contact_email, w.netlify_site_id, w.netlify_site_id_custom
+        SELECT w.id, w.domain_name, w.template, w.font, w.favicon_url, w.contact_email, w.css, w.javascript, w.netlify_site_id, w.netlify_site_id_custom
           BULK COLLECT INTO l_domains
           FROM website w
          WHERE w.user_id=l_session_data.user_id
@@ -673,7 +682,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
             buildRadioWrapper('website.template',l_template_html, l_session_data.canuse_popover) ||
             buildRadioWrapper('website.font',l_font_html, l_session_data.canuse_popover) ||
-            buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email, l_session_data.canuse_popover) || '
+            buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email, l_session_data.canuse_popover) ||
+            buildTextareaWrapper(l_domains(1).id, 'website.css', l_domains(1).css, l_session_data.canuse_popover, l_domain_dropdown) ||
+            buildTextareaWrapper(l_domains(1).id, 'website.javascript', l_domains(1).javascript, l_session_data.canuse_popover, l_domain_dropdown) || '
             <fieldset class="deploy-buttons">
                 <legend>Build & Deploy Website</legend>
                 <div>' ||
