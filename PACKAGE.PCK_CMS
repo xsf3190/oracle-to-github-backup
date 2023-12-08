@@ -203,7 +203,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_session_data pck_core.session_data_rt;
         l_field_html LONG;
         l_pk VARCHAR2(20);
-        l_value VARCHAR2(500);
+        l_value CLOB;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -216,6 +216,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             CASE C.table_column
                 WHEN 'website_article.navigation_label' THEN
                     SELECT navigation_label INTO l_value FROM website_article WHERE website_id=C.website_id AND article_id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'article.body_html' THEN
+                    SELECT body_html INTO l_value FROM article WHERE id=C.id AND author_user_id=l_session_data.user_id;
                 WHEN 'website_article.page_title' THEN
                     SELECT page_title INTO l_value FROM website_article WHERE website_id=C.website_id AND article_id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website_article.page_description' THEN
@@ -709,10 +711,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_article_array:= new JSON_ARRAY_T;
 
         /* Get details of website */
-        FOR C IN (SELECT w.id, w.domain_name, w.favicon_url, w.font, wf.parameters, wf.fallback, w.contact_email, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, u.name author_name
+        FOR C IN (SELECT w.id, w.domain_name, w.css, w.javascript, w.favicon_url, w.font, wf.parameters, wf.fallback, w.contact_email, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, u.name author_name
                     FROM website w, users u, website_font wf
                    WHERE w.id=pWebsiteId
-                     AND w.font(+)=wf.name
+                     AND w.font=wf.name(+)
                      AND w.user_id=l_session_data.user_id
                      AND u.id=w.user_id)
         LOOP
@@ -736,6 +738,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_website_object.put('signatureContactEmail',l_signatureContactEmail);
             END IF;
             l_website_object.put('visit_url',pck_core.getRestUrl() || 'page-visit');
+            l_website_object.put('css',C.css);
+            l_website_object.put('javascript',C.javascript);
 
             l_json.put('website',l_website_object);
 
@@ -801,13 +805,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_json.put('articles',l_article_array);
 
         l_nb_articles:=l_article_array.get_size;
-        IF (l_nb_articles=0) THEN
-            owa_util.status_line(404, '', true);
-        ELSE
+        --IF (l_nb_articles=0) THEN
+        --    owa_util.status_line(404, '', true);
+        --ELSE
             owa_util.status_line(200, '', false);
             owa_util.mime_header( 'application/json', TRUE, 'UTF-8' );
             htp.p(l_json.to_clob);
-        END IF;
+        --END IF;
 
         EXCEPTION WHEN OTHERS THEN
             owa_util.status_line(400, '', true);
@@ -1369,7 +1373,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_session_data:=pck_core.getSessionData();
 
         FOR C IN (SELECT t.id, t.table_column, t.value
-                    FROM users, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value)) t
+                    FROM users, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value CLOB)) t
                    WHERE users.id=l_session_data.user_id)
         LOOP
             IF (INSTR(C.id,',')>0) THEN
@@ -1387,6 +1391,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     UPDATE website SET template=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website.font' THEN
                     UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.css' THEN
+                    UPDATE website SET css=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.javascript' THEN
+                    UPDATE website SET javascript=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'article.body_html' THEN
+                    UPDATE article SET body_html=C.value, updated_date=current_timestamp WHERE id=C.id AND author_user_id=l_session_data.user_id;
                 WHEN 'website_article.publish' THEN
                     UPDATE website_article SET publish=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'website_article.navigation_label' THEN
