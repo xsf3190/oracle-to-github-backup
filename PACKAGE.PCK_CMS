@@ -174,7 +174,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.open_object;
 
         FOR C IN (
-            SELECT w.domain_name, w.contact_email, w.template, w.font, w.favicon_url, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, w.netlify_site_id, w.netlify_site_id_custom
+            SELECT w.domain_name, w.css, w.javascript, w.contact_email, w.template, w.font, w.favicon_url, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, w.netlify_site_id, w.netlify_site_id_custom
               FROM website w
              WHERE w.id=pWebsiteId
                AND w.user_id=l_session_data.user_id) 
@@ -184,6 +184,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             IF (C.template<>'-1') THEN
                 apex_json.write('template', 'template-' || LOWER(C.template));
             END IF;
+            apex_json.write('css', C.css);
+            apex_json.write('javascript', C.javascript);
             apex_json.write('deploy_buttons', pck_core.buildDeployButtons(C.domain_name, C.netlify_site_id, C.netlify_site_id_custom));
             apex_json.write('cards',pck_core.buildWebsiteArticles(pWebsiteId, l_session_data.canuse_popover, l_session_data.timezone));
         END LOOP;
@@ -769,7 +771,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
                 IF (C1.body_html IS NOT NULL) THEN
                     l_article_object.put('words',C1.word_count);
-                    l_article_object.put('text',stripHeading(C1.title, C1.body_html));
+                    IF (c.css IS NULL) THEN
+                        l_article_object.put('text',stripHeading(C1.title, C1.body_html));
+                    ELSE
+                        l_article_object.put('text',C1.body_html);
+                    END IF;
                 END IF;
 
                 FOR C2 IN (SELECT rn, nb, cld_cloud_name, resource_type, public_id, format, width, height, alt_text 
