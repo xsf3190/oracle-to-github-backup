@@ -17,6 +17,8 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       domainName = website.querySelector("#domain_name"),
       domainNameResult = domainName.nextElementSibling.querySelector(".result"),
       contactEmail = website.querySelector("#contact_email"),
+      css = website.querySelector("#css"),
+      javascript = website.querySelector("#javascript"),
       newWebsite = website.querySelector(".new-website"),
       copyWebsite = website.querySelector(".copy-website"),
       deployButtons = website.querySelector(".deploy-buttons > div"),
@@ -207,7 +209,6 @@ newContent.addEventListener("click",  () => {
  **  EDIT WEBSITE
  */
 const edit_website = (e) => {
-    console.log("e.target.dataset.id",e.target.dataset.id)
     execProcess( "website/"+e.target.dataset.id,"GET").then( (data) => {
         resetWebsite();
         
@@ -221,6 +222,8 @@ const edit_website = (e) => {
 
         domainName.value = data.domain_name;
         contactEmail.value = data.contact_email ? data.contact_email : "";
+        css.value = data.css ? data.css : "";
+        javascript.value = data.javascript ? data.javascript : "";
 
         for (let i = 0; i < inputs.length; i++) {
             if (inputs[i].type === "textarea") {
