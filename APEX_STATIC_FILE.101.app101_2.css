@@ -131,9 +131,10 @@ label {
 textarea {
     border: 0.2ch solid var(--color-pale);
     border-radius: 0.5ch;
-    resize: vertical;
+    resize: both;
     line-height: 1.5;
     padding-left: 0.5ch;
+    max-width: 90vw;
 }
 
 .textarea-wrapper, radio-wrapper {
@@ -225,7 +226,7 @@ hr {
 /* ************** */
 
 form {
-    border: 1px solid var(--color-pale);
+    /*border: 1px solid var(--color-pale);*/
     padding: 1rem;
     margin-block-start: 1rem;
     margin-block-end: 1rem;
@@ -322,10 +323,6 @@ dialog:,
 
 dialog:not(.gallery)::backdrop {
   background-color: rgba(0,0,0,.6);
-}
-
-dialog.edit-field {
-    inline-size: min(100%,40ch);
 }
 
 dialog.delete-confirm > div, dialog.edit-field > div {
