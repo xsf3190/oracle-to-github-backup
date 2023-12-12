@@ -218,7 +218,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_column_name:=LOWER(l_column_name);
 
         RETURN('
-        <div style="min-width:min(' || l_data_length || 'ch,100%)" class="textarea-wrapper">' ||
+        <div class="textarea-wrapper">' ||
             CASE WHEN pDropdown IS NOT NULL THEN '<div class="button-container">' END || '
             <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
                 CASE WHEN pCanUsePopover 
@@ -227,10 +227,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </label>' || pDropdown || 
             CASE WHEN pDropdown IS NOT NULL THEN '</div>' END || '
             <textarea placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
-                CASE WHEN l_data_type='CLOB' THEN '" rows="5"' ELSE '" maxlength="' || l_data_length || '" rows="1"' END || ' data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>        
+                CASE WHEN l_data_type='CLOB' THEN '" rows="5" cols="60"' ELSE '" maxlength="' || l_data_length || '" rows="1"' END || ' data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>        
             <div class="button-container">
                 <span class="result"></span>
-                <span class="charcounter">' || NVL(LENGTH(pValue),0) || '/' || l_data_length || '</span>
+                <span class="charcounter">' || NVL(LENGTH(pValue),0) || CASE WHEN l_data_type<>'CLOB' THEN '/' || l_data_length END || '</span>
             </div>
         </div>');
     END;
@@ -684,14 +684,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             buildRadioWrapper('website.template',l_template_html, l_session_data.canuse_popover) ||
             buildRadioWrapper('website.font',l_font_html, l_session_data.canuse_popover) ||
             buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email, l_session_data.canuse_popover) ||
-            buildTextareaWrapper(l_domains(1).id, 'website.css', l_domains(1).css, l_session_data.canuse_popover, l_domain_dropdown) ||
-            buildTextareaWrapper(l_domains(1).id, 'website.javascript', l_domains(1).javascript, l_session_data.canuse_popover, l_domain_dropdown) || '
+            buildTextareaWrapper(l_domains(1).id, 'website.css', l_domains(1).css, l_session_data.canuse_popover) ||
+            buildTextareaWrapper(l_domains(1).id, 'website.javascript', l_domains(1).javascript, l_session_data.canuse_popover) || '
             <fieldset class="deploy-buttons">
                 <legend>Build & Deploy Website</legend>
                 <div>' ||
                 buildDeployButtons(l_domains(1).domain_name, l_domains(1).netlify_site_id, l_domains(1).netlify_site_id_custom) ||
                 '</div>
             </fieldset>
+        </form>
+        <form action="https://codepen.io/pen/define" method="POST" target="_blank">
+            <input type="hidden" name="data" value="">
+            <input type="image" src="http://s.cdpn.io/3/cp-arrow-right.svg" width="40" height="40" value="Create Pen" class="codepen-mover-button">
         </form>
         <hr>
         <nav>
