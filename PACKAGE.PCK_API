@@ -14,6 +14,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
     --
     PROCEDURE getTerraformData(pUserId IN users.id%type, pTerraformOrganizationName IN OUT users.terraform_organization_name%type, pTerraformWorkspaceName IN OUT users.terraform_workspace_name%type, pTerraformPrivateKey IN OUT users.terraform_private_key%type);
     --
+    PROCEDURE callIpdataAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB);
+    --
     PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
     --
     PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
@@ -381,6 +383,52 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         END LOOP;
         RAISE_APPLICATION_ERROR(-20040,l_error_message);
     END;
+
+    /*
+    **  IPDATA API
+    */
+    PROCEDURE callIpdataAPI(
+        pUserId IN users.id%type, 
+        pEndpoint IN VARCHAR2, 
+        pMethod IN VARCHAR2, 
+        pData IN OUT NOCOPY CLOB)
+    IS
+        l_ipdata_url VARCHAR2(200):='https://api.ipdata.co/';
+        l_ipdata_api_key users.ipdata_api_key%type;
+        l_error_message LONG;
+    BEGIN
+        /* Get user's ipdata api key */
+        FOR C IN (SELECT ipdata_api_key FROM users WHERE id=pUserId) LOOP 
+            l_ipdata_api_key:=C.ipdata_api_key;
+        END LOOP;
+
+        /* Use Administrator's key if user does not have token */
+        IF (l_ipdata_api_key IS NULL) THEN
+            SELECT u.ipdata_api_key 
+              INTO l_ipdata_api_key
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        END IF;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'Content-Type';
+        apex_web_service.g_request_headers(1).value := 'application/json';
+
+        l_ipdata_url:=l_ipdata_url || pEndpoint || '?api-key=' || l_ipdata_api_key;
+
+        pData := apex_web_service.make_rest_request(p_url=>l_ipdata_url, p_http_method=>pMethod);
+
+        pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_ipdata_url);
+
+        IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
+            RETURN;
+        END IF;
+
+        l_error_message:=pMethod || ' ' || l_ipdata_url || ' https status:' || apex_web_service.g_status_code;
+        RAISE_APPLICATION_ERROR(-20040,l_error_message);
+    END;    
 
     /*
     **  TERRAFORM API
