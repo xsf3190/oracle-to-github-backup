@@ -58,7 +58,14 @@ const inputHandler = (e) => {
     const maxchars = e.target.getAttribute("maxlength");
     const counter = e.target.nextElementSibling.querySelector(".charcounter");
     let numOfEnteredChars = e.target.value.length;
-    counter.textContent = numOfEnteredChars + "/" + maxchars;
+
+    if (maxchars) {
+        counter.textContent = numOfEnteredChars + "/" + maxchars;
+    } else {
+        counter.textContent = numOfEnteredChars;
+        return;
+    }
+
     if (numOfEnteredChars === Number(maxchars)) {
         counter.style.color = "red";
     } else {
@@ -227,7 +234,12 @@ const edit_website = (e) => {
 
         for (let i = 0; i < inputs.length; i++) {
             if (inputs[i].type === "textarea") {
-                inputs[i].nextElementSibling.querySelector(".charcounter").textContent = inputs[i].value.length + "/" + inputs[i].getAttribute("maxlength");
+                const maxlength = inputs[i].getAttribute("maxlength");
+                let charcounter = inputs[i].value.length;
+                if (maxlength) {
+                    charcounter += "/" + maxlength;
+                }
+                inputs[i].nextElementSibling.querySelector(".charcounter").textContent = charcounter;
             }
         }
 
