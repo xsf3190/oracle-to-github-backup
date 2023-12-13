@@ -455,7 +455,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             <li>
                                 <button type="button" class="with-icon edit-field" data-column="article.body_html">
                                     <svg class="icon"><use href="#pen-to-square"></use></svg>
-                                Upload Text 
+                                Edit HTML
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="with-icon edit-codepen" data-column="article.body_html">
+                                    <svg class="icon"><use href="#codepen"></use></svg>
+                                Edit in Codepen
                                 </button>
                             </li>
                             <li>
@@ -614,6 +620,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         NEW WEBSITE
                     </button>
                 </li>
+                <!--
                 <li>
                     <button type="button" class="with-icon copy-website"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
                         <svg class="icon">
@@ -621,7 +628,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         </svg>
                         COPY WEBSITE
                     </button>
-                </li>';
+                </li>
+                -->';
 
         FOR i IN 1..l_domains.COUNT LOOP
             IF (l_domains(i).id IS NULL) THEN
@@ -695,7 +703,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </form>
         <form action="https://codepen.io/pen/define" method="POST" target="_blank">
             <input type="hidden" name="data" value="">
-            <input type="image" src="http://s.cdpn.io/3/cp-arrow-right.svg" width="40" height="40" value="Create Pen" class="codepen-mover-button">
+            <!--<input type="image" src="http://s.cdpn.io/3/cp-arrow-right.svg" width="40" height="40" value="Create Pen" class="codepen-mover-button">-->
         </form>
         <hr>
         <nav>
