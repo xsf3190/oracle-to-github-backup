@@ -20,7 +20,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       css = website.querySelector("#css"),
       javascript = website.querySelector("#javascript"),
       newWebsite = website.querySelector(".new-website"),
-      copyWebsite = website.querySelector(".copy-website"),
+      //copyWebsite = website.querySelector(".copy-website"),
       deployButtons = website.querySelector(".deploy-buttons > div"),
       newContent = document.querySelector(".new-content"),
       cards = document.querySelector(".cards"),
@@ -115,7 +115,7 @@ const changeHandler = (e) => {
             const li = e.target.previousElementSibling.querySelector(".dropdown-items .separator");
             li.insertAdjacentHTML('afterend',data.dropdown);
             newContent.disabled = false;
-            copyWebsite.disabled = false;
+            //copyWebsite.disabled = false;
         }
         if (data.deploy_buttons) {
             deployButtons.replaceChildren();
@@ -166,6 +166,7 @@ newWebsite.addEventListener("click",  () => {
 /*
  **  COPY WEBSITE
  */
+/*
 copyWebsite.addEventListener("click",  () => {
     const websiteId = website.dataset.id;
     execProcess( "website/"+websiteId,"POST").then( (data) => {
@@ -187,6 +188,7 @@ copyWebsite.addEventListener("click",  () => {
         //domain_name.focus();
     });
 });
+*/
 
 const transitionEditor = () => {
   editorContainer.style.visibility = "visible";
@@ -430,6 +432,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
     }
 
     lazyload();
+    initCodepen();
 });
 
 const lazyload = () => {
@@ -459,6 +462,23 @@ const lazyload = () => {
         img.src = src;
     }
 }
+
+const initCodepen = () => {
+    const form = container.querySelector("[action='https://codepen.io/pen/define']");
+
+    let data = {
+        title: domainName.value,
+        html: "<p>Coucou</p><blockquote>fred</blockquote>",
+        css: css.value,
+        js: javascript.value
+    };
+    const input = form.querySelector("[name='data']");
+    let JSONstring = JSON.stringify(data)
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+    input.value = JSONstring;
+}
+
 /*
 **  BATCH PERFORMANCE ENTRIES IN ARRAY TO AVOID TOO MANY DATABASE PROCESS CALLS
 */
@@ -624,7 +644,9 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".edit-text")) {
         edit_text(id,e.srcElement);   
     } else if (e.target.matches(".edit-field")) {
-        edit_field(id, e);                                                         
+        edit_field(id, e); 
+    } else if (e.target.matches(".edit-codepen")) {
+        edit_codepen(id, e);                                                                                                                 
     } else if (e.target.matches(".fullscreen")) {
         showFullScreen(e);                                 
     } else if (e.target.matches(".edit-website")) {
@@ -1145,6 +1167,28 @@ const edit_field = (id, e) => {
         content.replaceChildren();
         content.insertAdjacentHTML('afterbegin',data.content);
         editField.showModal();
+    });
+}
+
+/* 
+ ** EDIT WEBSITE ASSETS IN CODEPEN
+ */
+const edit_codepen = (id, e) => {
+    const form = container.querySelector("[action='https://codepen.io/pen/define']");
+
+    execProcess( "edit-field","PUT",{"table_column":e.target.dataset.column, "website_id":website.dataset.id, "id":id}).then( (data) => {
+        let formdata = {
+            title: domainName.value,
+            html: data.content,
+            css: css.value,
+            js: javascript.value
+        };
+        const input = form.querySelector("[name='data']");
+        let JSONstring = JSON.stringify(formdata)
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&apos;");
+        input.value = JSONstring;
+        form.submit();
     });
 }
 
