@@ -34,6 +34,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
     --
+    PROCEDURE updateContent(pZipFile IN BLOB, pId IN VARCHAR2);
+    --
     PROCEDURE uploadWebVitals(pBodyText IN CLOB);
     --
     PROCEDURE uploadCldMetadata(pBodyText IN CLOB);
@@ -965,6 +967,48 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('success', TRUE);
             apex_json.close_object;
         END IF;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
+    /*
+     **  Update content of website using file contents of exported Codepen zip file
+     */        
+    PROCEDURE updateContent(pZipFile IN BLOB, pId IN VARCHAR2) IS
+        l_website_id website.id%type;
+        l_article_id article.id%type;
+        l_domain_name website.domain_name%type;
+        l_zip BLOB:=pZipFile;
+        l_files apex_zip.t_files;
+        l_file BLOB;
+        l_clob CLOB;
+    BEGIN
+        /* pId contains website_id,article_id */
+        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
+        l_article_id:=SUBSTR(pId,INSTR(pId,',')+1);
+
+        SELECT REPLACE(domain_name,'.','-') INTO l_domain_name FROM website WHERE id=l_website_id;
+
+        l_files := apex_zip.get_files(p_zipped_blob => l_zip);
+        FOR i in 1 .. l_files.COUNT LOOP
+            CASE l_files(i)
+                WHEN l_domain_name||'/src/index.html' THEN
+                    l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
+                    UPDATE article SET body_html=l_clob WHERE id=l_article_id;
+                WHEN l_domain_name||'/src/script.js' THEN
+                    pck_core.log(l_files(i));
+                WHEN l_domain_name||'/src/style.css' THEN
+                    pck_core.log(l_files(i));
+                ELSE
+                    NULL;
+            END CASE;
+        END LOOP;
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
