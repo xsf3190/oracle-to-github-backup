@@ -465,6 +465,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                 </button>
                             </li>
                             <li>
+                                <button type="button" class="with-icon upload-zipfile" data-column="article.body_html">
+                                    <svg class="icon"><use href="#upload"></use></svg>
+                                Upload Codepen Zipfile
+                                </button>
+                            </li>
+                            <li>
                                 <button type="button" class="with-icon edit-field" data-column="website_article.navigation_label">
                                     <svg class="icon"><use href="#list"></use></svg>
                                 Navigation Label
