@@ -432,7 +432,6 @@ window.addEventListener("DOMContentLoaded", (event) => {
     }
 
     lazyload();
-    initCodepen();
 });
 
 const lazyload = () => {
@@ -461,22 +460,6 @@ const lazyload = () => {
         }
         img.src = src;
     }
-}
-
-const initCodepen = () => {
-    const form = container.querySelector("[action='https://codepen.io/pen/define']");
-
-    let data = {
-        title: domainName.value,
-        html: "<p>Coucou</p><blockquote>fred</blockquote>",
-        css: css.value,
-        js: javascript.value
-    };
-    const input = form.querySelector("[name='data']");
-    let JSONstring = JSON.stringify(data)
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&apos;");
-    input.value = JSONstring;
 }
 
 /*
@@ -542,6 +525,8 @@ const execProcess = (template, method, input) => {
             
             if (method==="GET") {
                 response = await fetch(url, {method: method, headers: {"Apex-Session": session}});
+            } else if (input instanceof File) {
+                response = await fetch(url, {method: method, headers: {"Apex-Session": session}, body: input});
             } else {
                 response = await fetch(url, {method: method, headers: {"Apex-Session": session}, body: JSON.stringify(input)});
             }
@@ -646,7 +631,9 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".edit-field")) {
         edit_field(id, e); 
     } else if (e.target.matches(".edit-codepen")) {
-        edit_codepen(id, e);                                                                                                                 
+        edit_codepen(id, e);   
+    } else if (e.target.matches(".upload-zipfile")) {
+        upload_zipfile(id, e);                                                                                                                 
     } else if (e.target.matches(".fullscreen")) {
         showFullScreen(e);                                 
     } else if (e.target.matches(".edit-website")) {
@@ -1176,7 +1163,7 @@ const edit_field = (id, e) => {
 const edit_codepen = (id, e) => {
     const form = container.querySelector("[action='https://codepen.io/pen/define']");
 
-    execProcess( "edit-field","PUT",{"table_column":e.target.dataset.column, "website_id":website.dataset.id, "id":id}).then( (data) => {
+    execProcess( "article/"+id,"GET").then( (data) => {
         let formdata = {
             title: domainName.value,
             html: data.content,
@@ -1189,6 +1176,34 @@ const edit_codepen = (id, e) => {
             .replace(/'/g, "&apos;");
         input.value = JSONstring;
         form.submit();
+    });
+}
+
+/* 
+ ** UPLOAD ZIPFILE EXPORTED TO LOCAL FILESYSTEM FROM CODEPEN
+ */
+const upload_zipfile = async (id, e) => {
+    const options = {
+        types: [
+        {
+            description: "Zip",
+            accept: {
+            "application/zip": ".zip",
+            }
+        },
+        ],
+        excludeAcceptAllOption: true,
+        startIn: "downloads",
+    };
+
+    let fileHandle;
+ 
+    [fileHandle] = await window.showOpenFilePicker(options);
+    
+    const file = await fileHandle.getFile();
+
+    execProcess( "content/"+website.dataset.id+","+id,"POST",file).then( (data) => {
+        console.log("data",data);
     });
 }
 
