@@ -398,6 +398,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         TYPE t_publish IS VARRAY(2) OF VARCHAR2(3);
         l_publish t_publish:=t_publish('YES','NO');
         l_publish_html LONG;
+        nb PLS_INTEGER:=0;
     BEGIN
         FOR C IN (SELECT a.id,
                    c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
@@ -409,6 +410,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    wa.page_title,
                    wa.page_description,
                    a.word_count,
+                   a.editor,
                    NVL(a.updated_date, a.created_date) updated_date,
                    wa.display_order display_order
               FROM article a, website_article wa, asset c
@@ -418,6 +420,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                AND a.cover_asset_id=c.id(+)
              ORDER BY display_order)
         LOOP
+            nb:=nb+1;
             l_publish_html:=NULL;
             FOR i IN 1..l_publish.COUNT LOOP
             l_publish_html:=l_publish_html ||
@@ -445,37 +448,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                     <svg class="icon"><use href="#photo-film"></use></svg>
                                 Media Gallery
                                 </button>
-                            </li>
-                            <li>
+                            </li>' || 
+                            CASE WHEN C.editor IS NULL THEN '
                                 <button type="button" class="with-icon edit-text">
                                     <svg class="icon"><use href="#pen-to-square"></use></svg>
                                 Edit Text
                                 </button>
-                            </li>
-                            <li>
-                                <button type="button" class="with-icon edit-field" data-column="article.body_html">
-                                    <svg class="icon"><use href="#pen-to-square"></use></svg>
-                                Edit HTML
-                                </button>
-                            </li>
+                            </li>' ELSE '
                             <li>
                                 <button type="button" class="with-icon edit-codepen" data-column="article.body_html">
                                     <svg class="icon"><use href="#codepen"></use></svg>
                                 Edit in Codepen
                                 </button>
-                            </li>
+                            </li>'
+                            END || '
                             <li>
-                                <button type="button" class="with-icon upload-zipfile" data-column="article.body_html">
+                                <button type="button" class="with-icon upload-codepen" data-column="article.body_html">
                                     <svg class="icon"><use href="#upload"></use></svg>
-                                Upload Codepen Zipfile
+                                Upload Codepen Zip
                                 </button>
-                            </li>
+                            </li>' ||
+                            CASE WHEN nb>1 THEN '
                             <li>
                                 <button type="button" class="with-icon edit-field" data-column="website_article.navigation_label">
                                     <svg class="icon"><use href="#list"></use></svg>
                                 Navigation Label
                                 </button>
-                            </li>
+                            </li>'
+                            END || '
                             <li>
                                 <button type="button" class="with-icon edit-field" data-column="website_article.page_title">
                                     <svg class="icon"><use href="#searchengin"></use></svg>
@@ -697,9 +697,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
             buildRadioWrapper('website.template',l_template_html, l_session_data.canuse_popover) ||
             buildRadioWrapper('website.font',l_font_html, l_session_data.canuse_popover) ||
-            buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email, l_session_data.canuse_popover) ||
-            buildTextareaWrapper(l_domains(1).id, 'website.css', l_domains(1).css, l_session_data.canuse_popover) ||
-            buildTextareaWrapper(l_domains(1).id, 'website.javascript', l_domains(1).javascript, l_session_data.canuse_popover) || '
+            buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email, l_session_data.canuse_popover) || '
             <fieldset class="deploy-buttons">
                 <legend>Build & Deploy Website</legend>
                 <div>' ||
@@ -709,7 +707,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </form>
         <form action="https://codepen.io/pen/define" method="POST" target="_blank">
             <input type="hidden" name="data" value="">
-            <!--<input type="image" src="http://s.cdpn.io/3/cp-arrow-right.svg" width="40" height="40" value="Create Pen" class="codepen-mover-button">-->
         </form>
         <hr>
         <nav>
