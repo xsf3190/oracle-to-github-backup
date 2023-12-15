@@ -632,8 +632,8 @@ const clickHandler = (e) => {
         edit_field(id, e); 
     } else if (e.target.matches(".edit-codepen")) {
         edit_codepen(id, e);   
-    } else if (e.target.matches(".upload-zipfile")) {
-        upload_zipfile(id, e);                                                                                                                 
+    } else if (e.target.matches(".upload-codepen")) {
+        upload_codepen(id, e);                                                                                                                 
     } else if (e.target.matches(".fullscreen")) {
         showFullScreen(e);                                 
     } else if (e.target.matches(".edit-website")) {
@@ -1158,17 +1158,17 @@ const edit_field = (id, e) => {
 }
 
 /* 
- ** EDIT WEBSITE ASSETS IN CODEPEN
+ ** EGET WEBSITE ARTICLE ASSETS TO OPEN IN CODEPEN
  */
 const edit_codepen = (id, e) => {
     const form = container.querySelector("[action='https://codepen.io/pen/define']");
 
-    execProcess( "article/"+id,"GET").then( (data) => {
+    execProcess( "article/"+website.dataset.id+","+id,"GET").then( (data) => {
         let formdata = {
-            title: domainName.value,
-            html: data.content,
-            css: css.value,
-            js: javascript.value
+            title: data.domain_name,
+            html: data.html,
+            css: data.css,
+            js: data.js
         };
         const input = form.querySelector("[name='data']");
         let JSONstring = JSON.stringify(formdata)
@@ -1182,7 +1182,7 @@ const edit_codepen = (id, e) => {
 /* 
  ** UPLOAD ZIPFILE EXPORTED TO LOCAL FILESYSTEM FROM CODEPEN
  */
-const upload_zipfile = async (id, e) => {
+const upload_codepen = async (id, e) => {
     const options = {
         types: [
         {
@@ -1203,7 +1203,7 @@ const upload_zipfile = async (id, e) => {
     const file = await fileHandle.getFile();
 
     execProcess( "content/"+website.dataset.id+","+id,"POST",file).then( (data) => {
-        console.log("data",data);
+        popupOpen("CODEPEN UPLOAD COMPLETED",data.message);
     });
 }
 
