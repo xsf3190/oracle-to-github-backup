@@ -10,7 +10,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getCldSignature(pParamsToSign IN CLOB);
     --
-    PROCEDURE getArticle(pArticleId IN article.id%type);
+    PROCEDURE getArticle(pId IN VARCHAR2);
     --
     PROCEDURE getFieldHTML(pParams IN CLOB);
     --
@@ -828,25 +828,50 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Get the selected article's content in HTML format
+     **  Get website article's HTML/CSS/JS
      */    
-    PROCEDURE getArticle(pArticleId IN article.id%type)  IS
+    PROCEDURE getArticle(pId IN VARCHAR2)  IS
+        l_id_1 NUMBER;
+        l_id_2 NUMBER;
+        l_domain_name website.domain_name%type;
+        l_css website.css%type;
+        l_javascript website.css%type;
+        l_body_html article.body_html%type;
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        FOR C IN (SELECT a.body_html, UPPER(u.name) name, apex_util.get_since(a.created_date) created, CASE WHEN a.word_count<200 THEN 'less than a minute' ELSE ROUND(a.word_count/200) || ' minute read' END minutes 
-                    FROM article a, users u 
-                   WHERE a.id=pArticleId 
-                     AND a.author_user_id=NVL(l_session_data.user_id,a.author_user_id)
-                     AND a.author_user_id=u.id )
-        LOOP
-            apex_json.open_object; 
-            apex_json.write('success', TRUE); 
-            apex_json.write('content', C.body_html);
-            apex_json.write('details','<div class="details"><span>' || C.name || '</span><span>-</span><span>' || C.created || '</span><span>-</span><span>' || C.minutes || '</span></div>');
-            apex_json.close_object;
-        END LOOP;
+        /* pId contains website_id,article_id or just the article_id */
+        IF (INSTR(pId,',')=0) THEN
+            l_id_1:=pId;
+        ELSE
+            l_id_1:=SUBSTR(pId,1,INSTR(pId,',')-1);
+            l_id_2:=SUBSTR(pId,INSTR(pId,',')+1);
+        END IF;
+
+        pck_core.log('pId:'||pId||'|l_id_1:'||l_id_1||'|l_id_2:'||l_id_2);
+
+        /* Website and Article data */
+        IF (l_id_1 IS NOT NULL AND l_id_2 IS NOT NULL) THEN
+            SELECT w.domain_name, w.css, w.javascript, a.body_html INTO l_domain_name, l_css, l_javascript, l_body_html
+            FROM website w, article a
+            WHERE w.id=l_id_1
+            AND w.user_id=l_session_data.user_id
+            AND a.id=l_id_2
+            AND a.author_user_id=l_session_data.user_id;
+        ELSIF (l_session_data.page_id=1) THEN
+            SELECT body_html INTO l_body_html
+              FROM article
+             WHERE id=l_id_1;
+        END IF;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE); 
+        apex_json.write('domain_name', l_domain_name);
+        apex_json.write('html', l_body_html);
+        apex_json.write('css', l_css);
+        apex_json.write('js', l_javascript);
+        apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -974,40 +999,75 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Update content of website using file contents of exported Codepen zip file
+     **  Update website CSS / JS plus HTML of one article from the contents of an exported Codepen zip file
      */        
     PROCEDURE updateContent(pZipFile IN BLOB, pId IN VARCHAR2) IS
         l_website_id website.id%type;
         l_article_id article.id%type;
         l_domain_name website.domain_name%type;
+        l_css CLOB;
+        l_javascript CLOB;
+        l_body_html CLOB;
         l_zip BLOB:=pZipFile;
         l_files apex_zip.t_files;
         l_file BLOB;
         l_clob CLOB;
+        l_message VARCHAR2(500);
+        l_session_data pck_core.session_data_rt;
     BEGIN
+        l_session_data:=pck_core.getSessionData();
+
         /* pId contains website_id,article_id */
         l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
         l_article_id:=SUBSTR(pId,INSTR(pId,',')+1);
 
-        SELECT REPLACE(domain_name,'.','-') INTO l_domain_name FROM website WHERE id=l_website_id;
+        /* Get existing clobs */
+        SELECT REPLACE(w.domain_name,'.','-'), w.css, w.javascript, a.body_html 
+          INTO l_domain_name, l_css, l_javascript, l_body_html
+          FROM website w, article a
+         WHERE w.id=l_website_id
+           AND w.user_id=l_session_data.user_id
+           AND a.id=l_article_id
+           AND a.author_user_id=l_session_data.user_id;
 
         l_files := apex_zip.get_files(p_zipped_blob => l_zip);
         FOR i in 1 .. l_files.COUNT LOOP
             CASE l_files(i)
                 WHEN l_domain_name||'/src/index.html' THEN
                     l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
-                    UPDATE article SET body_html=l_clob WHERE id=l_article_id;
+                    IF (dbms_lob.compare(l_body_html, l_clob)=0) THEN
+                        l_message:=l_message || 'HTML - no change | ';
+                    ELSE
+                        UPDATE article SET body_html=l_clob, editor='CODEPEN', updated_date=current_timestamp WHERE id=l_article_id;
+                        l_message:=l_message || 'HTML - updated successfully | ';
+                    END IF;
                 WHEN l_domain_name||'/src/script.js' THEN
-                    pck_core.log(l_files(i));
+                    l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
+                    IF (dbms_lob.compare(l_javascript, l_clob)=0) THEN
+                        l_message:=l_message || 'JAVASCRIPT - no change | ';
+                    ELSE
+                        UPDATE website SET javascript=l_clob, updated_date=current_timestamp WHERE id=l_website_id;
+                        l_message:=l_message || 'JAVASCRIPT - updated successfully | ';
+                    END IF;
                 WHEN l_domain_name||'/src/style.css' THEN
-                    pck_core.log(l_files(i));
+                    l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
+                    IF (dbms_lob.compare(l_css, l_clob)=0) THEN
+                        l_message:=l_message || 'CSS - no change | ';
+                    ELSE
+                        UPDATE website SET css=l_clob, updated_date=current_timestamp WHERE id=l_website_id;
+                        l_message:=l_message || 'CSS - updated successfully | ';
+                    END IF;
                 ELSE
                     NULL;
             END CASE;
         END LOOP;
+        IF (l_message IS NULL) THEN
+            l_message:='CAN ONLY UPLOAD FILES EXPORTED FROM CODEPEN NAMED ' || l_domain_name || '.zip';
+        END IF;
 
         apex_json.open_object;
         apex_json.write('success', TRUE);
+        apex_json.write('message', l_message);
         apex_json.close_object;
 
         EXCEPTION
