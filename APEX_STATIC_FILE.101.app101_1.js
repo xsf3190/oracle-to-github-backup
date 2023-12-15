@@ -92,7 +92,7 @@ const execProcess = (template, method, input) => {
  */
 privacy.addEventListener("click", (e) => {
     execProcess( "article/"+e.currentTarget.dataset.id,"GET").then( (data) => {
-        popup.querySelector(".content").innerHTML = data.content;
+        popup.querySelector(".content").innerHTML = data.html;
         popup.showModal();
     });
 });
