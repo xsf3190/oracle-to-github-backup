@@ -231,8 +231,6 @@ const edit_website = (e) => {
 
         domainName.value = data.domain_name;
         contactEmail.value = data.contact_email ? data.contact_email : "";
-        css.value = data.css ? data.css : "";
-        javascript.value = data.javascript ? data.javascript : "";
 
         for (let i = 0; i < inputs.length; i++) {
             if (inputs[i].type === "textarea") {
