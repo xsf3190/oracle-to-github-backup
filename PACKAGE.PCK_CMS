@@ -695,6 +695,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_page_id NUMBER;
         l_aws_gateway_url VARCHAR2(200);
         l_signatureContactEmail VARCHAR2(4000);
+        l_sitemap LONG;
 
         /* If title missing remove the empty <h1></h1> tag */
         FUNCTION stripHeading(pTitle IN VARCHAR2, pBodyHtml IN OUT NOCOPY CLOB) RETURN CLOB IS
@@ -745,10 +746,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_website_object.put('css',C.css);
             l_website_object.put('javascript',C.javascript);
 
-            l_json.put('website',l_website_object);
+            /* Build contents of sitemap.xml */
+            l_sitemap:='<?xml version="1.0" encoding="UTF-8"?>' || chr(10) || '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' || chr(10);
 
-            FOR C1 IN (SELECT a.id, a.created_date, a.word_count, a.title, a.body_html, 
-                              wa.display_order, wa.page_title, wa.page_description, NVL(apex_string_util.get_slug(wa.navigation_label),'index') path_name, wa.navigation_label
+            FOR C1 IN (SELECT a.id, a.created_date, COALESCE(a.updated_date,a.created_date) lastmod, a.word_count, a.title, a.body_html, 
+                              wa.display_order, wa.page_title, wa.page_description, NVL(apex_string_util.get_slug(wa.navigation_label),'index') path_name, wa.navigation_label,
+                              ROW_NUMBER() OVER (ORDER BY wa.display_order) rn
                         FROM article a, website_article wa
                        WHERE wa.website_id=C.id
                          AND wa.article_id=a.id
@@ -762,6 +765,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_article_object.put('page_title',C1.page_title);
                 l_article_object.put('page_description',C1.page_description);
                 l_article_object.put('created',TO_CHAR(C1.created_date,'dd.mm.yyyy'));
+
+                l_sitemap:=l_sitemap || 
+                '    <url>' || chr(10) || '        <loc>https://www.' || C.domain_name || CASE WHEN (C1.rn>1) THEN '/' || C1.path_name END || '</loc>' || chr(10) || '        <lastmod>' || TO_CHAR(C1.lastmod,'YYYY-MM-DD') || '</lastmod>' || chr(10) || 
+                '    </url>' || chr(10);
 
                 IF (C1.navigation_label IS NOT NULL) THEN
                     l_article_object.put('nav_name',C1.navigation_label);
@@ -809,7 +816,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 END LOOP;
                 l_article_array.append(l_article_object);
             END LOOP;
+            l_website_object.put('robots','User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: https://www.' || C.domain_name || '/sitemap.xml');
+            l_sitemap:=l_sitemap || '</urlset>';
         END LOOP;
+
+
+        l_website_object.put('sitemap',l_sitemap);
+
+        l_json.put('website',l_website_object);
         l_json.put('articles',l_article_array);
 
         l_nb_articles:=l_article_array.get_size;
