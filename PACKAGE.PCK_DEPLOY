@@ -10,6 +10,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type);
     --
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type) ;
+    --
     PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2, pSiteId IN website.netlify_site_id%type);
 end;
 /
@@ -21,6 +23,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     PROCEDURE deployWebsite(pBodyText IN CLOB) IS
         l_template website.template%type;
         l_clob CLOB;
+        l_blob BLOB;
+
         l_job_name VARCHAR2(30);
         n PLS_INTEGER;
         l_body_text CLOB:=pBodyText;
@@ -33,6 +37,45 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         SELECT websiteid, siteid INTO l_website_id, l_site_id FROM users, JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid)) WHERE users.id=l_session_data.user_id;
 
         DELETE website_deploy WHERE website_id=l_website_id AND site_id=l_site_id;
+
+        /* START UPLOAD FILE METHOD */
+
+        logDeployment('{"site_id":"' || l_site_id || '","status":"Submitting Deployment Job"}',l_website_id);
+
+        l_job_name:=dbms_scheduler.generate_job_name('DEPLOY_');
+        dbms_scheduler.create_job(
+            job_name   => l_job_name,
+            job_type   =>'STORED_PROCEDURE',
+            job_action =>'pck_deploy.runDeployment',
+            number_of_arguments=>3,
+            start_date=>systimestamp
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 1,
+            argument_value => l_website_id
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 2,
+            argument_value => l_session_data.user_id
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 3,
+            argument_value => l_site_id
+        );
+        dbms_scheduler.enable(l_job_name);
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+
+        RETURN;
+
+        /* ************************** */
+        /* HAVE TO USE PARAMETER HERE */
+        /* ************************** */
 
         /* All content except first article, which is the home page, must have a navigation label */
         SELECT COUNT(*)
@@ -122,8 +165,61 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.close_object;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
     END;
 
+    /*
+    **  DEPLOY BY UPLOADING HTML FILE CONTENT DIRECTLY TO NETLIFY
+    */
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type) IS
+        l_clob CLOB;
+        l_json JSON_OBJECT_T;
+        l_files JSON_OBJECT_T;
+        l_page CLOB;
+        l_file_name website_article.navigation_label%type;
+        l_sha1 VARCHAR2(40);
+        TYPE tt_files IS RECORD (
+            file_name website_article.navigation_label%type,
+            file_content CLOB
+        );
+        TYPE t_files IS TABLE OF tt_files INDEX BY VARCHAR2(40);
+        l_deploy_files t_files;
+    BEGIN
+        /* Get SHA1 of all files to be deployed */
+        l_json:= new JSON_OBJECT_T;
+        l_files:= new JSON_OBJECT_T;
+
+        FOR C IN (SELECT w.css, w.javascript, wa.navigation_label, a.body_html, ROW_NUMBER() OVER (ORDER BY wa.display_order) rn, COUNT(*) OVER () nb
+                    FROM website w, website_article wa, article a
+                   WHERE w.id=pWebsiteId
+                     AND wa.website_id=w.id
+                     AND wa.article_id=a.id
+                   ORDER BY wa.display_order)
+        LOOP
+            l_page:='<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>' || C.css || '</style></head><body>' || C.body_html || '<script>' || C.javascript || '</script></body></html>';
+            l_sha1:=LOWER(dbms_crypto.hash(src => l_page, typ => dbms_crypto.hash_sh1));
+            l_file_name:=CASE WHEN C.rn=1 THEN 'index' ELSE C.navigation_label END || '.html';
+            l_deploy_files(l_sha1).file_name:=l_file_name;
+            l_deploy_files(l_sha1).file_content:=l_page;
+            l_files.put(l_file_name, l_sha1);
+        END LOOP;
+        l_json.put('files',l_files);
+
+        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId || '/deploys', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+
+        FOR C IN (SELECT id, sha1 From JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$')))) LOOP
+            logDeployment('{"site_id":"' || pSiteId || '","status":"Uploading ' || l_deploy_files(C.sha1).file_name || '"}',pWebsiteId);
+            pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', pBody=>l_deploy_files(C.sha1).file_content, pData=>l_clob);
+        END LOOP;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                logDeployment('{"site_id":"' || pSiteId || '","status":"' || SUBSTR(SQLERRM,1,100) || '", "exitcode": 1}',pWebsiteId);
+                pck_core.log_error;
+    END;
 
     PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2, pSiteId IN website.netlify_site_id%type) is
         l_domain_name website.domain_name%type;
@@ -147,6 +243,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
           FROM website
          WHERE id=pWebsiteId
            AND user_id=pUserId;
+
 
         /* Github directory for the website must exist in DEPLOY repository in order to enable auto-deploy from Netlify */
         /* Have to handle case where domain name changed after deploy so we don't keep unused directories */
@@ -227,10 +324,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_site_id website_deploy.site_id%type;
         l_exitcode PLS_INTEGER;
         l_status website_deploy.status%type;
-        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_session_data:=pck_core.getSessionData();
-
         SELECT site_id, status, NVL(exitcode,0)
           INTO l_site_id, l_status, l_exitcode
           FROM JSON_TABLE(pBodyText, '$' COLUMNS (site_id, status, exitcode));
