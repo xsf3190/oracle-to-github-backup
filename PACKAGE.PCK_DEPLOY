@@ -12,7 +12,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type) ;
     --
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2, pSiteId IN website.netlify_site_id%type);
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as 
@@ -36,11 +35,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         SELECT websiteid, siteid INTO l_website_id, l_site_id FROM users, JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid)) WHERE users.id=l_session_data.user_id;
 
+        /* Check no other session currently deploying */
+
+        FOR C IN (SELECT job_name FROM user_scheduler_running_jobs WHERE job_name LIKE 'DEPLOY_%') LOOP
+            logDeployment('{"site_id":"' || l_site_id || '","status":"Someone else is deploying ... try again later","exitcode":1}',l_website_id);
+            apex_json.open_object;
+            apex_json.write('success', TRUE);
+            apex_json.close_object;
+            RETURN;
+        END LOOP;
+
+
         DELETE website_deploy WHERE website_id=l_website_id AND site_id=l_site_id;
 
-        /* START UPLOAD FILE METHOD */
-
-        logDeployment('{"site_id":"' || l_site_id || '","status":"Submitting Deployment Job"}',l_website_id);
+        logDeployment('{"site_id":"' || l_site_id || '","status":"Preparing Deployment"}',l_website_id);
 
         l_job_name:=dbms_scheduler.generate_job_name('DEPLOY_');
         dbms_scheduler.create_job(
@@ -71,101 +79,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         apex_json.write('success', TRUE);
         apex_json.close_object;
 
-        RETURN;
-
-        /* ************************** */
-        /* HAVE TO USE PARAMETER HERE */
-        /* ************************** */
-
-        /* All content except first article, which is the home page, must have a navigation label */
-        SELECT COUNT(*)
-        INTO n
-        FROM
-        (
-            SELECT MIN(display_order) OVER () first_display_order, navigation_label, display_order
-            FROM website_article
-            WHERE website_id=l_website_id
-        )
-        WHERE navigation_label IS NULL
-        AND display_order<>first_display_order;
-
-        IF (n>0) THEN
-            logDeployment('{"site_id":"' || l_site_id || '","status":"Missing ' || n || ' Navigation Labels ... see View Options","exitcode":1}',l_website_id);
-            apex_json.open_object; 
-            apex_json.write('success', TRUE);
-            apex_json.close_object;
-            RETURN;
-        END IF;
-
-        /* Template must exist in Deploy repository */
-        SELECT template
-          INTO l_template
-          FROM website
-         WHERE id=l_website_id
-           AND user_id=l_session_data.user_id;
-
-        pck_api.callGithubAPI(pUserId=>l_session_data.user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_clob);
-        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT name FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (name)) WHERE name=l_template);
-        IF (n<>1) THEN
-            logDeployment('{"site_id":"' || l_site_id || '","status":"TEMPLATE INCONSISTENCY","exitcode":1}',l_website_id);
-            apex_json.open_object; 
-            apex_json.write('success', TRUE);
-            apex_json.close_object;
-            RETURN;
-        END IF;
-
-        /* Check no other session currently building */
-        IF (pck_api.setGithubCurrentBuild(l_session_data.user_id, l_session_data.session_id) IS NOT NULL) THEN
-            logDeployment('{"site_id":"' || l_site_id || '","status":"Someone else is deploying ... try again later","exitcode":1}',l_website_id);
-            apex_json.open_object;
-            apex_json.write('success', TRUE);
-            apex_json.close_object;
-            RETURN;
-        END IF;
-
-
-        logDeployment('{"site_id":"' || l_site_id || '","status":"Submitting Deployment Job"}',l_website_id);
-
-        /* Submit background job to run the deployment - can take some time depending on number of pages to build */
-        l_job_name:=dbms_scheduler.generate_job_name('DEPLOY_');
-        dbms_scheduler.create_job(
-            job_name   => l_job_name,
-            job_type   =>'STORED_PROCEDURE',
-            job_action =>'pck_deploy.runDeployment',
-            number_of_arguments=>5,
-            start_date=>systimestamp
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 1,
-            argument_value => l_website_id
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 2,
-            argument_value => l_session_data.user_id
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 3,
-            argument_value => l_session_data.app_id || ',' || l_session_data.session_id || ',' || l_session_data.page_id
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 4,
-            argument_value => pck_core.getRestUrl()
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 5,
-            argument_value => l_site_id
-        );
-        dbms_scheduler.enable(l_job_name);
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.close_object;
-
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error;
@@ -182,132 +95,95 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_file_name website_article.navigation_label%type;
         l_sha1 VARCHAR2(40);
         TYPE tt_files IS RECORD (
+            lastmod article.updated_date%type,
+            url VARCHAR2(200),
             file_name website_article.navigation_label%type,
             file_content CLOB
         );
         TYPE t_files IS TABLE OF tt_files INDEX BY VARCHAR2(40);
         l_deploy_files t_files;
+        l_sitemap CLOB;
+        l_robots CLOB;
+        n PLS_INTEGER:=0;
     BEGIN
         /* Get SHA1 of all files to be deployed */
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
 
-        FOR C IN (SELECT w.css, w.javascript, wa.navigation_label, a.body_html, ROW_NUMBER() OVER (ORDER BY wa.display_order) rn, COUNT(*) OVER () nb
-                    FROM website w, website_article wa, article a
+        FOR C IN (SELECT w.domain_name, w.css, w.javascript, 
+                         wa.page_title, wa.page_description, apex_string_util.get_slug(wa.navigation_label) path_name, 
+                         COALESCE(a.updated_date,a.created_date) lastmod, a.body_html, 
+                         u.name, ROW_NUMBER() OVER (ORDER BY wa.display_order) rn, COUNT(*) OVER () nb
+                    FROM website w, website_article wa, article a, users u
                    WHERE w.id=pWebsiteId
                      AND wa.website_id=w.id
                      AND wa.article_id=a.id
+                     AND u.id=w.user_id
                    ORDER BY wa.display_order)
         LOOP
-            l_page:='<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>' || C.css || '</style></head><body>' || C.body_html || '<script>' || C.javascript || '</script></body></html>';
+            l_page:='<!DOCTYPE HTML>' || chr(10) ||
+                    '<html>' || chr(10) ||
+                    '<head>' || chr(10) ||
+                        '<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">' || chr(10) || 
+                        '<title>' || C.page_title || '</title>' || chr(10) ||
+                        '<meta name="description" content=">' || C.page_description || '">' || chr(10) ||
+                        '<meta name="author" content=">' || C.name || '">' || chr(10) ||
+                        '<style>' || C.css || '</style>' || chr(10) || 
+                    '</head>' || chr(10) || 
+                    '<body>' || C.body_html || chr(10) ||
+                        '<script>' || C.javascript || '</script>' || chr(10) || 
+                    '</body>' || chr(10) || 
+                    '</html>';
             l_sha1:=LOWER(dbms_crypto.hash(src => l_page, typ => dbms_crypto.hash_sh1));
-            l_file_name:=CASE WHEN C.rn=1 THEN 'index' ELSE C.navigation_label END || '.html';
+            l_file_name:=CASE WHEN C.rn=1 THEN 'index' ELSE NVL(C.path_name,'Page_'||C.rn) END || '.html';
+
+            l_deploy_files(l_sha1).url:='https://www.' || C.domain_name || CASE WHEN C.rn>1 THEN '/' || NVL(C.path_name,'Page_'||C.rn) END;
+            l_deploy_files(l_sha1).lastmod:=C.lastmod;
             l_deploy_files(l_sha1).file_name:=l_file_name;
             l_deploy_files(l_sha1).file_content:=l_page;
             l_files.put(l_file_name, l_sha1);
         END LOOP;
+
+        /* Build sitemap.xml */
+
+        l_sitemap:='<?xml version="1.0" encoding="UTF-8"?>' || chr(10) || 
+                    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' || chr(10);
+
+        l_sha1:=l_deploy_files.FIRST;
+        WHILE (l_sha1 IS NOT NULL) LOOP
+            IF (l_sha1=l_deploy_files.FIRST) THEN
+                l_robots:='User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: ' || l_deploy_files(l_sha1).url || '/sitemap.xml';
+            END IF;
+            l_sitemap:=l_sitemap || 
+                '    <url>' || chr(10) || 
+                '        <loc>' || l_deploy_files(l_sha1).url || '</loc>' || chr(10) || 
+                '        <lastmod>' || TO_CHAR(l_deploy_files(l_sha1).lastmod,'YYYY-MM-DD') || '</lastmod>' || chr(10) || 
+                '    </url>' || chr(10);
+            l_sha1 := l_deploy_files.NEXT(l_sha1);
+        END LOOP;
+        l_sitemap:=l_sitemap || '</urlset>';
+
+        l_sha1:=LOWER(dbms_crypto.hash(src => l_sitemap, typ => dbms_crypto.hash_sh1));
+        l_deploy_files(l_sha1).file_name:='sitemap.xml';
+        l_deploy_files(l_sha1).file_content:=l_sitemap;
+        l_files.put('sitemap.xml', l_sha1);
+
+        l_sha1:=LOWER(dbms_crypto.hash(src => l_robots, typ => dbms_crypto.hash_sh1));
+        l_deploy_files(l_sha1).file_name:='robots.txt';
+        l_deploy_files(l_sha1).file_content:=l_robots;
+        l_files.put('robots.txt', l_sha1);
+
         l_json.put('files',l_files);
 
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId || '/deploys', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+        pck_core.log(l_clob);
 
-        FOR C IN (SELECT id, sha1 From JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$')))) LOOP
+        /* upload to Netlify if required - i.e. file content has changed since last deployment  */
+
+        FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
             logDeployment('{"site_id":"' || pSiteId || '","status":"Uploading ' || l_deploy_files(C.sha1).file_name || '"}',pWebsiteId);
             pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', pBody=>l_deploy_files(C.sha1).file_content, pData=>l_clob);
         END LOOP;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                logDeployment('{"site_id":"' || pSiteId || '","status":"' || SUBSTR(SQLERRM,1,100) || '", "exitcode": 1}',pWebsiteId);
-                pck_core.log_error;
-    END;
-
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pApexSession IN VARCHAR2, pRestURL IN VARCHAR2, pSiteId IN website.netlify_site_id%type) is
-        l_domain_name website.domain_name%type;
-        l_template website.template%type;
-        l_clob CLOB;
-        l_json_clob CLOB;
-
-        l_github_repos_owner users.github_repos_owner%type;
-        l_netlify_installation_id users.netlify_installation_id%type;
-        l_placeholder BLOB:=HEXTORAW('00');
-        l_repo_id INTEGER;
-        l_deploy_key_id VARCHAR2(40);
-        l_json JSON_OBJECT_T;
-        l_repo JSON_OBJECT_T;
-        l_action JSON_OBJECT_T;
-    BEGIN
-        logDeployment('{"site_id":"' || pSiteId || '","status":"Starting Deployment"}',pWebsiteId);
-
-        SELECT domain_name, template
-          INTO l_domain_name, l_template
-          FROM website
-         WHERE id=pWebsiteId
-           AND user_id=pUserId;
-
-
-        /* Github directory for the website must exist in DEPLOY repository in order to enable auto-deploy from Netlify */
-        /* Have to handle case where domain name changed after deploy so we don't keep unused directories */
-
-        pck_api.callGithubAPI(pUserId=>pUserId, pEndpoint=>'contents/'||l_domain_name, pMethod=>'GET', pStatusAllowed=>404, pData=>l_clob);
-        IF (apex_web_service.g_status_code=404) THEN
-            logDeployment('{"status":"Creating Github repository folder DEPLOY/' || l_domain_name || '"}',pWebsiteId);
-            l_json:=new JSON_OBJECT_T;
-            l_json.put('message','Commit by user id ' || pUserId);
-            l_json.put('content', APEX_WEB_SERVICE.BLOB2CLOBBASE64(l_placeholder)); /* Github insists on base64 string */
-            l_json_clob:=l_json.to_clob;
-            pck_api.callGithubAPI(pUserId=>pUserId, pEndpoint=>'contents/'||l_domain_name || '/.placeholder', pMethod=>'PUT', pBody=>l_json_clob, pData=>l_clob);
-        END IF;
-
-        /*
-        ** 1. Create Netlify Site with deployment id if not already exists
-        ** 2. Trigger Github action build
-        */
-        --logDeployment('{"status":"Creating site in Netlify"}',pWebsiteId);
-
-        /* get id of the DEPLOY github repository */
-        pck_api.callGithubAPI(pUserId=>pUserId, pEndpoint=>NULL, pMethod=>'GET', pData=>l_clob);
-        SELECT id INTO l_repo_id FROM JSON_TABLE(l_clob, '$' COLUMNS (id));
-
-        /* get netlify deploy id */
-        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'deploy_keys', pMethod=>'POST', pData=>l_clob);
-        SELECT id INTO l_deploy_key_id FROM JSON_TABLE(l_clob, '$' COLUMNS (id));
-
-        /* create JSON payload for new Netlify site */
-        l_repo:=new JSON_OBJECT_T;
-        l_repo.put('provider', 'github');
-        l_repo.put('repo_type', 'git');
-        l_repo.put('repo_id', l_repo_id);
-        l_repo.put('repo', pck_api.getGithubReposOwner(pUserId) || '/DEPLOY');
-        l_repo.put('repo_branch', 'main');
-        l_repo.put('private', FALSE);
-        l_repo.put('deploy_key_id', l_deploy_key_id);
-        l_repo.put('installation_id', pck_api.getNetlifyIntallationId(pUserId));
-        l_repo.put('base', l_domain_name);   
-
-        l_json:=new JSON_OBJECT_T;
-        l_json.put('repo', l_repo);
-
-        /* Link Netlify site to Github repository */
-        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId, pMethod=>'PATCH', pBody=>l_json.stringify, pData=>l_clob);
-        logDeployment('{"site_id":"' || pSiteId || '","status":"Netlify site linked to github"}',pWebsiteId);
-
-        /* trigger deployment by dispatching Github action */          
-        l_json:=new JSON_OBJECT_T;
-        l_json.put('event_type', 'trigger_build');
-
-        l_action:=new JSON_OBJECT_T;
-        l_action.put('build_path', l_domain_name);
-        l_action.put('template', l_template);
-        l_action.put('fetch_url', pRestURL || 'content/' || pWebsiteId);  
-        l_action.put('log_url', pRestURL || 'deploy-status/' || pWebsiteId);
-        l_action.put('apex_session', pApexSession);
-        l_action.put('site_id', pSiteId);
-        l_json.put('client_payload', l_action);
-
-        /* Note that Github API 'dispatches' endpoint does not send a response */
-        l_json_clob:=l_json.stringify;
-        logDeployment('{"site_id":"' || pSiteId || '","status":"Triggering github action to build site"}',pWebsiteId);
-        pck_api.callGithubAPI(pUserId=>pUserId, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json_clob, pData=>l_clob);
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -356,38 +232,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         SELECT site_id INTO l_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
 
-        /* If github action completed get latest Netlify deployment status and add this to the website_deploy table */
-
-        FOR C IN (SELECT wd.log_time
-                    FROM website w, website_deploy wd
-                   WHERE w.id=pWebsiteId 
-                     AND w.user_id=l_session_data.user_id
-                     AND wd.website_id=w.id
-                     AND wd.site_id=l_site_id
-                     AND wd.status='Github action completed - OK') 
+        /* Get latest deployment status */
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys', pMethod=>'GET', pData=>l_clob);
+        FOR C IN (SELECT state, ssl_url, error_message, created_at
+                    FROM JSON_TABLE(l_clob, '$[0]' COLUMNS (state, ssl_url, created_at, error_message))) 
         LOOP
-            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys', pMethod=>'GET', pData=>l_clob);
-
-            FOR C1 IN (SELECT state, ssl_url, error_message, created_at
-                         FROM JSON_TABLE(l_clob, '$[0]' COLUMNS (state, ssl_url, created_at, error_message))) 
-            LOOP
-                IF (to_timestamp(C1.created_at,'yyyy-mm-dd"T"hh24:mi:ss.ff3"Z"') >= C.log_time) THEN
-                    IF (C1.state='ready') THEN
-                        l_deployment_complete:=TRUE;
-                        l_ssl_url:=C1.ssl_url;
-                    END IF;
-                    l_netlify_status:='Netlify ' || C1.state;
-                    DELETE website_deploy WHERE website_id=pWebsiteId AND status LIKE l_netlify_status||'%' AND site_id=l_site_id;
-                    logDeployment('{"site_id":"' || l_site_id || '","status":"' || l_netlify_status || '","exitcode":' || CASE WHEN C1.error_message IS NULL THEN 0 ELSE 1 END || '}',pWebsiteId);
-                END IF;
-            END LOOP;
+            IF (C.state='ready') THEN
+                l_deployment_complete:=TRUE;
+                l_ssl_url:=C.ssl_url;
+            END IF;
+            logDeployment('{"site_id":"' || l_site_id || '","status":"' || 'Status is ' || C.state || '","exitcode":' || CASE WHEN C.error_message IS NULL THEN 0 ELSE 1 END || '}',pWebsiteId);
         END LOOP;
 
         /* return list of all deployment status to client */
-        FOR C IN (SELECT id, status, ROUND((next_log_time - log_time)*86400) ela_sec
+        FOR C IN (SELECT id, status, ROUND(EXTRACT (second FROM diff),1) ela_sec
                     FROM 
                         (
-                         SELECT id, status, log_time, NVL(LEAD(log_time) OVER (ORDER BY id),current_date) next_log_time
+                         SELECT id, status, NVL(LEAD(log_time) OVER (ORDER BY id),current_timestamp) - log_time as diff
                            FROM website_deploy 
                           WHERE website_id=pWebsiteId
                             AND site_id=l_site_id
@@ -402,36 +263,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END LOOP;
 
         IF (l_ssl_url IS NOT NULL) THEN
-            FOR C IN (SELECT ROUND((MAX(log_time)-MIN(log_time))*86400) total_elapsed FROM website_deploy WHERE website_id=pWebsiteId AND site_id=l_site_id) LOOP
+            FOR C IN (SELECT ROUND(EXTRACT (second FROM diff),1)  total_elapsed FROM 
+                        (SELECT MAX(log_time)-MIN(log_time) as diff FROM website_deploy WHERE website_id=pWebsiteId AND site_id=l_site_id) )
+            LOOP
                 l_status:=l_status || TO_CLOB('<span>DEPLOYMENT COMPLETE  - ' || C.total_elapsed || ' seconds</span><br>');
             END LOOP;
             l_status:=l_status || TO_CLOB('<a target="_blank" href="' || l_ssl_url || '">' || l_ssl_url || '<a>');
-        END IF;
-
-        IF (l_deployment_complete) THEN
-            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/unlink_repo', pMethod=>'PUT', pData=>l_clob);
-
-            /* Submit background job to delete Github build directory */
-            l_job_name:=dbms_scheduler.generate_job_name('DELETE_');
-
-            dbms_scheduler.create_job(
-                job_name   => l_job_name,
-                job_type   =>'STORED_PROCEDURE',
-                job_action =>'pck_deploy.deleteDirectory',
-                number_of_arguments=>2,
-                start_date=>systimestamp
-            );
-            dbms_scheduler.set_job_argument_value(
-                job_name => l_job_name,
-                argument_position => 1,
-                argument_value => pWebsiteId
-            );
-            dbms_scheduler.set_job_argument_value(
-                job_name => l_job_name,
-                argument_position => 2,
-                argument_value => l_session_data.user_id
-            );
-            dbms_scheduler.enable(l_job_name);
         END IF;
 
         apex_json.open_object; 
