@@ -212,8 +212,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
           FROM users u, apex_workspace_developers w 
          WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
            AND w.is_admin='Yes'
-           AND w.email=u.email;
+           AND w.email=u.email
+           FETCH FIRST ROW ONLY;
 
+        /* Required because Oracle OCI does not allow approved sender email to be "gmail", "hotmail" etc */
         SELECT email 
           INTO l_email_sender
           FROM users 
@@ -278,6 +280,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         FOR C IN (SELECT id FROM JSON_TABLE(l_clob, '$.workflow_runs[*]' COLUMNS(id))) LOOP
             pck_api.callGithubAPI(pUserId=>44, pEndpoint=>'actions/runs/' || C.id, pMethod=>'DELETE', pData=>l_delete);
         END LOOP;
+
+        /*
+        **   5. Delete log older than 24 hours
+        */
+        DELETE log WHERE log_date<current_timestamp-1;
+
 
         EXCEPTION
             WHEN OTHERS THEN
