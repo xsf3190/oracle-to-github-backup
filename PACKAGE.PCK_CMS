@@ -146,14 +146,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      ** Insert row in session_data table when user views home page.
      */
     PROCEDURE setClientInfo(pBodyText IN CLOB) IS
-        l_bodytext CLOB:=pBodyText;
         l_ip_address session_data.ip_address%type;
     BEGIN
-        pck_core.log(l_bodytext);
         l_ip_address:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
         INSERT INTO session_data (session_id, timezone, maxtouchpoints, supports_popover, ip_address)
         SELECT session_id, timezone, maxtouchpoints, supports_popover, l_ip_address
-            FROM JSON_TABLE(l_bodytext FORMAT JSON, '$[*]' COLUMNS (session_id, timezone, maxtouchpoints, supports_popover));
+            FROM JSON_TABLE(pBodyText FORMAT JSON, '$[*]' COLUMNS (session_id, timezone, maxtouchpoints, supports_popover));
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
