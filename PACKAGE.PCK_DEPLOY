@@ -122,9 +122,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                    ORDER BY wa.display_order)
         LOOP
             l_page:='<!DOCTYPE HTML>' || chr(10) ||
-                    '<html>' || chr(10) ||
+                    '<html lang="en">' || chr(10) ||
                     '<head>' || chr(10) ||
-                        '<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">' || chr(10) || 
+                        '<meta charset="UTF-8">' || chr(10) ||
+                        '<meta name="viewport" content="width=device-width, initial-scale=1.0">' || chr(10) || 
                         '<title>' || C.page_title || '</title>' || chr(10) ||
                         '<meta name="description" content=">' || C.page_description || '">' || chr(10) ||
                         '<meta name="author" content=">' || C.name || '">' || chr(10) ||
