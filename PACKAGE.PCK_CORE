@@ -602,7 +602,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         /* Get templates from Administrator's github DEPLOY repository. Do it now so we can print at least the <nav> in case templates are not defined.
         ** Data returned in variable l_temmplates which we use to build the radio controls later in the code
          */
-        pck_api.callGithubAPI(pUserId=>l_session_data.user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_templates);
+        --pck_api.callGithubAPI(pUserId=>l_session_data.user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_templates);
 
         SELECT w.id, w.domain_name, w.template, w.font, w.favicon_url, w.contact_email, w.css, w.javascript, w.netlify_site_id, w.netlify_site_id_custom
           BULK COLLECT INTO l_domains
@@ -673,6 +673,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </div>';
 
         /* TEMPLATES are directory names and returned as array in alphabetic order */
+        /*
         FOR C IN (SELECT name FROM JSON_TABLE(l_templates, '$[*]' COLUMNS (name))) LOOP
             l_template_html:=l_template_html || 
             '<div>
@@ -681,8 +682,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </input> <label for="template-' || LOWER(C.name) || '">' || C.name || '</label>
             </div>';
         END LOOP;
+        */
 
         /* FONTS are Google font family names */
+        /*
         FOR C IN (SELECT name FROM website_font ORDER BY name) LOOP
             l_font_html:=l_font_html || 
             '<div>
@@ -691,14 +694,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </input> <label for="font-' || LOWER(C.name) || '">' || C.name || '</label>
             </div>';
         END LOOP;
+        */
 
         l_clob:=l_clob || TO_CLOB('
         <form class="website" data-id="' || l_domains(1).id || '">' ||
             buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
-            buildRadioWrapper('website.template',l_template_html, l_session_data.canuse_popover) ||
-            buildRadioWrapper('website.font',l_font_html, l_session_data.canuse_popover) ||
-            buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email, l_session_data.canuse_popover) || '
-            <fieldset class="deploy-buttons">
+            --buildRadioWrapper('website.template',l_template_html, l_session_data.canuse_popover) ||
+            --buildRadioWrapper('website.font',l_font_html, l_session_data.canuse_popover) ||
+            --buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email, l_session_data.canuse_popover) || 
+            '<fieldset class="deploy-buttons">
                 <legend>Build & Deploy Website</legend>
                 <div>' ||
                 buildDeployButtons(l_domains(1).domain_name, l_domains(1).netlify_site_id, l_domains(1).netlify_site_id_custom) ||
