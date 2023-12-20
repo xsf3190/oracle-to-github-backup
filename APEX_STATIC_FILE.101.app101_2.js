@@ -16,7 +16,6 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       website = document.querySelector("form.website"),
       domainName = website.querySelector("#domain_name"),
       domainNameResult = domainName.nextElementSibling.querySelector(".result"),
-      contactEmail = website.querySelector("#contact_email"),
       css = website.querySelector("#css"),
       javascript = website.querySelector("#javascript"),
       newWebsite = website.querySelector(".new-website"),
@@ -230,7 +229,6 @@ const edit_website = (e) => {
         }
 
         domainName.value = data.domain_name;
-        contactEmail.value = data.contact_email ? data.contact_email : "";
 
         for (let i = 0; i < inputs.length; i++) {
             if (inputs[i].type === "textarea") {
@@ -243,9 +241,6 @@ const edit_website = (e) => {
             }
         }
 
-        if (data.template) {
-            document.getElementById(data.template).checked = true;
-        }
         deployButtons.replaceChildren();
         deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
 
