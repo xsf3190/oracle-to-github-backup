@@ -38,6 +38,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN CLOB, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
+    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
+    --
     FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pCanUsePopover IN BOOLEAN, pTimezone IN session_data.timezone%type, pViewOption IN VARCHAR2 DEFAULT NULL, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB;
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
@@ -231,6 +233,47 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <div class="button-container">
                 <span class="result"></span>
                 <span class="charcounter">' || NVL(LENGTH(pValue),0) || CASE WHEN l_data_type<>'CLOB' THEN '/' || l_data_length END || '</span>
+            </div>
+        </div>');
+    END;
+
+    /*
+     **  Create wrapper html for textarea element, optionally including dropdown
+     */
+    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB IS
+        l_table_name user_tab_columns.table_name%type;
+        l_column_name user_tab_columns.column_name%type;
+        l_data_length user_tab_columns.data_length%type;
+        l_comments user_col_comments.comments%type;
+        l_data_type user_tab_columns.data_type%type;
+    BEGIN
+        l_table_name:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
+        l_column_name:=UPPER(SUBSTR(pColumn,INSTR(pColumn,'.')+1));
+
+        SELECT c.data_length, NVL(i.comments,'Info not defined yet'), c.data_type
+          INTO l_data_length, l_comments, l_data_type
+          FROM user_tab_columns c, user_col_comments i
+         WHERE c.table_name=l_table_name
+           AND c.column_name=l_column_name
+           AND i.table_name=c.table_name
+           AND i.column_name=c.column_name;
+
+        l_column_name:=LOWER(l_column_name);
+
+        RETURN('
+        <div class="input-wrapper">' ||
+            CASE WHEN pDropdown IS NOT NULL THEN '<div class="button-container">' END || '
+            <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
+                CASE WHEN pCanUsePopover 
+                        THEN '<button type="button" popovertarget="' || l_column_name || '_popover"><svg class="icon"><use href="#info"></use></svg></button>
+                              <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' END ||'
+            </label>' || pDropdown || 
+            CASE WHEN pDropdown IS NOT NULL THEN '</div>' END || '
+            <input placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
+                '" maxlength="' || l_data_length || '" size="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '" data-id="' || pId || '">
+            <div class="button-container">
+                <span class="result"></span>
+                <span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</span>
             </div>
         </div>');
     END;
@@ -698,7 +741,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         l_clob:=l_clob || TO_CLOB('
         <form class="website" data-id="' || l_domains(1).id || '">' ||
-            buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
+            buildInputWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
             --buildRadioWrapper('website.template',l_template_html, l_session_data.canuse_popover) ||
             --buildRadioWrapper('website.font',l_font_html, l_session_data.canuse_popover) ||
             --buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email, l_session_data.canuse_popover) || 
@@ -713,10 +756,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <input type="hidden" name="data" value="">
         </form>
         <hr>
-        <nav>
-            <button type="button" class="cta new-content" style="--width:20ch"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
-                <span style="--content:''\002B''">NEW CONTENT</span>
+        <fieldset>
+            <legend>CREATE NEW</legend>
+            <button type="button" class="cta new-content"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
+                <span style="--content:''\2192''">PAGE</span>
             </button>
+            <button type="button" class="cta new-blog"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
+                <span style="--content:''\2192''">BLOG</span>
+            </button>
+            <button type="button" class="cta new-portfolio"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
+                <span style="--content:''\2192''">PORTFOLIO</span>
+            </button>
+        </fieldset>
+        <nav class="website-nav-menu">
+            <a href="">Home</a>
+            <a href="">Me Counsellor</a>
+            <a href="">You (Client)</a>
+            <a href="">Practicalities</a>
+            <a href="">Room</a>
+            <a href="">Contact</a>
+            <a href="">Problem</a>
         </nav>
         <ul class="cards">' || buildWebsiteArticles(l_domains(1).id, l_session_data.canuse_popover, l_session_data.timezone) || '
         </ul>');
