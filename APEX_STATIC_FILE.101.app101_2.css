@@ -114,6 +114,13 @@ nav:has(.cta) {
     justify-content: space-between;
 }
 
+nav.website-nav-menu {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    justify-content: center;
+}
+
 form.website {
     display: flex;
     flex-wrap: wrap;
@@ -270,6 +277,10 @@ input[type="radio"]:checked {
 .cluster label {
     display: initial;
     font-weight: initial;
+}
+
+fieldset {
+    width: fit-content;
 }
 
 legend {
@@ -514,8 +525,9 @@ dialog.log tr {
 }
 
 .dropdown .dropdown-items {
-    max-height: 0;
-    transition: 0.5s linear;
+    transition: 0.5s ease-in-out;
+    visibility: hidden;
+    opacity: 0;
     overflow: hidden;
     font-size: 85%;
     position: absolute;
@@ -529,8 +541,8 @@ dialog.log tr {
 }
 
 .dropdown .dropdown-items.visible {
-    /*display: block;*/
-    max-height:100dvh;
+    visibility: visible;
+    opacity: 1;
     padding: 1ch;
     border: var(--color-solid) solid 1px;
 }
