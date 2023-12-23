@@ -48,7 +48,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
 **  TEXT INPUT COMPONENT
 */
 const inputHandler = (e) => {
-    if (e.target.tagName !== "TEXTAREA") return;
+    if (e.target.tagName !== "TEXTAREA" && e.target.tagName !== "INPUT") return;
 
     if (e.target.id==="domain_name") {
         e.target.value = e.target.value.replace(/[^a-z0-9.]/gi, "");
