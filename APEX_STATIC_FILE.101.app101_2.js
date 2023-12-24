@@ -21,6 +21,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       newWebsite = website.querySelector(".new-website"),
       //copyWebsite = website.querySelector(".copy-website"),
       deployButtons = website.querySelector(".deploy-buttons > div"),
+      websiteNavMenu = container.querySelector(".website-nav-menu"),
       newContent = document.querySelector(".new-content"),
       cards = document.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
@@ -74,7 +75,7 @@ const inputHandler = (e) => {
 
 const focusHandler = (e) => {
     let result;
-    if (e.target.tagName == "TEXTAREA") {
+    if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT") {
         result = e.target.nextElementSibling.querySelector(".result");
     } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
         result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
@@ -87,7 +88,7 @@ const focusHandler = (e) => {
 
 const changeHandler = (e) => {
     let result;
-    if (e.target.tagName == "TEXTAREA") {
+    if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT") {
         result = e.target.nextElementSibling.querySelector(".result");
     } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
         result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
@@ -606,6 +607,12 @@ const clickHandler = (e) => {
     
     if (!open && e.target.matches(".show-dropdown")) {
         e.target.nextElementSibling.classList.toggle("visible");
+    }
+
+    if (e.target.matches(".nav-label")) {
+        e.preventDefault();
+        get_page(e.target.dataset.id);
+        return;
     }
 
     const card = e.srcElement.closest(".card");
@@ -1151,7 +1158,17 @@ const edit_field = (id, e) => {
 }
 
 /* 
- ** EGET WEBSITE ARTICLE ASSETS TO OPEN IN CODEPEN
+ ** GET WEBSITE ARTICLE ASSETS TO OPEN IN CODEPEN
+ */
+const get_page = (id, e) => {
+    execProcess( "article/"+website.dataset.id+","+id,"GET").then( (data) => {
+        const pageContent = container.querySelector(".page-content");
+        pageContent.innerHTML = data.html;
+    });
+}
+
+/* 
+ ** GET WEBSITE ARTICLE ASSETS TO OPEN IN CODEPEN
  */
 const edit_codepen = (id, e) => {
     const form = container.querySelector("[action='https://codepen.io/pen/define']");
