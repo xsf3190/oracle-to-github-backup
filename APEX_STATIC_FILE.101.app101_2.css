@@ -114,7 +114,7 @@ nav:has(.cta) {
     justify-content: space-between;
 }
 
-nav.website-nav-menu {
+nav.website-nav-menu > ul {
     display: flex;
     gap: 1rem;
     margin-top: 2rem;
@@ -147,6 +147,7 @@ textarea {
 .textarea-wrapper, radio-wrapper {
     display: flex;
     flex-direction: column;
+    padding: 1rem;
 }
 
 ul {
@@ -608,10 +609,28 @@ nav button {
 }
 
 .cards {
+    /*
     display: grid;
-    list-style-type: none;
     grid-template-columns: repeat(auto-fill,minmax(min(var(--card-width), 100%), 1fr));
-    gap: 3ch;
+    */
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2ch;
+        resize: both;
+    overflow: auto;
+}
+
+.cards > li:nth-of-type(1) {
+    border: solid 1ch pink;
+    flex-basis: 30ch;
+    flex-grow: 1;
+}
+
+.cards > li:nth-of-type(2) {
+    border: solid 1ch red;
+    flex-basis: 0;
+    flex-grow: 999;
+    min-inline-size: 50%;
 }
 
 .card {
