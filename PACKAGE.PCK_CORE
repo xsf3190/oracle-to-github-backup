@@ -270,7 +270,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </label>' || pDropdown || 
             CASE WHEN pDropdown IS NOT NULL THEN '</div>' END || '
             <input placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
-                '" maxlength="' || l_data_length || '" size="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '" data-id="' || pId || '">
+                '" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '" data-id="' || pId || '">
             <div class="button-container">
                 <span class="result"></span>
                 <span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</span>
@@ -314,6 +314,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <span class="result"></span><span>&nbsp;</span>
                 </div>
             </div>');
+    END;
+
+    FUNCTION buildNavLabels(pWebsiteId IN website.id%type) RETURN VARCHAR2 IS
+        l_nav_labels LONG;
+    BEGIN
+        l_nav_labels:='<ul>';
+        FOR C IN (SELECT article_id, navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
+            l_nav_labels:=l_nav_labels || '<li><a href="#" class="nav-label" data-id="' || C.article_id || '">' || C.navigation_label || '</a></li>';
+        END LOOP;
+        l_nav_labels:=l_nav_labels || '</ul>';
+        RETURN l_nav_labels;
     END;
 
     /*
@@ -768,18 +779,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <span style="--content:''\2192''">PORTFOLIO</span>
             </button>
         </fieldset>
-        <nav class="website-nav-menu">
-            <a href="">Home</a>
-            <a href="">Me Counsellor</a>
-            <a href="">You (Client)</a>
-            <a href="">Practicalities</a>
-            <a href="">Room</a>
-            <a href="">Contact</a>
-            <a href="">Problem</a>
+        <nav class="website-nav-menu">' || buildNavLabels(l_domains(1).id) || '
         </nav>
-        <ul class="cards">' || buildWebsiteArticles(l_domains(1).id, l_session_data.canuse_popover, l_session_data.timezone) || '
+        <ul class="cards">
+            <li>' 
+            || buildTextareaWrapper(l_domains(1).id, 'website_article.page_title', '', l_session_data.canuse_popover) 
+            || buildTextareaWrapper(l_domains(1).id, 'website_article.page_description', '', l_session_data.canuse_popover) 
+            || '</li>
+            <li class="page-content"></li>
         </ul>');
-
+        -- ' || buildWebsiteArticles(l_domains(1).id, l_session_data.canuse_popover, l_session_data.timezone) || '
         l_clob:=l_clob || TO_CLOB('
         <dialog class="popup">
             <div>
