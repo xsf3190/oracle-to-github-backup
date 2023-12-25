@@ -147,7 +147,6 @@ textarea {
 .textarea-wrapper, radio-wrapper {
     display: flex;
     flex-direction: column;
-    padding: 1rem;
 }
 
 ul {
@@ -281,7 +280,10 @@ input[type="radio"]:checked {
 }
 
 fieldset {
-    width: fit-content;
+    /*width: fit-content;*/
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
 legend {
@@ -616,21 +618,26 @@ nav button {
     display: flex;
     flex-wrap: wrap;
     gap: 2ch;
-        resize: both;
+    resize: both;
     overflow: auto;
 }
 
-.cards > li:nth-of-type(1) {
-    border: solid 1ch pink;
+.cards > div:nth-of-type(1) {
+    border: solid 0.25ch pink;
     flex-basis: 30ch;
     flex-grow: 1;
 }
 
-.cards > li:nth-of-type(2) {
-    border: solid 1ch red;
+.cards > div:nth-of-type(1) > *{
+    margin: 1rem;
+}
+
+.cards > div:nth-of-type(2) {
+    border: solid 0.25ch red;
     flex-basis: 0;
     flex-grow: 999;
     min-inline-size: 50%;
+    margin-inline-end: 1rem;
 }
 
 .card {
