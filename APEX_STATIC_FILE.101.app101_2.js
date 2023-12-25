@@ -22,6 +22,8 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       //copyWebsite = website.querySelector(".copy-website"),
       deployButtons = website.querySelector(".deploy-buttons > div"),
       websiteNavMenu = container.querySelector(".website-nav-menu"),
+      pageContent = container.querySelector(".page-content"),
+      shadow = pageContent.attachShadow({mode: 'open'}),
       newContent = document.querySelector(".new-content"),
       cards = document.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
@@ -611,9 +613,15 @@ const clickHandler = (e) => {
 
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
-        get_page(e.target.dataset.id);
-        return;
-    }
+        gArticleId = e.target.dataset.id
+        get_page();
+    } else if (e.target.matches(".edit-codepen")) {
+        edit_codepen();   
+    } else if (e.target.matches(".upload-codepen")) {
+        upload_codepen();                                                                                                                 
+    } 
+
+    return;
 
     const card = e.srcElement.closest(".card");
     const id = card ? card.dataset.id : website.dataset.id;
@@ -630,10 +638,6 @@ const clickHandler = (e) => {
         edit_text(id,e.srcElement);   
     } else if (e.target.matches(".edit-field")) {
         edit_field(id, e); 
-    } else if (e.target.matches(".edit-codepen")) {
-        edit_codepen(id, e);   
-    } else if (e.target.matches(".upload-codepen")) {
-        upload_codepen(id, e);                                                                                                                 
     } else if (e.target.matches(".fullscreen")) {
         showFullScreen(e);                                 
     } else if (e.target.matches(".edit-website")) {
@@ -1160,20 +1164,22 @@ const edit_field = (id, e) => {
 /* 
  ** GET WEBSITE ARTICLE ASSETS TO OPEN IN CODEPEN
  */
-const get_page = (id, e) => {
-    execProcess( "article/"+website.dataset.id+","+id,"GET").then( (data) => {
-        const pageContent = container.querySelector(".page-content");
-        pageContent.innerHTML = data.html;
+const get_page = () => {
+    execProcess( "article/"+website.dataset.id+","+gArticleId,"GET").then( (data) => {
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(data.css);
+        shadow.adoptedStyleSheets = [sheet];
+        shadow.innerHTML = data.html;
     });
 }
 
 /* 
  ** GET WEBSITE ARTICLE ASSETS TO OPEN IN CODEPEN
  */
-const edit_codepen = (id, e) => {
+const edit_codepen = () => {
     const form = container.querySelector("[action='https://codepen.io/pen/define']");
 
-    execProcess( "article/"+website.dataset.id+","+id,"GET").then( (data) => {
+    execProcess( "article/"+website.dataset.id+","+gArticleId,"GET").then( (data) => {
         let formdata = {
             title: data.domain_name,
             html: data.html,
@@ -1192,7 +1198,7 @@ const edit_codepen = (id, e) => {
 /* 
  ** UPLOAD ZIPFILE EXPORTED TO LOCAL FILESYSTEM FROM CODEPEN
  */
-const upload_codepen = async (id, e) => {
+const upload_codepen = async () => {
     const options = {
         types: [
         {
@@ -1212,7 +1218,7 @@ const upload_codepen = async (id, e) => {
     
     const file = await fileHandle.getFile();
 
-    execProcess( "content/"+website.dataset.id+","+id,"POST",file).then( (data) => {
+    execProcess( "content/"+website.dataset.id+","+gArticleId,"POST",file).then( (data) => {
         popupOpen("CODEPEN UPLOAD COMPLETED",data.message);
     });
 }
