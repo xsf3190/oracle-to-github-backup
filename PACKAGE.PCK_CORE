@@ -781,13 +781,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </fieldset>
         <nav class="website-nav-menu">' || buildNavLabels(l_domains(1).id) || '
         </nav>
-        <ul class="cards">
-            <li>' 
+        <div class="cards">
+            <div>
+                <fieldset>
+                    <legend>Codepen Editor</legend>
+                    <button type="button" class="cta edit-codepen" data-column="article.body_html">
+                        <svg class="icon"><use href="#codepen"></use></svg>
+                        Open Editor
+                    </button>
+                    <button type="button" class="cta upload-codepen" data-column="article.body_html">
+                        <svg class="icon"><use href="#upload"></use></svg>
+                        Upload Exported Zip
+                    </button>
+                </fieldset>' 
             || buildTextareaWrapper(l_domains(1).id, 'website_article.page_title', '', l_session_data.canuse_popover) 
             || buildTextareaWrapper(l_domains(1).id, 'website_article.page_description', '', l_session_data.canuse_popover) 
-            || '</li>
-            <li class="page-content"></li>
-        </ul>');
+            || '
+            </div>
+            <div class="page-content">
+            </div>
+        </div>');
         -- ' || buildWebsiteArticles(l_domains(1).id, l_session_data.canuse_popover, l_session_data.timezone) || '
         l_clob:=l_clob || TO_CLOB('
         <dialog class="popup">
