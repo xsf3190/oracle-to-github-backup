@@ -786,12 +786,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <fieldset>
                     <legend>Codepen Editor</legend>
                     <button type="button" class="cta edit-codepen" data-column="article.body_html">
-                        <svg class="icon"><use href="#codepen"></use></svg>
-                        Open Editor
+                        <span style="--content:''\2192''">Open Editor</span>
                     </button>
                     <button type="button" class="cta upload-codepen" data-column="article.body_html">
-                        <svg class="icon"><use href="#upload"></use></svg>
-                        Upload Exported Zip
+                        <span style="--content:''\2192''">Upload Exported Zip</span>
                     </button>
                 </fieldset>' 
             || buildTextareaWrapper(l_domains(1).id, 'website_article.page_title', '', l_session_data.canuse_popover) 
