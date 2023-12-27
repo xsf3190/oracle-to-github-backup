@@ -201,7 +201,7 @@ const transitionEditor = () => {
 
 /*
  **  NEW CONTENT
- */
+
 newContent.addEventListener("click",  () => {
     gArticleId = 0;
     editor.setData("");
@@ -619,6 +619,8 @@ const clickHandler = (e) => {
         edit_codepen();   
     } else if (e.target.matches(".upload-codepen")) {
         upload_codepen();                                                                                                                 
+    } else if (e.target.matches(".edit-text")) {
+        edit_text();   
     } 
 
     return;
@@ -1050,7 +1052,7 @@ const saveData = async ( data ) => {
 let editor;
 
 ClassicEditor.create(document.querySelector("#editor"), {
-        toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote','insertImage','codeBlock','style', ],
+        toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','style', 'sourceEditing'],
         autosave: {
             waitingTime: 2000,
             save( editor ) {
@@ -1085,9 +1087,9 @@ ClassicEditor.create(document.querySelector("#editor"), {
         const wordCountWrapper = document.getElementById( 'word-count' );
         wordCountWrapper.appendChild( wordCountPlugin.wordCountContainer );
 
-        const imgFileSelector = document.querySelector("input[type=file]");
-        const imgBtn = imgFileSelector.previousElementSibling;
-        imgBtn.disabled=true;
+        //const imgFileSelector = document.querySelector("input[type=file]");
+        //const imgBtn = imgFileSelector.previousElementSibling;
+        //imgBtn.disabled=true;
     })
     .catch(error => {
         console.error(error);
@@ -1121,17 +1123,17 @@ const upload_media = (articleId) => {
 //const editorDialog = document.querySelector("dialog.editor");
 
 
-const edit_text = (articleId,button) => {
+const edit_text = () => {
     const pendingActions = editor.plugins.get( 'PendingActions' );
     if ( pendingActions.hasAny ) {
         return;
     }
-    execProcess( "article/"+articleId,"GET").then( (data) => {
-        gArticleId = articleId;
+    execProcess( "article/"+gArticleId,"GET").then( (data) => {
         editor_status = "init";
         editor_status_text.textContent = "";
-        if (data.content) {
-            editor.setData(data.content);
+        console.log(data);
+        if (data.html) {
+            editor.setData(data.html);
         } else {
             editor.setData("");
         }
@@ -1220,6 +1222,7 @@ const upload_codepen = async () => {
 
     execProcess( "content/"+website.dataset.id+","+gArticleId,"POST",file).then( (data) => {
         popupOpen("CODEPEN UPLOAD COMPLETED",data.message);
+        get_page();
     });
 }
 
