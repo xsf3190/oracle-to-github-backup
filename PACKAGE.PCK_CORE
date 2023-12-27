@@ -175,21 +175,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_html VARCHAR2(1000);
         l_text VARCHAR2(50);
         l_text_custom VARCHAR2(50);
-        l_width VARCHAR2(50);
     BEGIN
 
         l_text:='https://' || REPLACE(pDomainName,'.','-') || '.netlify.app';
-        l_width:='style="--width:' || LENGTH(l_text) || 'ch';
 
         IF (pNetlifySiteId IS NOT NULL) THEN 
             l_html:=
-            '<button type="button" class="deploy-website cta" data-site_id="' || pNetlifySiteId || '" '|| l_width || '">
-                <span style="--content:''\2192''">' || l_text || '</span>
+            '<button type="button" class="deploy-website pushable" data-site_id="' || pNetlifySiteId || '">
+                <span class="shadow"></span>
+                    <span class="edge"></span>
+                    <span class="front">' || l_text || '</span>
              </button>';
             IF (pNetlifySiteIdCustom IS NOT NULL) THEN 
                 l_html:=l_html || 
-                '<button type="button" class="deploy-website cta" data-site_id="'|| pNetlifySiteIdCustom || '" ' || l_width || '">
-                    <span style="--content:''\2192''">https://www.' || pDomainName || '</span>
+                '<button type="button" class="deploy-website pushable" data-site_id="'|| pNetlifySiteIdCustom || '">
+                    <span class="shadow"></span>
+                    <span class="edge"></span>
+                    <span class="front">https://www.' || pDomainName || '</span>
                  </button>';
             END IF;
         END IF;
@@ -767,31 +769,30 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <input type="hidden" name="data" value="">
         </form>
         <hr>
-        <fieldset>
-            <legend>CREATE NEW</legend>
-            <button type="button" class="cta new-content"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
-                <span style="--content:''\2192''">PAGE</span>
-            </button>
-            <button type="button" class="cta new-blog"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
-                <span style="--content:''\2192''">BLOG</span>
-            </button>
-            <button type="button" class="cta new-portfolio"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
-                <span style="--content:''\2192''">PORTFOLIO</span>
-            </button>
-        </fieldset>
-        <nav class="website-nav-menu">' || buildNavLabels(l_domains(1).id) || '
+        <nav class="website-nav-menu">
+            <button type="button" class="deploy-website pushable">
+                <span class="shadow"></span>
+                <span class="edge"></span>
+                <span class="front">NEW PAGE</span>
+            </button>' || buildNavLabels(l_domains(1).id) || '
         </nav>
         <div class="cards">
             <div>
-                <fieldset>
-                    <legend>Codepen Editor</legend>
-                    <button type="button" class="cta edit-codepen" data-column="article.body_html">
-                        <span style="--content:''\2192''">Open Editor</span>
-                    </button>
-                    <button type="button" class="cta upload-codepen" data-column="article.body_html">
-                        <span style="--content:''\2192''">Upload Exported Zip</span>
-                    </button>
-                </fieldset>' 
+                <button type="button" class="pushable edit-codepen">
+                    <span class="shadow"></span>
+                    <span class="edge"></span>
+                    <span class="front">EDIT IN CODEPEN</span>
+                </button>
+                <button type="button" class="pushable upload-codepen">
+                    <span class="shadow"></span>
+                    <span class="edge"></span>
+                    <span class="front">UPLOAD CODEPEN ZIP</span>
+                </button>
+                <button type="button" class="pushable edit-text">
+                    <span class="shadow"></span>
+                    <span class="edge"></span>
+                    <span class="front">EDIT TEXT</span>
+                </button>' 
             || buildTextareaWrapper(l_domains(1).id, 'website_article.page_title', '', l_session_data.canuse_popover) 
             || buildTextareaWrapper(l_domains(1).id, 'website_article.page_description', '', l_session_data.canuse_popover) 
             || '
