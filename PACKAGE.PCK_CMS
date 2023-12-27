@@ -871,7 +871,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             AND w.user_id=l_session_data.user_id
             AND a.id=l_id_2
             AND a.author_user_id=l_session_data.user_id;
-        ELSIF (l_session_data.page_id=1) THEN
+        ELSE
             SELECT body_html INTO l_body_html
               FROM article
              WHERE id=l_id_1;
