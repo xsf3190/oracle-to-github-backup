@@ -78,6 +78,7 @@ const inputHandler = (e) => {
 const focusHandler = (e) => {
     let result;
     if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT") {
+        console.log(e);
         result = e.target.nextElementSibling.querySelector(".result");
     } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
         result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
@@ -306,7 +307,6 @@ updateDeploymentStatus = (websiteid, siteid) => {
 document.querySelector("button.close-editor").addEventListener("click", (e) => {
     editorContainer.style.visibility = "hidden";
     cards.style.filter = "none";
-    newContent.disabled = false;
 });
 
 /*
@@ -1079,6 +1079,16 @@ ClassicEditor.create(document.querySelector("#editor"), {
                     classes: [ 'with-border' ]
                 },
             ]
+        },
+        htmlSupport: {
+            allow: [
+                {
+                    name: /.*/,
+                    attributes: true,
+                    classes: true,
+                    styles: true
+                }
+            ]
         }
     })
     .then( (newEditor) => {
@@ -1131,7 +1141,6 @@ const edit_text = () => {
     execProcess( "article/"+gArticleId,"GET").then( (data) => {
         editor_status = "init";
         editor_status_text.textContent = "";
-        console.log(data);
         if (data.html) {
             editor.setData(data.html);
         } else {
