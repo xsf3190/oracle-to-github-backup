@@ -22,21 +22,18 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       //copyWebsite = website.querySelector(".copy-website"),
       deployButtons = website.querySelector(".deploy-buttons > div"),
       websiteNavMenu = container.querySelector(".website-nav-menu"),
-      pageContent = container.querySelector(".page-content"),
-      shadow = pageContent.attachShadow({mode: 'open'}),
-      newContent = document.querySelector(".new-content"),
-      cards = document.querySelector(".cards"),
+      newPage = container.querySelector(".new-page"),
+      cards = container.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
       confirm = container.querySelector("dialog.delete-confirm"),
       confirmBtn = confirm.querySelector(".confirmBtn"),
       editField = container.querySelector("dialog.edit-field"),
       editorContainer = container.querySelector("div.editor"),
-      gallery = document.querySelector("dialog.gallery"),
-      galleryInstruction = gallery.querySelector(".instruction"),
+      gallery = container.querySelector(".gallery-container"),
       galleryList = gallery.querySelector("ul"),
-      galleryFull = gallery.querySelector(".gallery-overlay"),
-      galleryFullImg = galleryFull.querySelector("img");
+      galleryFull = container.querySelector(".gallery-overlay"),
+      galleryFullImg = galleryFull.querySelector("img"),
       galleryFullCounter = galleryFull.querySelector("span.counter"),
       galleryFullClose = galleryFull.querySelector("button.close-fullscreen"),
       galleryFullPrev = galleryFull.querySelector("button.prev"),
@@ -76,14 +73,13 @@ const inputHandler = (e) => {
 }
 
 const focusHandler = (e) => {
+    if (!e.target.matches(".cms")) return;
+
     let result;
     if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT") {
-        console.log(e);
         result = e.target.nextElementSibling.querySelector(".result");
     } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
         result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
-    } else {
-        return;
     }
     result.textContent = "";
     result.style.opacity = "0";
@@ -164,57 +160,6 @@ newWebsite.addEventListener("click",  () => {
         cards.replaceChildren();
         domainName.focus();
     },1000);
-});
-
-/*
- **  COPY WEBSITE
- */
-/*
-copyWebsite.addEventListener("click",  () => {
-    const websiteId = website.dataset.id;
-    execProcess( "website/"+websiteId,"POST").then( (data) => {
-        domainName.value = data.domain_name;
-        
-        website.querySelectorAll("[data-id]").forEach((item) => {
-            item.dataset.id=data.website_id;
-        });        
-        
-        cards.querySelectorAll("[data-id*=',']").forEach((item) => {
-            const original_id = item.dataset.id;
-            item.dataset.id=original_id.replace(websiteId+",",data.website_id+",");
-        });
-
-        website.dataset.id=data.website_id;
-        
-        domainNameResult.style.opacity = "1";
-        domainNameResult.textContent = "WEBSITE COPIED";
-        //domain_name.focus();
-    });
-});
-*/
-
-const transitionEditor = () => {
-  editorContainer.style.visibility = "visible";
-  editorContainer.style.transform = "translate(-50%)";
-  cards.style.filter = "blur(5px)";
-  newContent.disabled = true;
-};
-
-/*
- **  NEW CONTENT
-
-newContent.addEventListener("click",  () => {
-    gArticleId = 0;
-    editor.setData("");
-    editor_status = "init";
-    editor_status_text.textContent = "";
-    if (document.startViewTransition) {
-        document.startViewTransition(() => {
-        transitionEditor();
-        });
-    } else {
-        transitionEditor();
-    }
 });
 
 /*
@@ -300,14 +245,6 @@ updateDeploymentStatus = (websiteid, siteid) => {
         }
     });
 }
-
-/*
-**  CLOSE EDITOR 
-*/
-document.querySelector("button.close-editor").addEventListener("click", (e) => {
-    editorContainer.style.visibility = "hidden";
-    cards.style.filter = "none";
-});
 
 /*
 **  CLOSE DIALOGS
@@ -422,12 +359,13 @@ window.addEventListener("DOMContentLoaded", (event) => {
         }, { capture: true} );
     }
 
-    if (!website.dataset.id) {
-        website.querySelector(".new-website").click();
-        popupOpen("WELCOME","Enter Domain name. Choose template. Create content. Deploy.");
-    }
+    /* display first article in websiteNavMenu */
+
+    gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
+    edit_text();
 
     lazyload();
+
 });
 
 const lazyload = () => {
@@ -584,15 +522,13 @@ const preview_article = (articleId,button) => {
 /*
  ** OPEN GALLERY FOR SELECTED ARTICLE
  */
-const show_gallery = (articleId) => {
-    execProcess( "gallery/"+articleId,"GET").then( (data) => {
-        gallery.showModal();
+const show_gallery = () => {
+    execProcess( "gallery/"+gArticleId,"GET").then( (data) => {
         galleryInstruction.replaceChildren();
         galleryInstruction.insertAdjacentHTML('afterbegin',data.instruction);
         galleryList.replaceChildren();
         galleryList.insertAdjacentHTML('afterbegin',data.content);
         lazyload();
-        gArticleId = articleId;
     });
 };
 
@@ -614,14 +550,14 @@ const clickHandler = (e) => {
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
         gArticleId = e.target.dataset.id
-        get_page();
+        edit_text();
     } else if (e.target.matches(".edit-codepen")) {
         edit_codepen();   
     } else if (e.target.matches(".upload-codepen")) {
         upload_codepen();                                                                                                                 
-    } else if (e.target.matches(".edit-text")) {
-        edit_text();   
-    } 
+    } else if (e.target.matches(".show-gallery")) {
+        show_gallery();                                
+    }
 
     return;
 
@@ -1052,7 +988,12 @@ const saveData = async ( data ) => {
 let editor;
 
 ClassicEditor.create(document.querySelector("#editor"), {
-        toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','style', 'sourceEditing'],
+        toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','style', 'sourceEditing'],
+        ui: {
+            viewportOffset: {
+                top: 0
+            }
+        },
         autosave: {
             waitingTime: 2000,
             save( editor ) {
@@ -1096,10 +1037,6 @@ ClassicEditor.create(document.querySelector("#editor"), {
         const wordCountPlugin = editor.plugins.get( 'WordCount' );
         const wordCountWrapper = document.getElementById( 'word-count' );
         wordCountWrapper.appendChild( wordCountPlugin.wordCountContainer );
-
-        //const imgFileSelector = document.querySelector("input[type=file]");
-        //const imgBtn = imgFileSelector.previousElementSibling;
-        //imgBtn.disabled=true;
     })
     .catch(error => {
         console.error(error);
@@ -1316,7 +1253,6 @@ const delete_object = (id, e) => {
             break;
     }
     
-
     confirmBtn.dataset.id = id ? id : e.target.dataset.id;
     confirmBtn.dataset.table = e.target.dataset.table;
     confirm.showModal();
