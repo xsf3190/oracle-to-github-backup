@@ -187,7 +187,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('css', C.css);
             apex_json.write('javascript', C.javascript);
             apex_json.write('deploy_buttons', pck_core.buildDeployButtons(C.domain_name, C.netlify_site_id, C.netlify_site_id_custom));
-            apex_json.write('cards',pck_core.buildWebsiteArticles(pWebsiteId, l_session_data.canuse_popover, l_session_data.timezone));
+            --apex_json.write('cards',pck_core.buildWebsiteArticles(pWebsiteId, l_session_data.canuse_popover, l_session_data.timezone));
         END LOOP;
 
         apex_json.write('success', TRUE);
@@ -950,7 +950,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         APEX_JSON.write('success', TRUE);
         IF (pArticleId=0) THEN
             APEX_JSON.write('articleId',seq_article.currval);
-            APEX_JSON.write('new_card',pck_core.buildWebsiteArticles(pWebsiteId=>l_website_id,pCanUsePopover=>l_session_data.canuse_popover, pTimezone=>l_session_data.timezone, pArticleId=>seq_article.currval));
+            --APEX_JSON.write('new_card',pck_core.buildWebsiteArticles(pWebsiteId=>l_website_id,pCanUsePopover=>l_session_data.canuse_popover, pTimezone=>l_session_data.timezone, pArticleId=>seq_article.currval));
         END IF;
         APEX_JSON.write('title', l_title);
         APEX_JSON.write('excerpt', l_excerpt);
