@@ -40,8 +40,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
-    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pCanUsePopover IN BOOLEAN, pTimezone IN session_data.timezone%type, pViewOption IN VARCHAR2 DEFAULT NULL, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB;
-    --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
 END;
@@ -230,7 +228,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                               <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' END ||'
             </label>' || pDropdown || 
             CASE WHEN pDropdown IS NOT NULL THEN '</div>' END || '
-            <textarea placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
+            <textarea class="cms" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
                 CASE WHEN l_data_type='CLOB' THEN '" rows="5" cols="60"' ELSE '" maxlength="' || l_data_length || '" rows="1"' END || ' data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>        
             <div class="button-container">
                 <span class="result"></span>
@@ -271,7 +269,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                               <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' END ||'
             </label>' || pDropdown || 
             CASE WHEN pDropdown IS NOT NULL THEN '</div>' END || '
-            <input placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
+            <input  class="cms" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
                 '" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '" data-id="' || pId || '">
             <div class="button-container">
                 <span class="result"></span>
@@ -321,11 +319,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     FUNCTION buildNavLabels(pWebsiteId IN website.id%type) RETURN VARCHAR2 IS
         l_nav_labels LONG;
     BEGIN
-        l_nav_labels:='<ul>';
+
         FOR C IN (SELECT article_id, navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
-            l_nav_labels:=l_nav_labels || '<li><a href="#" class="nav-label" data-id="' || C.article_id || '">' || C.navigation_label || '</a></li>';
+            l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
         END LOOP;
-        l_nav_labels:=l_nav_labels || '</ul>';
+
         RETURN l_nav_labels;
     END;
 
@@ -447,130 +445,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     END;
         END IF;        
         RETURN (l_url);
-    END;    
-
-    FUNCTION buildWebsiteArticles(pWebsiteId IN website.id%type, pCanUsePopover IN BOOLEAN, pTimezone IN session_data.timezone%type, pViewOption IN VARCHAR2 DEFAULT NULL, pArticleId IN article.id%type DEFAULT NULL) RETURN CLOB IS
-        l_clob CLOB;
-        TYPE t_publish IS VARRAY(2) OF VARCHAR2(3);
-        l_publish t_publish:=t_publish('YES','NO');
-        l_publish_html LONG;
-        nb PLS_INTEGER:=0;
-    BEGIN
-        FOR C IN (SELECT a.id,
-                   c.cld_cloud_name, c.resource_type, c.public_id, c.format, c.width,
-                   a.nb_assets,
-                   a.title, 
-                   a.excerpt,
-                   wa.publish,
-                   wa.navigation_label,
-                   wa.page_title,
-                   wa.page_description,
-                   a.word_count,
-                   a.editor,
-                   NVL(a.updated_date, a.created_date) updated_date,
-                   wa.display_order display_order
-              FROM article a, website_article wa, asset c
-             WHERE wa.website_id=pWebsiteId
-               AND a.id=wa.article_id
-               AND a.id=NVL(pArticleId,a.id)
-               AND a.cover_asset_id=c.id(+)
-             ORDER BY display_order)
-        LOOP
-            nb:=nb+1;
-            l_publish_html:=NULL;
-            FOR i IN 1..l_publish.COUNT LOOP
-            l_publish_html:=l_publish_html ||
-                '<div>
-                    <input type="radio" data-column="website_article.publish" data-id="' || pWebsiteId || ',' || C.id || '" id="publish-' || C.id || '" name="publish-' || C.id || '" value="' || l_publish(i) || '"' ||
-                    CASE WHEN l_publish(i)=C.publish THEN ' checked' END || '>
-                    </input> <label for="publish-' || C.id || '">' || l_publish(i) || '</label>
-                </div>';
-            END LOOP;
-
-            l_clob:=l_clob || TO_CLOB('
-            <li class="card" tabindex="0" data-id="' || C.id || '">
-                <div class="button-container">
-                    <div class="dropdown">
-                        <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                        <ul class="dropdown-items">
-                            <li>
-                                <button type="button" class="with-icon upload-media">
-                                    <svg class="icon"><use href="#cloud-arrow-up"></use></svg>
-                                Upload Media
-                                </button>
-                            </li>
-                            <li>
-                                <button type="button" class="with-icon show-gallery">
-                                    <svg class="icon"><use href="#photo-film"></use></svg>
-                                Media Gallery
-                                </button>
-                            </li>' || 
-                            CASE WHEN C.editor IS NULL THEN '
-                                <button type="button" class="with-icon edit-text">
-                                    <svg class="icon"><use href="#pen-to-square"></use></svg>
-                                Edit Text
-                                </button>
-                            </li>' ELSE '
-                            <li>
-                                <button type="button" class="with-icon edit-codepen" data-column="article.body_html">
-                                    <svg class="icon"><use href="#codepen"></use></svg>
-                                Edit in Codepen
-                                </button>
-                            </li>'
-                            END || '
-                            <li>
-                                <button type="button" class="with-icon upload-codepen" data-column="article.body_html">
-                                    <svg class="icon"><use href="#upload"></use></svg>
-                                Upload Codepen Zip
-                                </button>
-                            </li>' ||
-                            CASE WHEN nb>1 THEN '
-                            <li>
-                                <button type="button" class="with-icon edit-field" data-column="website_article.navigation_label">
-                                    <svg class="icon"><use href="#list"></use></svg>
-                                Navigation Label
-                                </button>
-                            </li>'
-                            END || '
-                            <li>
-                                <button type="button" class="with-icon edit-field" data-column="website_article.page_title">
-                                    <svg class="icon"><use href="#searchengin"></use></svg>
-                                Page Title (SEO)
-                                </button>
-                            </li>
-                            <li>
-                                <button type="button" class="with-icon edit-field" data-column="website_article.page_description">
-                                    <svg class="icon"><use href="#searchengin"></use></svg>
-                                Page Description (SEO)
-                                </button>
-                            </li>
-                            <li>
-                                <hr>
-                            </li>
-                            <li>
-                                <button type="button" class="with-icon delete" data-table="website_article">
-                                    <svg class="icon"><use href="#delete"></use></svg>
-                                Delete
-                                </button>
-                            </li>
-                        </ul>
-                    </div>
-                </div>' ||
-                CASE WHEN NVL(C.nb_assets,0)=0
-                    THEN '<button type="button" class="no-media upload-media">UPLOAD MEDIA</button>' 
-                    ELSE '<img' || CASE WHEN C.format='svg' THEN ' style="object-fit:scale-down"' END || ' data-src="' || getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">' 
-                END ||
-                CASE WHEN COALESCE(C.title, C.excerpt) IS NULL 
-                    THEN '<button type="button" class="no-media edit-text">CREATE TEXT</button>'
-                    ELSE '<p class="title edit-text">' || NVL(C.title, C.excerpt) || '</p> ' 
-                END
-                || buildRadioWrapper('website_article.publish',l_publish_html, pCanUsePopover)
-                || '   
-                <footer class="button-container"><div><span class="word-count">' || NVL(C.word_count,0) || ' words' || '</span> | <span class="nb-assets">' || NVL(C.nb_assets,0) 
-                || ' media</span></div><span class="updated-date">' || TO_CHAR(C.updated_date AT TIME ZONE pTimezone, 'fmdd Mon yyyy, hh24:fmmi')  || '</span></footer>
-            </li>');
-        END LOOP;
-        RETURN l_clob;
     END;
 
     /*
@@ -590,26 +464,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         TYPE t_domain IS RECORD (
             id                      website.id%type,
             domain_name             website.domain_name%type,
-            template                website.template%type,
-            font                    website.font%type,
-            favicon_url             website.favicon_url%type,
-            contact_email           website.contact_email%type,
-            css                     website.css%type,
-            javascript              website.javascript%type,
             netlify_site_id         website.netlify_site_id%type,
             netlify_site_id_custom  website.netlify_site_id%type
         );
         TYPE tt_domain IS TABLE OF t_domain;
         l_domains tt_domain;  
         l_session_data session_data_rt;
+
+        TYPE t_publish IS VARRAY(2) OF VARCHAR2(3);
+        l_publish t_publish:=t_publish('YES','NO');
+        l_publish_html LONG;
     BEGIN
         l_session_data:=getSessionData();
 
         l_clob:= TO_CLOB(pck_icons.g_icons_svg);
 
-        /* Construct the navigation header section */
+        /* Construct the top navigation menu */
         l_clob:=l_clob || TO_CLOB('
-        <nav>
+        <nav class="top-nav">
             <div class="dropdown">
                 <span>' || apex_application.g_user || '</span>
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
@@ -640,17 +512,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     </li>      
                 </ul>
             </div>
-        </nav>
-        <div class="editor" aria-hidden="true" tabindex="-1">
-            <div>
-                <button type="button" class="close-editor">&times;</button>
-            </div>
-            <div id="editor"></div>
-            <div>
-                <span id="word-count"></span>
-                <span id="editor-status"></span>
-            </div>
-        </div>');
+        </nav>');
 
         -- should use this to show users available custom domains
         pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_dns_zones);
@@ -660,7 +522,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
          */
         --pck_api.callGithubAPI(pUserId=>l_session_data.user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_templates);
 
-        SELECT w.id, w.domain_name, w.template, w.font, w.favicon_url, w.contact_email, w.css, w.javascript, w.netlify_site_id, w.netlify_site_id_custom
+        SELECT w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom
           BULK COLLECT INTO l_domains
           FROM website w
          WHERE w.user_id=l_session_data.user_id
@@ -728,29 +590,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </ul>
         </div>';
 
-        /* TEMPLATES are directory names and returned as array in alphabetic order */
-        /*
-        FOR C IN (SELECT name FROM JSON_TABLE(l_templates, '$[*]' COLUMNS (name))) LOOP
-            l_template_html:=l_template_html || 
+        FOR i IN 1..l_publish.COUNT LOOP
+            l_publish_html:=l_publish_html ||
             '<div>
-                <input type="radio" data-column="website.template" data-id="' || l_domains(1).id || '" id="template-' || LOWER(C.name) || '" name="template" value="' || C.name || '"' ||
-                CASE WHEN l_domains(1).template=C.name THEN ' checked' END || '>
-                </input> <label for="template-' || LOWER(C.name) || '">' || C.name || '</label>
+                <input type="radio" data-column="website_article.publish" id="publish-' || l_publish(i) || '" name="publish-' || l_publish(i) || '" value="' || l_publish(i) || '">
+                </input> <label for="publish-' || l_publish(i) || '">' || l_publish(i) || '</label>
             </div>';
         END LOOP;
-        */
-
-        /* FONTS are Google font family names */
-        /*
-        FOR C IN (SELECT name FROM website_font ORDER BY name) LOOP
-            l_font_html:=l_font_html || 
-            '<div>
-                <input type="radio" data-column="website.font" data-id="' || l_domains(1).id || '" id="font-' || LOWER(C.name) || '" name="font" value="' || C.name || '"' ||
-                CASE WHEN l_domains(1).font=C.name THEN ' checked' END || '>
-                </input> <label for="font-' || LOWER(C.name) || '">' || C.name || '</label>
-            </div>';
-        END LOOP;
-        */
 
         l_clob:=l_clob || TO_CLOB('
         <form class="website" data-id="' || l_domains(1).id || '">' ||
@@ -768,40 +614,88 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         <form action="https://codepen.io/pen/define" method="POST" target="_blank">
             <input type="hidden" name="data" value="">
         </form>
-        <hr>
-        <nav class="website-nav-menu">
-            <button type="button" class="deploy-website pushable">
-                <span class="shadow"></span>
-                <span class="edge"></span>
-                <span class="front">NEW PAGE</span>
-            </button>' || buildNavLabels(l_domains(1).id) || '
-        </nav>
         <div class="cards">
+            <!-- First card -->
             <div>
-                <button type="button" class="pushable edit-codepen">
+                <div class="dropdown">
+                    <span>Edit Options</span>
+                    <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                    <ul class="dropdown-items">                    
+                        <li>
+                            <button type="button" class="with-icon edit-codepen">
+                                <svg class="icon"><use href="#codepen"></use></svg>
+                            Codepen Editor
+                            </button>
+                        </li>
+                        <li>
+                            <button type="button" class="with-icon upload-codepen">
+                                <svg class="icon"><use href="#upload"></use></svg>
+                            Upload Codepen Zip
+                            </button>
+                        </li>
+                        <li>
+                            <button type="button" class="with-icon edit-field" data-column="website_article.page_title">
+                                <svg class="icon"><use href="#searchengin"></use></svg>
+                            Page Title (SEO)
+                            </button>
+                        </li>
+                        <li>
+                            <button type="button" class="with-icon edit-field" data-column="website_article.page_description">
+                                <svg class="icon"><use href="#searchengin"></use></svg>
+                            Page Description (SEO)
+                            </button>
+                        </li>
+                        <li>
+                            <hr>
+                        </li>
+                        <li>
+                            <button type="button" class="with-icon delete" data-table="website_article">
+                                <svg class="icon"><use href="#delete"></use></svg>
+                            Delete
+                            </button>
+                        </li>     
+                    </ul>
+                </div>
+                <button type="button" class="pushable upload-media">
                     <span class="shadow"></span>
                     <span class="edge"></span>
-                    <span class="front">EDIT IN CODEPEN</span>
+                    <span class="front">UPLOAD MEDIA</span>
                 </button>
-                <button type="button" class="pushable upload-codepen">
+                <div class="gallery-container" role="region" aria-label="gallery">
+                    <p class="instruction"></p>
+                    <ul></ul>
+                </div>
+                <div class="gallery-overlay">
+                    <img src="">
+                    <fieldset>
+                        <legend><span></span><button class="close-fieldset" type="button">&times;</button></legend>
+                        <button type="button" class="dimensions"></button>
+                        <button type="button" class="copy-url" disabled>&boxbox;</button>
+                        <button type="button" class="dimensions"></button>
+                        <button type="button" class="copy-url" disabled>&boxbox;</button>
+                        <button type="button" class="dimensions"></button>
+                        <button type="button" class="copy-url" disabled>&boxbox;</button>
+                    </fieldset>
+                    <span class="counter"></span>
+                    <button type="button" class="close-fullscreen">&times;</button>
+                    <button type="button" class="prev">&lt;</button>
+                    <button type="button" class="next">&gt;</button>
+                </div>
+            </div>
+            <div class="page-content">                
+                <button type="button" class="new-page pushable">
                     <span class="shadow"></span>
                     <span class="edge"></span>
-                    <span class="front">UPLOAD CODEPEN ZIP</span>
+                    <span class="front">NEW PAGE</span>
                 </button>
-                <button type="button" class="pushable edit-text">
-                    <span class="shadow"></span>
-                    <span class="edge"></span>
-                    <span class="front">EDIT TEXT</span>
-                </button>' 
-            || buildTextareaWrapper(l_domains(1).id, 'website_article.page_title', '', l_session_data.canuse_popover) 
-            || buildTextareaWrapper(l_domains(1).id, 'website_article.page_description', '', l_session_data.canuse_popover) 
-            || '
+                <nav class="website-nav-menu">' || buildNavLabels(l_domains(1).id) || '</nav>
+                <div id="editor"></div>
+                <div>
+                    <span id="word-count"></span>
+                    <span id="editor-status"></span>
+                </div>
             </div>
-            <div class="page-content">
-            </div>
-        </div>');
-        -- ' || buildWebsiteArticles(l_domains(1).id, l_session_data.canuse_popover, l_session_data.timezone) || '
-        l_clob:=l_clob || TO_CLOB('
+        </div>
         <dialog class="popup">
             <div>
                 <button type="button" class="close">&times;</button>
