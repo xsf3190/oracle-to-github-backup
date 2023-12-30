@@ -22,7 +22,6 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       //copyWebsite = website.querySelector(".copy-website"),
       deployButtons = website.querySelector(".deploy-buttons > div"),
       websiteNavMenu = container.querySelector(".website-nav-menu"),
-      newPage = container.querySelector(".new-page"),
       cards = container.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
@@ -30,8 +29,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       confirmBtn = confirm.querySelector(".confirmBtn"),
       editField = container.querySelector("dialog.edit-field"),
       editorContainer = container.querySelector("div.editor"),
-      gallery = container.querySelector(".gallery-container"),
-      galleryList = gallery.querySelector("ul"),
+      galleryList = container.querySelector(".gallery-list"),
       galleryFull = container.querySelector(".gallery-overlay"),
       galleryFullImg = galleryFull.querySelector("img"),
       galleryFullCounter = galleryFull.querySelector("span.counter"),
@@ -40,9 +38,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       galleryFullNext = galleryFull.querySelector("button.next"),
       galleryFullCloseFieldset = galleryFull.querySelector("button.close-fieldset"),
       galleryFullLegend = galleryFull.querySelector("legend > span"),
-      galleryFullDimensions = galleryFull.querySelectorAll("fieldset button.dimensions"),
-      listPerformance = gallery.querySelector(".list-performance"),      
-      perftable = document.querySelector("dialog.perftable");
+      galleryFullDimensions = galleryFull.querySelectorAll("fieldset button.dimensions");
 
 /*
 **  TEXT INPUT COMPONENT
@@ -193,13 +189,13 @@ const edit_website = (e) => {
         deployButtons.replaceChildren();
         deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
 
-        newContent.disabled = false;
+       const labels =  websiteNavMenu.querySelector("div:first-of-type");
+       labels.replaceChildren();
+       labels.insertAdjacentHTML('afterbegin',data.navigation);
 
-        cards.replaceChildren();
-        if (data.cards) {
-            cards.insertAdjacentHTML('afterbegin',data.cards);
-            lazyload();
-        }
+        gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
+        edit_text();
+        lazyload();
     });
 };
 
@@ -551,35 +547,31 @@ const clickHandler = (e) => {
         e.preventDefault();
         gArticleId = e.target.dataset.id
         edit_text();
+    } else if (e.target.matches(".new-page")) {
+        new_page();   
     } else if (e.target.matches(".edit-codepen")) {
         edit_codepen();   
     } else if (e.target.matches(".upload-codepen")) {
         upload_codepen();                                                                                                                 
-    } else if (e.target.matches(".show-gallery")) {
-        show_gallery();                                
-    }
+    } else if (e.target.matches(".upload-media")) {
+        upload_media();                                
+    } else if (e.target.matches(".edit-field")) {
+        edit_field(id, e); 
+    } else if (e.target.matches(".edit-website")) {
+        edit_website(e);
+    } 
 
     return;
 
     const card = e.srcElement.closest(".card");
     const id = card ? card.dataset.id : website.dataset.id;
 
-    if (e.target.matches(".show-gallery")) {
-        show_gallery(id);                                
-    } else if (e.target.matches(".delete")) {
+     if (e.target.matches(".delete")) {
         delete_object(id, e);
     } else if (e.target.matches(".confirmBtn")) {
         delete_object_confirm(e);
-    } else if (e.target.matches(".upload-media")) {
-        upload_media(id);
-    } else if (e.target.matches(".edit-text")) {
-        edit_text(id,e.srcElement);   
-    } else if (e.target.matches(".edit-field")) {
-        edit_field(id, e); 
     } else if (e.target.matches(".fullscreen")) {
         showFullScreen(e);                                 
-    } else if (e.target.matches(".edit-website")) {
-        edit_website(e);
     } else if (e.target.matches(".deploy-website")) {
         deploy_website(e);
     } else if (e.target.matches(".saveBtn")) {
@@ -900,10 +892,7 @@ new Sortable(galleryList, {
     store: {
         set: async function (sortable) {
             execProcess("thumbnails","PUT", {dbid_string: sortable.toArray().join(":")} ).then( (data) => {
-                if (data.url) {
-                    const li = document.querySelector("[data-id='" + data.articleId + "']");
-                    li.querySelector("img").src = data.url;
-                }
+                console.log("sorted!");
             });
         }
     }
@@ -913,7 +902,7 @@ new Sortable(galleryList, {
  ** ENABLE DRAG AND DROP OF WEBSITE ARTICLES TO RE-ORDER
  */
 
-new Sortable(cards, {
+new Sortable(websiteNavMenu, {
     animation: 150,
     ghostClass: 'drag-in-progress',
     store: {
@@ -973,14 +962,10 @@ const saveData = async ( data ) => {
 
     
     const title = document.querySelector(".ck > h1").textContent;
-    await execProcess("article/"+gArticleId, "PUT",  {website_id: website.dataset.id, edit_text: data, title: title, word_count: word_count}).then( (data) => {
+    await execProcess("article/"+gArticleId, "PUT",  {website_id: website.dataset.id, body_html: data, title: title, word_count: word_count}).then( (data) => {
         pendingActions.remove( action );
         editor_status_text.textContent = "saved successfully";
         editor_status_text.style.color = "green";
-        if (gArticleId === 0) {
-            gArticleId = data.articleId;
-            cards.insertAdjacentHTML('afterbegin',data.new_card);
-        }
     }).catch( (error) => console.error(error));
 }
 
@@ -1049,18 +1034,26 @@ if (window.location.hash === "#_=_"){
         : window.location.hash = "";
 }
 
+/* 
+ ** UPLOAD MEDIA TO CLOUDINARY
+ */
+const new_page = () => {
+    execProcess( "article/"+website.dataset.id,"POST").then( (data) => {
+        console.log("article_id",data.article_id);
+    });
+}
 
 /* 
  ** UPLOAD MEDIA TO CLOUDINARY
  */
-const upload_media = (articleId) => {
+const upload_media = () => {
     if (!website.dataset.id) {
         popupOpen("CANT DO THAT YET","Need a Domain Name");
         return;
     }
     execProcess( "cld-details","GET").then( (data) => {
         widget.open();
-        widget.update({tags: [articleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
+        widget.update({tags: [gArticleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
     });
 }
 
@@ -1078,18 +1071,19 @@ const edit_text = () => {
     execProcess( "article/"+gArticleId,"GET").then( (data) => {
         editor_status = "init";
         editor_status_text.textContent = "";
-        if (data.html) {
-            editor.setData(data.html);
-        } else {
-            editor.setData("");
+        editor.setData(data.html);
+        galleryList.replaceChildren();
+        if (data.thumbnails) {
+            galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
+            lazyload();
         }
-        if (document.startViewTransition) {
-            document.startViewTransition(() => {
-            transitionEditor();
-            });
-        } else {
-            transitionEditor();
-        }
+        websiteNavMenu.querySelectorAll("a").forEach((link) => {
+            link.classList.remove("selected");
+            if (link.dataset.id === gArticleId) {
+                link.classList.add("selected");
+            }
+        });
+
     });
 }
 
@@ -1098,8 +1092,6 @@ const edit_text = () => {
  */
 const edit_field = (id, e) => {
     if (id === website.dataset.id) return;
-
-    console.log();
 
     execProcess( "edit-field","PUT",{"table_column":e.target.dataset.column, "website_id":website.dataset.id, "id":id}).then( (data) => {
         const content = editField.querySelector(".content");
