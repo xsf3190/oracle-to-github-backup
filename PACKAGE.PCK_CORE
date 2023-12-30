@@ -36,9 +36,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN CLOB, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
-    --
     FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
+    --
+    FUNCTION buildNavLabels(pWebsiteId IN website.id%type) RETURN VARCHAR2;
+    --
+    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN CLOB, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
@@ -319,12 +321,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     FUNCTION buildNavLabels(pWebsiteId IN website.id%type) RETURN VARCHAR2 IS
         l_nav_labels LONG;
     BEGIN
-
         FOR C IN (SELECT article_id, navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
             l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
         END LOOP;
 
-        RETURN l_nav_labels;
+        RETURN '<div>' || l_nav_labels || '</div>';
     END;
 
     /*
@@ -543,17 +544,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         </svg>
                         NEW WEBSITE
                     </button>
-                </li>
-                <!--
-                <li>
-                    <button type="button" class="with-icon copy-website"' || CASE WHEN l_domains(1).id IS NULL THEN ' disabled' END || '>
-                        <svg class="icon">
-                            <use href="#copy"></use>
-                        </svg>
-                        COPY WEBSITE
-                    </button>
-                </li>
-                -->';
+                </li>';
 
         FOR i IN 1..l_domains.COUNT LOOP
             IF (l_domains(i).id IS NULL) THEN
@@ -617,53 +608,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         <div class="cards">
             <!-- First card -->
             <div>
-                <div class="dropdown">
-                    <span>Edit Options</span>
-                    <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                    <ul class="dropdown-items">                    
-                        <li>
-                            <button type="button" class="with-icon edit-codepen">
-                                <svg class="icon"><use href="#codepen"></use></svg>
-                            Codepen Editor
-                            </button>
-                        </li>
-                        <li>
-                            <button type="button" class="with-icon upload-codepen">
-                                <svg class="icon"><use href="#upload"></use></svg>
-                            Upload Codepen Zip
-                            </button>
-                        </li>
-                        <li>
-                            <button type="button" class="with-icon edit-field" data-column="website_article.page_title">
-                                <svg class="icon"><use href="#searchengin"></use></svg>
-                            Page Title (SEO)
-                            </button>
-                        </li>
-                        <li>
-                            <button type="button" class="with-icon edit-field" data-column="website_article.page_description">
-                                <svg class="icon"><use href="#searchengin"></use></svg>
-                            Page Description (SEO)
-                            </button>
-                        </li>
-                        <li>
-                            <hr>
-                        </li>
-                        <li>
-                            <button type="button" class="with-icon delete" data-table="website_article">
-                                <svg class="icon"><use href="#delete"></use></svg>
-                            Delete
-                            </button>
-                        </li>     
-                    </ul>
-                </div>
                 <button type="button" class="pushable upload-media">
                     <span class="shadow"></span>
                     <span class="edge"></span>
                     <span class="front">UPLOAD MEDIA</span>
                 </button>
-                <div class="gallery-container" role="region" aria-label="gallery">
-                    <p class="instruction"></p>
-                    <ul></ul>
+                <div role="region" aria-label="gallery">
+                    <ul class="gallery-list"></ul>
                 </div>
                 <div class="gallery-overlay">
                     <img src="">
@@ -688,7 +639,47 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <span class="edge"></span>
                     <span class="front">NEW PAGE</span>
                 </button>
-                <nav class="website-nav-menu">' || buildNavLabels(l_domains(1).id) || '</nav>
+                <nav class="website-nav-menu">' || buildNavLabels(l_domains(1).id) || '
+                    <div class="dropdown">
+                        <span>Edit Options</span>
+                        <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                        <ul class="dropdown-items">                    
+                            <li>
+                                <button type="button" class="with-icon edit-codepen">
+                                    <svg class="icon"><use href="#codepen"></use></svg>
+                                Codepen Editor
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="with-icon upload-codepen">
+                                    <svg class="icon"><use href="#upload"></use></svg>
+                                Upload Codepen Zip
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="with-icon edit-field" data-column="website_article.page_title">
+                                    <svg class="icon"><use href="#searchengin"></use></svg>
+                                Page Title (SEO)
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="with-icon edit-field" data-column="website_article.page_description">
+                                    <svg class="icon"><use href="#searchengin"></use></svg>
+                                Page Description (SEO)
+                                </button>
+                            </li>
+                            <li>
+                                <hr>
+                            </li>
+                            <li>
+                                <button type="button" class="with-icon delete" data-table="website_article">
+                                    <svg class="icon"><use href="#delete"></use></svg>
+                                Delete
+                                </button>
+                            </li>     
+                        </ul>
+                    </div>
+                </nav>
                 <div id="editor"></div>
                 <div>
                     <span id="word-count"></span>
