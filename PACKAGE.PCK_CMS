@@ -1,10 +1,6 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
-    PROCEDURE copyWebsite(pWebsiteId IN website.id%type);
-    --
     PROCEDURE deleteTable(pBodyText IN CLOB);
-    --
-    PROCEDURE getContent(pWebsiteId IN website.id%type);
     --
     PROCEDURE getCldDetails;
     --
@@ -14,11 +10,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getFieldHTML(pParams IN CLOB);
     --
-    PROCEDURE getPerformance;
-    --
     PROCEDURE getSessionLog(SessionId IN NUMBER);
     --
-    PROCEDURE getThumbnails(pArticleId IN article.id%type);
+    PROCEDURE insertArticle(pWebsiteId IN website.id%type);
     --
     PROCEDURE getWebsite(pWebsiteId IN website.id%type);
     --
@@ -174,21 +168,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.open_object;
 
         FOR C IN (
-            SELECT w.domain_name, w.css, w.javascript, w.contact_email, w.template, w.font, w.favicon_url, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, w.netlify_site_id, w.netlify_site_id_custom
+            SELECT w.domain_name, w.css, w.javascript, w.netlify_site_id, w.netlify_site_id_custom
               FROM website w
              WHERE w.id=pWebsiteId
                AND w.user_id=l_session_data.user_id) 
         LOOP
             apex_json.write('domain_name', C.domain_name);
-            apex_json.write('contact_email', C.contact_email);
-            IF (C.template<>'-1') THEN
-                apex_json.write('template', 'template-' || LOWER(C.template));
-            END IF;
             apex_json.write('css', C.css);
             apex_json.write('javascript', C.javascript);
             apex_json.write('deploy_buttons', pck_core.buildDeployButtons(C.domain_name, C.netlify_site_id, C.netlify_site_id_custom));
-            --apex_json.write('cards',pck_core.buildWebsiteArticles(pWebsiteId, l_session_data.canuse_popover, l_session_data.timezone));
         END LOOP;
+
+        apex_json.write('navigation', pck_core.buildNavLabels(pWebsiteId));
 
         apex_json.write('success', TRUE);
         apex_json.close_object;
@@ -297,11 +288,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Build gallery of thumbnail images for a given article
      */
-    PROCEDURE getThumbnails(pArticleId IN article.id%type)
+    PROCEDURE getThumbnails(pArticleId IN article.id%type, pHTML IN OUT NOCOPY CLOB)
     IS
         l_clob CLOB;
         l_user_id users.id%type;
-        l_instruction VARCHAR2(300);
         l_url_image VARCHAR2(300);
         l_media_type VARCHAR2(5);
         l_dimensions VARCHAR2(50);
@@ -323,39 +313,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             n:=n+1;
             l_media_type:=pck_core.getMediaType(C.resource_type, C.format);
 
-            l_clob:=l_clob || TO_CLOB('
-                <li class="card" tabindex="0" data-id="' || C.id || '">
-                    <div>
-                        <div class="dropdown">
-                            <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                            <ul class="dropdown-items">
-                                <li>
-                                    <button type="button" class="with-icon edit-field" data-column="asset.description">
-                                        <svg class="icon"><use href="#searchengin"></use></svg>
-                                    Description
-                                    </button>
-                                </li>' ||
-                                CASE WHEN l_media_type='image' THEN '
-                                <li>
-                                    <button type="button" class="with-icon edit-field" data-column="asset.alt_text">
-                                        <svg class="icon"><use href="#searchengin"></use></svg>
-                                    Image Alt Text (SEO)
-                                    </button>
-                                </li>' 
-                                END ||'
-                                <li>
-                                    <hr>
-                                </li>
-                                <li>
-                                    <button type="button" class="with-icon delete" data-table="asset">
-                                        <svg class="icon"><use href="#delete"></use></svg>
-                                    Delete
-                                    </button>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>');
-
             l_url_image:=pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
 
             IF (C.width>0 AND C.width*.25>pck_core.gWidthThumbnail) THEN
@@ -366,13 +323,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                               ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':';
             END IF;
 
-            l_clob:=l_clob || TO_CLOB('<img class="fullscreen" data-dimensions="'  || l_dimensions || 
+            pHTML:=pHTML || TO_CLOB(
+                '<li class="card" tabindex="0" data-id="' || C.id || '">
+                    <img class="fullscreen" data-dimensions="'  || l_dimensions || 
                                 C.width || 'x' || C.height || '" data-src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>');
 
             CASE l_media_type
 
                 WHEN 'video' THEN
-                    l_clob:=l_clob || TO_CLOB(
+                    pHTML:=pHTML || TO_CLOB(
                     '<video controls preload="metadata" poster="' || l_url_image || '">
                         <source src="' || REPLACE(l_url_image,'.jpg','.webm') || '" type="video/webm"></source>
                         <source src="' || REPLACE(l_url_image,'.jpg','.mp4') || '" type="video/mp4"></source>
@@ -380,7 +339,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
                 WHEN 'audio' THEN
                     l_url_image:=REGEXP_REPLACE(l_url_image,',w_(\d)+\/fl_waveform',NULL);
-                    l_clob:=l_clob || TO_CLOB(
+                    pHTML:=pHTML || TO_CLOB(
                     '<audio preload="metadata" controls>
                         <source src="' || REPLACE(l_url_image,'.png','.aac') || '" type="audio/aac"></source>
                         <source src="' || REPLACE(l_url_image,'.png','.ogg') || '" type="audio/ogg"></source>
@@ -391,20 +350,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 ELSE NULL;
             END CASE;
 
-            l_clob:=l_clob || TO_CLOB('</li>');
+            pHTML:=pHTML || TO_CLOB('</li>');
 
         END LOOP;
-
-        l_instruction:=CASE WHEN l_session_data.maxtouchpoints > 1 THEN 'Tap' ELSE 'Click' END || ' Image to view in full screen';
-        IF (n > 1) THEN 
-            l_instruction:=l_instruction || '<span>|</span>Drag and drop images to reorder<span>|</span>First image is article cover';
-        END IF;
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('content', l_clob);
-        apex_json.write('instruction', l_instruction);
-        apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -531,112 +479,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-    ** Write HTML table of media download performance for the article
-    */
-    PROCEDURE getPerformance IS
-        l_article_id asset.article_id%type:=apex_application.g_x01;
-        l_content CLOB;
-        l_ip_address performance.ip_address%type;
-        l_session_id NUMBER:=APEX_CUSTOM_AUTH.GET_SESSION_ID;
-        n PLS_INTEGER:=0;
-        l_url_parts apex_t_varchar2;
-        l_transformation VARCHAR(300);
-    BEGIN
-        IF (apex_authentication.is_authenticated) THEN
-            l_ip_address:=NULL;
-        ELSE
-            l_ip_address:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
-        END IF;
-
-        /* 
-
-        FOR C IN (SELECT  COUNT(*) OVER (PARTITION BY a.cld_cloud_name, a.resource_type, a.public_id) nb_rows, 
-                          ROW_NUMBER() OVER (PARTITION BY a.display_order,a.cld_cloud_name, a.resource_type, a.public_id ORDER BY p.capture_date DESC) rn, 
-                          a.cld_cloud_name, a.resource_type, a.public_id, a.format, a.width, a.bytes, apex_util.get_since(a.created_date) created_date, apex_util.get_since(p.capture_date) capture_date, 
-                          p.url, p.transfersize, p.duration, p.content_type, p.browser, p.session_id, p.window_innerwidth, p.ip_address, p.connection_type, p.servertiming
-                    FROM asset a, performance p
-                   WHERE a.article_id=l_article_id
-                     AND a.cld_cloud_name=p.cld_cloud_name
-                     AND a.resource_type=p.resource_type
-                     AND a.public_id=p.public_id
-                     AND p.ip_address = NVL(l_ip_address, p.ip_address)
-                     AND p.session_id=NVL(l_session_id, p.session_id)
-                   ORDER BY a.display_order)
-        LOOP
-            n:=n+1;
-            IF (n=1) THEN
-                l_content:=to_clob(
-                '<table>
-                    <caption>CLOUDINARY BASE URL: ' || SUBSTR(C.url,1,INSTR(C.url,'/',1,4)) || '</caption>
-                    <thead>
-                        <tr>
-                            <th></th>
-                            <th>DOWNLOADED<br>I.P. (CONNECTION)<br>BROWSER (WIDTH)</th>
-                            <th class="align-left">TRANSFORMATION</th>
-                            <th>TRANSFER SIZE<br>DURATION<br>CONTENT/TYPE</th>
-                            <th class="align-left">SERVER TIMING</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                ');
-            END IF;
-
-            IF (C.nb_rows=C.rn) THEN
-                l_content:=l_content || to_clob('<tr class="last-tr">');
-            ELSE
-                l_content:=l_content || to_clob('<tr>');
-            END IF;
-
-            IF (C.rn=1) THEN 
-                l_content:=l_content || to_clob(
-                '<td rowspan="' || C.nb_rows || '">
-                    <figure><img src="' || pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
-                        <figcaption><span class="label">File name: </span>' || SUBSTR(C.public_id,1,INSTR(C.public_id,'_',-1)-1) || '.' || C.format 
-                            || '<br><span class="label">Original size: </span>' || apex_string_util.to_display_filesize(C.bytes) 
-                            || '<br><span class="label">Width: </span>' || C.width || ' px'
-                            || '<br><span class="label">Uploaded: </span>' || C.created_date || '
-                    </figcaption></figure></td>');
-            END IF;
-
-            l_url_parts:=apex_string.split(C.url,'/');
-            IF (C.resource_type='image') THEN
-                l_transformation:=l_url_parts(5);
-                IF (INSTR(l_transformation,'f_auto'))=0 THEN
-                    l_transformation:=NULL;
-                END IF;
-            ELSE
-                l_transformation:=l_url_parts(7);
-                IF (INSTR(l_transformation,'f_auto'))=0 THEN
-                    l_transformation:=NULL;
-                END IF;
-            END IF;
-
-            l_content:=l_content || to_clob('
-                <td class="align-center">' || C.capture_date || '<br>' || C.ip_address || CASE WHEN C.connection_type IS NOT NULL THEN ' (' || C.connection_type || ')' END || '<br>' || C.browser || ' (' || C.window_innerwidth || ' px)</td>
-                <td>' || l_transformation || '</td>
-                <td class="align-center">' || apex_string_util.to_display_filesize(C.transfersize) || '<br>' || C.duration || ' ms<br>' || C.content_type|| '</td>
-                <td>' || REPLACE(C.servertiming,'|','<br>') || '</td>
-            </tr>');
-
-        END LOOP;
-
-        IF (n>0) THEN
-            l_content:=l_content || to_clob('</tbody></table>');
-        ELSE
-            l_content:= to_clob('<p>All media for your session was retrieved from Cache</p>');
-        END IF;
-        */
-
-        APEX_JSON.open_object; 
-        APEX_JSON.write('success', TRUE);
-        APEX_JSON.write('content', l_content);
-        APEX_JSON.close_object;          
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;        
-    END;
-
+    ** Get contact email address signed by Terraform together with AWS gateway url
+    */ 
     PROCEDURE getTerraformParameters(pUserId IN users.id%type, pContactEmail IN website.contact_email%type, pAwsGatewayUrl IN OUT VARCHAR2, pSignatureContactEmail IN OUT VARCHAR2) IS
         l_clob CLOB;
         l_clob2 CLOB;
@@ -665,180 +509,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         pSignatureContactEmail:=utl_i18n.raw_to_char(utl_encode.base64_encode(l_signed_data));
     END;
 
-
-    /*
-    ** Fetched from Eleventy running in Github action to retrieve website content and array of articles
-    ** {
-    **    website: {},
-    **    articles: [{},{},..{}]
-    ** }
-    */ 
-    PROCEDURE getContent(pWebsiteId IN website.id%type) IS
-        l_json JSON_OBJECT_T;
-        l_website_object JSON_OBJECT_T;
-        l_article_object JSON_OBJECT_T;
-        l_article_array JSON_ARRAY_T;
-        l_asset_object JSON_OBJECT_T;
-        l_asset_array JSON_ARRAY_T;
-        l_url_img VARCHAR2(500);
-        l_media_type VARCHAR2(5);
-        l_nb_articles INTEGER;
-        l_nb_assets INTEGER;
-
-        l_clob CLOB;
-
-        l_user_id users.id%type;
-        l_app_id NUMBER;
-        l_session_data pck_core.session_data_rt;
-        l_page_id NUMBER;
-        l_aws_gateway_url VARCHAR2(200);
-        l_signatureContactEmail VARCHAR2(4000);
-        l_sitemap LONG;
-
-        /* If title missing remove the empty <h1></h1> tag */
-        FUNCTION stripHeading(pTitle IN VARCHAR2, pBodyHtml IN OUT NOCOPY CLOB) RETURN CLOB IS
-        BEGIN
-            IF (TRIM(pTitle) IS NOT NULL) THEN
-                RETURN (pBodyHtml);
-            END IF;
-            RETURN (dbms_lob.substr(pBodyHtml, 
-                    dbms_lob.getlength (pBodyHtml),
-                    dbms_lob.instr(pBodyHtml,'</h1>')+5));
-        END;
-
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-
-        l_json:= new JSON_OBJECT_T;
-        l_website_object:= new JSON_OBJECT_T;
-        l_article_array:= new JSON_ARRAY_T;
-
-        /* Get details of website */
-        FOR C IN (SELECT w.id, w.domain_name, w.css, w.javascript, w.favicon_url, w.font, wf.parameters, wf.fallback, w.contact_email, w.trade_name, w.affiliation_link_img, w.affiliation_link_url, u.name author_name
-                    FROM website w, users u, website_font wf
-                   WHERE w.id=pWebsiteId
-                     AND w.font=wf.name(+)
-                     AND w.user_id=l_session_data.user_id
-                     AND u.id=w.user_id)
-        LOOP
-            l_website_object.put('id',C.id);
-            l_website_object.put('name',C.domain_name);
-            l_website_object.put('favicon_url',C.favicon_url);
-            IF (C.font IS NOT NULL AND C.parameters IS NOT NULL) THEN
-                l_website_object.put('google_font',C.font || ':' || C.parameters);
-            END IF;
-            IF (C.font IS NOT NULL) THEN
-                l_website_object.put('font_family',C.font || ',' || C.fallback);
-            END IF;
-            l_website_object.put('contact_email',C.contact_email);
-            l_website_object.put('trade_name',C.trade_name);
-            l_website_object.put('affiliation_link_img',C.affiliation_link_img);
-            l_website_object.put('affiliation_link_url',C.affiliation_link_url);
-            l_website_object.put('author',C.author_name);
-            IF (C.contact_email IS NOT NULL) THEN 
-                getTerraformParameters(l_user_id,C.contact_email,l_aws_gateway_url,l_signatureContactEmail);
-                l_website_object.put('aws_gateway_url',l_aws_gateway_url);
-                l_website_object.put('signatureContactEmail',l_signatureContactEmail);
-            END IF;
-            l_website_object.put('visit_url',pck_core.getRestUrl() || 'page-visit');
-            l_website_object.put('css',C.css);
-            l_website_object.put('javascript',C.javascript);
-
-            /* Build contents of sitemap.xml */
-            l_sitemap:='<?xml version="1.0" encoding="UTF-8"?>' || chr(10) || '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' || chr(10);
-
-            FOR C1 IN (SELECT a.id, a.created_date, COALESCE(a.updated_date,a.created_date) lastmod, a.word_count, a.title, a.body_html, 
-                              wa.display_order, wa.page_title, wa.page_description, NVL(apex_string_util.get_slug(wa.navigation_label),'index') path_name, wa.navigation_label,
-                              ROW_NUMBER() OVER (ORDER BY wa.display_order) rn
-                        FROM article a, website_article wa
-                       WHERE wa.website_id=C.id
-                         AND wa.article_id=a.id
-                         AND wa.publish='YES'
-                       ORDER BY wa.display_order)
-            LOOP
-                l_article_object:=new JSON_OBJECT_T;
-                l_article_object.put('article_id',C1.id);
-                l_article_object.put('display_order',C1.display_order);
-                l_article_object.put('path_name',C1.path_name);
-                l_article_object.put('page_title',C1.page_title);
-                l_article_object.put('page_description',C1.page_description);
-                l_article_object.put('created',TO_CHAR(C1.created_date,'dd.mm.yyyy'));
-
-                l_sitemap:=l_sitemap || 
-                '    <url>' || chr(10) || '        <loc>https://www.' || C.domain_name || CASE WHEN (C1.rn>1) THEN '/' || C1.path_name END || '</loc>' || chr(10) || '        <lastmod>' || TO_CHAR(C1.lastmod,'YYYY-MM-DD') || '</lastmod>' || chr(10) || 
-                '    </url>' || chr(10);
-
-                IF (C1.navigation_label IS NOT NULL) THEN
-                    l_article_object.put('nav_name',C1.navigation_label);
-                END IF;
-
-                IF (C1.title IS NOT NULL) THEN
-                    l_article_object.put('title',C1.title);
-                END IF;
-
-                IF (C1.body_html IS NOT NULL) THEN
-                    l_article_object.put('words',C1.word_count);
-                    IF (c.css IS NULL) THEN
-                        l_article_object.put('text',stripHeading(C1.title, C1.body_html));
-                    ELSE
-                        l_article_object.put('text',C1.body_html);
-                    END IF;
-                END IF;
-
-                FOR C2 IN (SELECT rn, nb, cld_cloud_name, resource_type, public_id, format, width, height, alt_text 
-                             FROM
-                                (
-                                 SELECT cld_cloud_name, resource_type, public_id, format, width, height, alt_text, display_order, ROW_NUMBER() OVER (ORDER BY display_order) rn, COUNT(*) OVER () nb
-                                   FROM asset 
-                                  WHERE article_id=C1.id
-                                ) 
-                            ORDER BY display_order)
-                LOOP
-                    IF (C2.rn=1) THEN
-                        l_asset_array:= new JSON_ARRAY_T;
-                        l_asset_object:= new JSON_OBJECT_T;
-                    END IF;
-                    IF (C2.alt_text IS NOT NULL) THEN
-                        l_asset_object.put('alt_text',C2.alt_text);
-                    END IF;
-                    l_media_type:=pck_core.getMediaType(C2.resource_type, C2.format);
-                    l_url_img:=pck_core.getCloudinaryUrl(C2.cld_cloud_name, C2.resource_type, C2.public_id, C2.format, C2.width);
-                    l_asset_object.put('media',l_media_type);
-                    l_asset_object.put('url',l_url_img);
-                    l_asset_object.put('width',ROUND(C2.width*.25));
-                    l_asset_object.put('height',ROUND(C2.height*.25));
-                    l_asset_array.append(l_asset_object);
-                    IF (C2.rn=C2.nb) THEN
-                        l_article_object.put('assets',l_asset_array);
-                    END IF;
-                END LOOP;
-                l_article_array.append(l_article_object);
-            END LOOP;
-            l_website_object.put('robots','User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: https://www.' || C.domain_name || '/sitemap.xml');
-            l_sitemap:=l_sitemap || '</urlset>';
-        END LOOP;
-
-
-        l_website_object.put('sitemap',l_sitemap);
-
-        l_json.put('website',l_website_object);
-        l_json.put('articles',l_article_array);
-
-        l_nb_articles:=l_article_array.get_size;
-        --IF (l_nb_articles=0) THEN
-        --    owa_util.status_line(404, '', true);
-        --ELSE
-            owa_util.status_line(200, '', false);
-            owa_util.mime_header( 'application/json', TRUE, 'UTF-8' );
-            htp.p(l_json.to_clob);
-        --END IF;
-
-        EXCEPTION WHEN OTHERS THEN
-            owa_util.status_line(400, '', true);
-            htp.p('{"sqlcode":'||sqlcode||',"sqlerrm":"'||sqlerrm||'"}');
-            pck_core.log_error; 
-    END;
-
     /*
      **  Get website article's HTML/CSS/JS
      */    
@@ -849,6 +519,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_css website.css%type;
         l_javascript website.css%type;
         l_body_html article.body_html%type;
+        l_thumbnails_html CLOB;
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
@@ -860,8 +531,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_id_1:=SUBSTR(pId,1,INSTR(pId,',')-1);
             l_id_2:=SUBSTR(pId,INSTR(pId,',')+1);
         END IF;
-
-        pck_core.log('pId:'||pId||'|l_id_1:'||l_id_1||'|l_id_2:'||l_id_2);
 
         /* Website and Article data */
         IF (l_id_1 IS NOT NULL AND l_id_2 IS NOT NULL) THEN
@@ -875,20 +544,47 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             SELECT body_html INTO l_body_html
               FROM article
              WHERE id=l_id_1;
+            getThumbnails(l_id_1, l_thumbnails_html);
         END IF;
 
-        apex_json.open_object; 
+        apex_json.open_object;
         apex_json.write('success', TRUE); 
         apex_json.write('domain_name', l_domain_name);
         apex_json.write('html', l_body_html);
         apex_json.write('css', l_css);
         apex_json.write('js', l_javascript);
+        apex_json.write('thumbnails', l_thumbnails_html);
         apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error;
     END; 
+
+
+
+
+
+    /*
+     **  Insert new page in website
+     */        
+    PROCEDURE insertArticle(pWebsiteId IN website.id%type) IS
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        INSERT INTO article (id, author_user_id, created_date) VALUES (seq_article.nextval, l_session_data.user_id, current_timestamp);
+        INSERT INTO website_article(article_id, website_id, display_order, user_id) VALUES (seq_article.currval, pWebsiteId, seq_article.currval*-1, l_session_data.user_id);
+
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.write('article_id', seq_article.currval);
+        APEX_JSON.close_object;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
 
     /*
      **  Procedure called by the autoSave feature of CKEditor
@@ -899,7 +595,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_title article.title%type;
         l_excerpt varchar2(1000);
         l_word_count article.word_count%type;
-        l_edit_text article.body_html%type;
+        l_body_html article.body_html%type;
         l_name users.name%type;
         l_words apex_t_varchar2;
         l_rem PLS_INTEGER;
@@ -910,12 +606,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         SELECT website_id,
                SUBSTR(title,1,60) title, 
                REGEXP_SUBSTR(word_count,'(\d)+') word_count,
-               edit_text,
+               body_html,
                u.name
-          INTO l_website_id, l_title, l_word_count, l_edit_text, l_name
-          FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (website_id, title, word_count, edit_text CLOB))
+          INTO l_website_id, l_title, l_word_count, l_body_html, l_name
+          FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (website_id, title, word_count, body_html CLOB))
           WHERE u.id=l_session_data.user_id;
-
+        /*
         apex_escape.set_html_escaping_mode('E');
         l_excerpt:=dbms_lob.substr(utl_i18n.unescape_reference(apex_escape.striphtml(l_edit_text)),200,NVL(LENGTHB(l_title),0)+1);
 
@@ -937,26 +633,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 EXIT;
             END IF;
         END LOOP;
-
-        IF (pArticleId=0) THEN
-            INSERT INTO article (id, title, excerpt, word_count, body_html, author_user_id, created_date) VALUES (seq_article.nextval, l_title, l_excerpt, l_word_count, l_edit_text, l_session_data.user_id, current_timestamp);
-            INSERT INTO website_article(article_id, website_id, display_order, user_id) VALUES (seq_article.currval, l_website_id, seq_article.currval*-1, l_session_data.user_id);
-        ELSE
-            UPDATE article SET title=l_title, excerpt=l_excerpt, word_count=l_word_count, body_html=l_edit_text, updated_date=current_timestamp
-             WHERE id=pArticleId;
-        END IF;
+        */
+        UPDATE article SET title=l_title, word_count=l_word_count, body_html=l_body_html, updated_date=current_timestamp
+         WHERE id=pArticleId;
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
-        IF (pArticleId=0) THEN
-            APEX_JSON.write('articleId',seq_article.currval);
-            --APEX_JSON.write('new_card',pck_core.buildWebsiteArticles(pWebsiteId=>l_website_id,pCanUsePopover=>l_session_data.canuse_popover, pTimezone=>l_session_data.timezone, pArticleId=>seq_article.currval));
-        END IF;
-        APEX_JSON.write('title', l_title);
-        APEX_JSON.write('excerpt', l_excerpt);
-        APEX_JSON.write('words', l_word_count || ' words');
-        APEX_JSON.write('author', l_name);
-        APEX_JSON.write('updated', TO_CHAR(current_timestamp AT TIME ZONE l_session_data.timezone,'dd Mon yyyy hh24:mi:ss'));
         APEX_JSON.close_object;
 
         EXCEPTION
@@ -1147,52 +829,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         --apex_json.write('updated', pck_core.fmtUpdatedDate(current_date));
         apex_json.write('nb-assets', l_nb_assets || ' media');
         apex_json.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-    END;
-
-    /*
-     **  Copy Website
-     */  
-    PROCEDURE copyWebsite(pWebsiteId IN website.id%type) IS
-        l_domain_name_copy website.domain_name%type;
-        l_json JSON_OBJECT_T;
-        l_clob CLOB;
-        l_session_data pck_core.session_data_rt;
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-
-        SELECT SUBSTR(domain_name,1,25) || '_COPY' INTO l_domain_name_copy FROM website WHERE id=pWebsiteId AND user_id=l_session_data.user_id;
-
-        /* Create Netlify site and store site_id */
-        l_json:=new JSON_OBJECT_T;
-        l_json.put('name', l_domain_name_copy);
-
-        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, 
-            pEndpoint=>'sites', 
-            pMethod=>'POST', 
-            pBody=>l_json.stringify, 
-            pData=>l_clob);
-
-        INSERT INTO website (id,domain_name,user_id,favicon_url,template,contact_email,trade_name,affiliation_link_img,affiliation_link_url,netlify_site_id)
-        SELECT seq_website.nextval,l_domain_name_copy,w.user_id,w.favicon_url,w.template,w.contact_email,w.trade_name,w.affiliation_link_img,w.affiliation_link_url,s.site_id
-          FROM website w, JSON_TABLE(l_clob, '$' COLUMNS(site_id)) s
-         WHERE w.id=pWebsiteId
-           AND w.user_id=l_session_data.user_id;
-
-        INSERT INTO website_article (website_id,article_id,display_order,navigation_label,page_title,page_description,user_id)
-        SELECT seq_website.currval, article_id,display_order,navigation_label,page_title,page_description,user_id
-          FROM website_article
-         WHERE website_id=pWebsiteId
-           AND user_id=l_session_data.user_id;
-
-        apex_json.open_object;  
-        apex_json.write('success',TRUE);
-        apex_json.write('website_id',seq_website.currval);
-        apex_json.write('domain_name',l_domain_name_copy);
-        apex_json.close_object;        
 
         EXCEPTION
             WHEN OTHERS THEN
