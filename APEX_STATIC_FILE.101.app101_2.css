@@ -111,9 +111,28 @@ nav.top-nav {
 }
 
 nav.website-nav-menu {
-    display: inline-flex;
+    display: flex;
     gap: 1rem;
     margin: 1rem;
+}
+
+.website-nav-menu > .dropdown {
+    margin-left: auto;
+}
+
+.nav-label + .nav-label {
+    margin-left: var(--space-m);
+}
+
+.nav-label:not(.selected) {
+    text-decoration: none;
+}
+
+.nav-label.selected {
+    text-decoration-color: var(--color-secondary);
+    text-decoration-thickness: var(--space-3xs);
+    text-underline-offset: var(--space-3xs);
+    text-decoration-skip-ink: none;
 }
 
 button.new-page {
@@ -616,7 +635,7 @@ nav button {
 
 .cards > div:nth-of-type(1) {
     border: solid 0.25ch pink;
-    flex-basis: 35ch;
+    flex-basis: 45ch;
     flex-grow: 1;
 }
 
@@ -653,39 +672,23 @@ nav button {
 /* GALLERY STYLES  */
 /* *************** */
 
-.gallery-container > ul {
+.gallery-list {
   list-style: none;
   margin: 0;
   display: grid;
-  grid-gap: 0.5em;
-  grid-template-columns: repeat(auto-fill, minmax(min(25ch, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(10ch, 100%), 1fr));
 }
 
 .drag-in-progress {
     opacity: 0.4;
 }
 
-.instruction {
-    margin: 0 0 2ch 2ch;
-}
-
-.gallery-container .instruction > span {
-  padding: 0 0.5em;
-  color: var(--color-secondary);
-}
-
-.gallery-container ul img {
+.gallery-list img {
   inline-size: 100%;
-  block-size: 100%;
+  block-size: auto;
   object-fit: scale-down;
-  max-height: 20ch; /* bollox safari */
+  max-height: 10ch; /* bollox safari */
 }
-/*
-.gallery-container .card > div:first-of-type {
-    display: flex;
-    justify-content: flex-end;
-}
-*/
 
 video, audio {
     inline-size: 100%;
