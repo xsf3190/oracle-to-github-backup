@@ -38,7 +38,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
-    FUNCTION buildNavLabels(pWebsiteId IN website.id%type) RETURN VARCHAR2;
+    FUNCTION buildNavLabels(pWebsiteId IN website.id%type, pArticleId article.id%type DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN CLOB, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
@@ -318,11 +318,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </div>');
     END;
 
-    FUNCTION buildNavLabels(pWebsiteId IN website.id%type) RETURN VARCHAR2 IS
+    FUNCTION buildNavLabels(pWebsiteId IN website.id%type, pArticleId article.id%type DEFAULT NULL) RETURN VARCHAR2 IS
         l_nav_labels LONG;
+        l_selected BOOLEAN;
     BEGIN
-        FOR C IN (SELECT article_id, navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
-            l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
+        /* set "selected" class either for the pArticleId if present else for the first page */
+        FOR C IN (SELECT article_id, navigation_label, ROW_NUMBER() OVER (ORDER BY display_order) rn FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
+            l_selected:=FALSE;
+            IF (pArticleId IS NOT NULL) THEN
+                IF (pArticleId=C.article_id) THEN 
+                    l_selected:=TRUE;
+                END IF;
+            END IF;
+            IF (pArticleId IS NULL) THEN
+                IF (C.rn=1) THEN 
+                    l_selected:=TRUE;
+                END IF;
+            END IF;
+            l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label' || CASE  WHEN l_selected THEN ' selected' END || '" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
         END LOOP;
 
         RETURN '<div>' || l_nav_labels || '</div>';
@@ -639,11 +652,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <span class="edge"></span>
                     <span class="front">NEW PAGE</span>
                 </button>
-                <nav class="website-nav-menu">' || buildNavLabels(l_domains(1).id) || '
+                <header>
+                    <nav class="website-nav-menu">' || buildNavLabels(l_domains(1).id) || '</nav>
                     <div class="dropdown">
                         <span>Edit Options</span>
                         <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                        <ul class="dropdown-items">                    
+                        <ul class="dropdown-items">
+                            <li>
+                                <button type="button" class="with-icon edit-field" data-column="website_article.navigation_label">
+                                    <svg class="icon"><use href="#link"></use></svg>
+                                Navigation Label
+                                </button>
+                            </li>                    
                             <li>
                                 <button type="button" class="with-icon edit-codepen">
                                     <svg class="icon"><use href="#codepen"></use></svg>
@@ -674,12 +694,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             <li>
                                 <button type="button" class="with-icon delete" data-table="website_article">
                                     <svg class="icon"><use href="#delete"></use></svg>
-                                Delete
+                                Delete Page
                                 </button>
                             </li>     
                         </ul>
                     </div>
-                </nav>
+                </header>
                 <div id="editor"></div>
                 <div>
                     <span id="word-count"></span>
