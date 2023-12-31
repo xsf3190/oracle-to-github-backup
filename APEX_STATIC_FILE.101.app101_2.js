@@ -19,7 +19,6 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       css = website.querySelector("#css"),
       javascript = website.querySelector("#javascript"),
       newWebsite = website.querySelector(".new-website"),
-      //copyWebsite = website.querySelector(".copy-website"),
       deployButtons = website.querySelector(".deploy-buttons > div"),
       websiteNavMenu = container.querySelector(".website-nav-menu"),
       cards = container.querySelector(".cards"),
@@ -359,7 +358,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
 
     gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
     edit_text();
-
+    sortable_nav();
     lazyload();
 
 });
@@ -556,18 +555,11 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".upload-media")) {
         upload_media();                                
     } else if (e.target.matches(".edit-field")) {
-        edit_field(id, e); 
+        edit_field(e); 
     } else if (e.target.matches(".edit-website")) {
         edit_website(e);
-    } 
-
-    return;
-
-    const card = e.srcElement.closest(".card");
-    const id = card ? card.dataset.id : website.dataset.id;
-
-     if (e.target.matches(".delete")) {
-        delete_object(id, e);
+    } else if (e.target.matches(".delete")) {
+        delete_object(e);
     } else if (e.target.matches(".confirmBtn")) {
         delete_object_confirm(e);
     } else if (e.target.matches(".fullscreen")) {
@@ -887,8 +879,12 @@ const widget=cloudinary.createUploadWidget(
  ** ENABLE DRAG AND DROP OF GALLERY IMAGES TO RE-ORDER
  */
 new Sortable(galleryList, {
+    sort: true,
     animation: 150,
     ghostClass: 'drag-in-progress',
+    onMove: event => {
+         return !event.related.classList.contains('ck');
+    },
     store: {
         set: async function (sortable) {
             execProcess("thumbnails","PUT", {dbid_string: sortable.toArray().join(":")} ).then( (data) => {
@@ -901,18 +897,21 @@ new Sortable(galleryList, {
 /* 
  ** ENABLE DRAG AND DROP OF WEBSITE ARTICLES TO RE-ORDER
  */
-
-new Sortable(websiteNavMenu, {
-    animation: 150,
-    ghostClass: 'drag-in-progress',
-    store: {
-        set: async function (sortable) {
-            execProcess("reorder-articles/" + website.dataset.id, "PUT", {dbid_string: sortable.toArray().join(":")} ).then( () => {
-                console.log("cards reordered");
-            });
+const sortable_nav = () => {
+    const websiteNavSort = websiteNavMenu.querySelector("div");
+    Sortable.create(websiteNavSort, {
+        sort: true,
+        animation: 150,
+        ghostClass: 'drag-in-progress',
+        store: {
+            set: async function (sortable) {
+                execProcess("reorder-articles/" + website.dataset.id, "PUT", {dbid_string: sortable.toArray().join(":")} ).then( () => {
+                    console.log("cards reordered");
+                });
+            }
         }
-    }
-});
+    });
+};
 
 /* 
  ** SIGN OUT
@@ -1028,18 +1027,26 @@ ClassicEditor.create(document.querySelector("#editor"), {
     });
 
 
+
+
 if (window.location.hash === "#_=_"){
     history.replaceState 
         ? history.replaceState(null, null, window.location.href.split("#")[0])
         : window.location.hash = "";
 }
 
+
 /* 
- ** UPLOAD MEDIA TO CLOUDINARY
+ ** CREATE NEW WEBSIITE PAGE
  */
 const new_page = () => {
     execProcess( "article/"+website.dataset.id,"POST").then( (data) => {
-        console.log("article_id",data.article_id);
+        gArticleId = data.article_id;
+        websiteNavMenu.replaceChildren();
+        websiteNavMenu.insertAdjacentHTML('afterbegin',data.navigation);
+        sortable_nav();
+        editor.setData("");
+        galleryList.replaceChildren();
     });
 }
 
@@ -1064,14 +1071,22 @@ const upload_media = () => {
 
 
 const edit_text = () => {
+    /*
     const pendingActions = editor.plugins.get( 'PendingActions' );
     if ( pendingActions.hasAny ) {
+        const arr = Array.from(pendingActions)
+        console.log("arr",arr);
         return;
     }
+    */
     execProcess( "article/"+gArticleId,"GET").then( (data) => {
         editor_status = "init";
         editor_status_text.textContent = "";
-        editor.setData(data.html);
+        if (data.html) {
+            editor.setData(data.html);
+        } else {
+            editor.setData("");
+        }
         galleryList.replaceChildren();
         if (data.thumbnails) {
             galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
@@ -1090,10 +1105,8 @@ const edit_text = () => {
 /* 
  ** GET HTML FOR SELECTED FIELD TO EDIT IN MODAL DIALOG
  */
-const edit_field = (id, e) => {
-    if (id === website.dataset.id) return;
-
-    execProcess( "edit-field","PUT",{"table_column":e.target.dataset.column, "website_id":website.dataset.id, "id":id}).then( (data) => {
+const edit_field = (e) => {
+    execProcess( "edit-field","PUT",{"table_column":e.target.dataset.column, "website_id":website.dataset.id, "id":gArticleId}).then( (data) => {
         const content = editField.querySelector(".content");
         content.replaceChildren();
         content.insertAdjacentHTML('afterbegin',data.content);
@@ -1160,92 +1173,42 @@ const upload_codepen = async () => {
 
     execProcess( "content/"+website.dataset.id+","+gArticleId,"POST",file).then( (data) => {
         popupOpen("CODEPEN UPLOAD COMPLETED",data.message);
-        get_page();
+        // need to refresh html if changed !!
     });
-}
-
-/* 
- ** GET NAVIGATION LABEL FOR WEBSITE ARTICE AND SHOW MODAL DIALOG
- */
-const edit_nav_label = (id) => {
-    if (id === website.dataset.id) return;
-
-    const pk = website.dataset.id + "," + id;
-
-    execProcess( "navigation-label/"+pk,"GET").then( (data) => {
-        const textarea = editNavLabel.querySelector("textarea");
-        textarea.dataset.id = pk;
-        textarea.value = data.navigation_label ? data.navigation_label : "";
-        const navigation_label_len = data.navigation_label ? data.navigation_label.length : 0;
-        textarea.nextElementSibling.querySelector(".charcounter").textContent = navigation_label_len + "/" + textarea.getAttribute("maxlength");
-        textarea.nextElementSibling.querySelector(".result").textContent = "";
-        editNavLabel.showModal();
-    });
-}
-
-/* 
- ** GET SEO ITEMS FOR WEBSITE ARTICE AND SHOW MODAL DIALOG
- */
-const edit_seo_items = (id) => {
-    if (id === website.dataset.id) return;
-
-    const pk = website.dataset.id + "," + id;
-    
-    execProcess( "seo-items/"+pk,"GET").then( (data) => {
-        const page_title = editSeoItems.querySelector("#page_title");
-        page_title.dataset.id = pk;
-        page_title.value = data.page_title ? data.page_title : "";
-        const page_title_len = data.page_title ? data.page_title.length : 0;
-        page_title.nextElementSibling.querySelector(".charcounter").textContent = page_title_len + "/" + page_title.getAttribute("maxlength");
-        page_title.nextElementSibling.querySelector(".result").textContent = "";
-
-        const page_description = editSeoItems.querySelector("#page_description");
-        page_description.dataset.id = pk;
-        page_description.value = data.page_description ? data.page_description : "";
-        const page_description_len = data.page_description ? data.page_description.length : 0;
-        page_description.nextElementSibling.querySelector(".charcounter").textContent = page_description_len + "/" + page_description.getAttribute("maxlength");
-        page_description.nextElementSibling.querySelector(".result").textContent = "";
-        
-        editSeoItems.showModal();
-    });
-}
-
-/*
-**  REMOVE CARD FROM DOM
-*/
-const remove_card = (articleId) => {
-    let li = document.querySelector("[data-id='" + articleId + "']");
-    li.replaceChildren();
-    li.remove();
 }
 
 /*
  ** DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER - REQUIRES CONFIRMATION
  */
-const delete_object = (id, e) => {
+const delete_object = (e) => {
     confirm.querySelector("h2").textContent = "Delete " + e.target.dataset.table.replace("_"," ");
     confirm.querySelector("img").style.display = "block";
     confirm.querySelector("p").style.display = "block";
+    let object_id;
     switch (e.target.dataset.table) {
         case "website_article":
-            if (cards.querySelector("[data-id='" + id + "'] img")) {
-                confirm.querySelector("img").src = cards.querySelector("[data-id='" + id + "'] img").src;
+            const title = websiteNavMenu.querySelector("[data-id='" + gArticleId + "']").textContent;
+            const img = document.querySelector(".ck img:first-of-type");
+            if (img) {
+                confirm.querySelector("img").src = img.src;
             } else {
                 confirm.querySelector("img").style.display = "none";
             }
-            if (cards.querySelector("[data-id='" + id + "'] .title")) {
-                confirm.querySelector("p").textContent = cards.querySelector("[data-id='" + id + "'] .title").textContent;
+            if (title) {
+                confirm.querySelector("p").textContent = title;
             } else {
                 confirm.querySelector("p").style.display = "none";
             }
+            object_id = gArticleId;
             break;
+
         case "asset":
             confirm.querySelector("img").src = gallery.querySelector("[data-id='" + id + "'] img").src;
             confirm.querySelector("p").style.display = "none";
             break;
     }
     
-    confirmBtn.dataset.id = id ? id : e.target.dataset.id;
+    confirmBtn.dataset.id = object_id;
     confirmBtn.dataset.table = e.target.dataset.table;
     confirm.showModal();
 }
@@ -1260,16 +1223,23 @@ const delete_object_confirm = (e) => {
         pk.id = e.target.dataset.id;
     }
 
-    execProcess("dml","DELETE",pk).then( () => {
+    execProcess("dml","DELETE",pk).then( (data) => {
         let ele;
         switch (pk.table_name) {
             case "website_article":
-                ele = cards.querySelector("[data-id='" + pk.article_id + "']");
-                ele.classList.add("fade-out");
+                websiteNavMenu.replaceChildren();
+                websiteNavMenu.insertAdjacentHTML('afterbegin',data.navigation);
+                gArticleId = websiteNavMenu.querySelector("a.selected").dataset.id;
+                sortable_nav();
+                if (gArticleId) {
+                    edit_text();
+                }
                 break;
+
             case "asset":
                 ele = gallery.querySelector("[data-id='" + pk.id + "']");
                 ele.classList.add("fade-out");
+                ele.remove();
                 break;
             case "website":
                 ele = website.querySelector("[data-id='" + pk.id + "']");
@@ -1282,9 +1252,10 @@ const delete_object_confirm = (e) => {
                     deployButtons.replaceChildren();
                     newContent.disabled = true;
                 },1000);
+                ele.remove();
                 break;                    
         }
-        ele.remove();
+        
     });
 }
 
