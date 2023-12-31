@@ -98,25 +98,21 @@ textarea, button, input, select {
   font: inherit;
 }
 
-nav {
-    background-color: white;
-    display: flex;
-}
-
 nav.top-nav {
     position: sticky;
     top: 0;
+    display: flex;
     justify-content: flex-end;
     margin: 2rem 2rem 2rem 0;
 }
 
-nav.website-nav-menu {
+.page-content > header {
     display: flex;
-    gap: 1rem;
+    gap: var(--space-s);
     margin: 1rem;
 }
 
-.website-nav-menu > .dropdown {
+.page-content > header  > .dropdown {
     margin-left: auto;
 }
 
