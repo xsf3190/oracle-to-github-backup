@@ -664,6 +664,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_clob CLOB;
         l_message VARCHAR2(500);
         l_session_data pck_core.session_data_rt;
+        l_html_updated BOOLEAN;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -687,9 +688,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
                     IF (dbms_lob.compare(l_body_html, l_clob)=0) THEN
                         l_message:=l_message || 'HTML - no change | ';
+                        l_html_updated:=FALSE;
                     ELSE
                         UPDATE article SET body_html=l_clob, editor='CODEPEN', updated_date=current_timestamp WHERE id=l_article_id;
                         l_message:=l_message || 'HTML - updated successfully | ';
+                        l_body_html:=l_clob;
+                        l_html_updated:=TRUE;
                     END IF;
                 WHEN l_domain_name||'/src/script.js' THEN
                     l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
@@ -718,6 +722,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.open_object;
         apex_json.write('success', TRUE);
         apex_json.write('message', l_message);
+        IF (l_html_updated) THEN
+            apex_json.write('body_html', l_body_html);
+        END IF;
         apex_json.close_object;
 
         EXCEPTION
