@@ -38,7 +38,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
-    FUNCTION buildNavLabels(pWebsiteId IN website.id%type, pArticleId article.id%type DEFAULT NULL) RETURN VARCHAR2;
+    FUNCTION buildNavLabels(pWebsiteId IN website.id%type, pArticleId IN article.id%type DEFAULT NULL, pDeploy IN VARCHAR2 DEFAULT '#') RETURN VARCHAR2;
     --
     FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN CLOB, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
@@ -318,9 +318,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </div>');
     END;
 
-    FUNCTION buildNavLabels(pWebsiteId IN website.id%type, pArticleId article.id%type DEFAULT NULL) RETURN VARCHAR2 IS
+    FUNCTION buildNavLabels(pWebsiteId IN website.id%type, pArticleId IN article.id%type DEFAULT NULL, pDeploy IN VARCHAR2 DEFAULT '#') RETURN VARCHAR2 IS
         l_nav_labels LONG;
         l_selected BOOLEAN;
+        l_deploy VARCHAR2(200);
+
     BEGIN
         /* set "selected" class either for the pArticleId if present else for the first page */
         FOR C IN (SELECT article_id, navigation_label, ROW_NUMBER() OVER (ORDER BY display_order) rn FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
@@ -335,7 +337,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     l_selected:=TRUE;
                 END IF;
             END IF;
-            l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label' || CASE  WHEN l_selected THEN ' selected' END || '" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
+            IF (pDeploy='#') THEN
+                l_deploy:=pDeploy;
+            ELSE
+                l_deploy:='/' || CASE WHEN C.rn>1 THEN apex_string_util.get_slug(C.navigation_label) END;
+            END IF;
+            l_nav_labels:=l_nav_labels || '<a href="' || l_deploy || '" class="nav-label' || CASE  WHEN l_selected THEN ' selected' END || '" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
         END LOOP;
 
         RETURN '<div>' || l_nav_labels || '</div>';
