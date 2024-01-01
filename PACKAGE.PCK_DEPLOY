@@ -104,14 +104,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files t_files;
         l_sitemap CLOB;
         l_robots CLOB;
+        l_ssl_url VARCHAR2(200);
         n PLS_INTEGER:=0;
     BEGIN
+        /* Get URL of site to be deployed in order to build navigation links */
+        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId, pMethod=>'GET', pData=>l_clob);
+        SELECT ssl_url INTO l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS(ssl_url));
+
         /* Get SHA1 of all files to be deployed */
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
 
         FOR C IN (SELECT w.domain_name, w.css, w.javascript, 
-                         wa.page_title, wa.page_description, apex_string_util.get_slug(wa.navigation_label) path_name, 
+                         wa.article_id, wa.page_title, wa.page_description, apex_string_util.get_slug(wa.navigation_label) path_name, 
                          COALESCE(a.updated_date,a.created_date) lastmod, a.body_html, 
                          u.name, ROW_NUMBER() OVER (ORDER BY wa.display_order) rn, COUNT(*) OVER () nb
                     FROM website w, website_article wa, article a, users u
@@ -131,7 +136,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         '<meta name="author" content=">' || C.name || '">' || chr(10) ||
                         '<style>' || C.css || '</style>' || chr(10) || 
                     '</head>' || chr(10) || 
-                    '<body>' || C.body_html || chr(10) ||
+                    '<body><nav>' || pck_core.buildNavLabels(pWebsiteId, C.article_id, pDeploy=>l_ssl_url) || '</nav>' || C.body_html || chr(10) ||
                         '<script>' || C.javascript || '</script>' || chr(10) || 
                     '</body>' || chr(10) || 
                     '</html>';
