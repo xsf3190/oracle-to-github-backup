@@ -43,6 +43,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
 **  TEXT INPUT COMPONENT
 */
 const inputHandler = (e) => {
+    if (!e.target.matches(".cms")) return;
     if (e.target.tagName !== "TEXTAREA" && e.target.tagName !== "INPUT") return;
 
     if (e.target.id==="domain_name") {
@@ -81,6 +82,7 @@ const focusHandler = (e) => {
 }
 
 const changeHandler = (e) => {
+    if (!e.target.matches(".cms")) return;
     let result;
     if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT") {
         result = e.target.nextElementSibling.querySelector(".result");
@@ -114,6 +116,10 @@ const changeHandler = (e) => {
         if (data.deploy_buttons) {
             deployButtons.replaceChildren();
             deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
+        }
+
+        if (table_column === "website_article.navigation_label") {
+            websiteNavMenu.querySelector("a.selected").textContent = value;
         }
     });
 }
@@ -207,15 +213,6 @@ const deploy_website = (e) => {
         domainNameResult.textContent = "MUST HAVE A DOMAIN NAME";
         domainNameResult.style.opacity = "1";
         domainNameResult.style.color = "red";
-        return;
-    }
-
-    const template = website.querySelector("[name='template']:checked");
-    if (!template) {
-        let templateResult = website.querySelector("[name='template']").closest("fieldset").nextElementSibling.querySelector(".result");
-        templateResult.textContent = "SELECT TEMPLATE FOR DEPLOYMENT";
-        templateResult.style.opacity = "1";
-        templateResult.style.color = "red";
         return;
     }
  
@@ -882,9 +879,6 @@ new Sortable(galleryList, {
     sort: true,
     animation: 150,
     ghostClass: 'drag-in-progress',
-    onMove: event => {
-         return !event.related.classList.contains('ck');
-    },
     store: {
         set: async function (sortable) {
             execProcess("thumbnails","PUT", {dbid_string: sortable.toArray().join(":")} ).then( (data) => {
@@ -906,7 +900,7 @@ const sortable_nav = () => {
         store: {
             set: async function (sortable) {
                 execProcess("reorder-articles/" + website.dataset.id, "PUT", {dbid_string: sortable.toArray().join(":")} ).then( () => {
-                    console.log("cards reordered");
+                    console.log("pages reordered");
                 });
             }
         }
@@ -972,7 +966,7 @@ const saveData = async ( data ) => {
 let editor;
 
 ClassicEditor.create(document.querySelector("#editor"), {
-        toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','style', 'sourceEditing'],
+        toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage','style', 'sourceEditing'],
         ui: {
             viewportOffset: {
                 top: 0
@@ -1021,6 +1015,18 @@ ClassicEditor.create(document.querySelector("#editor"), {
         const wordCountPlugin = editor.plugins.get( 'WordCount' );
         const wordCountWrapper = document.getElementById( 'word-count' );
         wordCountWrapper.appendChild( wordCountPlugin.wordCountContainer );
+        editor.editing.view.document.on( 'drop', ( evt, data ) => {
+			// Stop execute next callbacks.
+			evt.stop();
+	
+			// Stop the default event action.
+			data.preventDefault();
+		}, { priority: 'high' } );
+	
+		editor.editing.view.document.on( 'dragover', ( evt, data ) => {
+			evt.stop();
+			data.preventDefault();
+		}, { priority: 'high' } );
     })
     .catch(error => {
         console.error(error);
@@ -1172,6 +1178,9 @@ const upload_codepen = async () => {
     const file = await fileHandle.getFile();
 
     execProcess( "content/"+website.dataset.id+","+gArticleId,"POST",file).then( (data) => {
+        if (data.body_html) {
+            editor.setData(data.body_html);
+        }
         popupOpen("CODEPEN UPLOAD COMPLETED",data.message);
         // need to refresh html if changed !!
     });
