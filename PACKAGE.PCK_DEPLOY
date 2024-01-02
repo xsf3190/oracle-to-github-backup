@@ -134,12 +134,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         '<title>' || C.page_title || '</title>' || chr(10) ||
                         '<meta name="description" content=">' || C.page_description || '">' || chr(10) ||
                         '<meta name="author" content=">' || C.name || '">' || chr(10) ||
-                        '<style>' || C.css || '</style>' || chr(10) || 
+                        '<style>' || C.css || chr(10) || pck_icons.g_content_styles || '</style>' || chr(10) || 
                     '</head>' || chr(10) || 
-                    '<body><nav>' || pck_core.buildNavLabels(pWebsiteId, C.article_id, pDeploy=>l_ssl_url) || '</nav>' || C.body_html || chr(10) ||
+                    '<body>
+                        <div class="cms-wrapper ck-content">
+                            <nav>' || pck_core.buildNavLabels(pWebsiteId, C.article_id, pDeploy=>l_ssl_url) || '</nav>' || C.body_html || '
+                        </div>' || chr(10) ||
                         '<script>' || C.javascript || '</script>' || chr(10) || 
                     '</body>' || chr(10) || 
                     '</html>';
+
             l_sha1:=LOWER(dbms_crypto.hash(src => l_page, typ => dbms_crypto.hash_sh1));
             l_file_name:=CASE WHEN C.rn=1 THEN 'index' ELSE NVL(C.path_name,'Page_'||C.rn) END || '.html';
 
