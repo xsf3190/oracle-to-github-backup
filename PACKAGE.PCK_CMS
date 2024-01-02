@@ -459,15 +459,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Get website article's HTML/CSS/JS
+     **  Get article HTML if 1 parameter passed
+     **  Get all assets (HTML/CSS/JS) for codepen when both parameters passed
      */    
     PROCEDURE getArticle(pId IN VARCHAR2)  IS
         l_id_1 NUMBER;
         l_id_2 NUMBER;
-        l_domain_name website.domain_name%type;
-        l_css website.css%type;
-        l_javascript website.css%type;
-        l_body_html article.body_html%type;
         l_thumbnails_html CLOB;
         l_session_data pck_core.session_data_rt;
     BEGIN
@@ -483,27 +480,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         /* Website and Article data */
         IF (l_id_1 IS NOT NULL AND l_id_2 IS NOT NULL) THEN
-            SELECT w.domain_name, w.css, w.javascript, a.body_html INTO l_domain_name, l_css, l_javascript, l_body_html
-            FROM website w, article a
-            WHERE w.id=l_id_1
-            AND w.user_id=l_session_data.user_id
-            AND a.id=l_id_2
-            AND a.author_user_id=l_session_data.user_id;
+            FOR C IN (
+                SELECT w.domain_name, w.css, w.javascript, a.body_html
+                FROM website w, article a
+                WHERE w.id=l_id_1
+                AND w.user_id=l_session_data.user_id
+                AND a.id=l_id_2
+                AND a.author_user_id=l_session_data.user_id) 
+            LOOP
+                apex_json.open_object;
+                apex_json.write('success', TRUE); 
+                apex_json.write('domain_name', C.domain_name);
+                apex_json.write('html', '<div class="cms-wrapper ck-content"><nav>' || pck_core.buildNavLabels(l_id_1, l_id_2) || '</nav>' || C.body_html || '</div>');
+                apex_json.write('css', C.css || chr(10) || pck_icons.g_content_styles) ;
+                apex_json.write('js', C.javascript);
+                apex_json.close_object;
+            END LOOP;
         ELSE
-            SELECT body_html INTO l_body_html
-              FROM article
-             WHERE id=l_id_1;
-            getThumbnails(l_id_1, l_thumbnails_html);
+            FOR C IN (
+                SELECT body_html
+                FROM article
+                WHERE id=l_id_1
+                AND author_user_id=l_session_data.user_id) 
+            LOOP
+                getThumbnails(l_id_1, l_thumbnails_html);
+                apex_json.open_object;
+                apex_json.write('success', TRUE); 
+                apex_json.write('html', C.body_html);
+                apex_json.write('thumbnails', l_thumbnails_html);
+                apex_json.close_object;
+            END LOOP;
         END IF;
-
-        apex_json.open_object;
-        apex_json.write('success', TRUE); 
-        apex_json.write('domain_name', l_domain_name);
-        apex_json.write('html', l_body_html);
-        apex_json.write('css', l_css);
-        apex_json.write('js', l_javascript);
-        apex_json.write('thumbnails', l_thumbnails_html);
-        apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -649,7 +656,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Update website CSS / JS plus HTML of one article from the contents of an exported Codepen zip file
+     **  Update website CSS / JS from the contents of an exported Codepen zip file
      */        
     PROCEDURE updateContent(pZipFile IN BLOB, pId IN VARCHAR2) IS
         l_website_id website.id%type;
@@ -657,14 +664,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_domain_name website.domain_name%type;
         l_css CLOB;
         l_javascript CLOB;
-        l_body_html CLOB;
         l_zip BLOB:=pZipFile;
         l_files apex_zip.t_files;
         l_file BLOB;
         l_clob CLOB;
         l_message VARCHAR2(500);
         l_session_data pck_core.session_data_rt;
-        l_html_updated BOOLEAN;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -673,8 +678,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_article_id:=SUBSTR(pId,INSTR(pId,',')+1);
 
         /* Get existing clobs */
-        SELECT REPLACE(w.domain_name,'.','-'), w.css, w.javascript, a.body_html 
-          INTO l_domain_name, l_css, l_javascript, l_body_html
+        SELECT REPLACE(w.domain_name,'.','-'), w.css, w.javascript
+          INTO l_domain_name, l_css, l_javascript
           FROM website w, article a
          WHERE w.id=l_website_id
            AND w.user_id=l_session_data.user_id
@@ -684,17 +689,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_files := apex_zip.get_files(p_zipped_blob => l_zip);
         FOR i in 1 .. l_files.COUNT LOOP
             CASE l_files(i)
-                WHEN l_domain_name||'/src/index.html' THEN
-                    l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
-                    IF (dbms_lob.compare(l_body_html, l_clob)=0) THEN
-                        l_message:=l_message || 'HTML - no change | ';
-                        l_html_updated:=FALSE;
-                    ELSE
-                        UPDATE article SET body_html=l_clob, editor='CODEPEN', updated_date=current_timestamp WHERE id=l_article_id;
-                        l_message:=l_message || 'HTML - updated successfully | ';
-                        l_body_html:=l_clob;
-                        l_html_updated:=TRUE;
-                    END IF;
                 WHEN l_domain_name||'/src/script.js' THEN
                     l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
                     IF (dbms_lob.compare(l_javascript, l_clob)=0) THEN
@@ -705,6 +699,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     END IF;
                 WHEN l_domain_name||'/src/style.css' THEN
                     l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
+                    l_clob:=SUBSTR(l_clob,1,INSTR(l_clob,'/* CK')-1);
                     IF (dbms_lob.compare(l_css, l_clob)=0) THEN
                         l_message:=l_message || 'CSS - no change | ';
                     ELSE
@@ -722,9 +717,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.open_object;
         apex_json.write('success', TRUE);
         apex_json.write('message', l_message);
-        IF (l_html_updated) THEN
-            apex_json.write('body_html', l_body_html);
-        END IF;
         apex_json.close_object;
 
         EXCEPTION
