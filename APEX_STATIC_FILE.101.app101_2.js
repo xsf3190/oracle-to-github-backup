@@ -979,9 +979,9 @@ ClassicEditor.create(document.querySelector("#editor"), {
             }
         },
         title: {
-            placeholder: 'Enter title for article'
+            placeholder: 'Enter title'
         },
-        placeholder: 'Enter article content',
+        placeholder: 'Enter content',
         wordCount: {displayCharacters: false},
         list: {
             properties: {
@@ -1008,6 +1008,11 @@ ClassicEditor.create(document.querySelector("#editor"), {
                     styles: true
                 }
             ]
+        },
+        image: {
+            insert: {
+                type: 'auto'
+            }
         }
     })
     .then( (newEditor) => {
@@ -1071,11 +1076,8 @@ const upload_media = () => {
 }
 
 /* 
- ** GET CONTENT FOR RICH TEXT EDITOR 
+ ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR 
  */
-//const editorDialog = document.querySelector("dialog.editor");
-
-
 const edit_text = () => {
     /*
     const pendingActions = editor.plugins.get( 'PendingActions' );
@@ -1117,18 +1119,6 @@ const edit_field = (e) => {
         content.replaceChildren();
         content.insertAdjacentHTML('afterbegin',data.content);
         editField.showModal();
-    });
-}
-
-/* 
- ** GET WEBSITE ARTICLE ASSETS TO OPEN IN CODEPEN
- */
-const get_page = () => {
-    execProcess( "article/"+website.dataset.id+","+gArticleId,"GET").then( (data) => {
-        const sheet = new CSSStyleSheet();
-        sheet.replaceSync(data.css);
-        shadow.adoptedStyleSheets = [sheet];
-        shadow.innerHTML = data.html;
     });
 }
 
@@ -1178,11 +1168,7 @@ const upload_codepen = async () => {
     const file = await fileHandle.getFile();
 
     execProcess( "content/"+website.dataset.id+","+gArticleId,"POST",file).then( (data) => {
-        if (data.body_html) {
-            editor.setData(data.body_html);
-        }
         popupOpen("CODEPEN UPLOAD COMPLETED",data.message);
-        // need to refresh html if changed !!
     });
 }
 
