@@ -1076,6 +1076,18 @@ const upload_media = () => {
 }
 
 /* 
+ ** ASSIGN "selected" CLASS TO NAV ITEM
+ */
+const selected_nav = (id) => {
+    websiteNavMenu.querySelectorAll("a").forEach((link) => {
+        link.classList.remove("selected");
+        if (link.dataset.id === id) {
+            link.classList.add("selected");
+        }
+    });
+}
+
+/* 
  ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR 
  */
 const edit_text = () => {
@@ -1100,13 +1112,7 @@ const edit_text = () => {
             galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
             lazyload();
         }
-        websiteNavMenu.querySelectorAll("a").forEach((link) => {
-            link.classList.remove("selected");
-            if (link.dataset.id === gArticleId) {
-                link.classList.add("selected");
-            }
-        });
-
+        selected_nav(gArticleId);
     });
 }
 
