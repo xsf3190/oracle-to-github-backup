@@ -99,20 +99,19 @@ textarea, button, input, select {
 }
 
 nav.top-nav {
-    position: sticky;
-    top: 0;
     display: flex;
     justify-content: flex-end;
     margin: 2rem 2rem 2rem 0;
 }
 
-.page-content > header {
+.page-content > nav {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-s);
     margin: var(--space-m);
 }
 
-.page-content > header  > .dropdown {
+.page-content > nav  > .dropdown {
     margin-left: auto;
 }
 
