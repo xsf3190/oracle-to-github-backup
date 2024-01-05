@@ -179,8 +179,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('deploy_buttons', pck_core.buildDeployButtons(C.domain_name, C.netlify_site_id, C.netlify_site_id_custom));
         END LOOP;
 
-        apex_json.write('navigation', pck_core.buildNavLabels(pWebsiteId));
-
         apex_json.write('success', TRUE);
         apex_json.close_object;
 
@@ -491,7 +489,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 apex_json.open_object;
                 apex_json.write('success', TRUE); 
                 apex_json.write('domain_name', C.domain_name);
-                apex_json.write('html', '<div class="cms-wrapper ck-content"><nav>' || pck_core.buildNavLabels(l_id_1, l_id_2) || '</nav>' || C.body_html || '</div>');
+                apex_json.write('html', '<div class="cms-wrapper ck-content"><nav></nav>' || C.body_html || '</div>');
                 apex_json.write('css', C.css || chr(10) || pck_icons.g_content_styles) ;
                 apex_json.write('js', C.javascript);
                 apex_json.close_object;
@@ -539,7 +537,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
         APEX_JSON.write('article_id', seq_article.currval);
-        APEX_JSON.write('navigation', pck_core.buildNavLabels(pWebsiteId, seq_article.currval));
 
         APEX_JSON.close_object;
 
@@ -645,7 +642,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         IF (pSendResponse) THEN
             apex_json.open_object;
-            apex_json.write('navigation', pck_core.buildNavLabels(pWebsiteId));
             apex_json.write('success', TRUE);
             apex_json.close_object;
         END IF;
