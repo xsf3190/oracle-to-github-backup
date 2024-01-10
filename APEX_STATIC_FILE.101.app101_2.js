@@ -194,9 +194,10 @@ const edit_website = (e) => {
         deployButtons.replaceChildren();
         deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
 
-       const labels =  websiteNavMenu.querySelector("div:first-of-type");
-       labels.replaceChildren();
-       labels.insertAdjacentHTML('afterbegin',data.navigation);
+        while (websiteNavMenu.childElementCount > 1) {
+            websiteNavMenu.removeChild(websiteNavMenu.firstChild);
+        }
+        websiteNavMenu.insertAdjacentHTML('afterbegin',data.nav_labels);
 
         gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
         edit_text();
@@ -355,9 +356,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
 
     gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
     edit_text();
-    sortable_nav();
     lazyload();
-
 });
 
 const lazyload = () => {
@@ -889,23 +888,26 @@ new Sortable(galleryList, {
 });
 
 /* 
- ** ENABLE DRAG AND DROP OF WEBSITE ARTICLES TO RE-ORDER
+ **  DRAG AND DROP WEBSITE ARTICLES TO RE-ORDER
  */
-const sortable_nav = () => {
-    const websiteNavSort = websiteNavMenu.querySelector("div");
-    Sortable.create(websiteNavSort, {
-        sort: true,
-        animation: 150,
-        ghostClass: 'drag-in-progress',
-        store: {
-            set: async function (sortable) {
-                execProcess("reorder-articles/" + website.dataset.id, "PUT", {dbid_string: sortable.toArray().join(":")} ).then( () => {
-                    console.log("pages reordered");
-                });
-            }
+new Sortable(websiteNavMenu, {
+    sort: true,
+    animation: 150,
+    ghostClass: 'drag-in-progress',
+    filter: ".dropdown",
+    onMove: function (e) {
+          return e.related.className === 'nav-label';
+    },
+    store: {
+        set: async function (sortable) {
+            let arr = sortable.toArray();
+            arr.pop();
+            execProcess("reorder-articles/" + website.dataset.id, "PUT", {dbid_string: arr.join(":")} ).then( () => {
+                console.log("pages reordered");
+            });
         }
-    });
-};
+    }
+});
 
 /* 
  ** SIGN OUT
@@ -1053,9 +1055,12 @@ if (window.location.hash === "#_=_"){
 const new_page = () => {
     execProcess( "article/"+website.dataset.id,"POST").then( (data) => {
         gArticleId = data.article_id;
-        websiteNavMenu.replaceChildren();
-        websiteNavMenu.insertAdjacentHTML('afterbegin',data.navigation);
-        sortable_nav();
+        const selected = websiteNavMenu.querySelector(".selected");
+        if (selected) {
+            selected.insertAdjacentHTML('afterend',data.nav_label);
+        } else {
+            websiteNavMenu.insertAdjacentHTML('afterbegin',data.nav_label);
+        }
         editor.setData("");
         galleryList.replaceChildren();
     });
@@ -1228,13 +1233,7 @@ const delete_object_confirm = (e) => {
         let ele;
         switch (pk.table_name) {
             case "website_article":
-                websiteNavMenu.replaceChildren();
-                websiteNavMenu.insertAdjacentHTML('afterbegin',data.navigation);
-                gArticleId = websiteNavMenu.querySelector("a.selected").dataset.id;
-                sortable_nav();
-                if (gArticleId) {
-                    edit_text();
-                }
+                websiteNavMenu.querySelector(".selected").remove();
                 break;
 
             case "asset":
@@ -1242,6 +1241,7 @@ const delete_object_confirm = (e) => {
                 ele.classList.add("fade-out");
                 ele.remove();
                 break;
+
             case "website":
                 ele = website.querySelector("[data-id='" + pk.id + "']");
                 resetWebsite();
