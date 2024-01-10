@@ -158,10 +158,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
 
     /*
-    ** GET ALL ARTICLE (PAGE) CONTENT FOR A WEBSITE
+    ** GET CONTENT FOR A SELECTED WEBSITE
     */
     PROCEDURE getWebsite(pWebsiteId IN website.id%type) IS
         l_session_data pck_core.session_data_rt;
+        l_nav_labels LONG;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -175,9 +176,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         LOOP
             apex_json.write('domain_name', C.domain_name);
             apex_json.write('css', C.css);
-            apex_json.write('javascript', C.javascript);
+
             apex_json.write('deploy_buttons', pck_core.buildDeployButtons(C.domain_name, C.netlify_site_id, C.netlify_site_id_custom));
         END LOOP;
+
+        FOR C IN (SELECT article_id, navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
+            l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
+        END LOOP;
+        apex_json.write('nav_labels', l_nav_labels);
 
         apex_json.write('success', TRUE);
         apex_json.close_object;
@@ -537,6 +543,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
         APEX_JSON.write('article_id', seq_article.currval);
+        APEX_JSON.write('nav_label','<a href="#" class="nav-label selected" data-id="' || seq_article.currval || '">[New Page]</a>');
 
         APEX_JSON.close_object;
 
