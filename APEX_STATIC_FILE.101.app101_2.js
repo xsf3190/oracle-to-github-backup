@@ -201,7 +201,7 @@ const edit_website = (e) => {
 
         gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
         edit_text();
-        lazyload();
+        //lazyload();
     });
 };
 
@@ -356,7 +356,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
 
     gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
     edit_text();
-    lazyload();
+    //lazyload();
 });
 
 const lazyload = () => {
@@ -1053,14 +1053,15 @@ if (window.location.hash === "#_=_"){
  ** CREATE NEW WEBSIITE PAGE
  */
 const new_page = () => {
-    execProcess( "article/"+website.dataset.id,"POST").then( (data) => {
+    const selected = websiteNavMenu.querySelector(".selected");
+    execProcess( "article/"+website.dataset.id+","+selected.dataset.id,"POST").then( (data) => {
         gArticleId = data.article_id;
-        const selected = websiteNavMenu.querySelector(".selected");
         if (selected) {
             selected.insertAdjacentHTML('afterend',data.nav_label);
         } else {
             websiteNavMenu.insertAdjacentHTML('afterbegin',data.nav_label);
         }
+        selected_nav(gArticleId);
         editor.setData("");
         galleryList.replaceChildren();
     });
@@ -1086,7 +1087,7 @@ const upload_media = () => {
 const selected_nav = (id) => {
     websiteNavMenu.querySelectorAll("a").forEach((link) => {
         link.classList.remove("selected");
-        if (link.dataset.id === id) {
+        if (link.dataset.id == id) {
             link.classList.add("selected");
         }
     });
