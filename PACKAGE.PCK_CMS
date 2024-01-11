@@ -14,13 +14,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getWebsite(pWebsiteId IN website.id%type);
     --
-    PROCEDURE insertArticle(pWebsiteId IN website.id%type);
+    PROCEDURE insertArticle(pId IN VARCHAR2);
     --
     PROCEDURE publishArticle(pArticleId IN article.id%type);
     --
     PROCEDURE reorderAssets(pBodyText IN CLOB);
     --
-    PROCEDURE reorderWebsiteArticles(pWebsiteId IN website_article.website_id%type, pBodyText IN CLOB);
+    PROCEDURE reorderWebsiteArticles(pWebsiteId IN website_article.website_id%type, pBodyText IN CLOB, pReturnJson IN BOOLEAN DEFAULT TRUE);
     --
     PROCEDURE setClientInfo(pBodyText IN CLOB);
     --
@@ -219,11 +219,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 WHEN 'website_article.page_title' THEN
                     SELECT page_title INTO l_value FROM website_article WHERE website_id=C.website_id AND article_id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website_article.page_description' THEN
-                    SELECT page_description INTO l_value FROM website_article WHERE website_id=C.website_id AND article_id=C.id AND user_id=l_session_data.user_id;
-                WHEN 'asset.alt_text' THEN
-                    SELECT alt_text INTO l_value FROM asset WHERE id=C.id AND user_id=l_session_data.user_id;
-                WHEN 'asset.description' THEN
-                    SELECT description INTO l_value FROM asset WHERE id=C.id AND user_id=l_session_data.user_id;              
+                    SELECT page_description INTO l_value FROM website_article WHERE website_id=C.website_id AND article_id=C.id AND user_id=l_session_data.user_id;            
             END CASE;
             l_field_html:=pck_core.buildTextareaWrapper(l_pk,C.table_column,l_value,l_session_data.canuse_popover);
         END LOOP;
@@ -256,7 +252,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         FOR C IN (
             SELECT a.id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
-                   DECODE(a.width,0,pck_core.gWidthThumbnail,a.width) width, DECODE(a.height,0,pck_core.gWidthThumbnail,a.height) height, REPLACE(a.alt_text,'"','&quot;') alt_text, a.description, a.bytes, a.format
+                   DECODE(a.width,0,pck_core.gWidthThumbnail,a.width) width, DECODE(a.height,0,pck_core.gWidthThumbnail,a.height) height, a.bytes, a.format
               FROM asset a
              WHERE a.article_id=pArticleId
                AND a.user_id=l_session_data.user_id
@@ -277,7 +273,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END IF;
 
             pHTML:=pHTML || TO_CLOB(
-                '<li class="card" tabindex="0" data-id="' || C.id || '">
+                '<li class="card' || CASE WHEN c.width>C.height THEN ' landscape' END || '" tabindex="0" data-id="' || C.id || '">
                     <img class="fullscreen" data-dimensions="'  || l_dimensions || 
                                 C.width || 'x' || C.height || '" data-src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>');
 
@@ -521,24 +517,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pck_core.log_error;
     END; 
 
-
-
-
-
     /*
      **  Insert new page in website
      */        
-    PROCEDURE insertArticle(pWebsiteId IN website.id%type) IS
+    PROCEDURE insertArticle(pId IN VARCHAR2) IS
         l_session_data pck_core.session_data_rt;
-        n PLS_INTEGER;
+        l_website_id website.id%type;
+        l_selected_id article.id%type;
+        l_dbid_string apex_t_varchar2;
+        l_next_article_id article.id%type;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        /* Set default navigation_label */
-        SELECT MAX(display_order)+1 INTO n FROM website_article WHERE website_id=pWebsiteId AND user_id=l_session_data.user_id;
+        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
+        l_selected_id:=SUBSTR(pId,INSTR(pId,',')+1);
 
-        INSERT INTO article (id, author_user_id, created_date) VALUES (seq_article.nextval, l_session_data.user_id, current_timestamp);
-        INSERT INTO website_article(article_id, website_id, navigation_label, display_order, user_id) VALUES (seq_article.currval, pWebsiteId, '[New Page]', n, l_session_data.user_id);
+        /* Build string of article id to be reordered */ 
+        l_next_article_id:=seq_article.nextval;
+        FOR C IN (SELECT article_id FROM website_article WHERE website_id=l_website_id ORDER BY display_order) LOOP
+            apex_string.push(l_dbid_string, C.article_id);
+            IF (C.article_id=l_selected_id) THEN
+                apex_string.push(l_dbid_string, l_next_article_id);
+            END IF;
+        END LOOP;
+
+        INSERT INTO article (id, author_user_id, created_date) VALUES (l_next_article_id, l_session_data.user_id, current_timestamp);
+        INSERT INTO website_article(article_id, website_id, navigation_label, display_order, user_id) VALUES (l_next_article_id, l_website_id, '[New Page]', 0, l_session_data.user_id);
+
+        reorderWebsiteArticles(l_website_id,'{"dbid_string":"'|| apex_string.join(l_dbid_string,':') ||'"}',pReturnJson=>FALSE);
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
@@ -871,7 +877,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Reorder website articles
      */
-    PROCEDURE reorderWebsiteArticles(pWebsiteId IN website_article.website_id%type, pBodyText IN CLOB) IS
+    PROCEDURE reorderWebsiteArticles(pWebsiteId IN website_article.website_id%type, pBodyText IN CLOB, pReturnJson IN BOOLEAN DEFAULT TRUE) IS
         l_dbid_string LONG;
 
         TYPE t_website_article IS RECORD(
@@ -898,9 +904,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
            AND article_id=l_website_articles(i).article_id
            AND user_id=l_session_data.user_id;
 
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.close_object;
+        IF (pReturnJson) THEN
+            apex_json.open_object; 
+            apex_json.write('success', TRUE);
+            apex_json.close_object;
+        END IF;
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -1120,11 +1128,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 WHEN 'website_article.page_title' THEN
                     UPDATE website_article SET page_title=C.value WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'website_article.page_description' THEN
-                    UPDATE website_article SET page_description=C.value WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
-                WHEN 'asset.alt_text' THEN
-                    UPDATE asset SET alt_text=C.value WHERE id=C.id AND user_id=l_session_data.user_id;
-                WHEN 'asset.description' THEN
-                    UPDATE asset SET description=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;               
+                    UPDATE website_article SET page_description=C.value WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;       
             END CASE;
             n:=sql%rowcount;
         END LOOP;
