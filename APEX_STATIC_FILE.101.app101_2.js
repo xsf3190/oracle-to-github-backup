@@ -197,11 +197,17 @@ const edit_website = (e) => {
         while (websiteNavMenu.childElementCount > 1) {
             websiteNavMenu.removeChild(websiteNavMenu.firstChild);
         }
-        websiteNavMenu.insertAdjacentHTML('afterbegin',data.nav_labels);
-
-        gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
-        edit_text();
-        //lazyload();
+        if (data.nav_labels) {
+            websiteNavMenu.insertAdjacentHTML('afterbegin',data.nav_labels);
+            gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
+            edit_text();
+        } else {
+            gArticleId = 0;
+            editor_status_text.textContent = "";
+            editor.setData("");
+            galleryList.replaceChildren();
+        }
+        
     });
 };
 
@@ -644,28 +650,7 @@ const setImgSrc = (img) => {
         url = url.replace(/,w_\d+/,  "");
     } else {
         url = url.replace(/,w_\d+/,  ",w_" + closest);
-    }
-
-    galleryFullLegend.textContent = "Closest resolution downloaded for window " + window.innerWidth + " x " + window.innerHeight;
-    galleryFull.querySelectorAll("button.dimensions").forEach((button,index) => {
-        button.textContent = dimensions[index];
-        button.dataset.url = urls[index];
-        if (widths[index] === closest) {
-            button.style.backgroundColor = "var(--color-button)";
-        } else {
-            button.style.backgroundColor = "var(--color-pale)";
-        }
-    });
-
-    galleryFull.querySelectorAll("button.copy-url").forEach((button,index) => {
-        if (widths[index] === closest) {
-            button.disabled = false;
-            //button.style.backgroundColor = "var(--color-button)";
-        } else {
-            button.disabled = true;
-            //button.style.backgroundColor = "var(--color-pale)";
-        }
-    });    
+    }  
 
     if (url !== img.src) {
         galleryFullImg.src=url;
@@ -677,13 +662,6 @@ galleryFull.addEventListener("fullscreenchange", (e) => {
         window.removeEventListener("keydown", enableKeydown);
         galleryFull.style.display = "none";
     }
-});
-
-/*
- **  CLOSE FULLSCREEN FIELDSET
- */
-galleryFullCloseFieldset.addEventListener("click",  () => {
-    galleryFull.querySelector("fieldset").style.display = "none";
 });
 
 /*
@@ -734,47 +712,6 @@ galleryFull.querySelectorAll("button.copy-url").forEach((button) => {
             popupOpen("Copied URL to clipboard",galleryFullImg.src);
         } catch (err) {
             popupOpen('Failed to copy URL!', err)
-        }
-    });
-});
-
-/*
-**  CLICK DIMENSION BUTTONS
-*/
-galleryFull.querySelectorAll("button.dimensions").forEach((button) => {
-    button.addEventListener("click", (e) => {
-        const img = button.parentElement.previousElementSibling;
-        const dimensions = button.textContent.split("x");
-        img.style.width = dimensions[0]+"px";
-        img.src=button.dataset.url;
-        galleryFullLegend.textContent = "Image resolution downloaded for container " + window.innerWidth + " x " + window.innerHeight;
-        e.target.style.backgroundColor = "var(--color-button)";
-        let curr = e.target;
-        let el = curr.nextElementSibling;
-        el.disabled = false;
-        el = el.nextElementSibling;
-        
-        while (el) {
-            if (el.tagName === "BUTTON") {
-                if (el.classList.contains("dimensions")) {
-                    el.style.backgroundColor = "var(--color-pale)";
-                } else {
-                    el.disabled = true;
-                }
-            }
-            el = el.nextElementSibling;
-        }
-
-        el = curr.previousElementSibling;
-        while (el) {
-            if (el.tagName === "BUTTON") {
-                if (el.classList.contains("dimensions")) {
-                    el.style.backgroundColor = "var(--color-pale)";
-                } else {
-                    el.disabled = true;
-                }
-            }
-            el = el.previousElementSibling;
         }
     });
 });
@@ -878,6 +815,8 @@ new Sortable(galleryList, {
     sort: true,
     animation: 150,
     ghostClass: 'drag-in-progress',
+    multiDrag: true,
+    fallbackTolerance: 3,
     store: {
         set: async function (sortable) {
             execProcess("thumbnails","PUT", {dbid_string: sortable.toArray().join(":")} ).then( (data) => {
@@ -1235,6 +1174,8 @@ const delete_object_confirm = (e) => {
         switch (pk.table_name) {
             case "website_article":
                 websiteNavMenu.querySelector(".selected").remove();
+                gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
+                edit_text();
                 break;
 
             case "asset":
