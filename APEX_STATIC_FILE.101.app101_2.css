@@ -630,7 +630,7 @@ nav button {
 
 .cards > div:nth-of-type(1) {
     border: solid 0.25ch pink;
-    flex-basis: 45ch;
+    flex-basis: 50ch;
     flex-grow: 1;
     height: 100vh;
     overflow-y: scroll;
@@ -675,11 +675,22 @@ nav button {
   list-style: none;
   margin: 0;
   display: grid;
+  gap: 0.25ch;
   grid-template-columns: repeat(auto-fill, minmax(min(8ch, 100%), 1fr));
 }
 
 .drag-in-progress {
     opacity: 0.4;
+}
+
+.gallery-list li {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 5px;
+}
+
+.gallery-list li:hover  {
+    box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5);
 }
 
 .gallery-list img {
