@@ -183,7 +183,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         FOR C IN (SELECT article_id, navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
             l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
         END LOOP;
-        apex_json.write('nav_labels', l_nav_labels);
+        IF (l_nav_labels IS NOT NULL) THEN
+            apex_json.write('nav_labels', l_nav_labels);
+        END IF;
 
         apex_json.write('success', TRUE);
         apex_json.close_object;
