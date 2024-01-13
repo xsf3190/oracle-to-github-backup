@@ -403,26 +403,7 @@ dialog.popup {
     min-inline-size: 50vw;
 }
 
-dialog.perftable > div, dialog.gallery > div {
-    display: grid;
-    gap: 1rem;
-}
-
-dialog.gallery fieldset {
-    display: flex;
-    justify-content: space-between;
-}
-
-dialog.gallery legend {
-    border-radius: 0.3em;
-    border-top: inherit;
-    line-height: 1.5;
-    background-color: inherit;
-    padding-inline-start: 0.5em;
-    padding-inline-end: 0.5em;
-}
-
-dialog.preview, dialog.perftable, dialog.gallery {
+dialog.preview {
     color: currentColor;
     max-inline-size: 100vw;
     max-block-size: 100dvh;
@@ -662,10 +643,12 @@ nav button {
   }
 }
 
-/* ********************* */
-/* EDITOR  STYLES  - NONE*/
-/* ********************* */
-
+/* ************* */
+/* DRAG AND DROP */
+/* ************* */
+.drag-in-progress {
+    opacity: 0.4;
+}
 
 /* *************** */
 /* GALLERY STYLES  */
@@ -679,24 +662,33 @@ nav button {
   grid-template-columns: repeat(auto-fill, minmax(min(8ch, 100%), 1fr));
 }
 
-.drag-in-progress {
-    opacity: 0.4;
-}
-
 .gallery-list li {
     border: 1px solid #ddd;
     border-radius: 4px;
     padding: 5px;
+    display: grid;
+    grid-template-areas: "overlay";
 }
 
 .gallery-list li:hover  {
     box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5);
 }
 
+.gallery-list li:hover  img {
+    transform: scale(1.05);
+}
+
 .gallery-list img {
   inline-size: 100%;
   block-size: 100%;
   object-fit: cover;
+  place-self: center;
+  grid-area: overlay;
+}
+
+.gallery-list .copy {
+  place-self: start end;
+  grid-area: overlay;
 }
 
 .landscape {
@@ -710,8 +702,6 @@ video, audio {
 video {
     min-height: 20ch;
 }
-
-
 
 /* ************************** */
 /* GALLERY FULLSCREEN STYLES  */
@@ -744,11 +734,6 @@ video {
     outline: 0;
 }
 
-.gallery-overlay .copy-url {
-    /*background-color: transparent;*/
-    margin-left: -1em;
-}
-
 .gallery-overlay > button.close-fullscreen {
     place-self: start end;
 }
@@ -761,92 +746,10 @@ video {
     place-self: center end;
 }
 
-.gallery-overlay > fieldset {
-    grid-area: overlay;
-    place-self: end center;
-    display: inline-block;
-    font-size: var(--step-0);
-    padding: 1em;
-    /*background-color: var(--color-dark);*/
-    color: var(--color-light);
-}
 
-/* ************************* */
-/* PERFORMANCE TABLE STYLES  */
-/* ************************* */
-.perftable table {
-    table-layout: fixed;
-    width: 100%;
-    white-space: nowrap;
-    overflow-x: auto;
-    border-collapse: collapse;
-    font-size: var(--step--2);
-}
-
-.perftable caption {
-    caption-side: top;
-    padding: 0.5rem;
-}
-
-.perftable th {
-    background-color: var(--color-dark);
-    color: var(--color-light-glare);
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-}
-.perftable th:nth-of-type(1) {
-    width: 25%;
-}
-.perftable th:nth-of-type(2) {
-    width: 25%;
-}
-.perftable th:nth-of-type(3) {
-    width: 15%;
-}
-.perftable th:nth-of-type(4) {
-    width: 20%;
-}
-.perftable th:nth-of-type(5) {
-    width: 15%;
-}
-
-.perftable td {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.perftable tr {
-    border-bottom: 1px solid var(--color-pale);
-}
-
-.perftable tr.last-tr {
-    border-bottom: 2px solid var(--color-button);
-}
-
-.perftable .align-center {
-    text-align: center;
-}
-
-.perftable .align-left {
-    text-align: left;
-}
-
-.perftable .label {
-    font-weight: bold;
-}
-
-.perftable figure {
-    text-align: center;
-    inline-size: 100%;
-}
-
-.perftable img {
-    block-size: 15vh;
-    object-fit: contain;
-}
-
-/* PUSHABLE BUTTON */
+/* **************** */
+/* PUSHABLE BUTTON  */
+/* **************** */
 .pushable {
     inline-size: fit-content;
     position: relative;
