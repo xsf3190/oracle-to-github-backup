@@ -517,19 +517,6 @@ const preview_article = (articleId,button) => {
 }
 
 /*
- ** OPEN GALLERY FOR SELECTED ARTICLE
- */
-const show_gallery = () => {
-    execProcess( "gallery/"+gArticleId,"GET").then( (data) => {
-        galleryInstruction.replaceChildren();
-        galleryInstruction.insertAdjacentHTML('afterbegin',data.instruction);
-        galleryList.replaceChildren();
-        galleryList.insertAdjacentHTML('afterbegin',data.content);
-        lazyload();
-    });
-};
-
-/*
  ** CARD CLICK HANDLER
  */
 const clickHandler = (e) => {
@@ -564,14 +551,30 @@ const clickHandler = (e) => {
         delete_object(e);
     } else if (e.target.matches(".confirmBtn")) {
         delete_object_confirm(e);
-    } else if (e.target.matches(".fullscreen")) {
+    } else if (e.target.matches(".expand")) {
         showFullScreen(e);                                 
+    } else if (e.target.matches(".copy")) {
+        copy_url(e);                                 
     } else if (e.target.matches(".deploy-website")) {
         deploy_website(e);
     } else if (e.target.matches(".saveBtn")) {
         console.log("saveBtn clicked - do nothing!");
     }
 }
+
+/*
+ **  COPY URL
+ */
+const copy_url = async (e) => {
+    const li = e.target.closest("li"),
+          src = li.querySelector("img").src;
+    try {
+        await navigator.clipboard.writeText(src);
+        popupOpen("Image URL copied to clipboard","... can be inserted into document");
+    } catch (err) {
+        popupOpen('Failed to copy URL!', err)
+    }
+};
 
 /* ************************************************* 
  **
@@ -596,8 +599,9 @@ const enableKeydown = (event) => {
 const showFullScreen = (e) => {
     //if (e.target.tagName !== "IMG") return;
     galleryFull.requestFullscreen().then(() => {
-        gFullImage = e.target;
-        setImgSrc(e.target);
+        const li =e.target.closest("li");
+        gFullImage = li.querySelector(".fullscreen");
+        setImgSrc(gFullImage);
         galleryFull.style.display = "grid";
         window.addEventListener("keydown", enableKeydown);
     })
@@ -702,20 +706,6 @@ galleryFullPrev.addEventListener("click",  () => {
     setImgSrc(gFullImage);
 });
 
-/*
- **  COPY URL
- */
-galleryFull.querySelectorAll("button.copy-url").forEach((button) => {
-    button.addEventListener("click", async () => {
-        try {
-            await navigator.clipboard.writeText(galleryFullImg.src);
-            popupOpen("Copied URL to clipboard",galleryFullImg.src);
-        } catch (err) {
-            popupOpen('Failed to copy URL!', err)
-        }
-    });
-});
-
 /* 
  ** GENERATE SIGNATURE FOR CLOUDINARY SUSCRIBER TO ENABLE SECURE MEDIA UPLOAD
  */
@@ -815,8 +805,7 @@ new Sortable(galleryList, {
     sort: true,
     animation: 150,
     ghostClass: 'drag-in-progress',
-    multiDrag: true,
-    fallbackTolerance: 3,
+    //multiDrag: true,
     store: {
         set: async function (sortable) {
             execProcess("thumbnails","PUT", {dbid_string: sortable.toArray().join(":")} ).then( (data) => {
@@ -1149,7 +1138,9 @@ const delete_object = (e) => {
             break;
 
         case "asset":
-            confirm.querySelector("img").src = gallery.querySelector("[data-id='" + id + "'] img").src;
+            const li = e.target.closest("li");
+            object_id = li.dataset.id;
+            confirm.querySelector("img").src = li.querySelector("img").src;
             confirm.querySelector("p").style.display = "none";
             break;
     }
@@ -1179,7 +1170,7 @@ const delete_object_confirm = (e) => {
                 break;
 
             case "asset":
-                ele = gallery.querySelector("[data-id='" + pk.id + "']");
+                ele = galleryList.querySelector("[data-id='" + pk.id + "']");
                 ele.classList.add("fade-out");
                 ele.remove();
                 break;
@@ -1199,37 +1190,5 @@ const delete_object_confirm = (e) => {
                 break;                    
         }
         
-    });
-}
-
-/* *******************************
-** START OF THUMBNAIL GALLERY CODE 
-*  *******************************/
-
-/* 
- ** DELETE ASSET AND UPDATE THUMBNAIL GALLERY
- */
-const delete_asset = (id, button) => {
-    execProcess( "asset/"+id, "DELETE").then( (data) => {
-        if (Number(data.nb)===0) {
-            location.replace(location.href);
-            return;
-        }
-
-        galleryList.replaceChildren();
-        galleryList.insertAdjacentHTML('afterbegin',data.content);
-        galleryInstruction.textContent = data.instruction;
-        
-        let card = cards.querySelector("[data-id='" + data.articleId + "']"),
-                cover_img = card.querySelector("img"),
-                show_gallery = card.querySelector(".show-gallery"),
-                updated_date = card.querySelector(".updated-date"),
-                first_thumbnail = galleryList.children[0].querySelector("img");
-        
-        if (cover_img.src !== first_thumbnail.src) {
-            cover_img.src = first_thumbnail.src;
-        }
-        updated_date.textContent = data.updated;
-        show_gallery.textContent = "1/" + data.nb;
     });
 }
