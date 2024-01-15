@@ -278,7 +278,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 '<li class="card' || CASE WHEN c.width>C.height THEN ' landscape' END || '" tabindex="0" data-id="' || C.id || '">
                     <img class="fullscreen" data-dimensions="'  || l_dimensions || 
                                 C.width || 'x' || C.height || '" data-src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>
-                    <button type="button" class="copy">X</button>');
+                    <div class="actions">
+                        <button type="button" class="copy"><svg><use href="#copy"></use></svg></button>
+                        <button type="button" class="expand"><svg><use href="#expand"></use></svg></button>
+                        <button type="button" class="delete" data-table="asset"><svg><use href="#delete"></use></svg></button>
+                    </div>');
 
             CASE l_media_type
 
