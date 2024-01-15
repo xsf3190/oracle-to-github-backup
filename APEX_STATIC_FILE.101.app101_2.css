@@ -682,14 +682,28 @@ nav button {
   grid-area: overlay;
 }
 
-.gallery-list .copy {
+.gallery-list .actions {
   place-self: start end;
   grid-area: overlay;
   opacity: 0;
   padding: 0;
 }
 
-.gallery-list li:hover .copy {
+.gallery-list .actions > button {
+    inline-size: 2em;
+    block-size: 2em;
+    border-radius: 50%;
+    padding: 0.5em;
+    background-color: darkgrey;
+}
+
+.gallery-list .actions > button > svg {
+    fill: white;
+    inline-size: 100%;
+    block-size: 100%;
+}
+
+.gallery-list li:hover .actions {
     opacity: 1;
 }
 
