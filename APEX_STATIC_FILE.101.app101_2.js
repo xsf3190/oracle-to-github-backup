@@ -1150,6 +1150,9 @@ const delete_object = (e) => {
     confirm.showModal();
 }
 
+/*
+ ** EXECUTE DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER
+ */
 const delete_object_confirm = (e) => {
     let pk={};
     pk.table_name = e.target.dataset.table;
@@ -1159,8 +1162,8 @@ const delete_object_confirm = (e) => {
     } else {
         pk.id = e.target.dataset.id;
     }
-
-    execProcess("dml","DELETE",pk).then( (data) => {
+    console.log("pk",pk);
+    execProcess("dml","DELETE",pk).then( () => {
         let ele;
         switch (pk.table_name) {
             case "website_article":
@@ -1178,15 +1181,9 @@ const delete_object_confirm = (e) => {
             case "website":
                 ele = website.querySelector("[data-id='" + pk.id + "']");
                 resetWebsite();
-                setTimeout( () => {
-                    cards.replaceChildren();
-                    domainNameResult.style.opacity = "1";
-                    domainNameResult.style.color = "green";
-                    domainNameResult.textContent = "WEBSITE DELETED OK";
-                    deployButtons.replaceChildren();
-                    newContent.disabled = true;
-                },1000);
                 ele.remove();
+                // replace with first website in dropdown
+                website.querySelector(".edit-website").click();
                 break;                    
         }
         
