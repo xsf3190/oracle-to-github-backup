@@ -657,8 +657,8 @@ nav button {
   list-style: none;
   margin: 0;
   display: grid;
-  gap: 0.25ch;
-  grid-template-columns: repeat(auto-fill, minmax(min(8ch, 100%), 1fr));
+  gap: 0.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(7rem, 100%), 1fr));
 }
 
 .gallery-list li {
@@ -690,10 +690,11 @@ nav button {
 }
 
 .gallery-list .actions > button {
-    inline-size: 2em;
-    block-size: 2em;
+    display: inline-flex;
+    inline-size: 1.25em;
+    block-size: 1.25em;
     border-radius: 50%;
-    padding: 0.5em;
+    padding: 0.25em;
     background-color: darkgrey;
 }
 
