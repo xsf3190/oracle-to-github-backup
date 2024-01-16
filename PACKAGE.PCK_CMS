@@ -1160,7 +1160,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /**
-     **    Delete object
+     **    Delete Table row
      */
     PROCEDURE deleteTable(pBodyText IN CLOB) IS
         l_session_data pck_core.session_data_rt;
