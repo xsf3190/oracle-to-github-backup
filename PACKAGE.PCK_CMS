@@ -234,85 +234,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error;
-    END;    
-
-    /*
-     **  Build gallery of thumbnail images for a given article
-     */
-    PROCEDURE getThumbnails(pArticleId IN article.id%type, pHTML IN OUT NOCOPY CLOB)
-    IS
-        l_clob CLOB;
-        l_user_id users.id%type;
-        l_url_image VARCHAR2(300);
-        l_media_type VARCHAR2(5);
-        l_dimensions VARCHAR2(50);
-        l_aspect_ratio NUMBER;
-        n PLS_INTEGER:=0;
-        l_session_data pck_core.session_data_rt;
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-
-        FOR C IN (
-            SELECT a.id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
-                   DECODE(a.width,0,pck_core.gWidthThumbnail,a.width) width, DECODE(a.height,0,pck_core.gWidthThumbnail,a.height) height, a.bytes, a.format
-              FROM asset a
-             WHERE a.article_id=pArticleId
-               AND a.user_id=l_session_data.user_id
-               AND NVL(a.format,'N/A')<>'clt'
-             ORDER BY a.display_order )
-        LOOP
-            n:=n+1;
-            l_media_type:=pck_core.getMediaType(C.resource_type, C.format);
-
-            l_url_image:=pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
-
-            IF (C.width>0 AND C.width*.25>pck_core.gWidthThumbnail) THEN
-                l_dimensions:=pck_core.gWidthThumbnail || 'xheight:' ||
-                              ROUND((C.width-pck_core.gWidthThumbnail)/2) || 'xheight:';
-            ELSE
-                l_dimensions:=ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || 
-                              ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':';
-            END IF;
-
-            pHTML:=pHTML || TO_CLOB(
-                '<li class="card' || CASE WHEN c.width>C.height THEN ' landscape' END || '" tabindex="0" data-id="' || C.id || '">
-                    <img class="fullscreen" data-dimensions="'  || l_dimensions || 
-                                C.width || 'x' || C.height || '" data-src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>
-                    <div class="actions">
-                        <button type="button" class="copy"><svg><use href="#copy"></use></svg></button>
-                        <button type="button" class="expand"><svg><use href="#expand"></use></svg></button>
-                        <button type="button" class="delete" data-table="asset"><svg><use href="#delete"></use></svg></button>
-                    </div>');
-
-            CASE l_media_type
-
-                WHEN 'video' THEN
-                    pHTML:=pHTML || TO_CLOB(
-                    '<video controls preload="metadata" poster="' || l_url_image || '">
-                        <source src="' || REPLACE(l_url_image,'.jpg','.webm') || '" type="video/webm"></source>
-                        <source src="' || REPLACE(l_url_image,'.jpg','.mp4') || '" type="video/mp4"></source>
-                    </video>');
-
-                WHEN 'audio' THEN
-                    l_url_image:=REGEXP_REPLACE(l_url_image,',w_(\d)+\/fl_waveform',NULL);
-                    pHTML:=pHTML || TO_CLOB(
-                    '<audio preload="metadata" controls>
-                        <source src="' || REPLACE(l_url_image,'.png','.aac') || '" type="audio/aac"></source>
-                        <source src="' || REPLACE(l_url_image,'.png','.ogg') || '" type="audio/ogg"></source>
-                        <source src="' || REPLACE(l_url_image,'.png','.mp3') || '" type="audio/mpeg"></source>
-                        <source src="' || REPLACE(l_url_image,'.png','.wav') || '" type="audio/wav"></source>
-                    </audio>');
-
-                ELSE NULL;
-            END CASE;
-
-            pHTML:=pHTML || TO_CLOB('</li>');
-
-        END LOOP;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
     END;
 
     /*
@@ -510,7 +431,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 WHERE id=l_id_1
                 AND author_user_id=l_session_data.user_id) 
             LOOP
-                getThumbnails(l_id_1, l_thumbnails_html);
+                pck_core.getThumbnails(l_id_1, l_thumbnails_html);
                 apex_json.open_object;
                 apex_json.write('success', TRUE); 
                 apex_json.write('html', C.body_html);
