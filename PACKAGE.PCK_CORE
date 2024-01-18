@@ -34,6 +34,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
         pWidth IN INTEGER, 
         pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
     --
+    PROCEDURE getThumbnails(pArticleId IN article.id%type, pHTML IN OUT NOCOPY CLOB);
+    --
     FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
@@ -448,6 +450,85 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     END;
 
     /*
+     **  Build gallery of thumbnail images for a given article
+     */
+    PROCEDURE getThumbnails(pArticleId IN article.id%type, pHTML IN OUT NOCOPY CLOB)
+    IS
+        l_clob CLOB;
+        l_user_id users.id%type;
+        l_url_image VARCHAR2(300);
+        l_media_type VARCHAR2(5);
+        l_dimensions VARCHAR2(50);
+        l_aspect_ratio NUMBER;
+        n PLS_INTEGER:=0;
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        FOR C IN (
+            SELECT a.id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
+                   DECODE(a.width,0,pck_core.gWidthThumbnail,a.width) width, DECODE(a.height,0,pck_core.gWidthThumbnail,a.height) height, a.bytes, a.format
+              FROM asset a
+             WHERE a.article_id=pArticleId
+               AND a.user_id=l_session_data.user_id
+               AND NVL(a.format,'N/A')<>'clt'
+             ORDER BY a.display_order )
+        LOOP
+            n:=n+1;
+            l_media_type:=pck_core.getMediaType(C.resource_type, C.format);
+
+            l_url_image:=pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
+
+            IF (C.width>0 AND C.width*.25>pck_core.gWidthThumbnail) THEN
+                l_dimensions:=pck_core.gWidthThumbnail || 'xheight:' ||
+                              ROUND((C.width-pck_core.gWidthThumbnail)/2) || 'xheight:';
+            ELSE
+                l_dimensions:=ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || 
+                              ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':';
+            END IF;
+
+            pHTML:=pHTML || TO_CLOB(
+                '<li class="card' || CASE WHEN c.width>C.height THEN ' landscape' END || '" tabindex="0" data-id="' || C.id || '">
+                    <img class="fullscreen" data-dimensions="'  || l_dimensions || 
+                                C.width || 'x' || C.height || '" data-src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>
+                    <div class="actions">
+                        <button type="button" class="copy"><svg><use href="#copy"></use></svg></button>
+                        <button type="button" class="expand"><svg><use href="#expand"></use></svg></button>
+                        <button type="button" class="delete" data-table="asset"><svg><use href="#delete"></use></svg></button>
+                    </div>');
+
+            CASE l_media_type
+
+                WHEN 'video' THEN
+                    pHTML:=pHTML || TO_CLOB(
+                    '<video controls preload="metadata" poster="' || l_url_image || '">
+                        <source src="' || REPLACE(l_url_image,'.jpg','.webm') || '" type="video/webm"></source>
+                        <source src="' || REPLACE(l_url_image,'.jpg','.mp4') || '" type="video/mp4"></source>
+                    </video>');
+
+                WHEN 'audio' THEN
+                    l_url_image:=REGEXP_REPLACE(l_url_image,',w_(\d)+\/fl_waveform',NULL);
+                    pHTML:=pHTML || TO_CLOB(
+                    '<audio preload="metadata" controls>
+                        <source src="' || REPLACE(l_url_image,'.png','.aac') || '" type="audio/aac"></source>
+                        <source src="' || REPLACE(l_url_image,'.png','.ogg') || '" type="audio/ogg"></source>
+                        <source src="' || REPLACE(l_url_image,'.png','.mp3') || '" type="audio/mpeg"></source>
+                        <source src="' || REPLACE(l_url_image,'.png','.wav') || '" type="audio/wav"></source>
+                    </audio>');
+
+                ELSE NULL;
+            END CASE;
+
+            pHTML:=pHTML || TO_CLOB('</li>');
+
+        END LOOP;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
+    /*
      **  Build authenticated page
      */
     FUNCTION buildAuthPage RETURN CLOB IS
@@ -460,12 +541,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_dns_zones CLOB;
         l_domain_dropdown LONG;
         l_printed_separator BOOLEAN:=FALSE;
+        l_selected_article article.id%type;
+        l_body_html article.body_html%type;
+        l_thumbnails CLOB;
 
         TYPE t_domain IS RECORD (
             id                      website.id%type,
             domain_name             website.domain_name%type,
             netlify_site_id         website.netlify_site_id%type,
-            netlify_site_id_custom  website.netlify_site_id%type
+            netlify_site_id_custom  website.netlify_site_id%type,
+            nav_labels              LONG
         );
         TYPE tt_domain IS TABLE OF t_domain;
         l_domains tt_domain;  
@@ -474,6 +559,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         TYPE t_publish IS VARRAY(2) OF VARCHAR2(3);
         l_publish t_publish:=t_publish('YES','NO');
         l_publish_html LONG;
+
     BEGIN
         l_session_data:=getSessionData();
 
@@ -522,11 +608,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
          */
         --pck_api.callGithubAPI(pUserId=>l_session_data.user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_templates);
 
-        SELECT w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom
-          BULK COLLECT INTO l_domains
-          FROM website w
-         WHERE w.user_id=l_session_data.user_id
-         ORDER BY COALESCE(w.updated_date, w.created_date) DESC;
+        SELECT id, domain_name, netlify_site_id, netlify_site_id_custom, 
+            CASE WHEN max_updated_date=max_updated_date_w THEN 
+                LISTAGG('<a href="#" class="nav-label' || CASE WHEN updated_date=max_updated_date THEN ' selected' END || '" data-id="' || article_id || '">' || navigation_label || '</a>') WITHIN GROUP (ORDER BY display_order)
+            END
+        BULK COLLECT INTO l_domains
+        FROM
+            (
+            SELECT w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom, wa.display_order, wa.article_id, wa.navigation_label, a.updated_date, MAX(a.updated_date) OVER (PARTITION BY w.id) max_updated_date, MAX(a.updated_date) OVER() max_updated_date_w
+            FROM website w, website_article wa, article a
+            WHERE w.user_id=l_session_data.user_id
+            AND wa.website_id=w.id
+            AND a.id=wa.article_id
+            )
+        GROUP BY id, domain_name, netlify_site_id, netlify_site_id_custom, max_updated_date, max_updated_date_w
+        ORDER BY max_updated_date DESC;
+
+        /* Get id of article that will be displayed - i.e article last updated by user */
+        l_selected_article:=REGEXP_SUBSTR(l_domains(1).nav_labels,'"nav-label selected" data-id="(\d+)"',1,1,null,1);
+
+        SELECT body_html INTO l_body_html FROM article WHERE id=l_selected_article;
+        getThumbnails(l_selected_article, l_thumbnails);
 
         IF (l_domains.COUNT=0) THEN
             l_domains.EXTEND(1);
@@ -589,7 +691,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END LOOP;
 
         l_clob:=l_clob || TO_CLOB('
-        <form class="website" data-id="' || l_domains(1).id || '">' ||
+        <form class="website">' ||
             buildInputWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
             --buildRadioWrapper('website.template',l_template_html, l_session_data.canuse_popover) ||
             --buildRadioWrapper('website.font',l_font_html, l_session_data.canuse_popover) ||
@@ -613,7 +715,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <span class="front">UPLOAD MEDIA</span>
                 </button>
                 <div role="region" aria-label="gallery">
-                    <ul class="gallery-list"></ul>
+                    <ul class="gallery-list">' || l_thumbnails || '</ul>
                 </div>
                 <div class="gallery-overlay">
                     <img src="">
@@ -629,7 +731,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <span class="edge"></span>
                     <span class="front">NEW PAGE</span>
                 </button>
-                <nav class="website-nav-menu">' || buildNavLabels(l_domains(1).id) || '
+                <nav class="website-nav-menu">' || l_domains(1).nav_labels || '
                     <div class="dropdown">
                         <span>Edit Options</span>
                         <button type="button" class="show-dropdown">&blacktriangledown;</button>
@@ -676,6 +778,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         </ul>
                     </div>
                 </nav>
+                <textarea id="editor-content" style="display:none">' || l_body_html || '</textarea>
                 <div id="editor"></div>
                 <div>
                     <span id="word-count"></span>
