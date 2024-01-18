@@ -358,11 +358,11 @@ window.addEventListener("DOMContentLoaded", (event) => {
         }, { capture: true} );
     }
 
-    /* display first article in websiteNavMenu */
+    /* display last updated article (i.e. has class selected)  in websiteNavMenu */
 
-    gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
-    edit_text();
-    //lazyload();
+    gArticleId = websiteNavMenu.querySelector("a.selected").dataset.id;
+    editor.setData(container.querySelector("#editor-content").textContent);
+    lazyload();
 });
 
 const lazyload = () => {
@@ -791,8 +791,6 @@ const widget=cloudinary.createUploadWidget(
                     img.classList.add("show-gallery");
                     nomedia.replaceWith(img);
                 }
-                li.querySelector(".nb-assets").textContent = data.nbAssets;
-                li.querySelector(".updated-date").textContent = data.updated;
             });
         };
     }
