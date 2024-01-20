@@ -5,7 +5,6 @@ CREATE TABLE "WEBSITE"
 	"CREATED_DATE" TIMESTAMP (6) WITH TIME ZONE DEFAULT current_timestamp, 
 	"FAVICON_URL" VARCHAR2(100), 
 	"NETLIFY_SITE_ID" VARCHAR2(40), 
-	"TEMPLATE" VARCHAR2(30) NOT NULL ENABLE, 
 	"CONTACT_EMAIL" VARCHAR2(50), 
 	"TRADE_NAME" VARCHAR2(50), 
 	"AFFILIATION_LINK_IMG" VARCHAR2(100), 
@@ -23,14 +22,13 @@ CREATE TABLE "WEBSITE"
 	  REFERENCES "WEBSITE_FONT" ("NAME") ENABLE
    ) ;
 COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'All websites are deployed as a subdomain of "netlify.app".<p>If the name corresponds to a purchased Netlify domain name you can also build and deploy your live website.</p>';
-   COMMENT ON COLUMN "WEBSITE"."TEMPLATE" IS 'Choose template for your website.';
    COMMENT ON COLUMN "WEBSITE"."CONTACT_EMAIL" IS 'Email to receive details entered in any contact form included in your website.<p>Contact forms are created automatically for pages with navigation label set to "contact"';
    COMMENT ON COLUMN "WEBSITE"."FONT" IS 'Choose font for your website';
 CREATE UNIQUE INDEX "PK_WEBSITE" ON "WEBSITE" ("ID") 
   ;
   CREATE UNIQUE INDEX "IX_WEBSITE_DOMAIN_NAME" ON "WEBSITE" ("DOMAIN_NAME") 
   ;
-  CREATE UNIQUE INDEX "SYS_IL0000332838C00016$$" ON "WEBSITE" (
+  CREATE UNIQUE INDEX "SYS_IL0000332838C00015$$" ON "WEBSITE" (
   ;
-  CREATE UNIQUE INDEX "SYS_IL0000332838C00017$$" ON "WEBSITE" (
+  CREATE UNIQUE INDEX "SYS_IL0000332838C00016$$" ON "WEBSITE" (
   ;
