@@ -128,7 +128,6 @@ const changeHandler = (e) => {
  **  RESET PAGE ELEMENTS WHEN USER CLICKS NEW OR DELETE WEBSITE
  */
 const resetWebsite = () => {
-    website.dataset.id = "";
     const inputs = website.elements;
     for (let i = 0; i < inputs.length; i++) {
         if (inputs[i].type === "textarea") {
@@ -144,11 +143,10 @@ const resetWebsite = () => {
             inputs[i].checked = false;
             const result = inputs[i].closest(".radio-wrapper").querySelector(".result");
             result.textContent = "";
+        } else if (inputs[i].matches(".deploy-website")) {
+            inputs[i].remove();
         }
     }
-    cards.querySelectorAll(".card").forEach((card) => {
-        card.classList.add("fade-out");
-    });
 }
 
 /*
@@ -156,11 +154,13 @@ const resetWebsite = () => {
  */
 newWebsite.addEventListener("click",  () => {
     resetWebsite();
-    
-    setTimeout( () => {
-        cards.replaceChildren();
-        domainName.focus();
-    },1000);
+    while (websiteNavMenu.childElementCount > 1) {
+        websiteNavMenu.removeChild(websiteNavMenu.firstChild);
+    }
+    gArticleId = 0;
+    editor_status_text.textContent = "";
+    editor.setData("");
+    galleryList.replaceChildren();
 });
 
 /*
@@ -170,7 +170,6 @@ const edit_website = (e) => {
     execProcess( "website/"+e.target.dataset.id,"GET").then( (data) => {
         resetWebsite();
         
-        website.dataset.id = e.target.dataset.id;
         const inputs = website.elements;
         for (let i = 0; i < inputs.length; i++) {
             if (inputs[i].type === "textarea" || inputs[i].type === "radio") {
@@ -223,12 +222,12 @@ const deploy_website = (e) => {
         return;
     }
  
-    execProcess("deploy","POST",{"websiteid":website.dataset.id,"siteid":e.target.dataset.site_id}).then( () => {
+    execProcess("deploy","POST",{"websiteid":domainName.dataset.id,"siteid":e.target.dataset.site_id}).then( () => {
         popupOpen("Building "+e.target.textContent,"Checking content...");
         if (gIntervalId) {
             clearInterval(gIntervalId);
         }
-        gIntervalId = setInterval(updateDeploymentStatus,3000,website.dataset.id, e.target.dataset.site_id);
+        gIntervalId = setInterval(updateDeploymentStatus,3000,domainName.dataset.id, e.target.dataset.site_id);
     });
 };
 
@@ -361,8 +360,13 @@ window.addEventListener("DOMContentLoaded", (event) => {
     /* display last updated article (i.e. has class selected)  in websiteNavMenu */
 
     gArticleId = websiteNavMenu.querySelector("a.selected").dataset.id;
-    editor.setData(container.querySelector("#editor-content").textContent);
-    lazyload();
+    if (gArticleId) {
+        editor.setData(container.querySelector("#editor-content").textContent);
+        lazyload();
+    } else {
+        gArticleId = 0;
+        editor.setData("");
+    }
 });
 
 const lazyload = () => {
@@ -774,7 +778,7 @@ const widget=cloudinary.createUploadWidget(
                         "format": item.uploadInfo.format,
                         "cld_cloud_name": item.uploadInfo.url.split("/")[3],
                         "article_id": item.uploadInfo.tags[0],
-                        "website_id": website.dataset.id
+                        "website_id": domainName.dataset.id
                     });
                 }
             });
@@ -828,7 +832,7 @@ new Sortable(websiteNavMenu, {
         set: async function (sortable) {
             let arr = sortable.toArray();
             arr.pop();
-            execProcess("reorder-articles/" + website.dataset.id, "PUT", {dbid_string: arr.join(":")} ).then( () => {
+            execProcess("reorder-articles/" + domainName.dataset.id, "PUT", {dbid_string: arr.join(":")} ).then( () => {
                 console.log("pages reordered");
             });
         }
@@ -883,7 +887,7 @@ const saveData = async ( data ) => {
 
     
     const title = document.querySelector(".ck > h1").textContent;
-    await execProcess("article/"+gArticleId, "PUT",  {website_id: website.dataset.id, body_html: data, title: title, word_count: word_count}).then( (data) => {
+    await execProcess("article/"+gArticleId, "PUT",  {website_id: domainName.dataset.id, body_html: data, title: title, word_count: word_count}).then( (data) => {
         pendingActions.remove( action );
         editor_status_text.textContent = "saved successfully";
         editor_status_text.style.color = "green";
@@ -980,7 +984,7 @@ if (window.location.hash === "#_=_"){
  */
 const new_page = () => {
     const selected = websiteNavMenu.querySelector(".selected");
-    execProcess( "article/"+website.dataset.id+","+selected.dataset.id,"POST").then( (data) => {
+    execProcess( "article/"+domainName.dataset.id+","+selected.dataset.id,"POST").then( (data) => {
         gArticleId = data.article_id;
         if (selected) {
             selected.insertAdjacentHTML('afterend',data.nav_label);
@@ -997,7 +1001,7 @@ const new_page = () => {
  ** UPLOAD MEDIA TO CLOUDINARY
  */
 const upload_media = () => {
-    if (!website.dataset.id) {
+    if (!domainName.dataset.id) {
         popupOpen("CANT DO THAT YET","Need a Domain Name");
         return;
     }
@@ -1052,7 +1056,7 @@ const edit_text = () => {
  ** GET HTML FOR SELECTED FIELD TO EDIT IN MODAL DIALOG
  */
 const edit_field = (e) => {
-    execProcess( "edit-field","PUT",{"table_column":e.target.dataset.column, "website_id":website.dataset.id, "id":gArticleId}).then( (data) => {
+    execProcess( "edit-field","PUT",{"table_column":e.target.dataset.column, "website_id":domainName.dataset.id, "id":gArticleId}).then( (data) => {
         const content = editField.querySelector(".content");
         content.replaceChildren();
         content.insertAdjacentHTML('afterbegin',data.content);
@@ -1066,7 +1070,7 @@ const edit_field = (e) => {
 const edit_codepen = () => {
     const form = container.querySelector("[action='https://codepen.io/pen/define']");
 
-    execProcess( "article/"+website.dataset.id+","+gArticleId,"GET").then( (data) => {
+    execProcess( "article/"+domainName.dataset.id+","+gArticleId,"GET").then( (data) => {
         let formdata = {
             title: data.domain_name,
             html: data.html,
@@ -1105,7 +1109,7 @@ const upload_codepen = async () => {
     
     const file = await fileHandle.getFile();
 
-    execProcess( "content/"+website.dataset.id+","+gArticleId,"POST",file).then( (data) => {
+    execProcess( "content/"+domainName.dataset.id+","+gArticleId,"POST",file).then( (data) => {
         popupOpen("CODEPEN UPLOAD COMPLETED",data.message);
     });
 }
@@ -1141,6 +1145,13 @@ const delete_object = (e) => {
             confirm.querySelector("img").src = li.querySelector("img").src;
             confirm.querySelector("p").style.display = "none";
             break;
+
+        case "website":
+            confirm.querySelector("img").style.display = "none";
+            object_id = domainName.dataset.id;
+            confirm.querySelector("p").style.display = "block";
+            confirm.querySelector("p").textContent = domainName.value;
+            break;
     }
     
     confirmBtn.dataset.id = object_id;
@@ -1156,7 +1167,7 @@ const delete_object_confirm = (e) => {
     pk.table_name = e.target.dataset.table;
     if (pk.table_name === "website_article") {
         pk.article_id = e.target.dataset.id;
-        pk.website_id = website.dataset.id;
+        pk.website_id = domainName.dataset.id;
     } else {
         pk.id = e.target.dataset.id;
     }
