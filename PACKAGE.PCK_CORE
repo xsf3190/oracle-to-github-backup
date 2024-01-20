@@ -318,17 +318,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </div>');
     END;
 
-    FUNCTION buildNavLabels(pWebsiteId IN website.id%type) RETURN VARCHAR2 IS
-        l_nav_labels LONG;
-    BEGIN
-        /* set "selected" class either for the pArticleId if present else for the first page */
-        FOR C IN (SELECT article_id, navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
-            l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
-        END LOOP;
-
-        RETURN l_nav_labels;
-    END;
-
     /*
     ** the miserable privacy policy - Faceook insists that it can be accessed by an application url
     */
@@ -539,6 +528,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_font_html LONG;
         l_edit_websites CLOB;
         l_dns_zones CLOB;
+        l_sites CLOB;
         l_domain_dropdown LONG;
         l_printed_separator BOOLEAN:=FALSE;
         l_selected_article article.id%type;
@@ -602,6 +592,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         -- should use this to show users available custom domains
         pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_dns_zones);
+        DELETE netlify_dns_zone;
+        INSERT INTO netlify_dns_zone (id, name, site_id, created_at, updated_at)
+        SELECT id, name, site_id, TO_TIMESTAMP_TZ(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR'), TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR') 
+          FROM JSON_TABLE(l_dns_zones, '$[*]' COLUMNS(id, name, site_id, created_at, updated_at));
+
+        DELETE netlify_dns_zone_server;
+        INSERT INTO netlify_dns_zone_server (dns_zone_id, server)
+        SELECT id, server FROM JSON_TABLE(l_dns_zones, '$[*]' COLUMNS (id, NESTED '$.dns_servers[*]' COLUMNS (server varchar2(50) path '$')));
+
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'GET', pData=>l_sites);
+        DELETE netlify_site;
+        INSERT INTO netlify_site (id, name, custom_domain, created_at, updated_at)
+        SELECT id, name, custom_domain, TO_TIMESTAMP_TZ(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR'), TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR')
+          FROM JSON_TABLE(l_sites, '$[*]' COLUMNS(id, name, custom_domain, created_at, updated_at));
 
         /* Get templates from Administrator's github DEPLOY repository. Do it now so we can print at least the <nav> in case templates are not defined.
         ** Data returned in variable l_temmplates which we use to build the radio controls later in the code
@@ -618,8 +622,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             SELECT w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom, wa.display_order, wa.article_id, wa.navigation_label, a.updated_date, MAX(a.updated_date) OVER (PARTITION BY w.id) max_updated_date, MAX(a.updated_date) OVER() max_updated_date_w
             FROM website w, website_article wa, article a
             WHERE w.user_id=l_session_data.user_id
-            AND wa.website_id=w.id
-            AND a.id=wa.article_id
+            AND wa.website_id(+)=w.id
+            AND a.id=wa.article_id(+)
             )
         GROUP BY id, domain_name, netlify_site_id, netlify_site_id_custom, max_updated_date, max_updated_date_w
         ORDER BY max_updated_date DESC;
@@ -627,8 +631,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         /* Get id of article that will be displayed - i.e article last updated by user */
         l_selected_article:=REGEXP_SUBSTR(l_domains(1).nav_labels,'"nav-label selected" data-id="(\d+)"',1,1,null,1);
 
-        SELECT body_html INTO l_body_html FROM article WHERE id=l_selected_article;
-        getThumbnails(l_selected_article, l_thumbnails);
+        BEGIN
+            SELECT body_html INTO l_body_html FROM article WHERE id=l_selected_article;
+            getThumbnails(l_selected_article, l_thumbnails);
+            EXCEPTION WHEN NO_DATA_FOUND THEN NULL;
+        END;
 
         IF (l_domains.COUNT=0) THEN
             l_domains.EXTEND(1);
@@ -692,7 +699,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         l_clob:=l_clob || TO_CLOB('
         <form class="website">' ||
-            buildInputWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
+            buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
+            --buildInputWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
             --buildRadioWrapper('website.template',l_template_html, l_session_data.canuse_popover) ||
             --buildRadioWrapper('website.font',l_font_html, l_session_data.canuse_popover) ||
             --buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email, l_session_data.canuse_popover) || 
