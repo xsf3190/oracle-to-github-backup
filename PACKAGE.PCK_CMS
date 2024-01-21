@@ -634,7 +634,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     END IF;
                 WHEN l_domain_name||'/src/style.css' THEN
                     l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
-                    l_clob:=SUBSTR(l_clob,1,INSTR(l_clob,'/* CK')-1);
                     IF (dbms_lob.compare(l_css, l_clob)=0) THEN
                         l_message:=l_message || 'CSS - no change | ';
                     ELSE
@@ -991,6 +990,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             INSERT INTO website (id, user_id, domain_name, netlify_site_id, netlify_site_id_custom) 
                 VALUES (seq_website.nextval, pUserId, pDomainName, l_netlify_site_id, l_netlify_site_id_custom);
             l_website_id:=seq_website.currval;
+            INSERT INTO article (id, author_user_id, updated_date) 
+                VALUES (seq_article.nextval, pUserId, current_timestamp);
+            INSERT INTO website_article (website_id, article_id, user_id, display_order, navigation_label) 
+                VALUES (seq_website.currval, seq_article.currval, pUserId, 1, 'Home');
             l_message:='Created OK';
         ELSE
             UPDATE website SET 
