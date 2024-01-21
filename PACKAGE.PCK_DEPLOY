@@ -20,7 +20,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     ** Build and deploy website to Netlify by submitting Github action
     */    
     PROCEDURE deployWebsite(pBodyText IN CLOB) IS
-        l_template website.template%type;
         l_clob CLOB;
         l_blob BLOB;
 
@@ -160,13 +159,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         '<title>' || C.page_title || '</title>' || chr(10) ||
                         '<meta name="description" content=">' || C.page_description || '">' || chr(10) ||
                         '<meta name="author" content=">' || C.name || '">' || chr(10) ||
-                        '<style>' || C.css || chr(10) || pck_icons.g_content_styles || '</style>' || chr(10) || 
+                        '<style>' || C.css || chr(10) || '</style>' || chr(10) || 
                     '</head>' || chr(10) || 
-                    '<body>
-                        <div class="cms-wrapper ck-content">
-                            <nav>' || buildNavLabels(C.article_id) || '</nav>' || C.body_html || '
-                        </div>' || chr(10) ||
-                        '<script>' || C.javascript || '</script>' || chr(10) || 
+                    '<body>' || CASE WHEN c.nb>1 THEN '<nav>' || buildNavLabels(C.article_id) || '</nav>' END || chr(10) || 
+                        C.body_html || chr(10) || 
+                        '<!-- Hidden input fields referenced in cwv beacon API fetch -->
+                        <input type="hidden" name="visit_url" value="' || pck_core.getRestUrl || 'page-visit"/>
+                        <input type="hidden" name="website_id" value="' || pWebsiteId || '"/>
+                        <input type="hidden" name="article_id" value="' || C.article_id || '"/>
+                        <script>' || C.javascript || '</script>' || chr(10) || 
                     '</body>' || chr(10) || 
                     '</html>';
 
