@@ -101,7 +101,6 @@ const changeHandler = (e) => {
         result.style.color = data.color;
         result.style.opacity = "1";
         if (data.website_id) {
-            website.dataset.id = data.website_id;
             const inputs = website.elements;
             for (let i = 0; i < inputs.length; i++) {
                 if (inputs[i].type === "textarea" || inputs[i].type === "radio") {
@@ -110,8 +109,6 @@ const changeHandler = (e) => {
             }
             const li = e.target.previousElementSibling.querySelector(".dropdown-items .separator");
             li.insertAdjacentHTML('afterend',data.dropdown);
-            newContent.disabled = false;
-            //copyWebsite.disabled = false;
         }
         if (data.deploy_buttons) {
             deployButtons.replaceChildren();
@@ -357,16 +354,11 @@ window.addEventListener("DOMContentLoaded", (event) => {
         }, { capture: true} );
     }
 
-    /* display last updated article (i.e. has class selected)  in websiteNavMenu */
+    /* display last updated article - i.e. has class selected */
 
     gArticleId = websiteNavMenu.querySelector("a.selected").dataset.id;
-    if (gArticleId) {
-        editor.setData(container.querySelector("#editor-content").textContent);
-        lazyload();
-    } else {
-        gArticleId = 0;
-        editor.setData("");
-    }
+    editor.setData(container.querySelector("#editor-content").textContent);
+    lazyload();
 });
 
 const lazyload = () => {
