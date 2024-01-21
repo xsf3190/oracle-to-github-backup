@@ -603,9 +603,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'GET', pData=>l_sites);
         DELETE netlify_site;
-        INSERT INTO netlify_site (id, name, custom_domain, created_at, updated_at)
-        SELECT id, name, custom_domain, TO_TIMESTAMP_TZ(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR'), TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR')
-          FROM JSON_TABLE(l_sites, '$[*]' COLUMNS(id, name, custom_domain, created_at, updated_at));
+        INSERT INTO netlify_site (id, name, custom_domain, url, created_at, updated_at)
+        SELECT id, name, custom_domain, url, TO_TIMESTAMP_TZ(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR'), TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR')
+          FROM JSON_TABLE(l_sites, '$[*]' COLUMNS(id, name, custom_domain, url, created_at, updated_at));
 
         /* Get templates from Administrator's github DEPLOY repository. Do it now so we can print at least the <nav> in case templates are not defined.
         ** Data returned in variable l_temmplates which we use to build the radio controls later in the code
@@ -622,11 +622,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             SELECT w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom, wa.display_order, wa.article_id, wa.navigation_label, a.updated_date, MAX(a.updated_date) OVER (PARTITION BY w.id) max_updated_date, MAX(a.updated_date) OVER() max_updated_date_w
             FROM website w, website_article wa, article a
             WHERE w.user_id=l_session_data.user_id
-            AND wa.website_id(+)=w.id
-            AND a.id=wa.article_id(+)
+            AND wa.website_id=w.id
+            AND a.id=wa.article_id
             )
         GROUP BY id, domain_name, netlify_site_id, netlify_site_id_custom, max_updated_date, max_updated_date_w
         ORDER BY max_updated_date DESC;
+        for i in 1..l_domains.count loop log(l_domains(i).domain_name || ':' ||l_domains(i).nav_labels);end loop;
 
         /* Get id of article that will be displayed - i.e article last updated by user */
         l_selected_article:=REGEXP_SUBSTR(l_domains(1).nav_labels,'"nav-label selected" data-id="(\d+)"',1,1,null,1);
