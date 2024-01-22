@@ -14,6 +14,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getWebsite(pWebsiteId IN website.id%type);
     --
+    PROCEDURE getVisits(pWebsiteIdId IN website.id%type);
+    --
     PROCEDURE insertArticle(pId IN VARCHAR2);
     --
     PROCEDURE publishArticle(pArticleId IN article.id%type);
@@ -55,7 +57,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         <table>
             <thead>
                 <tr>
-                    <th>Log Time</th><th>Log Message</th>
+                    <th style="width:10%;text-align:left;">Log Time</th>
+                    <th style="width:90%;text-align:left;">Log Message</th>
                 </tr>
             </thead>
             <tbody>';
@@ -66,6 +69,52 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_content:=l_content || '
                 <tr>
                     <td>' || TO_CHAR(C.log_date AT TIME ZONE l_session_data.timezone, 'hh24:mi:ss') || '</td><td>' || REPLACE(C.message,chr(10),'<br>') || '</td>
+                </tr>';
+        END LOOP;
+        l_content:=l_content || '
+            </tbody>
+        </table>';
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('content', l_content);
+        apex_json.close_object;
+
+        EXCEPTION WHEN OTHERS THEN pck_core.log_error;
+    END;
+
+    /*
+    **  Return log of all visits to website
+    */
+    PROCEDURE getVisits(pWebsiteIdId IN website.id%type) IS
+        l_content CLOB;
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        l_content:='
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:10%;text-align:left;">Date</th>
+                    <th style="width:30%;text-align:left;">Location</th>
+                    <th style="width:60%;text-align:left;">Referrer</th>
+                </tr>
+            </thead>
+            <tbody>';
+        FOR C IN (SELECT wa.navigation_label, cwv.visit_date, NVL(cwv.referrer,'N/A') referrer, ip.city, ip.country_code, ip.postal
+                    FROM website_article_cwv cwv, website_article wa, ip_lookup ip
+                   WHERE wa.website_id=pWebsiteIdId
+                     AND cwv.website_id=wa.website_id
+                     AND cwv.cwv_name='LCP'
+                     AND ip.ip=cwv.ip_address
+                   ORDER BY cwv.visit_date DESC) 
+        LOOP
+            l_content:=l_content || '
+                <tr>
+                    <td>' || TO_CHAR(C.visit_date AT TIME ZONE l_session_data.timezone, 'dd.mm.yyyy hh24:mi:ss') || '</td>
+                    <td>' || apex_string.join(apex_t_varchar2(C.city,C.country_code,C.postal),',') || '</td>
+                    <td>' || C.referrer || '</td>
                 </tr>';
         END LOOP;
         l_content:=l_content || '
