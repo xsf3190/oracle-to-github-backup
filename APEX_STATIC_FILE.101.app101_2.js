@@ -531,6 +531,8 @@ const clickHandler = (e) => {
         e.preventDefault();
         gArticleId = e.target.dataset.id
         edit_text();
+    } else if (e.target.matches(".visits")) {
+        get_visits();   
     } else if (e.target.matches(".new-page")) {
         new_page();   
     } else if (e.target.matches(".edit-codepen")) {
@@ -970,6 +972,16 @@ if (window.location.hash === "#_=_"){
         : window.location.hash = "";
 }
 
+/* 
+ ** GET WEBSIITE VISITS
+ */
+const get_visits = () => {
+   execProcess( "visits/"+domainName.dataset.id,"GET").then( (data) => {
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('afterbegin',data.content);
+        logDialog.showModal();
+    });
+}
 
 /* 
  ** CREATE NEW WEBSIITE PAGE
