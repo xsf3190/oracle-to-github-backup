@@ -44,6 +44,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
+    PROCEDURE uploadIpLookup;
+    --
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
@@ -166,6 +168,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
            AND m.name='public';
 
         RETURN (l_rest_url);
+    END;
+
+    /*
+     **  Keep IP_LOOKUP table up to date
+     */
+    PROCEDURE uploadIpLookup IS 
+        l_clob clob;
+        TYPE t_ip_lookup IS TABLE OF ip_lookup%rowtype;
+        l_ip_lookup t_ip_lookup:=t_ip_lookup();
+    BEGIN
+        FOR C IN (SELECT DISTINCT ip_address FROM website_article_cwv MINUS SELECT ip FROM ip_lookup )
+        LOOP
+            pck_api.callIpdataAPI(44,C.ip_address,'GET',l_clob);
+            FOR C1 IN (SELECT city,country_code,postal FROM JSON_TABLE(l_clob, '$' COLUMNS(city,country_code,postal)))
+            LOOP
+                l_ip_lookup.EXTEND;
+                l_ip_lookup(l_ip_lookup.LAST).ip:=C.ip_address;
+                l_ip_lookup(l_ip_lookup.LAST).city:=C1.city;
+                l_ip_lookup(l_ip_lookup.LAST).country_code:=C1.country_code;
+                l_ip_lookup(l_ip_lookup.LAST).postal:=C1.postal;
+            END LOOP;
+        END LOOP;
+        FORALL i IN l_ip_lookup.FIRST..l_ip_lookup.LAST
+            INSERT INTO ip_lookup VALUES l_ip_lookup(i);
+        COMMIT;
     END;
 
     /*
@@ -627,16 +654,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             )
         GROUP BY id, domain_name, netlify_site_id, netlify_site_id_custom, max_updated_date, max_updated_date_w
         ORDER BY max_updated_date DESC;
-        for i in 1..l_domains.count loop log(l_domains(i).domain_name || ':' ||l_domains(i).nav_labels);end loop;
+        --for i in 1..l_domains.count loop log(l_domains(i).domain_name || ':' ||l_domains(i).nav_labels);end loop;
 
         /* Get id of article that will be displayed - i.e article last updated by user */
-        l_selected_article:=REGEXP_SUBSTR(l_domains(1).nav_labels,'"nav-label selected" data-id="(\d+)"',1,1,null,1);
 
-        BEGIN
-            SELECT body_html INTO l_body_html FROM article WHERE id=l_selected_article;
-            getThumbnails(l_selected_article, l_thumbnails);
-            EXCEPTION WHEN NO_DATA_FOUND THEN NULL;
-        END;
+        IF (l_domains.COUNT>0) THEN
+            l_selected_article:=REGEXP_SUBSTR(l_domains(1).nav_labels,'"nav-label selected" data-id="(\d+)"',1,1,null,1);
+            BEGIN
+                SELECT body_html INTO l_body_html FROM article WHERE id=l_selected_article;
+                getThumbnails(l_selected_article, l_thumbnails);
+                EXCEPTION WHEN NO_DATA_FOUND THEN NULL;
+            END;
+        END IF;
 
         IF (l_domains.COUNT=0) THEN
             l_domains.EXTEND(1);
@@ -690,6 +719,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </ul>
         </div>';
 
+        /*
         FOR i IN 1..l_publish.COUNT LOOP
             l_publish_html:=l_publish_html ||
             '<div>
@@ -697,6 +727,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </input> <label for="publish-' || l_publish(i) || '">' || l_publish(i) || '</label>
             </div>';
         END LOOP;
+        */
 
         l_clob:=l_clob || TO_CLOB('
         <form class="website">' ||
@@ -706,11 +737,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             --buildRadioWrapper('website.font',l_font_html, l_session_data.canuse_popover) ||
             --buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email, l_session_data.canuse_popover) || 
             '<fieldset class="deploy-buttons">
-                <legend>Build & Deploy Website</legend>
+                <legend>Publish Website</legend>
                 <div>' ||
                 buildDeployButtons(l_domains(1).domain_name, l_domains(1).netlify_site_id, l_domains(1).netlify_site_id_custom) ||
                 '</div>
             </fieldset>
+            <button type="button" class="pushable visits">
+                <span class="shadow"></span>
+                <span class="edge"></span>
+                <span class="front">VISITS</span>
+            </button>
         </form>
         <form action="https://codepen.io/pen/define" method="POST" target="_blank">
             <input type="hidden" name="data" value="">
