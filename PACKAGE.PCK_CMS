@@ -177,7 +177,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
-        apex_json.write('signature', dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign || pck_api.getCloudinaryAPISecret(l_user_id)), dbms_crypto.HASH_SH1));
+        apex_json.write('signature', dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign || pck_api.getCloudinaryAPISecret(l_session_data.user_id)), dbms_crypto.HASH_SH1));
         apex_json.close_object;
 
         EXCEPTION
@@ -194,7 +194,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_ip_address:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
         INSERT INTO session_data (session_id, timezone, maxtouchpoints, supports_popover, ip_address)
         SELECT session_id, timezone, maxtouchpoints, supports_popover, l_ip_address
-            FROM JSON_TABLE(pBodyText FORMAT JSON, '$[*]' COLUMNS (session_id, timezone, maxtouchpoints, supports_popover));
+          FROM JSON_TABLE(pBodyText FORMAT JSON, '$[*]' COLUMNS (session_id, timezone, maxtouchpoints, supports_popover));
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -286,69 +286,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     /*
      **  Load metadata after media uploaded to Cloudinary.
      **  Insert uploaded asset metadata into ASSETS table
-     **  Return new asset count and url of first image as default cover image
      */       
     PROCEDURE uploadCldMetadata(pBodyText IN CLOB) IS
-        l_article_id article.id%type;
-        l_website_id website.id%type;
-        l_metadata clob:=pBodyText;
-        l_user_id users.id%type;
-        l_start_order PLS_INTEGER;
-        l_start_order_website PLS_INTEGER;
-        l_updated_date article.updated_date%type:=current_timestamp;
         l_session_data pck_core.session_data_rt;
-        nb_assets PLS_INTEGER;
-        n PLS_INTEGER;
+        l_bodytext CLOB:=pBodyText;
+        l_thumbnails CLOB;
+        l_article_id asset.article_id%type;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT article_id, website_id
-          INTO l_article_id, l_website_id
-          FROM JSON_TABLE(l_metadata FORMAT JSON, '$.images[*]' COLUMNS (article_id, website_id)) WHERE ROWNUM=1;
+        SELECT article_id INTO l_article_id FROM JSON_TABLE(l_bodytext,'$.images[*]' COLUMNS (article_id))  WHERE ROWNuM=1;
 
-        MERGE INTO article t
-        USING (SELECT l_article_id article_id FROM dual) s
-           ON (t.id=s.article_id)
-         WHEN MATCHED THEN UPDATE SET updated_date=current_timestamp
-         WHEN NOT MATCHED THEN INSERT (id, author_user_id, created_date) VALUES (s.article_id, l_session_data.user_id, current_timestamp);
+        INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, created_date, user_id)
+        SELECT seq_asset.nextval, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, current_timestamp, l_session_data.user_id
+          FROM JSON_TABLE(l_bodytext, '$.images[*]' COLUMNS (article_id, public_id, width, height, bytes, resource_type, format, cld_cloud_name));
 
-        /* upload into WEBSITE_ARTICLE table */
 
-        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_article WHERE article_id=l_article_id AND website_id=l_website_id);
-        IF (n=0) THEN
-            SELECT NVL(MAX(display_order),0)+1 INTO l_start_order_website FROM website_article WHERE website_id=l_website_id;
-            INSERT INTO website_article(article_id, website_id, display_order, user_id) VALUES (l_article_id, l_website_id, l_start_order_website, l_user_id);
-        END IF;
+        pck_core.getThumbnails(l_article_id,l_thumbnails);
 
-        /* upload into ASSET table */
-
-        SELECT NVL(MAX(display_order),0) INTO l_start_order FROM asset WHERE article_id=l_article_id;
-
-        INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, created_date, display_order, user_id)
-        SELECT seq_asset.nextval, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, current_timestamp, l_start_order+ROWNUM, l_session_data.user_id
-          FROM JSON_TABLE(l_metadata FORMAT JSON, '$.images[*]' COLUMNS (article_id, public_id, width, height, bytes, resource_type, format, cld_cloud_name));
-
-        /* Return upload details to calling Javascript process in order to update front-end */
-        FOR C IN (SELECT id, cld_cloud_name, resource_type, public_id, format, width, nb_assets
-                    FROM
-                    (
-                    SELECT id, cld_cloud_name, resource_type, public_id, format, width, display_order, 
-                            MIN(display_order) OVER () min_display_order, 
-                            COUNT(*) OVER () nb_assets
-                    FROM asset 
-                    WHERE article_id=l_article_id
-                    )
-                    WHERE display_order=min_display_order)
-        LOOP
-            UPDATE article SET cover_asset_id=C.id, nb_assets=C.nb_assets WHERE id=l_article_id;
-            APEX_JSON.open_object; 
-            APEX_JSON.write('success', TRUE);
-            APEX_JSON.write('articleId',l_article_id);
-            APEX_JSON.write('nbAssets',C.nb_assets || ' media');
-            APEX_JSON.write('imgurl',pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width));
-            APEX_JSON.write('updated', TO_CHAR(l_updated_date AT TIME ZONE l_session_data.timezone,'dd Mon yyyy fmhh:fmmi PM'));
-            APEX_JSON.close_object;
-        END LOOP;
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.write('thumbnails', l_thumbnails);
+        APEX_JSON.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -466,8 +425,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 apex_json.open_object;
                 apex_json.write('success', TRUE); 
                 apex_json.write('domain_name', C.domain_name);
-                apex_json.write('html', '<div class="cms-wrapper ck-content"><nav></nav>' || C.body_html || '</div>');
-                apex_json.write('css', C.css || chr(10) || pck_icons.g_content_styles) ;
+                apex_json.write('html', C.body_html);
+                apex_json.write('css', C.css) ;
                 apex_json.write('js', C.javascript);
                 apex_json.close_object;
             END LOOP;
@@ -640,7 +599,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Update website CSS / JS from the contents of an exported Codepen zip file
+     **  Update website HTML / CSS / JS from the contents of an exported Codepen zip file
      */        
     PROCEDURE updateContent(pZipFile IN BLOB, pId IN VARCHAR2) IS
         l_website_id website.id%type;
@@ -648,6 +607,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_domain_name website.domain_name%type;
         l_css CLOB;
         l_javascript CLOB;
+        l_html CLOB;
         l_zip BLOB:=pZipFile;
         l_files apex_zip.t_files;
         l_file BLOB;
@@ -662,8 +622,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_article_id:=SUBSTR(pId,INSTR(pId,',')+1);
 
         /* Get existing clobs */
-        SELECT REPLACE(w.domain_name,'.','-'), w.css, w.javascript
-          INTO l_domain_name, l_css, l_javascript
+        SELECT REPLACE(w.domain_name,'.','-'), w.css, w.javascript, a.body_html
+          INTO l_domain_name, l_css, l_javascript, l_html
           FROM website w, article a
          WHERE w.id=l_website_id
            AND w.user_id=l_session_data.user_id
@@ -673,6 +633,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_files := apex_zip.get_files(p_zipped_blob => l_zip);
         FOR i in 1 .. l_files.COUNT LOOP
             CASE l_files(i)
+                WHEN l_domain_name||'/src/index.html' THEN
+                    l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
+                    IF (dbms_lob.compare(l_html, l_clob)=0) THEN
+                        l_message:=l_message || 'HTML - no change | ';
+                    ELSE
+                        UPDATE article SET body_html=l_clob, updated_date=current_timestamp WHERE id=l_article_id;
+                        l_message:=l_message || 'HTML - updated successfully | ';
+                    END IF;            
                 WHEN l_domain_name||'/src/script.js' THEN
                     l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
                     IF (dbms_lob.compare(l_javascript, l_clob)=0) THEN
