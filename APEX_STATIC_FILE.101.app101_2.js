@@ -709,7 +709,7 @@ galleryFullPrev.addEventListener("click",  () => {
  */
 const getCldSignature = async (callback, params_to_sign) => {
     execProcess("cld-signature","POST",params_to_sign).then( (data) => {
-        //console.log("data",data);
+        console.log("data",data);
         callback(data.signature);
     });
 };
@@ -771,24 +771,14 @@ const widget=cloudinary.createUploadWidget(
                         "height": item.uploadInfo.height,
                         "format": item.uploadInfo.format,
                         "cld_cloud_name": item.uploadInfo.url.split("/")[3],
-                        "article_id": item.uploadInfo.tags[0],
-                        "website_id": domainName.dataset.id
+                        "article_id": item.uploadInfo.tags[0]
                     });
                 }
             });
             execProcess("cld-upload","POST",metadata).then( (data) => {
-                let li = document.querySelector("[data-id='" + data.articleId + "']");
-                if (!li) {
-                    li = enable_card_zero(data.articleId);
-                    newArticle = true;
-                }
-                let nomedia = li.querySelector("button.no-media.upload-media");
-                if (nomedia) {
-                    const img = document.createElement("img");
-                    img.src = data.imgurl;
-                    img.classList.add("show-gallery");
-                    nomedia.replaceWith(img);
-                }
+                console.log("uloaded media to cloudinry");
+                galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
+                lazyload();
             });
         };
     }
@@ -1010,6 +1000,7 @@ const upload_media = () => {
         return;
     }
     execProcess( "cld-details","GET").then( (data) => {
+        //console.log(data);
         widget.open();
         widget.update({tags: [gArticleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
     });
