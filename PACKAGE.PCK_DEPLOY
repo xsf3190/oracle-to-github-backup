@@ -159,16 +159,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         '<title>' || C.page_title || '</title>' || chr(10) ||
                         '<meta name="description" content=">' || C.page_description || '">' || chr(10) ||
                         '<meta name="author" content=">' || C.name || '">' || chr(10) ||
+                        '<link rel="icon" href="https://res.cloudinary.com/mrbapex/believeintalking_favicon_q57es4.svg" type="image/svg+xml">'  || chr(10) ||
                         '<style>' || C.css || chr(10) || '</style>' || chr(10) || 
                     '</head>' || chr(10) || 
                     '<body>' || CASE WHEN c.nb>1 THEN '<nav>' || buildNavLabels(C.article_id) || '</nav>' END || chr(10) || 
                         C.body_html || chr(10) || 
-                        '<!-- Hidden input fields referenced in cwv beacon API fetch -->
+                        '<!-- Hidden input fields identify performance data sent to database -->
                         <input type="hidden" name="visit_url" value="' || pck_core.getRestUrl || 'page-visit"/>
                         <input type="hidden" name="website_id" value="' || pWebsiteId || '"/>
                         <input type="hidden" name="article_id" value="' || C.article_id || '"/>
-                        <script>' || C.javascript || '</script>' || chr(10) || 
-                    '</body>' || chr(10) || 
+                        <script>
+                        const vitalsQueue = new Set(),
+                              mediaQueue = new Set();
+                        const addToVitalsQueue = (metric) => {
+                            console.log(metric.name,metric.value);
+                            vitalsQueue.add(metric);
+                        };
+                        </script>
+                        <script type="module">
+                            import {onCLS, onFID, onLCP, onINP} from ''https://unpkg.com/web-vitals?module'';
+                            onCLS(addToVitalsQueue);
+                            onFID(addToVitalsQueue);
+                            onLCP(addToVitalsQueue);
+                            onINP(addToVitalsQueue);
+                        </script>
+                        <script>' || C.javascript || '</script>' || chr(10) || '
+                     </body>' || chr(10) || 
                     '</html>';
 
             l_sha1:=LOWER(dbms_crypto.hash(src => l_page, typ => dbms_crypto.hash_sh1));
