@@ -162,8 +162,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         '<link rel="icon" href="https://res.cloudinary.com/mrbapex/believeintalking_favicon_q57es4.svg" type="image/svg+xml">'  || chr(10) ||
                         '<style>' || C.css || chr(10) || '</style>' || chr(10) || 
                     '</head>' || chr(10) || 
-                    '<body>' || CASE WHEN c.nb>1 THEN '<nav>' || buildNavLabels(C.article_id) || '</nav>' END || chr(10) || 
-                        C.body_html || chr(10) || 
+                    '<body>' || CASE WHEN c.nb>1 THEN '<nav aria-label="Main Navigation">' || buildNavLabels(C.article_id) || '</nav>' END || chr(10) || 
+                        REPLACE(C.body_html,'<h1>&nbsp;</h1>',null) || chr(10) || 
                         '<!-- Hidden input fields identify performance data sent to database -->
                         <input type="hidden" name="visit_url" value="' || pck_core.getRestUrl || 'page-visit"/>
                         <input type="hidden" name="website_id" value="' || pWebsiteId || '"/>
