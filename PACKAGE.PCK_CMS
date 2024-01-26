@@ -102,6 +102,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 </tr>
             </thead>
             <tbody>';
+
+        pck_core.uploadIpLookup;
+
         FOR C IN (SELECT wa.navigation_label, cwv.visit_date, NVL(cwv.referrer,'N/A') referrer, ip.city, ip.country_code, ip.postal
                     FROM website_article_cwv cwv, website_article wa, ip_lookup ip
                    WHERE wa.website_id=pWebsiteIdId
