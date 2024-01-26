@@ -378,20 +378,6 @@ dialog.delete-confirm div.content > p {
     inline-size: fit-content;
 }
 
-button.confirmBtn {
-  background: white;
-  color: red;
-  padding: 0.5rem;
-  font-weight: 800;
-  letter-spacing: 0.25ch;
-  transition-duration: 0.25s;
-  
-  &:hover {
-    background: red;
-    color: white;
-  }
-}
-
 dialog.popup > div {
     display: grid;
     place-items: center;
