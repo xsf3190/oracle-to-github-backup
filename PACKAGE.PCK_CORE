@@ -180,7 +180,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     BEGIN
         FOR C IN (SELECT DISTINCT ip_address FROM website_article_cwv MINUS SELECT ip FROM ip_lookup )
         LOOP
-            pck_api.callIpdataAPI(44,C.ip_address,'GET',l_clob);
+            pck_api.callIpdataAPI(null,C.ip_address,'GET',l_clob);
             FOR C1 IN (SELECT city,country_code,postal FROM JSON_TABLE(l_clob, '$' COLUMNS(city,country_code,postal)))
             LOOP
                 l_ip_lookup.EXTEND;
@@ -843,7 +843,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <button type="button" class="close">&times;</button>
                 <div class="content"></div>
                 <form method="dialog">
-                    <button type="button" class="saveBtn">SAVE</button>
+                    <button type="button" class="saveBtn pushable">
+                        <span class="shadow"></span>
+                        <span class="edge"></span>
+                        <span class="front">SAVE</span>
+                    </button>
                 </form>
             </div>
         </dialog>
@@ -856,7 +860,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <p></p>
                 </div>
                 <form method="dialog">
-                    <button class="confirmBtn">CONFIRM</button>
+                    <button type="button" class="confirmBtn pushable">
+                        <span class="shadow"></span>
+                        <span class="edge"></span>
+                        <span class="front">CONFIRM</span>
+                    </button>
                 </form>
             </div>
         </dialog>
