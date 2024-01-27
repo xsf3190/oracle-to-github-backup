@@ -130,6 +130,11 @@ nav.top-nav {
     text-decoration-skip-ink: none;
 }
 
+.nav-label > svg {
+    margin-inline-start: 0.25em;
+    pointer-events: none;
+}
+
 button.new-page {
     margin: 1rem;
 }
@@ -175,46 +180,7 @@ button {
     white-space: nowrap;
 }
 
-button.cta {
-    inline-size: var(--width);
-    background-color: var(--color-solid);
-    padding: 1ch 2ch;
-    color: white;
-    border-radius: 1ch;
-}
-
-button:disabled.cta {
-    background-color: var(--color-pale);
-    cursor: none;
-}
-
-button.cta span {
-  cursor: pointer;
-  display: inline-block;
-  position: relative;
-  transition: 0.5s;
-}
-
-button.cta span:after {
-  content: var(--content);
-  font-weight: 900;
-  position: absolute;
-  opacity: 0;
-  top: 0;
-  right: -2rem;
-  transition: 0.5s;
-}
-
-button.cta:hover span {
-  padding-right: 2.5rem;
-}
-
-button.cta:hover span:after {
-  opacity: 1;
-  right: 0;
-}
-
-.show-dropdown, .new-before, .new-after {
+.show-dropdown {
     color: var(--color-solid);
     background-color: var(--color-pale);
     border-radius: 0.5ch;
@@ -527,6 +493,7 @@ dialog.log tr {
     opacity: 1;
     padding: 1ch;
     border: var(--color-solid) solid 1px;
+    z-index: 999;
 }
 
 .dropdown-items button {
