@@ -8,7 +8,7 @@ CREATE TABLE "WEBSITE_ARTICLE"
 	"PAGE_DESCRIPTION" VARCHAR2(200), 
 	"UPDATED_DATE" TIMESTAMP (6) WITH TIME ZONE, 
 	"USER_ID" NUMBER, 
-	"PUBLISH" VARCHAR2(3) DEFAULT 'YES', 
+	"CONTACT_FORM" VARCHAR2(3) DEFAULT 'YES', 
 	 CONSTRAINT "PK_WEBSITE_ARTICLE" PRIMARY KEY ("WEBSITE_ID", "ARTICLE_ID")
   USING INDEX  ENABLE, 
 	 CONSTRAINT "FK_ARTICLE_WEBSITE" FOREIGN KEY ("ARTICLE_ID")
@@ -19,6 +19,6 @@ CREATE TABLE "WEBSITE_ARTICLE"
 COMMENT ON COLUMN "WEBSITE_ARTICLE"."NAVIGATION_LABEL" IS 'Navigation label for this content in the deployed website';
    COMMENT ON COLUMN "WEBSITE_ARTICLE"."PAGE_TITLE" IS 'Title for this page to appear in Search Engine listings';
    COMMENT ON COLUMN "WEBSITE_ARTICLE"."PAGE_DESCRIPTION" IS 'Description for this page to appear in Search Engine listings';
-   COMMENT ON COLUMN "WEBSITE_ARTICLE"."PUBLISH" IS 'YES includes content in the deployed website. NO excludes content that you might be working on, for example';
+   COMMENT ON COLUMN "WEBSITE_ARTICLE"."CONTACT_FORM" IS 'YES includes content in the deployed website. NO excludes content that you might be working on, for example';
 CREATE UNIQUE INDEX "PK_WEBSITE_ARTICLE" ON "WEBSITE_ARTICLE" ("WEBSITE_ID", "ARTICLE_ID") 
   ;
