@@ -208,7 +208,7 @@ const edit_website = (e) => {
 };
 
 /* 
- ** DEPLOY WEBSITE - template must be selected
+ ** DEPLOY WEBSITE
  */
 const deploy_website = (e) => {
 
@@ -530,7 +530,7 @@ const clickHandler = (e) => {
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
         gArticleId = e.target.dataset.id
-        edit_text();
+        edit_text(e);
     } else if (e.target.matches(".visits")) {
         get_visits();   
     } else if (e.target.matches(".new-page")) {
@@ -555,6 +555,10 @@ const clickHandler = (e) => {
         copy_url(e);                                 
     } else if (e.target.matches(".deploy-website")) {
         deploy_website(e);
+    } else if (e.target.matches(".add-contact")) {
+        add_contact(e);
+    } else if (e.target.matches(".remove-contact")) {
+        remove_contact(e);
     } else if (e.target.matches(".saveBtn")) {
         console.log("saveBtn clicked - do nothing!");
     }
@@ -1021,7 +1025,7 @@ const selected_nav = (id) => {
 /* 
  ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR 
  */
-const edit_text = () => {
+const edit_text = (e) => {
     /*
     const pendingActions = editor.plugins.get( 'PendingActions' );
     if ( pendingActions.hasAny ) {
@@ -1043,6 +1047,18 @@ const edit_text = () => {
             galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
             lazyload();
         }
+
+        const contact_form_btn = websiteNavMenu.querySelector(".dropdown .add-contact,.dropdown .remove-contact");
+
+        if (data.contact_form) {
+            contact_form_btn.querySelector("use").setAttribute("href","#minus");
+            contact_form_btn.classList.remove("add-contact");
+            contact_form_btn.classList.add("remove-contact");
+        } else {
+            contact_form_btn.querySelector("use").setAttribute("href","#plus");
+            contact_form_btn.classList.remove("remove-contact");
+            contact_form_btn.classList.add("add-contact");
+        }
         selected_nav(gArticleId);
     });
 }
@@ -1056,6 +1072,26 @@ const edit_field = (e) => {
         content.replaceChildren();
         content.insertAdjacentHTML('afterbegin',data.content);
         editField.showModal();
+    });
+}
+
+/* 
+ ** ADD CONTACT FORM TO PAGE - TOGGLE LABEL
+ */
+const add_contact = (e) => {
+    execProcess( "contact-form/"+domainName.dataset.id+","+gArticleId,"PUT").then( (data) => {
+        const nav_label = websiteNavMenu.querySelector("[data-id='"+gArticleId+"']");
+        nav_label.style.textDecorationLine = "underline overline";
+    });
+}
+
+/* 
+ ** REMOVE CONTACT FORM FROM PAGE - - TOGGLE LABEL
+ */
+const remove_contact = (e) => {
+    execProcess( "contact-form/"+domainName.dataset.id+","+gArticleId,"DELETE").then( (data) => {
+        const nav_label = websiteNavMenu.querySelector("[data-id='"+gArticleId+"']");
+        nav_label.style.textDecorationLine = "underline";
     });
 }
 
