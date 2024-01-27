@@ -558,25 +558,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_sites CLOB;
         l_domain_dropdown LONG;
         l_printed_separator BOOLEAN:=FALSE;
-        l_selected_article article.id%type;
+        l_nav_labels LONG;
         l_body_html article.body_html%type;
         l_thumbnails CLOB;
+        l_contact_form website_article.contact_form%type;
 
         TYPE t_domain IS RECORD (
             id                      website.id%type,
             domain_name             website.domain_name%type,
             netlify_site_id         website.netlify_site_id%type,
             netlify_site_id_custom  website.netlify_site_id%type,
-            nav_labels              LONG
+            updated_date            article.updated_date%type
         );
         TYPE tt_domain IS TABLE OF t_domain;
         l_domains tt_domain;  
         l_session_data session_data_rt;
-
-        TYPE t_publish IS VARRAY(2) OF VARCHAR2(3);
-        l_publish t_publish:=t_publish('YES','NO');
-        l_publish_html LONG;
-
     BEGIN
         l_session_data:=getSessionData();
 
@@ -618,6 +614,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </nav>');
 
         -- should use this to show users available custom domains
+        /*
         pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_dns_zones);
         DELETE netlify_dns_zone;
         INSERT INTO netlify_dns_zone (id, name, site_id, created_at, updated_at)
@@ -633,38 +630,38 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         INSERT INTO netlify_site (id, name, custom_domain, url, created_at, updated_at)
         SELECT id, name, custom_domain, url, TO_TIMESTAMP_TZ(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR'), TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR')
           FROM JSON_TABLE(l_sites, '$[*]' COLUMNS(id, name, custom_domain, url, created_at, updated_at));
+        */
 
-        /* Get templates from Administrator's github DEPLOY repository. Do it now so we can print at least the <nav> in case templates are not defined.
-        ** Data returned in variable l_temmplates which we use to build the radio controls later in the code
-         */
-        --pck_api.callGithubAPI(pUserId=>l_session_data.user_id, pEndpoint=>'contents/TEMPLATES', pMethod=>'GET', pData=>l_templates);
-
-        SELECT id, domain_name, netlify_site_id, netlify_site_id_custom, 
-            CASE WHEN max_updated_date=max_updated_date_w THEN 
-                LISTAGG('<a href="#" class="nav-label' || CASE WHEN updated_date=max_updated_date THEN ' selected' END || '" data-id="' || article_id || '">' || navigation_label || '</a>') WITHIN GROUP (ORDER BY display_order)
-            END
-        BULK COLLECT INTO l_domains
-        FROM
-            (
-            SELECT w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom, wa.display_order, wa.article_id, wa.navigation_label, a.updated_date, MAX(a.updated_date) OVER (PARTITION BY w.id) max_updated_date, MAX(a.updated_date) OVER() max_updated_date_w
-            FROM website w, website_article wa, article a
-            WHERE w.user_id=l_session_data.user_id
-            AND wa.website_id=w.id
-            AND a.id=wa.article_id
-            )
-        GROUP BY id, domain_name, netlify_site_id, netlify_site_id_custom, max_updated_date, max_updated_date_w
-        ORDER BY max_updated_date DESC;
-        --for i in 1..l_domains.count loop log(l_domains(i).domain_name || ':' ||l_domains(i).nav_labels);end loop;
+        SELECT w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom, MAX(COALESCE(a.updated_date, a.created_date)) updated_date
+          BULK COLLECT INTO l_domains
+          FROM website w, website_article wa, article a
+         WHERE w.user_id=l_session_data.user_id
+           AND wa.website_id=w.id
+           AND a.id=wa.article_id
+         GROUP BY w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom
+         ORDER BY updated_date DESC;
 
         /* Get id of article that will be displayed - i.e article last updated by user */
 
         IF (l_domains.COUNT>0) THEN
-            l_selected_article:=REGEXP_SUBSTR(l_domains(1).nav_labels,'"nav-label selected" data-id="(\d+)"',1,1,null,1);
-            BEGIN
-                SELECT body_html INTO l_body_html FROM article WHERE id=l_selected_article;
-                getThumbnails(l_selected_article, l_thumbnails);
-                EXCEPTION WHEN NO_DATA_FOUND THEN NULL;
-            END;
+            FOR C IN (SELECT wa.navigation_label, wa.article_id, wa.contact_form, a.body_html, CASE WHEN COALESCE(a.updated_date, a.created_date)=l_domains(1).updated_date THEN ' selected' END selected 
+                        FROM website_article wa, article a 
+                       WHERE wa.website_id=l_domains(1).id 
+                         AND a.id=wa.article_id 
+                       ORDER BY wa.display_order) 
+            LOOP
+                l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label' || C.selected || '" data-id="' || C.article_id || '">' || C.navigation_label;
+                IF (C.contact_form='YES') THEN
+                    l_nav_labels:=l_nav_labels || '<svg class="icon"><use href="#envelope"></use></svg>';
+                END IF;
+                l_nav_labels:=l_nav_labels || '</a>';
+
+                IF (C.selected IS NOT NULL) THEN
+                    l_body_html:=C.body_html;
+                    l_contact_form:=C.contact_form;
+                    getThumbnails(C.article_id, l_thumbnails);
+                END IF;
+            END LOOP;
         END IF;
 
         IF (l_domains.COUNT=0) THEN
@@ -719,16 +716,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </ul>
         </div>';
 
-        /*
-        FOR i IN 1..l_publish.COUNT LOOP
-            l_publish_html:=l_publish_html ||
-            '<div>
-                <input type="radio" data-column="website_article.publish" id="publish-' || l_publish(i) || '" name="publish-' || l_publish(i) || '" value="' || l_publish(i) || '">
-                </input> <label for="publish-' || l_publish(i) || '">' || l_publish(i) || '</label>
-            </div>';
-        END LOOP;
-        */
-
         l_clob:=l_clob || TO_CLOB('
         <form class="website">' ||
             buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
@@ -770,13 +757,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <button type="button" class="next">&gt;</button>
                 </div>
             </div>
+            <!-- Second card -->
             <div class="page-content">                
                 <button type="button" class="new-page pushable">
                     <span class="shadow"></span>
                     <span class="edge"></span>
                     <span class="front">NEW PAGE</span>
                 </button>
-                <nav class="website-nav-menu">' || l_domains(1).nav_labels || '
+                <nav class="website-nav-menu">' || l_nav_labels || '
                     <div class="dropdown">
                         <span>Edit Options</span>
                         <button type="button" class="show-dropdown">&blacktriangledown;</button>
@@ -785,6 +773,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                 <button type="button" class="with-icon edit-field" data-column="website_article.navigation_label">
                                     <svg class="icon"><use href="#link"></use></svg>
                                 Navigation Label
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="with-icon ' || CASE WHEN l_contact_form='YES' THEN 'remove-contact' ELSE 'add-contact' END || '">
+                                    <svg class="icon"><use href="' || CASE WHEN l_contact_form='YES' THEN '#minus' ELSE '#plus' END || '"></use></svg>
+                                Contact Form
                                 </button>
                             </li>                    
                             <li>
