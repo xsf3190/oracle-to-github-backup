@@ -1081,7 +1081,15 @@ const edit_field = (e) => {
 const add_contact = (e) => {
     execProcess( "contact-form/"+domainName.dataset.id+","+gArticleId,"PUT").then( (data) => {
         const nav_label = websiteNavMenu.querySelector("[data-id='"+gArticleId+"']");
-        nav_label.style.textDecorationLine = "underline overline";
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.classList.add("icon");
+        const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+        use.setAttributeNS(null, 'href', '#envelope');
+        svg.appendChild(use);
+        nav_label.appendChild(svg);
+        e.target.classList.remove("add-contact");
+        e.target.classList.add("remove-contact");
+        e.target.querySelector("use").setAttributeNS(null, 'href', '#minus');
     });
 }
 
@@ -1091,7 +1099,10 @@ const add_contact = (e) => {
 const remove_contact = (e) => {
     execProcess( "contact-form/"+domainName.dataset.id+","+gArticleId,"DELETE").then( (data) => {
         const nav_label = websiteNavMenu.querySelector("[data-id='"+gArticleId+"']");
-        nav_label.style.textDecorationLine = "underline";
+        nav_label.querySelector("svg").remove();
+        e.target.classList.remove("remove-contact");
+        e.target.classList.add("add-contact");
+        e.target.querySelector("use").setAttributeNS(null, 'href', '#plus');
     });
 }
 
