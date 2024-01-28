@@ -404,6 +404,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_id_2 NUMBER;
         l_thumbnails_html CLOB;
         l_session_data pck_core.session_data_rt;
+
+        FUNCTION contactForm RETURN VARCHAR2 IS
+        BEGIN
+            RETURN('<form>
+                    <label for="nameInput">Name</label>
+                    <input type="text" id="nameInput" name="name" required="" minlength="1" maxlength="50">
+                    <label for="emailInput">Email</label>
+                    <input type="email" id="emailInput" name="email" required="" maxlength="50">
+                    <label for="messageInput">Message</label>
+                    <textarea id="messageInput" name="message" required="" minlength="1" maxlength="400"></textarea>
+                    <button disabled type="submit">Send</button>
+                </form>');
+        END;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -418,17 +431,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         /* Website and Article data */
         IF (l_id_1 IS NOT NULL AND l_id_2 IS NOT NULL) THEN
             FOR C IN (
-                SELECT w.domain_name, w.css, w.javascript, a.body_html
-                FROM website w, article a
+                SELECT w.domain_name, w.css, w.javascript, wa.contact_form, a.body_html
+                FROM website w, website_article wa, article a
                 WHERE w.id=l_id_1
                 AND w.user_id=l_session_data.user_id
+                AND wa.website_id=l_id_1
+                AND wa.article_id=l_id_2
                 AND a.id=l_id_2
                 AND a.author_user_id=l_session_data.user_id) 
             LOOP
                 apex_json.open_object;
                 apex_json.write('success', TRUE); 
                 apex_json.write('domain_name', C.domain_name);
-                apex_json.write('html', C.body_html);
+                apex_json.write('html', C.body_html || CASE WHEN C.contact_form='YES' THEN contactForm() END);
                 apex_json.write('css', C.css) ;
                 apex_json.write('js', C.javascript);
                 apex_json.close_object;
