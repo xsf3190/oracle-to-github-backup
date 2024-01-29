@@ -125,24 +125,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             RETURN (l_nav);
         END;
 
-        FUNCTION contactForm RETURN VARCHAR2 IS
+        FUNCTION contactEmail RETURN VARCHAR2 IS
+            l_contact_email website.contact_email%type;
         BEGIN
-            RETURN('<form>
-                    <label for="nameInput">Name</label>
-                    <input type="text" id="nameInput" name="name" required minlength="1" maxlength="50">
-                    <label for="emailInput">Email</label>
-                    <input type="email" id="emailInput" name="email" required maxlength="50">
-                    <label for="messageInput">Message</label>
-                    <textarea id="messageInput" name="message" required minlength="1" maxlength="400"></textarea>
-                    <input type="hidden" name="contactEmail" value="believeintalking@hotmail.com">
-                    <input type="hidden" name="signatureContactEmail" value="Jrj2OUI980r3+147bdtsXiNddFpi7lLFZ5iTPLMxMYTgSFAGKeC5axwh3J3nF459
-M9WZ95k2HSuh0q6HB5k+G7EvdK/qFm9xdHfYNUAKgeZDiZF4gUowRzGPArLEHo0x
-H/Qn4Pe13R3XSK6bP8ppDlvZb78GhNMOcI60FzREezf+l+3MFqRCbeyVk/PRwuL+
-SRVB2KJsDPR3JuwSmqVoUUOUTCeo22GtpqfesA80rrNhJWOSvXTMvSaHTNNH5o8J
-rUN4GwVtukXbkUDWGMVzJTS/j/1ybftGrhZN4H9Gcy5L7pYKjA0SXGKUlm2L7Qo9
-Q/asreTfh/z6vpDKOYL7GA==">
-                    <button data-url="https://a2r8e28y53.execute-api.eu-central-1.amazonaws.com/serverless_lambda_stage/" type="submit">Send</button>
-                </form>');
+            SELECT contact_email INTO l_contact_email FROM website WHERE id=pWebsiteId;
+            IF (l_contact_email IS NULL) THEN
+                SELECT email INTO l_contact_email FROM users WHERE id=pUserId;
+            END IF;
+            RETURN (l_contact_email);
         END;
 
     BEGIN
@@ -185,7 +175,7 @@ Q/asreTfh/z6vpDKOYL7GA==">
                     '</head>' || chr(10) || 
                     '<body>' || CASE WHEN c.nb>1 THEN '<nav aria-label="Main Navigation">' || buildNavLabels(C.article_id) || '</nav>' END || chr(10) || 
                         REPLACE(C.body_html,'<h1>&nbsp;</h1>',null) || chr(10) || 
-                        CASE WHEN C.contact_form='YES' THEN contactForm() END ||
+                        CASE WHEN C.contact_form='YES' THEN pck_core.buildContactForm(contactEmail()) END ||
                         '<!-- Hidden input fields identify performance data sent to database -->
                         <input type="hidden" name="visit_url" value="' || pck_core.getRestUrl || 'page-visit"/>
                         <input type="hidden" name="website_id" value="' || pWebsiteId || '"/>
