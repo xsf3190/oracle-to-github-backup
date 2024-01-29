@@ -2,12 +2,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     gWidthThumbnail CONSTANT INTEGER:=360;
     --
-    PROCEDURE log(pMsg IN VARCHAR2);
-    --
-    PROCEDURE log(pMsg IN OUT NOCOPY CLOB);
-    --
-    PROCEDURE log_error;
-    --
     TYPE session_data_rt IS RECORD (
         app_id NUMBER, 
         session_id NUMBER,
@@ -17,6 +11,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
         canuse_popover BOOLEAN,
         user_id NUMBER
     );
+    --
+    FUNCTION buildContactForm(pContactEmail IN website.contact_email%type DEFAULT NULL) RETURN VARCHAR2;
+    --
+    FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
+    --
+    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
+    --
+    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN CLOB, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
+    --
+    PROCEDURE log(pMsg IN VARCHAR2);
+    --
+    PROCEDURE log(pMsg IN OUT NOCOPY CLOB);
+    --
+    PROCEDURE log_error;
     --
     FUNCTION getSessionData RETURN session_data_rt;
     --
@@ -35,12 +43,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
         pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
     --
     PROCEDURE getThumbnails(pArticleId IN article.id%type, pHTML IN OUT NOCOPY CLOB);
-    --
-    FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
-    --
-    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
-    --
-    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN CLOB, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
@@ -193,6 +195,67 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         FORALL i IN l_ip_lookup.FIRST..l_ip_lookup.LAST
             INSERT INTO ip_lookup VALUES l_ip_lookup(i);
         COMMIT;
+    END;
+
+    /*
+     **  Build Contact Form
+     */
+    FUNCTION buildContactForm(pContactEmail IN website.contact_email%type) RETURN VARCHAR2 IS
+        l_form LONG;
+        l_terraform_organization_name users.terraform_organization_name%type;
+        l_terraform_workspace_name users.terraform_workspace_name%type;
+        l_terraform_private_key users.terraform_private_key%type;
+        l_aws_gateway_url VARCHAR2(200);
+        l_terraform_private_key_raw RAW(4000);
+        l_signed_data RAW(4000);
+        l_signature_contact_email VARCHAR2(500);
+        l_clob CLOB;
+    BEGIN
+        /* 
+        ** pUserId passed means we have to build form for deployment - use logged on user's email address unless website.contact_email is not null
+        */
+        IF (pContactEmail IS NOT NULL) THEN
+            pck_api.getTerraformData(pUserId=>null, pTerraformOrganizationName=>l_terraform_organization_name, pTerraformWorkspaceName=>l_terraform_workspace_name, pTerraformPrivateKey=>l_terraform_private_key);
+            pck_api.callTerraformAPI(pUserId=>null, pEndpoint=>'api/v2/organizations/' || l_terraform_organization_name || '/workspaces/' || l_terraform_workspace_name, pMethod=>'GET', pData=>l_clob);
+
+            FOR C IN (SELECT related FROM JSON_TABLE(l_clob, '$.data.relationships.outputs.links' COLUMNS (related))) LOOP
+                pck_api.callTerraformAPI(pUserId=>null, pEndpoint=>C.related, pMethod=>'GET', pData=>l_clob);
+                FOR C1 IN (SELECT value FROM JSON_TABLE(l_clob, '$.data[*]' COLUMNS (name PATH '$.attributes.name', value PATH '$.attributes.value')) WHERE name='invoke_url') LOOP
+                    l_aws_gateway_url:=C1.value || '/';
+                END LOOP;
+            END LOOP;
+
+            l_terraform_private_key_raw:=utl_i18n.string_to_raw(regexp_replace(l_terraform_private_key,'(-+((BEGIN|END) (RSA )?(PUBLIC|PRIVATE) KEY)-+\s?|\s)',''));
+
+            l_signed_data:=DBMS_CRYPTO.SIGN(src =>utl_i18n.string_to_raw(pContactEmail), prv_key =>l_terraform_private_key_raw, pubkey_alg =>dbms_crypto.KEY_TYPE_RSA,sign_alg =>dbms_crypto.SIGN_SHA256_RSA);
+
+            l_signature_contact_email:=utl_i18n.raw_to_char(utl_encode.base64_encode(l_signed_data));
+        END IF;
+
+        l_form:='
+        <form class="contact">
+            <div>
+                <label for="nameInput">Name</label>
+                <input type="text" id="nameInput" name="name" required minlength="1" maxlength="50">
+            </div>
+            <div>
+                <label for="emailInput">Email</label>
+                <input type="email" id="emailInput" name="email" required maxlength="50">
+            </div>
+            <div>
+                <label for="messageInput">Message</label>
+                <textarea id="messageInput" name="message" required minlength="1" maxlength="400" rows="5" cols="40"></textarea>
+            </div>
+            <input type="hidden" name="contactEmail" value="' || pContactEmail || '">
+            <input type="hidden" name="signatureContactEmail" value="' || l_signature_contact_email || '">
+            <button type="submit" class="pushable" data-url="' || l_aws_gateway_url || '">
+                <span class="shadow"></span>
+                <span class="edge"></span>
+                <span class="front">SEND</span>
+            </button>
+        </form>';
+
+        RETURN (l_form);
     END;
 
     /*
