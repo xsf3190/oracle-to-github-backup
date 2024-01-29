@@ -404,19 +404,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_id_2 NUMBER;
         l_thumbnails_html CLOB;
         l_session_data pck_core.session_data_rt;
-
-        FUNCTION contactForm RETURN VARCHAR2 IS
-        BEGIN
-            RETURN('<form>
-                    <label for="nameInput">Name</label>
-                    <input type="text" id="nameInput" name="name" required="" minlength="1" maxlength="50">
-                    <label for="emailInput">Email</label>
-                    <input type="email" id="emailInput" name="email" required="" maxlength="50">
-                    <label for="messageInput">Message</label>
-                    <textarea id="messageInput" name="message" required="" minlength="1" maxlength="400"></textarea>
-                    <button disabled type="submit">Send</button>
-                </form>');
-        END;
+        l_email users.email%type;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -440,10 +428,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 AND a.id=l_id_2
                 AND a.author_user_id=l_session_data.user_id) 
             LOOP
+                IF (C.contact_form='YES') THEN
+                    SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
+                END IF;
                 apex_json.open_object;
                 apex_json.write('success', TRUE); 
                 apex_json.write('domain_name', C.domain_name);
-                apex_json.write('html', C.body_html || CASE WHEN C.contact_form='YES' THEN contactForm() END);
+                apex_json.write('html', C.body_html || CASE WHEN C.contact_form='YES' THEN pck_core.buildContactForm(l_email) END);
                 apex_json.write('css', C.css) ;
                 apex_json.write('js', C.javascript);
                 apex_json.close_object;
