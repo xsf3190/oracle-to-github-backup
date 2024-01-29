@@ -529,8 +529,11 @@ const clickHandler = (e) => {
 
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
-        gArticleId = e.target.dataset.id
-        edit_text(e);
+        const sourceBtn = container.querySelector(".ck-source-editing-button");
+        if (sourceBtn.matches(".ck-off")) {
+            gArticleId = e.target.dataset.id
+            edit_text(e);
+        }
     } else if (e.target.matches(".visits")) {
         get_visits();   
     } else if (e.target.matches(".new-page")) {
