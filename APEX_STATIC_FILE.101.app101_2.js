@@ -165,6 +165,9 @@ newWebsite.addEventListener("click",  () => {
  */
 const edit_website = (e) => {
     execProcess( "website/"+e.target.dataset.id,"GET").then( (data) => {
+        
+        console.log("data",data);
+
         resetWebsite();
         
         const inputs = website.elements;
@@ -196,7 +199,18 @@ const edit_website = (e) => {
         if (data.nav_labels) {
             websiteNavMenu.insertAdjacentHTML('afterbegin',data.nav_labels);
             gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
-            edit_text();
+            editor_status = "init";
+            editor_status_text.textContent = "";
+            if (data.html) {
+                editor.setData(data.html);
+            } else {
+                editor.setData("");
+            }
+            galleryList.replaceChildren();
+            if (data.thumbnails) {
+                galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
+                lazyload();
+            }
         } else {
             gArticleId = 0;
             editor_status_text.textContent = "";
@@ -533,6 +547,8 @@ const clickHandler = (e) => {
         if (sourceBtn.matches(".ck-off")) {
             gArticleId = e.target.dataset.id
             edit_text(e);
+        } else {
+            popupOpen("Click Source button",".. cannot switch pages when in Source editing mode");
         }
     } else if (e.target.matches(".visits")) {
         get_visits();   
@@ -716,7 +732,6 @@ galleryFullPrev.addEventListener("click",  () => {
  */
 const getCldSignature = async (callback, params_to_sign) => {
     execProcess("cld-signature","POST",params_to_sign).then( (data) => {
-        console.log("data",data);
         callback(data.signature);
     });
 };
