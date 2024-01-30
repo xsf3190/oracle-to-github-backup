@@ -48,6 +48,253 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     PROCEDURE uploadIpLookup;
     --
+    /* Default custom properties */
+    g_root_css CONSTANT LONG:=
+':root {
+    --color-dark: #404040;
+    --color-light: #f3f3f3;
+    --color-primary: #0042bf;  
+    /* Custom properties for fluid type */
+    --step--2:  clamp(0.69rem,0.59rem + 0.45vw,1.04rem);
+    --step--1:  clamp(0.83rem,0.71rem + 0.54vw,1.25rem);
+    --step-0:  clamp(1rem,0.85rem + 0.65vw,1.5rem);
+    --step-1:  clamp(1.2rem,1.03rem + 0.77vw,1.8rem);
+    --step-2:  clamp(1.44rem,1.23rem + 0.93vw,2.16rem);
+    --step-3:  clamp(1.73rem,1.48rem + 1.11vw,2.59rem);
+    --step-4:  clamp(2.07rem,1.77rem + 1.34vw,3.11rem);
+    --step-5:  clamp(2.49rem,2.13rem + 1.61vw,3.73rem);
+    /* Custom properties for fluid spacing */
+    --space-3xs:  clamp(0.25rem,0.21rem + 0.16vw,0.38rem);
+    --space-2xs:  clamp(0.5rem,0.43rem + 0.32vw,0.75rem);
+    --space-xs:  clamp(0.75rem,0.64rem + 0.48vw,1.13rem);
+    --space-s:  clamp(1rem,0.85rem + 0.65vw,1.5rem);
+    --space-m:  clamp(1.5rem,1.28rem + 0.97vw,2.25rem);
+    --space-l:  clamp(2rem,1.71rem + 1.29vw,3rem);
+    --space-xl:  clamp(3rem,2.56rem + 1.94vw,4.5rem);
+    --space-2xl:  clamp(4rem,3.42rem + 2.58vw,6rem);
+    --space-3xl:  clamp(6rem,5.13rem + 3.87vw,9rem);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+    background: var(--color-light);
+    color: var(--color-dark);
+    font-family: "Lato", sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.5;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    max-inline-size: 65ch;
+    margin-inline: auto;
+    padding-inline: 1rem;
+}
+body > * + * {
+    margin-top: var(--space-m);
+}
+img,
+picture {
+  max-width: 100%;
+  display: block;
+  object-fit: scale-down;
+}';
+
+    g_nav_css CONSTANT LONG:=
+'nav[aria-label="Main Navigation"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1em;
+    justify-content: space-evenly;
+}
+.nav-label:not(.selected) {
+    text-decoration: none;
+}
+.nav-label.selected {
+    text-decoration-color: var(--color-primary);
+    text-decoration-thickness: var(--space-3xs);
+    text-underline-offset: var(--space-3xs);
+    text-decoration-skip-ink: none;
+}';
+    --
+    g_contact_css LONG:=
+'form.contact {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    inline-size: fit-content;
+    border: solid 1px var(--color-primary);
+    padding: 1em;
+    border-radius: 0.5em;
+    & button {
+        inline-size: fit-content;
+        position: relative;
+        border: none;
+        background: transparent;
+        padding: 0;
+        cursor: pointer;
+        outline-offset: 4px;
+        transition: filter 250ms;
+    }
+    & label {
+        display: block;
+        font-weight: 600;
+    }
+    & input {
+        inline-size: 95%;
+        line-height: 2;
+    }
+}
+input, textarea, button, select {
+    font: inherit;
+}
+/* **************** */
+/* PUSHABLE BUTTON  */
+/* **************** */
+.pushable {
+    inline-size: fit-content;
+    position: relative;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    outline-offset: 4px;
+    transition: filter 250ms;
+  }
+  .shadow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+    background: hsl(0deg 0% 0% / 0.25);
+    will-change: transform;
+    transform: translateY(2px);
+    transition:
+      transform
+      600ms
+      cubic-bezier(.3, .7, .4, 1);
+  }
+  .edge {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+    background: linear-gradient(
+      to left,
+      hsl(340deg 100% 16%) 0%,
+      hsl(340deg 100% 32%) 8%,
+      hsl(340deg 100% 32%) 92%,
+      hsl(340deg 100% 16%) 100%
+    );
+  }
+  .front {
+    display: block;
+    position: relative;
+    padding: 12px 42px;
+    border-radius: 12px;
+    color: white;
+    background: hsl(345deg 100% 47%);
+    will-change: transform;
+    transform: translateY(-4px);
+    transition:
+      transform
+      600ms
+      cubic-bezier(.3, .7, .4, 1);
+  }
+  .pushable:hover {
+    filter: brightness(110%);
+  }
+  .pushable:hover .front {
+    transform: translateY(-6px);
+    transition:
+      transform
+      250ms
+      cubic-bezier(.3, .7, .4, 1.5);
+  }
+  .pushable:active .front {
+    transform: translateY(-2px);
+    transition: transform 34ms;
+  }
+  .pushable:hover .shadow {
+    transform: translateY(4px);
+    transition:
+      transform
+      250ms
+      cubic-bezier(.3, .7, .4, 1.5);
+  }
+  .pushable:active .shadow {
+    transform: translateY(1px);
+    transition: transform 34ms;
+  }
+  .pushable:focus:not(:focus-visible) {
+    outline: none;
+  }';
+    --
+    g_contact_js CONSTANT LONG:=
+'const form = document.querySelector("form.contact");
+form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    const submit = form.querySelector("button");
+    const aws_gateway_url = submit.dataset.url;
+    console.log("aws_gateway_url",aws_gateway_url);
+    fetch(aws_gateway_url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+        },
+        redirect: "follow",
+        referrerPolicy: "no-referrer",
+        body: JSON.stringify({
+            name: formData.get("name"),
+            email: formData.get("email"),
+            message: formData.get("message"),
+            contactEmail: formData.get("contactEmail"),
+            signatureContactEmail: formData.get("signatureContactEmail")
+        }),
+    }).then((response) => {
+        if (response.status) {
+            console.log("submitted form");
+            const formBtn = form.querySelector("button");
+            formBtn.disabled = true;
+            return;
+        }
+        throw new Error("Could not submit request");
+    }).catch( (error) => {
+        console.error(error);
+    });
+});';
+
+    g_img_observer LONG:=
+'const images = document.querySelectorAll(''[data-src]'');
+const config = {rootMargin: ''0px 0px 50px 0px'',threshold: 0};
+
+let observer = new IntersectionObserver(function (entries, self) {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      preloadImage(entry.target);
+      // Stop watching and load the image
+      self.unobserve(entry.target);
+    }
+  });
+}, config);
+
+images.forEach(image => {
+  observer.observe(image);
+});
+
+const preloadImage = (img) => {
+  const src = img.getAttribute(''data-src'');
+  if (!src) {
+    return; 
+  }
+  img.src = src;
+};';
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
@@ -232,28 +479,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             l_signature_contact_email:=utl_i18n.raw_to_char(utl_encode.base64_encode(l_signed_data));
         END IF;
 
-        l_form:='
-        <form class="contact">
-            <div>
-                <label for="nameInput">Name</label>
-                <input type="text" id="nameInput" name="name" required minlength="1" maxlength="50">
-            </div>
-            <div>
-                <label for="emailInput">Email</label>
-                <input type="email" id="emailInput" name="email" required maxlength="50">
-            </div>
-            <div>
-                <label for="messageInput">Message</label>
-                <textarea id="messageInput" name="message" required minlength="1" maxlength="400" rows="5" cols="40"></textarea>
-            </div>
-            <input type="hidden" name="contactEmail" value="' || pContactEmail || '">
-            <input type="hidden" name="signatureContactEmail" value="' || l_signature_contact_email || '">
-            <button type="submit" class="pushable" data-url="' || l_aws_gateway_url || '">
-                <span class="shadow"></span>
-                <span class="edge"></span>
-                <span class="front">SEND</span>
-            </button>
-        </form>';
+        l_form:=
+'<form class="contact">
+    <div>
+        <label for="nameInput">Name</label>
+        <input type="text" id="nameInput" name="name" required minlength="1" maxlength="50">
+    </div>
+    <div>
+        <label for="emailInput">Email</label>
+        <input type="email" id="emailInput" name="email" required maxlength="50">
+    </div>
+    <div>
+        <label for="messageInput">Message</label>
+        <textarea id="messageInput" name="message" required minlength="1" maxlength="400" rows="5" cols="40"></textarea>
+    </div>
+    <input type="hidden" name="contactEmail" value="' || pContactEmail || '">
+    <input type="hidden" name="signatureContactEmail" value="' || l_signature_contact_email || '">
+    <button type="submit" class="pushable" data-url="' || l_aws_gateway_url || '">
+        <span class="shadow"></span>
+        <span class="edge"></span>
+        <span class="front">SEND</span>
+    </button>
+</form>';
 
         RETURN (l_form);
     END;
