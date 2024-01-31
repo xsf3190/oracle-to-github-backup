@@ -60,6 +60,25 @@
     box-sizing: border-box;
 }
 
+/*******************/
+/* CKEDITOR STYLES */
+/*******************/
+.ck-content {
+    padding-inline: var(--space-m);
+    font-family: Lato;
+}
+
+.ck-content div.auto-fit-sections {
+    inline-size: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(35ch, 1fr));
+    gap: 5ch;
+}
+
+.ck-content section {
+    border: 1px solid red;
+}
+
 /******************/
 /* PAGE CONTAINER */
 /******************/
