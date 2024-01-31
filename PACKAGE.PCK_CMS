@@ -420,19 +420,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_session_data pck_core.session_data_rt;
         l_nav_labels LONG;
         l_email users.email%type;
+        l_domain_name website.domain_name%type;
+        l_contact_form website_article.contact_form%type;
+        l_html CLOB;
         l_css CLOB;
-
-    FUNCTION formatCode(pType IN VARCHAR2, pCode IN VARCHAR2) RETURN VARCHAR2 IS
-    BEGIN
-        RETURN (
-            chr(10) || 
-            CASE WHEN pType='html' THEN '<!-- AUTO GENERATED START -->' ELSE '/* AUTO GENERATED START */' END || chr(10) || 
-            pCode || chr(10) ||
-            CASE WHEN pType='html' THEN '<!-- AUTO GENERATED END -->' ELSE '/* AUTO GENERATED END */' END || 
-            chr(10)
-        );
-    END;
-
+        l_javascript CLOB;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -447,51 +439,57 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         /* Return website resources and content for selected page to be then opened in codepen */
         IF (l_id_1 IS NOT NULL AND l_id_2 IS NOT NULL) THEN
             FOR C IN (
-                SELECT wa.contact_form, wa.navigation_label, wa.article_id
+                SELECT wa.contact_form, wa.navigation_label, wa.article_id, COUNT(*) OVER () nb_pages
                   FROM website w, website_article wa
                  WHERE w.id=l_id_1
                   AND w.user_id=l_session_data.user_id
                   AND wa.website_id=w.id
                 ORDER BY wa.display_order) 
             LOOP
-                /* build navigation labels for appearance only */
-                l_nav_labels:=l_nav_labels || 
-                '<a href="#" class="nav-label' || CASE WHEN C.article_id=l_id_2 THEN ' selected' END  || '" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
+                /* Build navigation labels for multi-page websites */
+                IF (C.nb_pages>1) THEN
+                    l_nav_labels:=l_nav_labels || 
+                        '<a href="#" class="nav-label' || CASE WHEN C.article_id=l_id_2 THEN ' selected' END  || '" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
+                END IF;
             END LOOP;
 
             IF (l_nav_labels IS NOT NULL) THEN
-                l_nav_labels:=formatCode('html','<nav aria-label="Main Navigation">' || l_nav_labels || '</nav>');
+                l_nav_labels:='<nav aria-label="Main Navigation">' || l_nav_labels || '</nav>';
             END IF;
 
-            FOR C IN (
-                SELECT w.domain_name,  w.css, w.javascript, wa.contact_form, l_nav_labels || a.body_html html
-                  FROM website w, website_article wa, article a
-                 WHERE w.id=l_id_1
-                  AND w.user_id=l_session_data.user_id
-                  AND wa.website_id=w.id
-                  AND wa.article_id=a.id
-                  AND a.id=l_id_2)
-            LOOP
-                apex_json.open_object;
-                apex_json.write('success', TRUE); 
-                apex_json.write('domain_name', C.domain_name);
+            /* Build page resources */
+            SELECT w.domain_name,  a.body_html, w.css, w.javascript, wa.contact_form
+              INTO l_domain_name,  l_html, l_css, l_javascript, l_contact_form
+              FROM website w, website_article wa, article a
+             WHERE w.id=l_id_1
+               AND w.user_id=l_session_data.user_id
+               AND wa.website_id=w.id
+               AND wa.article_id=a.id
+               AND a.id=l_id_2;
 
-                l_css:=NVL(C.css,formatCode('css',pck_core.g_root_css));
-                l_css:=l_css || formatCode('css',pck_core.g_nav_css) || C.css;
+            apex_json.open_object;
+            apex_json.write('success', TRUE); 
+            apex_json.write('domain_name', l_domain_name);
 
-                IF (C.contact_form='YES') THEN
-                    SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
-                    apex_json.write('html', C.html || formatCode('html',pck_core.buildContactForm(l_email)));
-                    apex_json.write('css', l_css || formatCode('css',pck_core.g_contact_css));
-                    apex_json.write('js', C.javascript || formatCode('js',pck_core.g_contact_js));
-                ELSE
-                    apex_json.write('html', C.html);
-                    apex_json.write('css', l_css);
-                    apex_json.write('js', C.javascript);
-                END IF;
+            l_html:=l_nav_labels || chr(10) || pck_core.g_html_start || chr(10) || l_html || chr(10) || pck_core.g_html_end || chr(10);
+            IF (l_contact_form='YES') THEN
+                SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
+                l_html:=l_html || pck_core.buildContactForm(l_email);
+            END IF;
 
-                apex_json.close_object;
-            END LOOP;
+            IF (l_css IS NULL) THEN
+                l_css:=pck_core.g_css;
+            END IF;
+
+            IF (l_javascript IS NULL) THEN
+                l_javascript:=pck_core.g_javascript;
+            END IF;
+
+            apex_json.write('html', l_html);
+            apex_json.write('css', l_css);
+            apex_json.write('js', l_javascript);
+
+            apex_json.close_object;
         ELSE
             FOR C IN (
                 SELECT a.body_html, wa.contact_form
@@ -673,11 +671,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_css CLOB;
         l_javascript CLOB;
         l_html CLOB;
+        l_html_updated CLOB;
         l_zip BLOB:=pZipFile;
         l_files apex_zip.t_files;
         l_file BLOB;
         l_clob CLOB;
         l_message VARCHAR2(500);
+        l_start PLS_INTEGER;
+        l_end PLS_INTEGER;
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
@@ -700,11 +701,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             CASE l_files(i)
                 WHEN l_domain_name||'/src/index.html' THEN
                     l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
-                    IF (dbms_lob.compare(l_html, l_clob)=0) THEN
-                        l_message:=l_message || 'HTML - no change | ';
+                    l_start:=INSTR(l_clob,pck_core.g_html_start);
+                    l_end:=INSTR(l_clob,pck_core.g_html_end);
+                    IF (l_end=0 OR l_start=0 OR l_end<l_start) THEN
+                        l_message:=l_message || 'HTML - BOUNDARY TAGS CHANGED - no update | ';
                     ELSE
-                        UPDATE article SET body_html=l_clob, updated_date=current_timestamp WHERE id=l_article_id;
-                        l_message:=l_message || 'HTML - updated successfully | ';
+                        l_clob:=dbms_lob.substr(lob_loc=>l_clob, amount=>l_end-(l_start+LENGTH(pck_core.g_html_start)), offset=>l_start+LENGTH(pck_core.g_html_start));
+                        l_clob:=LTRIM(RTRIM(l_clob,chr(10)),chr(10));
+                        IF (dbms_lob.compare(l_html, l_clob)=0) THEN
+                            l_message:=l_message || 'HTML - no change | ';
+                        ELSE
+                            UPDATE article SET body_html=l_clob, updated_date=current_timestamp WHERE id=l_article_id;
+                            l_message:=l_message || 'HTML - updated successfully | ';
+                            l_html_updated:=l_clob;
+                        END IF;
                     END IF;            
                 WHEN l_domain_name||'/src/script.js' THEN
                     l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
@@ -733,6 +743,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.open_object;
         apex_json.write('success', TRUE);
         apex_json.write('message', l_message);
+        IF (l_html_updated IS NOT NULL) THEN
+            apex_json.write('html_updated', l_html_updated);
+        END IF;
         apex_json.close_object;
 
         EXCEPTION
