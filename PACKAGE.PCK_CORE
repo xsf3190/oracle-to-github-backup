@@ -48,8 +48,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     PROCEDURE uploadIpLookup;
     --
-    /* Default custom properties */
-    g_root_css CONSTANT LONG:=
+    g_html_start CONSTANT VARCHAR2(24):='<!-- YOUR CODE START -->';
+    g_html_end CONSTANT VARCHAR2(24):='<!-- YOUR CODE END -->';
+    --
+    g_css CONSTANT LONG:=
 ':root {
     --color-dark: #404040;
     --color-light: #f3f3f3;
@@ -98,10 +100,13 @@ picture {
   max-width: 100%;
   display: block;
   object-fit: scale-down;
-}';
+}
+input, textarea, button, select {
+    font: inherit;
+}
 
-    g_nav_css CONSTANT LONG:=
-'nav[aria-label="Main Navigation"] {
+/* NAVIGATION LABEL STYLES */
+nav[aria-label="Main Navigation"] {
     display: flex;
     flex-wrap: wrap;
     gap: 1em;
@@ -115,10 +120,25 @@ picture {
     text-decoration-thickness: var(--space-3xs);
     text-underline-offset: var(--space-3xs);
     text-decoration-skip-ink: none;
-}';
-    --
-    g_contact_css LONG:=
-'form.contact {
+}
+
+/* ANCHOR (WITH SVG) STYLES */
+a:has(svg) {
+  display: inline-flex;
+  gap: 1em;
+  align-items: center;
+  text-decoration-color: var(--color-primary);
+  text-decoration-thickness: 0.3ex;
+  text-underline-offset: 0.5ex;
+  cursor: pointer;
+}
+svg.icon {
+    inline-size: 2em;
+    block-size: auto;
+}
+
+/* CONTACT FORM STYLES */
+form.contact {
     display: flex;
     flex-direction: column;
     gap: 1em;
@@ -145,12 +165,8 @@ picture {
         line-height: 2;
     }
 }
-input, textarea, button, select {
-    font: inherit;
-}
-/* **************** */
-/* PUSHABLE BUTTON  */
-/* **************** */
+
+/* PUSHABLE BUTTON STYLES */
 .pushable {
     inline-size: fit-content;
     position: relative;
@@ -232,46 +248,40 @@ input, textarea, button, select {
   }
   .pushable:focus:not(:focus-visible) {
     outline: none;
-  }';
-    --
-    g_contact_js CONSTANT LONG:=
-'const form = document.querySelector("form.contact");
-form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const formData = new FormData(form);
-    const submit = form.querySelector("button");
-    const aws_gateway_url = submit.dataset.url;
-    console.log("aws_gateway_url",aws_gateway_url);
-    fetch(aws_gateway_url, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-        },
-        redirect: "follow",
-        referrerPolicy: "no-referrer",
-        body: JSON.stringify({
-            name: formData.get("name"),
-            email: formData.get("email"),
-            message: formData.get("message"),
-            contactEmail: formData.get("contactEmail"),
-            signatureContactEmail: formData.get("signatureContactEmail")
-        }),
-    }).then((response) => {
-        if (response.status) {
-            console.log("submitted form");
-            const formBtn = form.querySelector("button");
-            formBtn.disabled = true;
-            return;
-        }
-        throw new Error("Could not submit request");
-    }).catch( (error) => {
-        console.error(error);
-    });
-});';
+  }
 
-    g_img_observer LONG:=
-'const images = document.querySelectorAll(''[data-src]'');
+  /* DIALOG STYLES */
+  dialog {
+  max-inline-size: min(60ch,90vw);
+  overscroll-behavior: contain;
+}
+
+dialog > div:first-of-type {
+  display: grid;
+  grid-template-columns: 1fr 44px;
+}
+
+dialog h2 {
+  text-align: center;
+}
+
+dialog button.close {
+  place-self: start end;
+  background-color: transparent;
+  font-size: var(--step-2);
+  outline: 0;
+  border: 0;
+  position: sticky;
+  top: 0;
+  cursor: pointer;
+}
+';
+    --
+    g_javascript CONSTANT LONG:=
+'/*
+** IMAGE INTERSECTION OBSERVER
+*/
+const images = document.querySelectorAll(''[data-src]'');
 const config = {rootMargin: ''0px 0px 50px 0px'',threshold: 0};
 
 let observer = new IntersectionObserver(function (entries, self) {
@@ -294,7 +304,64 @@ const preloadImage = (img) => {
     return; 
   }
   img.src = src;
-};';
+};
+
+/*
+** DIALOG HANDLING
+*/
+document.querySelectorAll("a[data-dialog]").forEach((button) => {
+    button.addEventListener("click", (e) => {
+      e.preventDefault();
+      document.querySelector("dialog."+e.target.dataset.dialog).showModal();
+    });
+});
+
+document.querySelectorAll("dialog button.close").forEach((button) => {
+    button.addEventListener("click", (e) => {
+      e.target.closest("dialog").close();
+    });
+    button.textContent = "X";
+});
+
+/*
+** CONTACT FORM SUBMISSION
+*/
+const form = document.querySelector("form.contact");
+if (form) {
+    form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const submit = form.querySelector("button");
+        const aws_gateway_url = submit.dataset.url;
+        fetch(aws_gateway_url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+            },
+            redirect: "follow",
+            referrerPolicy: "no-referrer",
+            body: JSON.stringify({
+                name: formData.get("name"),
+                email: formData.get("email"),
+                message: formData.get("message"),
+                contactEmail: formData.get("contactEmail"),
+                signatureContactEmail: formData.get("signatureContactEmail")
+            }),
+        }).then((response) => {
+            if (response.status) {
+                console.log("submitted form");
+                const formBtn = form.querySelector("button");
+                formBtn.disabled = true;
+                return;
+            }
+            throw new Error("Could not submit request");
+        }).catch( (error) => {
+            console.error(error);
+        });
+    });
+}';
+
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
