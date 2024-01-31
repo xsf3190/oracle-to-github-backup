@@ -1170,6 +1170,9 @@ const upload_codepen = async () => {
     const file = await fileHandle.getFile();
 
     execProcess( "content/"+domainName.dataset.id+","+gArticleId,"POST",file).then( (data) => {
+        if (data.html_updated) {
+            editor.setData(data.html_updated);
+        }
         popupOpen("CODEPEN UPLOAD COMPLETED",data.message);
     });
 }
