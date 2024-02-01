@@ -421,10 +421,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_nav_labels LONG;
         l_email users.email%type;
         l_domain_name website.domain_name%type;
+        l_font website.font%type;
+        l_max_width website.max_width%type;
+        l_css_design_tokens website.css_design_tokens%type;
         l_contact_form website_article.contact_form%type;
         l_html CLOB;
         l_css CLOB;
         l_javascript CLOB;
+        l_start PLS_INTEGER;
+        l_end PLS_INTEGER;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -439,7 +444,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         /* Return website resources and content for selected page to be then opened in codepen */
         IF (l_id_1 IS NOT NULL AND l_id_2 IS NOT NULL) THEN
             FOR C IN (
-                SELECT wa.contact_form, wa.navigation_label, wa.article_id, COUNT(*) OVER () nb_pages
+                SELECT wa.navigation_label, wa.article_id, COUNT(*) OVER () nb_pages
                   FROM website w, website_article wa
                  WHERE w.id=l_id_1
                   AND w.user_id=l_session_data.user_id
@@ -449,7 +454,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 /* Build navigation labels for multi-page websites */
                 IF (C.nb_pages>1) THEN
                     l_nav_labels:=l_nav_labels || 
-                        '<a href="#" class="nav-label' || CASE WHEN C.article_id=l_id_2 THEN ' selected' END  || '" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
+                    '<a href="#" class="nav-label' || CASE WHEN C.article_id=l_id_2 THEN ' selected' END  || '" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
                 END IF;
             END LOOP;
 
@@ -458,8 +463,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END IF;
 
             /* Build page resources */
-            SELECT w.domain_name,  a.body_html, w.css, w.javascript, wa.contact_form
-              INTO l_domain_name,  l_html, l_css, l_javascript, l_contact_form
+            SELECT w.domain_name,  w.font, w.max_width, w.css_design_tokens, a.body_html, w.css, w.javascript, wa.contact_form
+              INTO l_domain_name,  l_font, l_max_width, l_css_design_tokens, l_html, l_css, l_javascript, l_contact_form
               FROM website w, website_article wa, article a
              WHERE w.id=l_id_1
                AND w.user_id=l_session_data.user_id
@@ -471,14 +476,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('success', TRUE); 
             apex_json.write('domain_name', l_domain_name);
 
-            l_html:=l_nav_labels || chr(10) || pck_core.g_html_start || chr(10) || l_html || chr(10) || pck_core.g_html_end || chr(10);
+            /* build html */
+            l_html:=l_nav_labels || chr(10) || pck_core.g_html_start || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10) || pck_core.g_html_end || chr(10);
             IF (l_contact_form='YES') THEN
                 SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
                 l_html:=l_html || pck_core.buildContactForm(l_email);
             END IF;
 
+            /* build css */
             IF (l_css IS NULL) THEN
-                l_css:=pck_core.g_css;
+                l_css:=':root {' ||chr(10) || l_css_design_tokens || chr(10) || '}' || chr(10);
+                IF (l_font LIKE 'https://%') THEN
+                    l_css:=l_css || '<link rel="stylesheet" href="' || l_font || '">' || chr(10);
+                    l_start:=INSTR(l_font,'=',1,1);
+                    l_end:=INSTR(l_font,'&',1,1);
+                    IF (l_end=0) THEN
+                        l_font:=SUBSTR(l_font,l_start+1);
+                    ELSE
+                        l_font:=SUBSTR(l_font,l_start+1,l_end-l_start-1);
+                    END IF;
+                    l_font:=REPLACE(l_font,'+',' ');
+                END IF;
+                l_css:=l_css || REPLACE(REPLACE(pck_core.g_css, '#BODY_FONT_FAMILY#',l_font),'#MAX_INLINE_SIZE#',l_max_width);
             END IF;
 
             IF (l_javascript IS NULL) THEN
