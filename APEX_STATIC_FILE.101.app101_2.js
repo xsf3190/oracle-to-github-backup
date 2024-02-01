@@ -900,15 +900,20 @@ const saveData = async ( data ) => {
     }).catch( (error) => console.error(error));
 }
 
-
+/* 
+ ** CONFIGURE CKEDITOR
+ */
 let editor;
 
 ClassicEditor.create(document.querySelector("#editor"), {
-        toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage','style', 'sourceEditing'],
+        toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage','style', 'sourceEditing'],
         ui: {
             viewportOffset: {
                 top: 0
             }
+        },
+        alignment: {
+            options: [ 'left', 'right', 'center', 'justify' ]
         },
         autosave: {
             waitingTime: 2000,
@@ -1234,14 +1239,16 @@ const delete_object_confirm = (e) => {
     } else {
         pk.id = e.target.dataset.id;
     }
-    console.log("pk",pk);
     execProcess("dml","DELETE",pk).then( () => {
         let ele;
         switch (pk.table_name) {
             case "website_article":
                 websiteNavMenu.querySelector(".selected").remove();
-                gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
-                edit_text();
+                ele = websiteNavMenu.querySelector("a:first-of-type");
+                if (ele) {
+                    gArticleId = ele.dataset.id;
+                    edit_text();
+                }
                 break;
 
             case "asset":
@@ -1258,6 +1265,6 @@ const delete_object_confirm = (e) => {
                 website.querySelector(".edit-website").click();
                 break;                    
         }
-        
+        confirm.close();
     });
 }
