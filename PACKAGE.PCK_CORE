@@ -50,57 +50,71 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     g_html_start CONSTANT VARCHAR2(24):='<!-- YOUR CODE START -->';
     g_html_end CONSTANT VARCHAR2(24):='<!-- YOUR CODE END -->';
+    g_css_start CONSTANT VARCHAR2(24):='/* YOUR CODE START */';
+    g_css_end CONSTANT VARCHAR2(24):='/* YOUR CODE END */';
     --
     g_css CONSTANT LONG:=
-':root {
-    --color-dark: #404040;
-    --color-light: #f3f3f3;
-    --color-primary: #0042bf;  
-    /* Custom properties for fluid type */
-    --step--2:  clamp(0.69rem,0.59rem + 0.45vw,1.04rem);
-    --step--1:  clamp(0.83rem,0.71rem + 0.54vw,1.25rem);
-    --step-0:  clamp(1rem,0.85rem + 0.65vw,1.5rem);
-    --step-1:  clamp(1.2rem,1.03rem + 0.77vw,1.8rem);
-    --step-2:  clamp(1.44rem,1.23rem + 0.93vw,2.16rem);
-    --step-3:  clamp(1.73rem,1.48rem + 1.11vw,2.59rem);
-    --step-4:  clamp(2.07rem,1.77rem + 1.34vw,3.11rem);
-    --step-5:  clamp(2.49rem,2.13rem + 1.61vw,3.73rem);
-    /* Custom properties for fluid spacing */
-    --space-3xs:  clamp(0.25rem,0.21rem + 0.16vw,0.38rem);
-    --space-2xs:  clamp(0.5rem,0.43rem + 0.32vw,0.75rem);
-    --space-xs:  clamp(0.75rem,0.64rem + 0.48vw,1.13rem);
-    --space-s:  clamp(1rem,0.85rem + 0.65vw,1.5rem);
-    --space-m:  clamp(1.5rem,1.28rem + 0.97vw,2.25rem);
-    --space-l:  clamp(2rem,1.71rem + 1.29vw,3rem);
-    --space-xl:  clamp(3rem,2.56rem + 1.94vw,4.5rem);
-    --space-2xl:  clamp(4rem,3.42rem + 2.58vw,6rem);
-    --space-3xl:  clamp(6rem,5.13rem + 3.87vw,9rem);
+'*,*::before,*::after {
+    box-sizing: border-box;
 }
-* {
-  box-sizing: border-box;
+body,h1,h2,h3,h4,p,figure,blockquote,dl,dd {
+  margin-block-end: 0;
 }
 body {
     background: var(--color-light);
     color: var(--color-dark);
-    font-family: "Lato", sans-serif;
+    font-family: "#BODY_FONT_FAMILY#", sans-serif;
     font-size: var(--step-0);
     line-height: 1.5;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    max-inline-size: 65ch;
+    min-height: 100vh;
+    max-inline-size: #MAX_INLINE_SIZE#;
     margin-inline: auto;
     padding-inline: 1rem;
 }
 body > * + * {
     margin-top: var(--space-m);
 }
-img,
-picture {
+
+/* HEADER TYPOGRAPHY STYLES */
+h1 {
+    font-size: var(--step-4);
+}
+h2 {
+    font-size: var(--step-3);
+}
+h3 {
+    font-size: var(--step-2);
+}
+h4 {
+    font-size: var(--step-1);
+}
+
+/* Set shorter line heights on headings and interactive elements */
+h1, h2, h3, h4, button, input, label {
+  line-height: 1.1;
+}
+
+/* Balance text wrapping on headings */
+h1, h2, h3, h4 {
+  text-wrap: balance;
+}
+
+img, picture {
   max-width: 100%;
   display: block;
   object-fit: scale-down;
 }
+
+/* NEED TO REVIEW IMAGE CLASSES - MAYBE DO IT IN CKEDITOR */
+img.float-right {
+    float: right;
+    border-radius: 0.5em;
+    margin: 0 0 1em 1em;
+}
+
 input, textarea, button, select {
     font: inherit;
 }
@@ -122,23 +136,55 @@ nav[aria-label="Main Navigation"] {
     text-decoration-skip-ink: none;
 }
 
+/* LOGO STYLES */
+div.logo {
+    border: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1em;
+  & svg {
+    inline-size: 5em;
+  }
+}
+
 /* ANCHOR (WITH SVG) STYLES */
 a:has(svg) {
-  display: inline-flex;
-  gap: 1em;
-  align-items: center;
-  text-decoration-color: var(--color-primary);
-  text-decoration-thickness: 0.3ex;
-  text-underline-offset: 0.5ex;
-  cursor: pointer;
+    display: inline-flex;
+    gap: 1em;
+    align-items: center;
+    text-decoration-color: var(--color-primary);
+    text-decoration-thickness: 0.3ex;
+    text-underline-offset: 0.5ex;
+    cursor: pointer;
 }
 svg.icon {
     inline-size: 2em;
     block-size: auto;
 }
 
+/* SECTION WITH BORDER. CONTENT CENTERED STYLES */
+section.with-border {
+    border: solid 1px var(--color-primary);
+    padding: var(--space-m);
+    border-radius: var(--space-s);
+    & img {
+        border-radius: var(--space-s);
+        margin-inline: auto;
+    }
+}
+
+/* SECTION AUTO-FIT */
+div.auto-fit-sections {
+    inline-size: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(32rem, 1fr));
+    gap: var(--space-l);
+}
+
 /* CONTACT FORM STYLES */
 form.contact {
+    margin-inline: auto;
     display: flex;
     flex-direction: column;
     gap: 1em;
@@ -274,6 +320,28 @@ dialog button.close {
   position: sticky;
   top: 0;
   cursor: pointer;
+}
+
+/* FOOTER STYLES */
+footer.space-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Remove all animations, transitions and smooth scroll for people that prefer not to see them */
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+   scroll-behavior: auto;
+  } 
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 ';
     --
