@@ -159,12 +159,12 @@ a:has(svg) {
     cursor: pointer;
 }
 svg.icon {
-    inline-size: 2em;
-    block-size: auto;
+    inline-size: 1.5em;
+    block-size: 1.5em;
 }
 
-/* SECTION WITH BORDER. CONTENT CENTERED STYLES */
-section.with-border {
+/* ELEMENT WITH BORDER. CENTERED IMAGE */
+.with-border {
     border: solid 1px var(--color-primary);
     padding: var(--space-m);
     border-radius: var(--space-s);
@@ -174,12 +174,20 @@ section.with-border {
     }
 }
 
-/* SECTION AUTO-FIT */
-div.auto-fit-sections {
-    inline-size: 100%;
+/* AUTO-FIT CARD ELEMENTS */
+.auto-fit-cards {
+    clear: both;
     display: grid;
-    grid-template-columns: repeat(auto-fit,minmax(32rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
     gap: var(--space-l);
+    & > * {
+      display:flex;
+      flex-direction: column;
+      & > *:last-child {
+        margin-block-start: auto;
+        line-height: 4;
+      }
+  }
 }
 
 /* CONTACT FORM STYLES */
