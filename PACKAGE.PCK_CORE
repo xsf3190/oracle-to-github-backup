@@ -63,14 +63,14 @@ body,h1,h2,h3,h4,p,figure,blockquote,dl,dd {
 body {
     background: var(--color-light);
     color: var(--color-dark);
-    font-family: "#BODY_FONT_FAMILY#", sans-serif;
+    font-family: var(--font-family), sans-serif;
     font-size: var(--step-0);
     line-height: 1.5;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
-    max-inline-size: #MAX_INLINE_SIZE#;
+    max-inline-size: var(--max-width);
     margin-inline: auto;
     padding-inline: 1rem;
 }
@@ -81,6 +81,7 @@ body > * + * {
 /* HEADER TYPOGRAPHY STYLES */
 h1 {
     font-size: var(--step-4);
+    text-align: center;
 }
 h2 {
     font-size: var(--step-3);
@@ -174,7 +175,7 @@ svg.icon {
     }
 }
 
-/* AUTO-FIT CARD ELEMENTS */
+/* AUTO-FIT CARD ELEMENTS. ELEMENTS AT END OF EACH CARD ALIGNED AT BOTTOM */
 .auto-fit-cards {
     clear: both;
     display: grid;
@@ -183,9 +184,12 @@ svg.icon {
     & > * {
       display:flex;
       flex-direction: column;
-      & > *:last-child {
+      justify-content: space-between;
+      & :nth-last-child(2) {
+        margin-block-end: var(--space-s);
+      }
+      & :last-child {
         margin-block-start: auto;
-        line-height: 4;
       }
   }
 }
@@ -711,7 +715,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </label>' || pDropdown || 
             CASE WHEN pDropdown IS NOT NULL THEN '</div>' END || '
             <textarea class="cms" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
-                CASE WHEN l_data_type='CLOB' THEN '" rows="5" cols="60"' ELSE '" maxlength="' || l_data_length || '" rows="1"' END || ' data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>        
+                CASE WHEN l_data_type='CLOB' THEN '" rows="5" cols="60"' 
+                     WHEN l_data_length=4000 THEN '" rows="5" cols="60" maxlength="' || l_data_length || '"' 
+                     ELSE '" maxlength="' || l_data_length || '" rows="1"' 
+                END || ' data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '
+            </textarea>        
             <div class="button-container">
                 <span class="result"></span>
                 <span class="charcounter">' || NVL(LENGTH(pValue),0) || CASE WHEN l_data_type<>'CLOB' THEN '/' || l_data_length END || '</span>
@@ -1174,9 +1182,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
             --buildInputWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
             --buildRadioWrapper('website.template',l_template_html, l_session_data.canuse_popover) ||
-            --buildRadioWrapper('website.font',l_font_html, l_session_data.canuse_popover) ||
-            --buildTextareaWrapper(l_domains(1).id, 'website.contact_email', l_domains(1).contact_email, l_session_data.canuse_popover) || 
-            '<fieldset class="deploy-buttons">
+            --
+            '<button type="button" class="pushable website-options">
+                <span class="shadow"></span>
+                <span class="edge"></span>
+                <span class="front">WEBSITE OPTIONS</span>
+            </button>
+            <fieldset class="deploy-buttons">
                 <legend>Publish Website</legend>
                 <div>' ||
                 buildDeployButtons(l_domains(1).domain_name, l_domains(1).netlify_site_id, l_domains(1).netlify_site_id_custom) ||
@@ -1283,6 +1295,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <button type="button" class="close">&times;</button>
                 <h2></h2>
                 <p></p>
+            </div>
+        </dialog>
+        <dialog class="website-options">
+            <div>
+                <div class="content"></div>
+                <button type="button" class="close">&times;</button>
             </div>
         </dialog>
         <dialog class="edit-field">
