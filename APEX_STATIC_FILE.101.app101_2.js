@@ -16,8 +16,8 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       website = document.querySelector("form.website"),
       domainName = website.querySelector("#domain_name"),
       domainNameResult = domainName.nextElementSibling.querySelector(".result"),
-      css = website.querySelector("#css"),
-      javascript = website.querySelector("#javascript"),
+      websiteDialog = container.querySelector("dialog.website-options"),
+      websiteContent = websiteDialog.querySelector(".content"),
       newWebsite = website.querySelector(".new-website"),
       deployButtons = website.querySelector(".deploy-buttons > div"),
       websiteNavMenu = container.querySelector(".website-nav-menu"),
@@ -551,7 +551,9 @@ const clickHandler = (e) => {
             popupOpen("Click Source button",".. cannot switch pages when in Source editing mode");
         }
     } else if (e.target.matches(".visits")) {
-        get_visits();   
+        get_visits(); 
+    } else if (e.target.matches(".website-options")) {
+        website_options();
     } else if (e.target.matches(".new-page")) {
         new_page();   
     } else if (e.target.matches(".edit-codepen")) {
@@ -906,7 +908,7 @@ const saveData = async ( data ) => {
 let editor;
 
 ClassicEditor.create(document.querySelector("#editor"), {
-        toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage','style', 'sourceEditing'],
+        toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
         ui: {
             viewportOffset: {
                 top: 0
@@ -932,15 +934,6 @@ ClassicEditor.create(document.querySelector("#editor"), {
                 startIndex: true,
                 reversed: true
             }
-        },
-        style: {
-            definitions: [
-                {
-                    name: 'Enclosed list item',
-                    element: 'li',
-                    classes: [ 'with-border' ]
-                },
-            ]
         },
         htmlSupport: {
             allow: [
@@ -987,6 +980,17 @@ if (window.location.hash === "#_=_"){
     history.replaceState 
         ? history.replaceState(null, null, window.location.href.split("#")[0])
         : window.location.hash = "";
+}
+
+/* 
+ ** GET WEBSIITE OPTIONS
+ */
+const website_options = () => {
+   execProcess( "website-options/"+domainName.dataset.id,"GET").then( (data) => {
+        websiteContent.replaceChildren();
+        websiteContent.insertAdjacentHTML('afterbegin',data.content);
+        websiteDialog.showModal();
+    });
 }
 
 /* 
