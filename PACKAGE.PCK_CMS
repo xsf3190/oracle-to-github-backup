@@ -16,6 +16,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getWebsite(pWebsiteId IN website.id%type);
     --
+    PROCEDURE getWebsiteoptions(pWebsiteId IN website.id%type);
+    --
     PROCEDURE getVisits(pWebsiteIdId IN website.id%type);
     --
     PROCEDURE insertArticle(pId IN VARCHAR2);
@@ -208,6 +210,39 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pck_core.log_error;
     END;
 
+    /*
+    ** GET WEBSITE OPTIONS TO DISPLAY IN DIALOG
+    */
+    PROCEDURE getWebsiteoptions(pWebsiteId IN website.id%type) IS
+        l_session_data pck_core.session_data_rt;
+        l_content CLOB;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        FOR C IN (SELECT id, domain_name, font, contact_email, max_width, fluid_types, color_dark, color_light, color_primary
+                    FROM website 
+                   WHERE id=pWebsiteId) 
+        LOOP
+            l_content:=l_content || '<h2>' || C.domain_name || '</h2>';
+            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.domain_name', C.domain_name, l_session_data.canuse_popover);
+            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.contact_email', C.contact_email, l_session_data.canuse_popover);
+            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.font', C.font, l_session_data.canuse_popover);
+            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover);
+            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.color_dark', C.color_dark, l_session_data.canuse_popover);
+            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.color_light', C.color_light, l_session_data.canuse_popover);
+            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover);
+            l_content:=l_content || pck_core.buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover);
+
+            apex_json.open_object;
+            apex_json.write('content', l_content);
+            apex_json.write('success', TRUE);
+            apex_json.close_object;        
+        END LOOP;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
 
     /*
     ** GET CONTENT FOR A SELECTED WEBSITE
@@ -422,8 +457,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_email users.email%type;
         l_domain_name website.domain_name%type;
         l_font website.font%type;
+        l_font_family website.font%type;
         l_max_width website.max_width%type;
-        l_css_design_tokens website.css_design_tokens%type;
+        l_fluid_types website.fluid_types%type;
+        l_color_dark website.color_dark%type;
+        l_color_light website.color_light%type;
+        l_color_primary website.color_primary%type;
         l_contact_form website_article.contact_form%type;
         l_html CLOB;
         l_css CLOB;
@@ -463,8 +502,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END IF;
 
             /* Build page resources */
-            SELECT w.domain_name,  w.font, w.max_width, w.css_design_tokens, a.body_html, w.css, w.javascript, wa.contact_form
-              INTO l_domain_name,  l_font, l_max_width, l_css_design_tokens, l_html, l_css, l_javascript, l_contact_form
+            SELECT w.domain_name,  w.font, w.max_width, w.fluid_types, w.color_light, w.color_dark, w.color_primary, a.body_html, w.css, w.javascript, wa.contact_form
+              INTO l_domain_name,  l_font, l_max_width, l_fluid_types, l_color_light, l_color_dark, l_color_primary,l_html, l_css, l_javascript, l_contact_form
               FROM website w, website_article wa, article a
              WHERE w.id=l_id_1
                AND w.user_id=l_session_data.user_id
@@ -483,21 +522,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_html:=l_html || pck_core.buildContactForm(l_email);
             END IF;
 
+            /* Get font family from Google fonts url */
+            IF (l_font LIKE 'https://%') THEN
+                l_start:=INSTR(l_font,'=',1,1);
+                l_end:=INSTR(l_font,'&',1,1);
+                IF (l_end=0) THEN
+                    l_font_family:=SUBSTR(l_font,l_start+1);
+                ELSE
+                    l_font_family:=SUBSTR(l_font,l_start+1,l_end-l_start-1);
+                END IF;
+                l_font_family:=REPLACE(l_font_family,'+',' ');
+            ELSE
+                l_font_family:=l_font;
+            END IF;
+
             /* build css */
             IF (l_css IS NULL) THEN
-                l_css:=':root {' ||chr(10) || l_css_design_tokens || chr(10) || '}' || chr(10);
-                IF (l_font LIKE 'https://%') THEN
-                    l_css:=l_css || '<link rel="stylesheet" href="' || l_font || '">' || chr(10);
-                    l_start:=INSTR(l_font,'=',1,1);
-                    l_end:=INSTR(l_font,'&',1,1);
-                    IF (l_end=0) THEN
-                        l_font:=SUBSTR(l_font,l_start+1);
-                    ELSE
-                        l_font:=SUBSTR(l_font,l_start+1,l_end-l_start-1);
-                    END IF;
-                    l_font:=REPLACE(l_font,'+',' ');
-                END IF;
-                l_css:=l_css || REPLACE(REPLACE(pck_core.g_css, '#BODY_FONT_FAMILY#',l_font),'#MAX_INLINE_SIZE#',l_max_width);
+                /* Start with design tokens */
+                l_css:=':root {' ||chr(10) || l_fluid_types || chr(10);
+                l_css:=l_css || '    --font-family: ' || l_font_family || ';' || chr(10);
+                l_css:=l_css || '    --max-width: ' || l_max_width || ';' || chr(10);
+                l_css:=l_css || '    --color-light: ' || l_color_light || ';' || chr(10);
+                l_css:=l_css || '    --color-dark: ' || l_color_dark || ';' || chr(10);
+                l_css:=l_css || '    --color-primary: ' || l_color_primary || ';' || chr(10);
+                l_css:=l_css || '}' || chr(10);
+                l_css:=l_css || '<link rel="stylesheet" href="' || l_font || '">' || chr(10);
+                l_css:=l_css || pck_core.g_css;
             END IF;
 
             IF (l_javascript IS NULL) THEN
@@ -1171,6 +1221,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     RETURN;
                 WHEN 'website.contact_email' THEN
                     UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.font' THEN
+                    UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.max_width' THEN
+                    UPDATE website SET max_width=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.fluid_types' THEN
+                    UPDATE website SET fluid_types=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website_article.navigation_label' THEN
                     UPDATE website_article SET navigation_label=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'website_article.page_title' THEN
