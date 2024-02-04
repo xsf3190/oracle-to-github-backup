@@ -543,8 +543,7 @@ const clickHandler = (e) => {
 
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
-        const sourceBtn = container.querySelector(".ck-source-editing-button");
-        if (sourceBtn.matches(".ck-off")) {
+        if (container.querySelector(".ck-source-editing-button").matches(".ck-off")) {
             gArticleId = e.target.dataset.id
             edit_text(e);
         } else {
@@ -565,7 +564,11 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".edit-field")) {
         edit_field(e); 
     } else if (e.target.matches(".edit-website")) {
-        edit_website(e);
+        if (container.querySelector(".ck-source-editing-button").matches(".ck-off")) {
+            edit_website(e);
+        } else {
+            popupOpen("Click Source button",".. cannot switch websites when in Source editing mode");
+        }
     } else if (e.target.matches(".delete")) {
         delete_object(e);
     } else if (e.target.matches(".confirmBtn")) {
