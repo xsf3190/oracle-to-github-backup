@@ -10,7 +10,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type);
     --
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type) ;
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type, pResturl IN VARCHAR2) ;
     --
 end;
 /
@@ -21,8 +21,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     */    
     PROCEDURE deployWebsite(pBodyText IN CLOB) IS
         l_clob CLOB;
-        l_blob BLOB;
-
         l_job_name VARCHAR2(30);
         n PLS_INTEGER;
         l_body_text CLOB:=pBodyText;
@@ -54,7 +52,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             job_name   => l_job_name,
             job_type   =>'STORED_PROCEDURE',
             job_action =>'pck_deploy.runDeployment',
-            number_of_arguments=>3,
+            number_of_arguments=>4,
             start_date=>systimestamp
         );
         dbms_scheduler.set_job_argument_value(
@@ -72,6 +70,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             argument_position => 3,
             argument_value => l_site_id
         );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 4,
+            argument_value => pck_core.getRestUrl()
+        );
         dbms_scheduler.enable(l_job_name);
 
         apex_json.open_object; 
@@ -86,7 +89,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     /*
     **  DEPLOY BY UPLOADING HTML FILE CONTENT DIRECTLY TO NETLIFY
     */
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type) IS
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type, pRestUrl IN VARCHAR2) IS
         l_clob CLOB;
         l_json JSON_OBJECT_T;
         l_files JSON_OBJECT_T;
@@ -113,6 +116,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_sitemap CLOB;
         l_robots CLOB;
         l_ssl_url VARCHAR2(200);
+        l_font_family website.font%type;
+        l_start PLS_INTEGER;
+        l_end PLS_INTEGER;
         n PLS_INTEGER:=0;
 
         FUNCTION buildNavLabels(pArticleId IN website_article.article_id%type) RETURN VARCHAR2 IS
@@ -151,7 +157,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
 
-        FOR C IN (SELECT w.domain_name, w.css, w.javascript, 
+        FOR C IN (SELECT w.domain_name, w.font, w.max_width, w.fluid_types, w.color_light, w.color_dark, w.color_primary, w.css, w.javascript, 
                          wa.article_id, wa.page_title, wa.page_description, apex_string_util.get_slug(wa.navigation_label) path_name, wa.contact_form,
                          COALESCE(a.updated_date,a.created_date) lastmod, a.body_html, 
                          u.name, ROW_NUMBER() OVER (ORDER BY wa.display_order) rn, COUNT(*) OVER () nb
@@ -162,6 +168,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                      AND u.id=w.user_id
                    ORDER BY wa.display_order)
         LOOP
+            /* Get font family from Google fonts url */
+            IF (C.font LIKE 'https://%') THEN
+                l_start:=INSTR(C.font,'=',1,1);
+                l_end:=INSTR(C.font,'&',1,1);
+                IF (l_end=0) THEN
+                    l_font_family:=SUBSTR(C.font,l_start+1);
+                ELSE
+                    l_font_family:=SUBSTR(C.font,l_start+1,l_end-l_start-1);
+                END IF;
+                l_font_family:=REPLACE(l_font_family,'+',' ');
+            ELSE
+                l_font_family:=C.font;
+            END IF;
+
             l_page:='<!DOCTYPE HTML>' || chr(10) ||
                     '<html lang="en">' || chr(10) ||
                     '<head>' || chr(10) ||
@@ -170,24 +190,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         '<title>' || C.page_title || '</title>' || chr(10) ||
                         '<meta name="description" content=">' || C.page_description || '">' || chr(10) ||
                         '<meta name="author" content=">' || C.name || '">' || chr(10) ||
+                        '<script src="https://cdn.jsdelivr.net/npm/bowser@latest/es5.js" defer></script>' || chr(10) ||
                         '<link rel="icon" href="https://res.cloudinary.com/mrbapex/believeintalking_favicon_q57es4.svg" type="image/svg+xml">'  || chr(10) ||
-                        '<style>' || C.css || chr(10) || '</style>' || chr(10) || 
+                        '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
+                        '<style>' || 
+                        ':root {' ||chr(10) || C.fluid_types || chr(10) ||
+                        '    --font-family: ' || l_font_family || ';' || chr(10) ||
+                        '    --max-width: ' || C.max_width || ';' || chr(10) ||
+                        '    --color-light: ' || C.color_light || ';' || chr(10) ||
+                        '    --color-dark: ' || C.color_dark || ';' || chr(10) ||
+                        '    --color-primary: ' || C.color_primary || ';' || chr(10) ||
+                        '}' || chr(10) || chr(10) ||
+                        '<link rel="stylesheet" href="' || C.font || '">' || chr(10) || chr(10) || NVL(C.css,pck_core.g_css) || chr(10) || 
+                        '</style>' || chr(10) || 
                     '</head>' || chr(10) || 
                     '<body>' || CASE WHEN c.nb>1 THEN '<nav aria-label="Main Navigation">' || buildNavLabels(C.article_id) || '</nav>' END || chr(10) || 
                         REPLACE(C.body_html,'<h1>&nbsp;</h1>',null) || chr(10) || 
                         CASE WHEN C.contact_form='YES' THEN pck_core.buildContactForm(contactEmail()) END ||
                         '<!-- Hidden input fields identify performance data sent to database -->
-                        <input type="hidden" name="visit_url" value="' || pck_core.getRestUrl || 'page-visit"/>
+                        <input type="hidden" name="visit_url" value="' || pRestUrl || 'page-visit"/>
                         <input type="hidden" name="website_id" value="' || pWebsiteId || '"/>
                         <input type="hidden" name="article_id" value="' || C.article_id || '"/>
-                        <script>
-                        const vitalsQueue = new Set(),
-                              mediaQueue = new Set();
-                        const addToVitalsQueue = (metric) => {
-                            console.log(metric.name,metric.value);
-                            vitalsQueue.add(metric);
-                        };
-                        </script>
                         <script type="module">
                             import {onCLS, onFID, onLCP, onINP} from ''https://unpkg.com/web-vitals?module'';
                             onCLS(addToVitalsQueue);
@@ -195,7 +218,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                             onLCP(addToVitalsQueue);
                             onINP(addToVitalsQueue);
                         </script>
-                        <script>' || C.javascript || '</script>' || chr(10) || '
+                        <script>' || NVL(C.javascript,pck_core.g_javascript) || '</script>' || chr(10) || '
                      </body>' || chr(10) || 
                     '</html>';
 
