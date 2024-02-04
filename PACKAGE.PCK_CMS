@@ -503,17 +503,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
             /* Build page resources */
             SELECT w.domain_name,  w.font, w.max_width, w.fluid_types, w.color_light, w.color_dark, w.color_primary, a.body_html, w.css, w.javascript, wa.contact_form
-              INTO l_domain_name,  l_font, l_max_width, l_fluid_types, l_color_light, l_color_dark, l_color_primary,l_html, l_css, l_javascript, l_contact_form
+              INTO l_domain_name,  l_font, l_max_width, l_fluid_types, l_color_light, l_color_dark, l_color_primary, l_html, l_css, l_javascript, l_contact_form
               FROM website w, website_article wa, article a
              WHERE w.id=l_id_1
                AND w.user_id=l_session_data.user_id
                AND wa.website_id=w.id
                AND wa.article_id=a.id
                AND a.id=l_id_2;
-
-            apex_json.open_object;
-            apex_json.write('success', TRUE); 
-            apex_json.write('domain_name', l_domain_name);
 
             /* build html */
             l_html:=l_nav_labels || chr(10) || pck_core.g_html_start || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10) || pck_core.g_html_end || chr(10);
@@ -537,27 +533,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END IF;
 
             /* build css */
-            IF (l_css IS NULL) THEN
-                /* Start with design tokens */
-                l_css:=':root {' ||chr(10) || l_fluid_types || chr(10);
-                l_css:=l_css || '    --font-family: ' || l_font_family || ';' || chr(10);
-                l_css:=l_css || '    --max-width: ' || l_max_width || ';' || chr(10);
-                l_css:=l_css || '    --color-light: ' || l_color_light || ';' || chr(10);
-                l_css:=l_css || '    --color-dark: ' || l_color_dark || ';' || chr(10);
-                l_css:=l_css || '    --color-primary: ' || l_color_primary || ';' || chr(10);
-                l_css:=l_css || '}' || chr(10);
-                l_css:=l_css || '<link rel="stylesheet" href="' || l_font || '">' || chr(10);
-                l_css:=l_css || pck_core.g_css;
-            END IF;
+            l_css:=
+            ':root {' ||chr(10) || l_fluid_types || chr(10) ||
+            '    --font-family: ' || l_font_family || ';' || chr(10) ||
+            '    --max-width: ' || l_max_width || ';' || chr(10) ||
+            '    --color-light: ' || l_color_light || ';' || chr(10) ||
+            '    --color-dark: ' || l_color_dark || ';' || chr(10) ||
+            '    --color-primary: ' || l_color_primary || ';' || chr(10) ||
+            '}' || chr(10) || chr(10) ||
+            '<link rel="stylesheet" href="' || l_font || '">' || chr(10) || chr(10) || 
+            pck_core.g_css_start || chr(10) || l_css || pck_core.g_css || pck_core.g_css_end;
+
 
             IF (l_javascript IS NULL) THEN
                 l_javascript:=pck_core.g_javascript;
             END IF;
 
+            apex_json.open_object;
+            apex_json.write('success', TRUE); 
+            apex_json.write('domain_name', l_domain_name);
             apex_json.write('html', l_html);
             apex_json.write('css', l_css);
             apex_json.write('js', l_javascript);
-
             apex_json.close_object;
         ELSE
             FOR C IN (
