@@ -175,6 +175,20 @@ svg.icon {
     }
 }
 
+/* UNORDERED LIST ITEMS WITH BORDER. SET CLASS ON UNSUPPORTED CKEDITOR ANCESTOR ELEMENT */
+.with-border-list ul {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: var(--space-s);
+    & li {
+        list-style: none;
+        border: solid 1px var(--color-primary);
+        border-radius: var(--space-s);
+        padding: var(--space-s);
+    }
+}
+
 /* AUTO-FIT CARD ELEMENTS. ELEMENTS AT END OF EACH CARD ALIGNED AT BOTTOM */
 .auto-fit-cards {
     clear: both;
@@ -334,13 +348,6 @@ dialog button.close {
   cursor: pointer;
 }
 
-/* FOOTER STYLES */
-footer.space-between {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
 /* Remove all animations, transitions and smooth scroll for people that prefer not to see them */
 @media (prefers-reduced-motion: reduce) {
   html:focus-within {
@@ -359,6 +366,74 @@ footer.space-between {
     --
     g_javascript CONSTANT LONG:=
 '/*
+** COLLECT GOOGLE CORE WEB VITALS AND MEDIA PERFORMANCE DATA IN SETS
+*/
+const vitalsQueue = new Set(),
+mediaQueue = new Set();
+
+const flushQueues = () => {
+    if (vitalsQueue.size > 0) {
+        const json = {};
+        for (const item of vitalsQueue.values()) {
+            json[item.name] = Math.round(item.value * 1) / 1;
+            json[item.name+"_rating"] = item.rating;
+        }
+
+        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (connection) {
+            json["connection"] = connection.downlink + " Mb/s" + " -" + connection.effectiveType;
+        }
+
+        const agent = bowser.getParser(window.navigator.userAgent),
+              browserName = agent.getBrowserName(),
+              browserVersion = agent.getBrowserVersion().split(".");
+
+        let browser = browserName + " " + browserVersion[0];
+        if (browserVersion[1]!=="0") {
+            browser+="."+browserVersion[1];
+        }
+        json["browser"] = browser;
+
+        json["url"] = window.location.hostname;
+        json["referrer"] = document.referrer;
+
+        const website_id = document.querySelector("[name=''website_id'']").value,
+              article_id = document.querySelector("[name=''article_id'']").value,
+              visit_url = document.querySelector("[name=''visit_url'']").value;
+
+        /*
+        let url = gRestUrl + "web-vitals";
+        (navigator.sendBeacon && navigator.sendBeacon(url, body)) || fetch(url, {body, method: ''POST'', keepalive: true});
+        */
+        vitalsQueue.clear();
+    }
+
+    if (mediaQueue.size > 0) {    
+        const body = JSON.stringify([...mediaQueue]);
+        let url = gRestUrl + "media-performance";
+        (navigator.sendBeacon && navigator.sendBeacon(url, body)) || fetch(url, {body, method: ''POST'', keepalive: true});
+        mediaQueue.clear();
+    }
+}
+
+const addToVitalsQueue = (metric) => {
+    console.log(metric.name,metric.value);
+    vitalsQueue.add(metric);
+};
+
+addEventListener(''visibilitychange'', () => {
+    if (document.visibilityState === "hidden") {
+        flushQueues();
+    }
+}, { capture: true} );
+
+if (''onpagehide'' in self) {
+    addEventListener(''pagehide'', () => {
+        flushQueues();
+    }, { capture: true} );
+}
+
+/*
 ** IMAGE INTERSECTION OBSERVER
 */
 const images = document.querySelectorAll(''[data-src]'');
