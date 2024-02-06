@@ -374,10 +374,13 @@ dialog button.close {
 '/*
 ** COLLECT GOOGLE CORE WEB VITALS AND MEDIA PERFORMANCE DATA IN SETS
 */
-if (!sessionStorage.getItem("page_loaded")) {
-    console.log("setting sessionStorage.page_loaded");
-    sessionStorage.setItem("page_loaded",Math.round(Date.now()/1000));
+if (!sessionStorage.getItem("website_loaded")) {
+    console.log("setting sessionStorage.website_loaded");
+    sessionStorage.setItem("website_loaded",Math.round(Date.now()/1000));
+    sessionStorage.setItem("send_data","0");
 }
+
+page_loaded = Math.round(Date.now()/1000);
 
 const vitalsQueue = new Set(),
       mediaQueue = new Set();
@@ -386,15 +389,17 @@ const flushQueues = () => {
     /* Prevent error in codepen whch does not allow importing modules */
     if (!document.querySelector("[name=''website_id'']")) return;
 
+    console.log("starting flushQueues");
+
     const website_id = document.querySelector("[name=''website_id'']").value,
           article_id = document.querySelector("[name=''article_id'']").value,
           visit_url = document.querySelector("[name=''visit_url'']").value;
 
     const json = {};
-    json["page_loaded"] = Number(sessionStorage.getItem("page_loaded"));
-    json["page_closed"] = Math.round(Date.now()/1000);
     json["website_id"] = website_id;
     json["article_id"] = article_id;
+    json["website_loaded"] = Number(sessionStorage.getItem("website_loaded"));
+    json["duration_visible"] =  Math.round(Date.now()/1000) - page_loaded;
 
     if (vitalsQueue.size > 0) {
         for (const item of vitalsQueue.values()) {
@@ -404,23 +409,31 @@ const flushQueues = () => {
         vitalsQueue.clear();
     }
 
-    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (connection) {
-        json["connection"] = connection.downlink + " Mb/s" + " -" + connection.effectiveType;
+    const send_data = sessionStorage.getItem("send_data");
+    console.log("send_data", send_data);
+
+    if (send_data==="0") {
+        sessionStorage.setItem("send_data","1");
+
+        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (connection) {
+            json["connection"] = connection.downlink + " Mb/s" + " -" + connection.effectiveType;
+        }
+
+        const agent = bowser.getParser(window.navigator.userAgent),
+            browserName = agent.getBrowserName(),
+            browserVersion = agent.getBrowserVersion().split(".");
+        let browser = browserName + " " + browserVersion[0];
+        if (browserVersion[1]!=="0") {
+            browser+="."+browserVersion[1];
+        }
+        json["browser"] = browser;
+
+        json["url"] = window.location.hostname;
+        json["referrer"] = document.referrer;
     }
 
-    const agent = bowser.getParser(window.navigator.userAgent),
-          browserName = agent.getBrowserName(),
-          browserVersion = agent.getBrowserVersion().split(".");
-    let browser = browserName + " " + browserVersion[0];
-    if (browserVersion[1]!=="0") {
-        browser+="."+browserVersion[1];
-    }
-    json["browser"] = browser;
-
-    json["url"] = window.location.hostname;
-    json["referrer"] = document.referrer;
-
+    page_loaded = Math.round(Date.now()/1000);
     const body = JSON.stringify(json);
 
     (navigator.sendBeacon && navigator.sendBeacon(visit_url, body)) || fetch(visit_url, {body, method: ''POST'', keepalive: true});
@@ -443,6 +456,9 @@ const addToVitalsQueue = (metric) => {
 addEventListener(''visibilitychange'', () => {
     if (document.visibilityState === "hidden") {
         flushQueues();
+    }
+    if (document.visibilityState === "visible") {
+        page_loaded = Math.round(Date.now()/1000);
     }
 }, { capture: true} );
 
