@@ -1307,12 +1307,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         pck_core.log(l_bodytext);
         INSERT INTO website_article_cwv (
-            website_id, article_id, visit_date, cwv_name, cwv_value, cwv_rating, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
+            website_id, article_id, visit_date, seq, cwv_name, cwv_value, cwv_rating, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
             browser, connection, url, website_loaded, duration_visible)
-        SELECT website_id, article_id, timestamp'1970-01-01 00:00:00' + numtodsinterval(website_loaded,'second'), cwv_name, cwv_value, cwv_rating, referrer, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
+        SELECT website_id, article_id, timestamp'1970-01-01 00:00:00' + numtodsinterval(website_loaded,'second'), seq, cwv_name, cwv_value, cwv_rating, referrer, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
                 browser, connection, url, website_loaded, duration_visible
           FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' 
-            COLUMNS (website_id, article_id, cwv_name, cwv_value, cwv_rating, referrer, LCP, LCP_rating, CLS, CLS_rating, INP, INP_rating, FID, FID_rating, 
+            COLUMNS (website_id, article_id, seq, cwv_name, cwv_value, cwv_rating, referrer, LCP, LCP_rating, CLS, CLS_rating, INP, INP_rating, FID, FID_rating, 
                     browser, connection, url, website_loaded, duration_visible));  
 
         EXCEPTION
