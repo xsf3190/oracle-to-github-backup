@@ -111,7 +111,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     FROM website_article_cwv cwv, website_article wa, ip_lookup ip
                    WHERE wa.website_id=pWebsiteIdId
                      AND cwv.website_id=wa.website_id
-                     AND cwv.cwv_name='LCP'
+                     AND cwv.seq=0
                      AND ip.ip=cwv.ip_address
                    ORDER BY cwv.visit_date DESC) 
         LOOP
@@ -1305,15 +1305,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_bodytext CLOB:=pBodyText;
         l_ip_address website_article_cwv.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
     BEGIN
-        pck_core.log(l_bodytext);
+        --pck_core.log(l_bodytext);
         INSERT INTO website_article_cwv (
-            website_id, article_id, visit_date, seq, cwv_name, cwv_value, cwv_rating, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
-            browser, connection, url, website_loaded, duration_visible)
-        SELECT website_id, article_id, timestamp'1970-01-01 00:00:00' + numtodsinterval(website_loaded,'second'), seq, cwv_name, cwv_value, cwv_rating, referrer, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
-                browser, connection, url, website_loaded, duration_visible
+            website_id, article_id, visit_date, seq, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
+            browser, mobile, connection, url, website_loaded, duration_visible)
+        SELECT website_id, article_id, timestamp'1970-01-01 00:00:00' + numtodsinterval(website_loaded,'second'), seq, referrer, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
+                browser, mobile, connection, url, website_loaded, duration_visible
           FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' 
-            COLUMNS (website_id, article_id, seq, cwv_name, cwv_value, cwv_rating, referrer, LCP, LCP_rating, CLS, CLS_rating, INP, INP_rating, FID, FID_rating, 
-                    browser, connection, url, website_loaded, duration_visible));  
+            COLUMNS (website_id, article_id, seq, referrer, LCP, LCP_rating, CLS, CLS_rating, INP, INP_rating, FID, FID_rating, 
+                    browser, mobile, connection, url, website_loaded, duration_visible));  
 
         EXCEPTION
             WHEN OTHERS THEN
