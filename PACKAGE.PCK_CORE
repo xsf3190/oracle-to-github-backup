@@ -377,7 +377,6 @@ dialog button.close {
 if (!sessionStorage.getItem("website_loaded")) {
     console.log("setting sessionStorage.website_loaded");
     sessionStorage.setItem("website_loaded",Math.round(Date.now()/1000));
-    sessionStorage.setItem("send_data","0");
 }
 
 page_loaded = Date.now();
@@ -392,6 +391,10 @@ const flushQueues = () => {
 
     if (vitalsQueue.size === 0 && page_loaded === 0) return;
 
+    const website_loaded = Number(sessionStorage.getItem("website_loaded"));
+    /* This happens if user manually clears sessionStorage */
+    if (website_loaded === 0) return; 
+
     const website_id = document.querySelector("[name=''website_id'']").value,
           article_id = document.querySelector("[name=''article_id'']").value,
           visit_url = document.querySelector("[name=''visit_url'']").value;
@@ -400,7 +403,7 @@ const flushQueues = () => {
     json["website_id"] = website_id;
     json["article_id"] = article_id;
     json["website_loaded"] = Number(sessionStorage.getItem("website_loaded"));
-    json["seq"] = seq++;
+    json["seq"] = seq;
     if (page_loaded !== 0) {
         json["duration_visible"] =  Math.round((Date.now() - page_loaded)/1000);
         page_loaded = 0;
@@ -414,12 +417,8 @@ const flushQueues = () => {
         vitalsQueue.clear();
     }
 
-    const send_data = sessionStorage.getItem("send_data");
-    console.log("send_data", send_data);
-
-    if (send_data==="0") {
-        sessionStorage.setItem("send_data","1");
-
+    /* We send full detils only on the first call to save network cost */
+    if (seq === 0) {
         const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
         if (connection) {
             json["connection"] = connection.downlink + " Mb/s" + " -" + connection.effectiveType;
@@ -433,13 +432,16 @@ const flushQueues = () => {
             browser+="."+browserVersion[1];
         }
         json["browser"] = browser;
+        if (navigator.userAgentData) {
+            json["mobile"] = navigator.userAgentData.mobile;
+        }
 
         json["url"] = window.location.hostname;
         json["referrer"] = document.referrer;
     }
 
     const body = JSON.stringify(json);
-
+    seq++;
     (navigator.sendBeacon && navigator.sendBeacon(visit_url, body)) || fetch(visit_url, {body, method: ''POST'', keepalive: true});
 
 
@@ -472,16 +474,6 @@ if (''onpagehide'' in self) {
         flushQueues();
     }, { capture: true} );
 }
-
-// track time when user minimizes window
-window.addEventListener("blur", function() {
-  console.log("blur");
-});
-
-window.addEventListener("focus", function() {
-  console.log("focus");
-});
-
 
 /*
 ** IMAGE INTERSECTION OBSERVER
