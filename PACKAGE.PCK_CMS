@@ -90,41 +90,88 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     */
     PROCEDURE getVisits(pWebsiteIdId IN website.id%type) IS
         l_content CLOB;
+        l_cwv page_hit.lcp_rating%type;
+        l_referrer page_hit.referrer%type;
         l_session_data pck_core.session_data_rt;
+        n PLS_INTEGER;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        l_content:='
-        <table>
-            <thead>
-                <tr>
-                    <th style="width:10%;text-align:left;">Date</th>
-                    <th style="width:30%;text-align:left;">Location</th>
-                    <th style="width:60%;text-align:left;">Referrer</th>
-                </tr>
-            </thead>
-            <tbody>';
+        INSERT INTO page_hit(
+            website_id, article_id, visit_date, ip_address, referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, duration_visible, browser, connection, url, mobile
+        )
+        SElECT 
+            website_id, article_id, visit_date, ip_address, referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, duration_visible, browser, connection, url, mobile
+        FROM
+        (
+            SELECT 
+                website_id, article_id, visit_date, ip_address, MAX(referrer) referrer, 
+                MAX(lcp) lcp, MAX(lcp_rating) lcp_rating, MAX(cls) cls, MAX(cls_rating) cls_rating, MAX(inp) inp, MAX(inp_rating) inp_rating, MAX(fid) fid, MAX(fid_rating) fid_rating, 
+                SUM(duration_visible) duration_visible, MAX(browser) browser, MAX(connection) connection, MAX(url) url, MAX(mobile) mobile
+            FROM website_article_cwv 
+            WHERE website_id=pWebsiteIdId
+            GROUP BY website_id, article_id, ip_address, visit_date
+        ) 
+        ORDER BY visit_date, article_id, ip_address;
+        n:=SQL%ROWCOUNT;
+        pck_core.log('Inserted '||n||' rows into page_hit table for website_id:'||pWebsiteIdId);
+
+        DELETE website_article_cwv WHERE website_id=pWebsiteIdId;
+        n:=SQL%ROWCOUNT;
+        pck_core.log('Deleted '||n||' rows from website_article_cwv table for website_id:'||pWebsiteIdId);
 
         pck_core.uploadIpLookup;
 
-        FOR C IN (SELECT wa.navigation_label, cwv.visit_date, NVL(cwv.referrer,'N/A') referrer, ip.city, ip.country_code, ip.postal
-                    FROM website_article_cwv cwv, website_article wa, ip_lookup ip
+        COMMIT;
+
+        l_content:='
+        <ol class="visits">
+            <li>
+                <span>Visit Date</span><span>Location</span><span>Referrer</span><span>Browser</span><span>Connection</span><span>Viewing time</span><span>Performance</span>
+            </li>';
+
+        FOR C IN (SELECT wa.navigation_label, TO_CHAR(ph.visit_date,'dd Mon yyyy hh24:mi') visit_date, ph.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
+                            ph.browser, ph.connection, ph.duration_visible, lcp_rating, cls_rating, inp_rating, fid_rating,
+                            COUNT(*) OVER (PARTITION BY TO_CHAR(ph.visit_date,'yyyymmdd')) visits_per_day,
+                            ROW_NUMBER() OVER (PARTITION BY TO_CHAR(ph.visit_date,'yyyymmdd') ORDER BY ph.visit_date DESC) visit_in_day
+                    FROM page_hit ph, website_article wa, ip_lookup ip
                    WHERE wa.website_id=pWebsiteIdId
-                     AND cwv.website_id=wa.website_id
-                     AND cwv.seq=0
-                     AND ip.ip=cwv.ip_address
-                   ORDER BY cwv.visit_date DESC) 
+                     AND ph.website_id=wa.website_id
+                     AND ip.ip=ph.ip_address
+                   ORDER BY ph.visit_date DESC) 
         LOOP
+            IF (C.lcp_rating='good' AND NVL(C.cls_rating,'good')='good' AND NVL(C.inp_rating,'good')='good' AND NVL(C.fid_rating,'good')='good')
+                THEN l_cwv:='good';
+            ELSIF (C.lcp_rating='poor' OR C.cls_rating='poor' OR C.inp_rating='poor'OR C.fid_rating='poor') 
+                THEN l_cwv:='poor';
+            ELSIF (C.lcp_rating='needs-improvement' OR C.cls_rating='needs-improvement' OR C.inp_rating='needs-improvement'OR C.fid_rating='needs-improvement') 
+                THEN l_cwv:='needs-improvement';
+            ELSIF (COALESCE(C.lcp_rating, C.cls_rating, C.inp_rating, C.fid_rating) IS NULL)
+                THEN l_cwv:='';
+            END IF;
+
+            IF (INSTR(C.referrer,'google')>0) 
+                THEN l_referrer:='google';
+            ELSIF (INSTR(C.referrer,'linkedin')>0) 
+                THEN l_referrer:='linkedin';
+            ELSIF (INSTR(C.referrer,'bing')>0) 
+                THEN l_referrer:='bing';
+            ELSE
+                l_referrer:=C.referrer;
+            END IF;
+
             l_content:=l_content || '
-                <tr>
-                    <td>' || TO_CHAR(C.visit_date AT TIME ZONE l_session_data.timezone, 'dd.mm.yyyy hh24:mi:ss') || '</td>
-                    <td>' || apex_string.join(apex_t_varchar2(C.city,C.country_code,C.postal),',') || '</td>
-                    <td>' || C.referrer || '</td>
-                </tr>';
+                <li>
+                    <span>' || CASE WHEN C.visit_in_day=1 THEN RTRIM(C.visit_date,'00:00') END || '</span>
+                    <span>' || LTRIM(RTRIM(C.location,','),',') || '</span>
+                    <span>' || l_referrer || '</span>
+                    <span>' || C.browser || '</span>
+                    <span>' || C.connection || '</span>
+                    <span>' || CASE WHEN C.duration_visible IS NOT NULL THEN TO_CHAR(C.duration_visible) || ' seconds' END || '</span>
+                    <span class="' || l_cwv || '">' || l_cwv || '</span>
+                </li>';
         END LOOP;
-        l_content:=l_content || '
-            </tbody>
-        </table>';
+        l_content:=l_content || '</ol>';
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
