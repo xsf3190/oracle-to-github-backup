@@ -700,7 +700,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         TYPE t_ip_lookup IS TABLE OF ip_lookup%rowtype;
         l_ip_lookup t_ip_lookup:=t_ip_lookup();
     BEGIN
-        FOR C IN (SELECT DISTINCT ip_address FROM website_article_cwv MINUS SELECT ip FROM ip_lookup )
+        FOR C IN (SELECT DISTINCT ip_address FROM page_hit MINUS SELECT ip FROM ip_lookup )
         LOOP
             pck_api.callIpdataAPI(null,C.ip_address,'GET',l_clob);
             FOR C1 IN (SELECT city,country_code,postal FROM JSON_TABLE(l_clob, '$' COLUMNS(city,country_code,postal)))
@@ -714,7 +714,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END LOOP;
         FORALL i IN l_ip_lookup.FIRST..l_ip_lookup.LAST
             INSERT INTO ip_lookup VALUES l_ip_lookup(i);
-        COMMIT;
     END;
 
     /*
