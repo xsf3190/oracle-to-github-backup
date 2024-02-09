@@ -302,6 +302,36 @@ legend {
 /* DIALOG STYLES */
 /* ************* */
 
+ol.visits {
+    font-size: var(--step--1);
+    border-top: solid 1px var(--color-solid);
+    & li {
+        list-style: none;
+        display: grid;
+        grid-template-columns: 1fr 2fr 1fr 1fr 1fr 1fr 1fr;
+    }
+    & li:first-child {
+        background: var(--color-pale);
+    }
+    & span {
+        border-right: solid 1px var(--color-solid);
+        border-bottom: solid 1px var(--color-solid);
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        padding: 0.2em;
+    }
+    .good {
+        background: chartreuse;
+    }
+    .needs-improvement {
+        background: orange;
+    }
+    .poor {
+        background: red;
+        color: white;
+    }
+}
 /*
 dialog {
     border: none !important;
