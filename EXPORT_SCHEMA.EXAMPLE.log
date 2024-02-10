@@ -1,43 +1,44 @@
-09-FEB-24 21:01:38.299: Starting "EXAMPLE"."EXPORT_SCHEMA_JOB":  
-09-FEB-24 21:01:43.300: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
-09-FEB-24 21:01:43.572: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
-09-FEB-24 21:01:44.062: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
-09-FEB-24 21:01:44.791: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
-09-FEB-24 21:01:47.183: Processing object type SCHEMA_EXPORT/TABLE/TABLE
-09-FEB-24 21:02:01.088: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
-09-FEB-24 21:02:01.313: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
-09-FEB-24 21:02:01.591: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
-09-FEB-24 21:02:02.170: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
-09-FEB-24 21:02:04.644: Processing object type SCHEMA_EXPORT/VIEW/VIEW
-09-FEB-24 21:02:05.440: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
-09-FEB-24 21:02:06.426: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
-09-FEB-24 21:02:07.203: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
-09-FEB-24 21:02:07.827: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
-09-FEB-24 21:02:08.464: . . exported "EXAMPLE"."ASSET"                           471.2 KB   21453 rows
-09-FEB-24 21:02:08.831: . . exported "EXAMPLE"."PERFORMANCE"                     208.9 KB    7648 rows
-09-FEB-24 21:02:09.058: . . exported "EXAMPLE"."CORE_WEB_VITALS"                 276.6 KB   14255 rows
-09-FEB-24 21:02:09.234: . . exported "EXAMPLE"."SERVERTIMING"                    190.7 KB   22621 rows
-09-FEB-24 21:02:09.345: . . exported "EXAMPLE"."USER_LOGIN"                      62.19 KB    4420 rows
-09-FEB-24 21:02:09.439: . . exported "EXAMPLE"."USAGE"                           49.12 KB    1480 rows
-09-FEB-24 21:02:09.544: . . exported "EXAMPLE"."WEBSITE_ARTICLE_CWV_BCK"         30.59 KB    1185 rows
-09-FEB-24 21:02:09.679: . . exported "EXAMPLE"."LOG"                             29.03 KB     302 rows
-09-FEB-24 21:02:09.817: . . exported "EXAMPLE"."ARTICLE"                         80.04 KB     309 rows
-09-FEB-24 21:02:09.921: . . exported "EXAMPLE"."PAGE_HIT"                        10.77 KB     302 rows
-09-FEB-24 21:02:10.918: . . exported "EXAMPLE"."SESSION_DATA"                    11.89 KB     371 rows
-09-FEB-24 21:02:11.430: . . exported "EXAMPLE"."WEBSITE_ARTICLE"                 9.429 KB     305 rows
-09-FEB-24 21:02:11.600: . . exported "EXAMPLE"."METRICS"                         11.11 KB     227 rows
-09-FEB-24 21:02:12.329: . . exported "EXAMPLE"."WEBSITE"                         8.437 KB       9 rows
-09-FEB-24 21:02:12.531: . . exported "EXAMPLE"."USERS"                           8.234 KB      19 rows
-09-FEB-24 21:02:12.542: . . exported "EXAMPLE"."WEBSITE_ARTICLE_CWV"                 0 KB       0 rows
-09-FEB-24 21:02:12.628: . . exported "EXAMPLE"."WEBSITE_DEPLOY"                  5.734 KB      39 rows
-09-FEB-24 21:02:12.731: . . exported "EXAMPLE"."IP_LOOKUP"                       6.421 KB     105 rows
-09-FEB-24 21:02:12.831: . . exported "EXAMPLE"."CORE_WEB_VITALS_ERR"             5.101 KB       1 rows
-09-FEB-24 21:02:12.938: . . exported "EXAMPLE"."NETLIFY_SITE"                    5.765 KB      15 rows
-09-FEB-24 21:02:13.043: . . exported "EXAMPLE"."NETLIFY_DNS_ZONE"                4.960 KB       5 rows
-09-FEB-24 21:02:13.157: . . exported "EXAMPLE"."NETLIFY_DNS_ZONE_SERVER"         4.734 KB      20 rows
-09-FEB-24 21:02:13.171: . . exported "EXAMPLE"."BLOB2FILE"                           0 KB       0 rows
-09-FEB-24 21:02:14.137: Master table "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully loaded/unloaded
-09-FEB-24 21:02:14.142: ******************************************************************************
-09-FEB-24 21:02:14.143: Dump file set for EXAMPLE.EXPORT_SCHEMA_JOB is:
-09-FEB-24 21:02:14.147:   /u03/dbfs/BDE1649F626EB000E0532E14000A3C29/data/dpdump/EXAMPLE.dmp
-09-FEB-24 21:02:14.153: Job "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully completed at Fri Feb 9 21:02:14 2024 elapsed 0 00:00:41
+10-FEB-24 21:01:20.609: Starting "EXAMPLE"."EXPORT_SCHEMA_JOB":  
+10-FEB-24 21:01:25.336: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
+10-FEB-24 21:01:25.605: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
+10-FEB-24 21:01:26.192: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
+10-FEB-24 21:01:27.152: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
+10-FEB-24 21:01:29.535: Processing object type SCHEMA_EXPORT/TABLE/TABLE
+10-FEB-24 21:01:45.095: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
+10-FEB-24 21:01:45.420: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
+10-FEB-24 21:01:45.730: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
+10-FEB-24 21:01:46.268: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
+10-FEB-24 21:01:48.869: Processing object type SCHEMA_EXPORT/VIEW/VIEW
+10-FEB-24 21:01:49.752: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
+10-FEB-24 21:01:50.905: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
+10-FEB-24 21:01:51.671: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
+10-FEB-24 21:01:52.466: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
+10-FEB-24 21:01:53.019: . . exported "EXAMPLE"."ASSET"                           471.2 KB   21453 rows
+10-FEB-24 21:01:53.279: . . exported "EXAMPLE"."PERFORMANCE"                     209.3 KB    7658 rows
+10-FEB-24 21:01:54.174: . . exported "EXAMPLE"."CORE_WEB_VITALS"                 278.2 KB   14325 rows
+10-FEB-24 21:01:54.399: . . exported "EXAMPLE"."SERVERTIMING"                    191.0 KB   22655 rows
+10-FEB-24 21:01:54.537: . . exported "EXAMPLE"."USER_LOGIN"                      62.31 KB    4427 rows
+10-FEB-24 21:01:54.655: . . exported "EXAMPLE"."USAGE"                           49.24 KB    1484 rows
+10-FEB-24 21:01:54.766: . . exported "EXAMPLE"."WEBSITE_ARTICLE_CWV_BCK"         30.59 KB    1185 rows
+10-FEB-24 21:01:55.154: . . exported "EXAMPLE"."ARTICLE"                         79.24 KB     309 rows
+10-FEB-24 21:01:55.281: . . exported "EXAMPLE"."LOG"                             21.92 KB     216 rows
+10-FEB-24 21:01:55.411: . . exported "EXAMPLE"."PAGE_HIT"                           11 KB     310 rows
+10-FEB-24 21:01:56.645: . . exported "EXAMPLE"."SESSION_DATA"                    12.03 KB     378 rows
+10-FEB-24 21:01:57.189: . . exported "EXAMPLE"."WEBSITE_ARTICLE"                 9.429 KB     305 rows
+10-FEB-24 21:01:57.330: . . exported "EXAMPLE"."METRICS"                         11.14 KB     228 rows
+10-FEB-24 21:01:57.911: . . exported "EXAMPLE"."WEBSITE"                         8.437 KB       9 rows
+10-FEB-24 21:01:58.059: . . exported "EXAMPLE"."USERS"                           8.234 KB      19 rows
+10-FEB-24 21:01:58.165: . . exported "EXAMPLE"."TEMP"                            5.734 KB      22 rows
+10-FEB-24 21:01:58.273: . . exported "EXAMPLE"."WEBSITE_ARTICLE_CWV"             5.507 KB      17 rows
+10-FEB-24 21:01:58.371: . . exported "EXAMPLE"."WEBSITE_DEPLOY"                  5.734 KB      39 rows
+10-FEB-24 21:01:58.473: . . exported "EXAMPLE"."IP_LOOKUP"                       6.421 KB     105 rows
+10-FEB-24 21:01:58.579: . . exported "EXAMPLE"."CORE_WEB_VITALS_ERR"             5.101 KB       1 rows
+10-FEB-24 21:01:58.688: . . exported "EXAMPLE"."NETLIFY_SITE"                    5.765 KB      15 rows
+10-FEB-24 21:01:58.955: . . exported "EXAMPLE"."NETLIFY_DNS_ZONE"                4.960 KB       5 rows
+10-FEB-24 21:01:59.142: . . exported "EXAMPLE"."NETLIFY_DNS_ZONE_SERVER"         4.734 KB      20 rows
+10-FEB-24 21:01:59.161: . . exported "EXAMPLE"."BLOB2FILE"                           0 KB       0 rows
+10-FEB-24 21:02:00.213: Master table "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully loaded/unloaded
+10-FEB-24 21:02:00.223: ******************************************************************************
+10-FEB-24 21:02:00.232: Dump file set for EXAMPLE.EXPORT_SCHEMA_JOB is:
+10-FEB-24 21:02:00.246:   /u03/dbfs/BDE1649F626EB000E0532E14000A3C29/data/dpdump/EXAMPLE.dmp
+10-FEB-24 21:02:00.286: Job "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully completed at Sat Feb 10 21:02:00 2024 elapsed 0 00:00:43
