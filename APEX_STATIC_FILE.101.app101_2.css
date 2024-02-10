@@ -308,10 +308,13 @@ ol.visits {
     & li {
         list-style: none;
         display: grid;
-        grid-template-columns: 1fr 2fr 1fr 1fr 1fr 1fr 1fr;
+        grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
     }
     & li:first-child {
         background: var(--color-pale);
+        font-weight: 600;
+        position: sticky;
+        top: 0;
     }
     & span {
         border-right: solid 1px var(--color-solid);
@@ -320,6 +323,17 @@ ol.visits {
         white-space: nowrap;
         text-overflow: ellipsis;
         padding: 0.2em;
+    }
+    & span.cwv {
+        display: flex;
+        gap: 0.5em;
+        justify-content: space-evenly;
+    }
+    & mark {
+        padding: 0.2em;
+        font-family: monospace;
+        font-weight: 600;
+        min-inline-size: 3.5ch;
     }
     .good {
         background: chartreuse;
@@ -465,7 +479,7 @@ dialog button.close {
     font-size: var(--step-4);
     color: var(--color-button);
     outline: 0;
-    margin-inline-start: 2ch;
+    /*margin-inline-start: 2ch;*/
     position: sticky;
     top: 0;
 }
@@ -476,22 +490,24 @@ dialog legend > button {
     vertical-align: text-bottom;
 }
 
-
-dialog.log > div{
-    inline-size: 90vw;
-    display: grid;
-    grid-template-columns: 1fr 44px;
+dialog.log {
+    inline-size: 100vw;
+    padding: 0;
+    & div:first-of-type {
+        display: grid;
+        grid-template-columns: 1fr 44px;
+    }
+    & table {
+        table-layout: fixed;
+        width: 100%;
+        white-space: nowrap;
+        overflow-x: auto;
+        border-collapse: collapse;
+        font-family: monospace;
+        font-size: 1ch;
+    }
 }
 
-dialog.log table {
-    table-layout: fixed;
-    width: 100%;
-    white-space: nowrap;
-    overflow-x: auto;
-    border-collapse: collapse;
-    font-family: monospace;
-    font-size: 1ch;
-}
 /*
 dialog.log th:nth-of-type(1) {
     width: 10%;
