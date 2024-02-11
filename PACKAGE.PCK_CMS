@@ -28,6 +28,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE reorderWebsiteArticles(pWebsiteId IN website_article.website_id%type, pBodyText IN CLOB, pReturnJson IN BOOLEAN DEFAULT TRUE);
     --
+    PROCEDURE restoreArticle(pArticleId IN article.id%type);
+    --
     PROCEDURE setClientInfo(pBodyText IN CLOB);
     --
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type);
@@ -613,6 +615,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             WHEN OTHERS THEN
                 pck_core.log_error;
     END; 
+
+    /*
+     **  Restore article content to prior to last login
+     */        
+    PROCEDURE restoreArticle(pArticleId IN article.id%type) IS
+        l_session_data pck_core.session_data_rt;
+        l_timestamp TIMESTAMP;
+        l_body_html article.body_html%type;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        SELECT login_date INTO l_timestamp FROM user_login WHERE apex_session_id=l_session_data.session_id;
+        SELECT body_html INTO l_body_html FROM article AS OF TIMESTAMP l_timestamp WHERE id=pArticleId;
+        UPDATE article SET body_html=l_body_html WHERE id=pArticleId;
+
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.close_object;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
 
     /*
      **  Insert new page in website
