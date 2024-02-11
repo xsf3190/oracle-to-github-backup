@@ -1428,6 +1428,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                                 </button>
                             </li>
                             <li>
+                                <button type="button" class="with-icon restore-article">
+                                    <svg class="icon"><use href="#backward"></use></svg>
+                                Restore Before Login
+                                </button>
+                            </li>
+                            <li>
                                 <button type="button" class="with-icon edit-field" data-column="website_article.page_title">
                                     <svg class="icon"><use href="#searchengin"></use></svg>
                                 Page Title (SEO)
