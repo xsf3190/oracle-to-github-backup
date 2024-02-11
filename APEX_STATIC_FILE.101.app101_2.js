@@ -558,7 +558,9 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".edit-codepen")) {
         edit_codepen();   
     } else if (e.target.matches(".upload-codepen")) {
-        upload_codepen();                                                                                                                 
+        upload_codepen();     
+    } else if (e.target.matches(".restore-article")) {
+        restore_article();                                                                                                              
     } else if (e.target.matches(".upload-media")) {
         upload_media();                                
     } else if (e.target.matches(".edit-field")) {
@@ -1186,6 +1188,15 @@ const upload_codepen = async () => {
             editor.setData(data.html_updated);
         }
         popupOpen("CODEPEN UPLOAD COMPLETED",data.message);
+    });
+}
+
+/* 
+ ** RESTORE ARTICLE CONTENT TO BEFORE LOGIN
+ */
+const restore_article = () => {
+    execProcess( "restore-article/"+gArticleId,"PUT").then( () => {
+        websiteNavMenu.querySelector("a.selected").click();
     });
 }
 
