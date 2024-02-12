@@ -317,6 +317,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 apex_json.write('html', C.body_html);
                 pck_core.getThumbnails(C.article_id, l_thumbnails);
                 apex_json.write('thumbnails', l_thumbnails);
+                IF (C.contact_form='YES') THEN
+                    apex_json.write('contact_form', TRUE);
+                ELSE
+                    apex_json.write('contact_form', FALSE);
+                END IF;
             END IF;
         END LOOP;
 
@@ -548,7 +553,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                AND a.id=l_id_2;
 
             /* build html */
-            l_html:=l_nav_labels || chr(10) || pck_core.g_html_start || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10) || pck_core.g_html_end || chr(10);
+            l_html:=l_nav_labels || chr(10) || pck_css_js.g_html_start || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10) || pck_css_js.g_html_end || chr(10);
             IF (l_contact_form='YES') THEN
                 SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
                 l_html:=l_html || pck_core.buildContactForm(l_email);
@@ -578,11 +583,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             '    --color-primary: ' || l_color_primary || ';' || chr(10) ||
             '}' || chr(10) || chr(10) ||
             '<link rel="stylesheet" href="' || l_font || '">' || chr(10) || chr(10) || 
-            pck_core.g_css_start || chr(10) || l_css || pck_core.g_css || pck_core.g_css_end;
+            pck_css_js.g_css_start || chr(10) || l_css || pck_css_js.g_css || pck_css_js.g_css_end;
 
 
             IF (l_javascript IS NULL) THEN
-                l_javascript:=pck_core.g_javascript;
+                l_javascript:=pck_css_js.g_javascript;
             END IF;
 
             apex_json.open_object;
@@ -826,12 +831,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             CASE l_files(i)
                 WHEN l_domain_name||'/src/index.html' THEN
                     l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
-                    l_start:=INSTR(l_clob,pck_core.g_html_start);
-                    l_end:=INSTR(l_clob,pck_core.g_html_end);
+                    l_start:=INSTR(l_clob,pck_css_js.g_html_start);
+                    l_end:=INSTR(l_clob,pck_css_js.g_html_end);
                     IF (l_end=0 OR l_start=0 OR l_end<l_start) THEN
                         l_message:=l_message || 'HTML - BOUNDARY TAGS CHANGED - no update | ';
                     ELSE
-                        l_clob:=dbms_lob.substr(lob_loc=>l_clob, amount=>l_end-(l_start+LENGTH(pck_core.g_html_start)), offset=>l_start+LENGTH(pck_core.g_html_start));
+                        l_clob:=dbms_lob.substr(lob_loc=>l_clob, amount=>l_end-(l_start+LENGTH(pck_css_js.g_html_start)), offset=>l_start+LENGTH(pck_css_js.g_html_start));
                         l_clob:=LTRIM(RTRIM(l_clob,chr(10)),chr(10));
                         IF (dbms_lob.compare(l_html, l_clob)=0) THEN
                             l_message:=l_message || 'HTML - no change | ';
