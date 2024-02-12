@@ -838,6 +838,13 @@ video {
       transform
       600ms
       cubic-bezier(.3, .7, .4, 1);
+    & svg {
+        width: 1em;
+        height: 1em;
+        fill: white;
+        margin-right: 0.5em;
+        vertical-align: middle;
+    }
   }
   .pushable:hover {
     filter: brightness(110%);
