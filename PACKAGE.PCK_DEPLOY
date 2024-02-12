@@ -201,7 +201,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         '    --color-dark: ' || C.color_dark || ';' || chr(10) ||
                         '    --color-primary: ' || C.color_primary || ';' || chr(10) ||
                         '}' || chr(10) || chr(10) ||
-                        '<link rel="stylesheet" href="' || C.font || '">' || chr(10) || chr(10) || NVL(C.css,pck_core.g_css) || chr(10) || 
+                        '<link rel="stylesheet" href="' || C.font || '">' || chr(10) || chr(10) || NVL(C.css,pck_css_js.g_css) || chr(10) || 
                         '</style>' || chr(10) || 
                     '</head>' || chr(10) || 
                     '<body>' || CASE WHEN c.nb>1 THEN '<nav aria-label="Main Navigation">' || buildNavLabels(C.article_id) || '</nav>' END || chr(10) || 
@@ -218,7 +218,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                             onLCP(addToVitalsQueue);
                             onINP(addToVitalsQueue);
                         </script>
-                        <script>' || NVL(C.javascript,pck_core.g_javascript) || '</script>' || chr(10) || '
+                        <script>' || NVL(C.javascript,pck_css_js.g_javascript) || '</script>' || chr(10) || '
                      </body>' || chr(10) || 
                     '</html>';
 
