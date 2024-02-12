@@ -165,9 +165,6 @@ newWebsite.addEventListener("click",  () => {
  */
 const edit_website = (e) => {
     execProcess( "website/"+e.target.dataset.id,"GET").then( (data) => {
-        
-        console.log("data",data);
-
         resetWebsite();
         
         const inputs = website.elements;
@@ -211,13 +208,14 @@ const edit_website = (e) => {
                 galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
                 lazyload();
             }
+            console.log("data",data);
+            selected_contact(data.contact_form);
         } else {
             gArticleId = 0;
             editor_status_text.textContent = "";
             editor.setData("");
             galleryList.replaceChildren();
         }
-        
     });
 };
 
@@ -1054,6 +1052,20 @@ const selected_nav = (id) => {
     });
 }
 
+const selected_contact = (contact_form) => {
+    const contact_form_btn = websiteNavMenu.querySelector(".dropdown .add-contact,.dropdown .remove-contact");
+
+    if (contact_form) {
+        contact_form_btn.querySelector("use").setAttribute("href","#minus");
+        contact_form_btn.classList.remove("add-contact");
+        contact_form_btn.classList.add("remove-contact");
+    } else {
+        contact_form_btn.querySelector("use").setAttribute("href","#plus");
+        contact_form_btn.classList.remove("remove-contact");
+        contact_form_btn.classList.add("add-contact");
+    }
+}
+
 /* 
  ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR 
  */
@@ -1080,17 +1092,7 @@ const edit_text = (e) => {
             lazyload();
         }
 
-        const contact_form_btn = websiteNavMenu.querySelector(".dropdown .add-contact,.dropdown .remove-contact");
-
-        if (data.contact_form) {
-            contact_form_btn.querySelector("use").setAttribute("href","#minus");
-            contact_form_btn.classList.remove("add-contact");
-            contact_form_btn.classList.add("remove-contact");
-        } else {
-            contact_form_btn.querySelector("use").setAttribute("href","#plus");
-            contact_form_btn.classList.remove("remove-contact");
-            contact_form_btn.classList.add("add-contact");
-        }
+        selected_contact(data.contact_form);
         selected_nav(gArticleId);
     });
 }
