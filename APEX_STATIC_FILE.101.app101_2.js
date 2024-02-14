@@ -195,7 +195,7 @@ const edit_website = (e) => {
         }
         if (data.nav_labels) {
             websiteNavMenu.insertAdjacentHTML('afterbegin',data.nav_labels);
-            gArticleId = websiteNavMenu.querySelector("a:first-of-type").dataset.id;
+            gArticleId = websiteNavMenu.querySelector(".selected").dataset.id;
             editor_status = "init";
             editor_status_text.textContent = "";
             if (data.html) {
@@ -898,7 +898,7 @@ const saveData = async ( data ) => {
 
     
     const title = document.querySelector(".ck > h1").textContent;
-    await execProcess("article/"+gArticleId, "PUT",  {website_id: domainName.dataset.id, body_html: data, title: title, word_count: word_count}).then( (data) => {
+    await execProcess("article/"+gArticleId, "PUT",  {body_html: data, title: title, word_count: word_count}).then( (data) => {
         pendingActions.remove( action );
         editor_status_text.textContent = "saved successfully";
         editor_status_text.style.color = "green";
@@ -1053,7 +1053,7 @@ const selected_nav = (id) => {
 }
 
 const selected_contact = (contact_form) => {
-    const contact_form_btn = websiteNavMenu.querySelector(".dropdown .add-contact,.dropdown .remove-contact");
+    const contact_form_btn = document.querySelector(".add-contact,.remove-contact");
 
     if (contact_form) {
         contact_form_btn.querySelector("use").setAttribute("href","#minus");
