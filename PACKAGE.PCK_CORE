@@ -769,19 +769,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         /* Get id of article that will be displayed - i.e article last updated by user */
 
         IF (l_domains.COUNT>0) THEN
-            FOR C IN (SELECT wa.navigation_label, wa.article_id, wa.contact_form, a.body_html, CASE WHEN COALESCE(a.updated_date, a.created_date)=l_domains(1).updated_date THEN ' selected' END selected 
+            FOR C IN (SELECT wa.navigation_label, wa.article_id, wa.contact_form, a.body_html, 
+                                ROW_NUMBER() OVER(ORDER BY COALESCE(a.updated_date, a.created_date) DESC) rn
                         FROM website_article wa, article a 
                        WHERE wa.website_id=l_domains(1).id 
                          AND a.id=wa.article_id 
                        ORDER BY wa.display_order) 
             LOOP
-                l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label' || C.selected || '" data-id="' || C.article_id || '">' || C.navigation_label;
+                l_nav_labels:=l_nav_labels || '<a href="#" data-id="' || C.article_id || '"';
+                IF (C.rn=1) THEN
+                    l_nav_labels:=l_nav_labels || ' class="nav-label selected"';
+                ELSE
+                    l_nav_labels:=l_nav_labels || ' class="nav-label"';
+                END IF;
+                l_nav_labels:=l_nav_labels || '>' || C.navigation_label;
+
                 IF (C.contact_form='YES') THEN
                     l_nav_labels:=l_nav_labels || '<svg class="icon"><use href="#envelope"></use></svg>';
                 END IF;
                 l_nav_labels:=l_nav_labels || '</a>';
 
-                IF (C.selected IS NOT NULL) THEN
+                IF (C.rn=1) THEN
                     l_body_html:=C.body_html;
                     l_contact_form:=C.contact_form;
                     getThumbnails(C.article_id, l_thumbnails);
@@ -887,13 +895,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </div>
             </div>
             <!-- Second card -->
-            <div class="page-content">                
-                <button type="button" class="new-page pushable">
-                    <span class="shadow"></span>
-                    <span class="edge"></span>
-                    <span class="front"><svg class=""><use href="#plus"></use></svg>NEW PAGE</span>
-                </button>
-                <nav class="website-nav-menu">' || l_nav_labels || '
+            <div class="page-content">
+                <div>
+                    <button type="button" class="new-page pushable">
+                        <span class="shadow"></span>
+                        <span class="edge"></span>
+                        <span class="front"><svg class=""><use href="#plus"></use></svg>NEW PAGE</span>
+                    </button>
                     <div class="dropdown">
                         <span>Edit Options</span>
                         <button type="button" class="show-dropdown">&blacktriangledown;</button>
@@ -951,7 +959,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             </li>     
                         </ul>
                     </div>
-                </nav>
+                </div>
+                <nav class="website-nav-menu">' || l_nav_labels || '</nav>
                 <textarea id="editor-content" style="display:none">' || l_body_html || '</textarea>
                 <div id="editor"></div>
                 <div>
