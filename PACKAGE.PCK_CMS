@@ -93,6 +93,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE getVisits(pWebsiteId IN website.id%type) IS
         l_content CLOB;
         l_cwv VARCHAR2(200);
+        l_visit_date VARCHAR2(22);
         l_referrer page_hit.referrer%type;
         l_session_data pck_core.session_data_rt;
         n PLS_INTEGER;
@@ -116,16 +117,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 WHERE  website_id=pWebsiteId
                 GROUP BY website_id, ip_address, visit_date
             )
-            SELECT  visit_date, wh.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
-                    wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating, wh.fid_rating,
-                    COUNT(*) OVER (PARTITION BY TO_CHAR(wh.visit_date,'yyyymmdd')) visits_per_day,
-                    ROW_NUMBER() OVER (PARTITION BY TO_CHAR(wh.visit_date,'yyyymmdd') ORDER BY wh.visit_date DESC) visit_in_day
+            SELECT  wh.visit_date, wh.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
+                    wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating, wh.fid_rating
                 FROM website_hits wh, ip_lookup ip
                 WHERE ip.ip=wh.ip_address
                 ORDER BY wh.visit_date desc
         ) 
         LOOP
-            l_cwv:='<mark class="' || C.lcp_rating || '">LCP</mark>';
+            l_visit_date:=SUBSTR(TO_CHAR(C.visit_date AT TIME ZONE l_session_data.timezone,'dd Mon yyyy, hh24:mi:ss'),1,18);
+
+            l_cwv:='';
+            IF (C.lcp_rating IS NOT NULL) THEN
+                l_cwv:=l_cwv || '<mark class="' || C.lcp_rating || '">LCP</mark>';
+            ELSE
+                l_cwv:=l_cwv || '<mark></mark>';
+            END IF;
             IF (C.cls_rating IS NOT NULL) THEN
                 l_cwv:=l_cwv || '<mark class="' || C.cls_rating || '">CLS</mark>';
             ELSE
@@ -151,11 +157,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
             l_content:=l_content || '
                 <li>
-                    <span>' || CASE WHEN C.visit_in_day=1 THEN RTRIM(TO_CHAR(C.visit_date AT TIME ZONE l_session_data.timezone,'dd Mon yyyy, hh24:mi:ss'),'00:00') END || '</span>
+                    <span>' || l_visit_date || '</span>
                     <span>' || LTRIM(RTRIM(C.location,','),',') || '</span>
                     <span>' || l_referrer || '</span>
                     <span>' || C.browser || '</span>
-                    <span>' || C.connection || '</span>
+                    <span>' || C.connection || CASE WHEN C.mobile='true' THEN ' (Mob)' END || '</span>
                     <span>' || CASE WHEN C.duration_visible IS NOT NULL THEN TO_CHAR(C.duration_visible) || ' seconds' END || '</span>
                     <span class="cwv">' || l_cwv || '</span>
                 </li>';
@@ -302,18 +308,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('deploy_buttons', pck_core.buildDeployButtons(C.domain_name, C.netlify_site_id, C.netlify_site_id_custom));
         END LOOP;
 
-        FOR C IN (SELECT wa.article_id, wa.navigation_label, wa.contact_form, a.body_html, a.updated_date, MAX(COALESCE(a.updated_date,a.created_date)) OVER() max_updated_date
+        FOR C IN (SELECT wa.article_id, wa.navigation_label, wa.contact_form, a.body_html, ROW_NUMBER() OVER (ORDER BY COALESCE(a.updated_date,a.created_date) DESC) rn
                     FROM website_article wa, article a  
                    WHERE wa.website_id=pWebsiteId 
                      AND a.id=wa.article_id
                    ORDER BY display_order) 
         LOOP
-            l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label' || CASE WHEN C.updated_date=C.max_updated_date THEN ' selected' END || '" data-id="' || C.article_id || '">' || C.navigation_label;
+            l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label' || CASE WHEN c.rn=1 THEN ' selected' END || '" data-id="' || C.article_id || '">' || C.navigation_label;
             IF (C.contact_form='YES') THEN
                 l_nav_labels:=l_nav_labels || '<svg class="icon"><use href="#envelope"></use></svg>';
             END IF;
             l_nav_labels:=l_nav_labels || '</a>';
-            IF (C.updated_date=C.max_updated_date) THEN
+            IF (C.rn=1) THEN
                 apex_json.write('html', C.body_html);
                 pck_core.getThumbnails(C.article_id, l_thumbnails);
                 apex_json.write('thumbnails', l_thumbnails);
@@ -689,8 +695,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Procedure called by the autoSave feature of CKEditor
      */        
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
-        l_website_id website_article.website_id%type;
-        l_article_id article.id%type;
+        /*l_article_id article.id%type;
         l_title article.title%type;
         l_excerpt varchar2(1000);
         l_word_count article.word_count%type;
@@ -698,18 +703,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_name users.name%type;
         l_words apex_t_varchar2;
         l_rem PLS_INTEGER;
+        */
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT website_id,
-               SUBSTR(title,1,60) title, 
-               REGEXP_SUBSTR(word_count,'(\d)+') word_count,
-               body_html,
-               u.name
-          INTO l_website_id, l_title, l_word_count, l_body_html, l_name
-          FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (website_id, title, word_count, body_html CLOB))
-          WHERE u.id=l_session_data.user_id;
+        MERGE INTO article t 
+        USING (
+                SELECT SUBSTR(title,1,100) title, REGEXP_SUBSTR(word_count,'(\d)+') word_count, body_html
+                FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (website_id, title, word_count, body_html CLOB))
+        ) s
+        ON (t.id=pArticleId)
+        WHEN MATCHED THEN UPDATE 
+            SET t.title=s.title, t.word_count=s.word_count, t.body_html=s.body_html, t.updated_date=current_timestamp
+            WHERE t.author_user_id=l_session_data.user_id;
+
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.close_object;
+
         /*
         apex_escape.set_html_escaping_mode('E');
         l_excerpt:=dbms_lob.substr(utl_i18n.unescape_reference(apex_escape.striphtml(l_edit_text)),200,NVL(LENGTHB(l_title),0)+1);
@@ -733,12 +745,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             END IF;
         END LOOP;
         */
-        UPDATE article SET title=l_title, word_count=l_word_count, body_html=l_body_html, updated_date=current_timestamp
-         WHERE id=pArticleId;
-
-        APEX_JSON.open_object; 
-        APEX_JSON.write('success', TRUE);
-        APEX_JSON.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
