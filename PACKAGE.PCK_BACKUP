@@ -216,7 +216,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
            FETCH FIRST ROW ONLY;
 
         /* Required because Oracle OCI does not allow approved sender email to be "gmail", "hotmail" etc */
-        l_email_sender:='no-reply@markrussellbrown.com';
+        l_email_sender:='backup@markrussellbrown.com';
         /*
         SELECT email 
           INTO l_email_sender
