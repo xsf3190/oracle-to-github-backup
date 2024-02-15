@@ -40,8 +40,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE uploadCldMetadata(pBodyText IN CLOB);
     --
-    PROCEDURE uploadPageVisit(pBodyText IN CLOB);
-    --
     PROCEDURE uploadPerformance(pBodyText IN CLOB);
     --
     PROCEDURE updateField(pBodyText IN CLOB);
@@ -1367,28 +1365,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             NESTED '$.cwv[*]' COLUMNS (name, value, rating)))
         LOG ERRORS INTO core_web_vitals_err REJECT LIMIT UNLIMITED;                 
     END;
-
-    /*
-     **  Upload page visit details received from deployed website pages
-     */      
-    PROCEDURE uploadPageVisit(pBodyText IN CLOB) IS
-        l_bodytext CLOB:=pBodyText;
-        l_ip_address website_article_cwv.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
-    BEGIN
-        --pck_core.log(l_bodytext);
-        INSERT INTO website_article_cwv (
-            website_id, article_id, visit_date, seq, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
-            browser, mobile, connection, url, website_loaded, duration_visible)
-        SELECT website_id, article_id, timestamp'1970-01-01 00:00:00' + numtodsinterval(website_loaded,'second'), seq, referrer, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
-                browser, mobile, connection, url, website_loaded, duration_visible
-          FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' 
-            COLUMNS (website_id, article_id, seq, referrer, LCP, LCP_rating, CLS, CLS_rating, INP, INP_rating, FID, FID_rating, 
-                    browser, mobile, connection, url, website_loaded, duration_visible));  
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-    END;   
 
     /*
     ** Logout authenticated session
