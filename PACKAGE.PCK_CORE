@@ -46,10 +46,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
-    PROCEDURE uploadIpLookup;
-    --
-    PROCEDURE uploadPageHits(pWebsiteIdId IN website.id%type);
-    --
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
@@ -172,69 +168,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
            AND m.name='public';
 
         RETURN (l_rest_url);
-    END;
-
-    /*
-     **  Keep IP_LOOKUP table up to date
-     */
-    PROCEDURE uploadIpLookup IS 
-        l_clob clob;
-        TYPE t_ip_lookup IS TABLE OF ip_lookup%rowtype;
-        l_ip_lookup t_ip_lookup:=t_ip_lookup();
-        l_ip_count VARCHAR2(10);
-    BEGIN
-        FOR C IN (SELECT DISTINCT ip_address FROM page_hit MINUS SELECT ip FROM ip_lookup )
-        LOOP
-            pck_api.callIpdataAPI(null,C.ip_address,'GET',l_clob);
-            FOR C1 IN (SELECT city,country_code,postal,count FROM JSON_TABLE(l_clob, '$' COLUMNS(city,country_code,postal,count)))
-            LOOP
-                l_ip_lookup.EXTEND;
-                l_ip_lookup(l_ip_lookup.LAST).ip:=C.ip_address;
-                l_ip_lookup(l_ip_lookup.LAST).city:=C1.city;
-                l_ip_lookup(l_ip_lookup.LAST).country_code:=C1.country_code;
-                l_ip_lookup(l_ip_lookup.LAST).postal:=C1.postal;
-                l_ip_count:=C1.count;
-            END LOOP;
-        END LOOP;
-        IF (l_ip_count IS NOT NULL) THEN
-            log('IPDATA API COUNT IS ' || l_ip_count);
-        END IF;
-        FORALL i IN l_ip_lookup.FIRST..l_ip_lookup.LAST
-            INSERT INTO ip_lookup VALUES l_ip_lookup(i);
-    END;
-
-    /*
-     **  Google core web vital and page visit duration data is uploaded from client sessions to table website_article_cwv.
-     **  This procedure aggregates the data into page hits
-     */
-    PROCEDURE uploadPageHits(pWebsiteIdId IN website.id%type) IS
-        n PLS_INTEGER;
-    BEGIN
-        INSERT INTO page_hit(
-            website_id, article_id, visit_date, ip_address, referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, duration_visible, browser, connection, url, mobile
-        )
-        SElECT 
-            website_id, article_id, visit_date, ip_address, referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, duration_visible, browser, connection, url, mobile
-        FROM
-        (
-            SELECT 
-                website_id, article_id, visit_date, ip_address, 
-                MAX(CASE WHEN INSTR(referrer,url)=0 THEN referrer END) referrer, 
-                MAX(lcp) lcp, MAX(lcp_rating) lcp_rating, MAX(cls) cls, MAX(cls_rating) cls_rating, MAX(inp) inp, MAX(inp_rating) inp_rating, MAX(fid) fid, MAX(fid_rating) fid_rating, 
-                SUM(duration_visible) duration_visible, MAX(browser) browser, MAX(connection) connection, MAX(url) url, MAX(mobile) mobile
-            FROM website_article_cwv 
-            WHERE website_id=pWebsiteIdId
-            GROUP BY website_id, article_id, ip_address, visit_date
-        ) 
-        ORDER BY visit_date, article_id, ip_address;
-        n:=SQL%ROWCOUNT;
-        pck_core.log('Inserted '||n||' rows into page_hit table for website_id:'||pWebsiteIdId);
-
-        DELETE website_article_cwv WHERE website_id=pWebsiteIdId;
-        n:=SQL%ROWCOUNT;
-        pck_core.log('Deleted '||n||' rows from website_article_cwv table for website_id:'||pWebsiteIdId);
-
-        pck_core.uploadIpLookup;
     END;
 
     /*
