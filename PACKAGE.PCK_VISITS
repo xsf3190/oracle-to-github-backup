@@ -2,7 +2,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE uploadIpLookup;
     --
-    PROCEDURE uploadPageHits(pWebsiteIdId IN website.id%type);
+    PROCEDURE uploadPageHits;
     --
     PROCEDURE uploadPageVisit(pBodyText IN CLOB);
     --
@@ -18,7 +18,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_bodytext CLOB:=pBodyText;
         l_ip_address website_article_cwv.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
     BEGIN
-        --pck_core.log(l_bodytext);
         INSERT INTO website_article_cwv (
             website_id, article_id, seq, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
             browser, mobile, connection, url, website_loaded, duration_visible)
@@ -67,31 +66,50 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
      **  This procedure aggregates the data into the page_hit table.
      **  Each page_hit row represents one visit from one ip address to a web page in a discrete client session.
      */
-    PROCEDURE uploadPageHits(pWebsiteIdId IN website.id%type) IS
+    PROCEDURE uploadPageHits IS
         n PLS_INTEGER;
     BEGIN
-        INSERT INTO page_hit(
-            website_id, article_id, website_loaded, visit_date, ip_address, referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, duration_visible, browser, connection, url, mobile
-        )
-        SElECT 
-            website_id, article_id, website_loaded, to_timestamp('1970-01-01','yyyy-mm-dd') + numtodsinterval(website_loaded,'second'), ip_address, referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, duration_visible, browser, connection, url, mobile
-        FROM
-        (
-            SELECT 
-                website_id, article_id, website_loaded, ip_address, 
-                MAX(CASE WHEN INSTR(referrer,url)=0 THEN referrer END) referrer, 
-                MAX(lcp) lcp, MAX(lcp_rating) lcp_rating, MAX(cls) cls, MAX(cls_rating) cls_rating, MAX(inp) inp, MAX(inp_rating) inp_rating, MAX(fid) fid, MAX(fid_rating) fid_rating, 
-                SUM(duration_visible) duration_visible, MAX(browser) browser, MAX(connection) connection, MAX(url) url, MAX(mobile) mobile
-            FROM website_article_cwv 
-            WHERE website_id=pWebsiteIdId
-            GROUP BY website_id, article_id, ip_address, website_loaded
-        );
+        MERGE INTO page_hit t
+        USING (
+            SElECT 
+                website_id, article_id, website_loaded, ip_address, referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, NVL(duration_visible,0) duration_visible, browser, connection, url, mobile,
+                to_timestamp('1970-01-01','yyyy-mm-dd') + numtodsinterval(website_loaded,'second') visit_date
+            FROM
+            (
+                SELECT 
+                    website_id, article_id, ip_address, website_loaded,  
+                    MAX(CASE WHEN INSTR(referrer,url)=0 THEN referrer END) referrer, 
+                    MAX(lcp) lcp, MAX(lcp_rating) lcp_rating, MAX(cls) cls, MAX(cls_rating) cls_rating, MAX(inp) inp, MAX(inp_rating) inp_rating, MAX(fid) fid, MAX(fid_rating) fid_rating, 
+                    SUM(duration_visible) duration_visible, MAX(browser) browser, MAX(connection) connection, MAX(url) url, MAX(mobile) mobile
+                FROM website_article_cwv 
+                GROUP BY website_id, article_id, ip_address, website_loaded
+            )
+        ) s
+        ON (t.website_id=s.website_id AND 
+            t.article_id=s.article_id AND 
+            t.ip_address=s.ip_address AND 
+            t.website_loaded=s.website_loaded)
+        WHEN NOT MATCHED THEN
+            INSERT (website_id, article_id, ip_address, website_loaded, visit_date, referrer, duration_visible, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, browser, connection, url, mobile)    
+            VALUES (s.website_id, s.article_id, s.ip_address, s.website_loaded, s.visit_date, s.referrer, s.duration_visible, s.lcp, s.lcp_rating, s.cls, s.cls_rating, s.inp, s.inp_rating, s.fid, s.fid_rating, s.browser, s.connection, s.url, s.mobile)
+        WHEN MATCHED THEN
+            UPDATE SET t.updated_date=current_timestamp,
+                t.duration_visible=t.duration_visible+s.duration_visible,
+                t.lcp=CASE WHEN t.lcp IS NOT NULL AND s.lcp IS NOT NULL THEN GREATEST(s.lcp,t.lcp) ELSE COALESCE(s.lcp,t.lcp) END,
+                t.lcp_rating=CASE WHEN t.lcp_rating IS NOT NULL AND s.lcp_rating IS NOT NULL THEN GREATEST(s.lcp_rating,t.lcp_rating) ELSE COALESCE(s.lcp_rating,t.lcp_rating) END,
+                t.cls=CASE WHEN t.cls IS NOT NULL AND s.cls IS NOT NULL THEN GREATEST(s.cls,t.cls) ELSE COALESCE(s.cls,t.cls) END,
+                t.cls_rating=CASE WHEN t.cls_rating IS NOT NULL AND s.cls_rating IS NOT NULL THEN GREATEST(s.cls_rating,t.cls_rating) ELSE COALESCE(s.cls_rating,t.cls_rating) END,
+                t.inp=CASE WHEN t.inp IS NOT NULL AND s.inp IS NOT NULL THEN GREATEST(s.inp,t.inp) ELSE COALESCE(s.inp,t.inp) END,
+                t.inp_rating=CASE WHEN t.inp_rating IS NOT NULL AND s.inp_rating IS NOT NULL THEN GREATEST(s.inp_rating,t.inp_rating) ELSE COALESCE(s.inp_rating,t.inp_rating) END,
+                t.fid=CASE WHEN t.fid IS NOT NULL AND s.fid IS NOT NULL THEN GREATEST(s.fid,t.fid) ELSE COALESCE(s.fid,t.fid) END,
+                t.fid_rating=CASE WHEN t.fid_rating IS NOT NULL AND s.fid_rating IS NOT NULL THEN GREATEST(s.fid_rating,t.fid_rating) ELSE COALESCE(s.fid_rating,t.fid_rating) END        
+                ;
         n:=SQL%ROWCOUNT;
-        pck_core.log('Inserted '||n||' rows into page_hit table for website_id:'||pWebsiteIdId);
+        pck_core.log('Merged '||n||' rows into page_hit table');
 
-        DELETE website_article_cwv WHERE website_id=pWebsiteIdId;
+        DELETE website_article_cwv;
         n:=SQL%ROWCOUNT;
-        pck_core.log('Deleted '||n||' rows from website_article_cwv table for website_id:'||pWebsiteIdId);
+        pck_core.log('Deleted '||n||' rows from website_article_cwv table');
 
         uploadIpLookup;
     END;
