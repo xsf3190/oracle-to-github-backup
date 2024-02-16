@@ -190,7 +190,7 @@ const edit_website = (e) => {
         deployButtons.replaceChildren();
         deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
 
-        while (websiteNavMenu.childElementCount > 1) {
+        while (websiteNavMenu.childElementCount > 0) {
             websiteNavMenu.removeChild(websiteNavMenu.firstChild);
         }
         if (data.nav_labels) {
@@ -541,6 +541,8 @@ const clickHandler = (e) => {
 
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
+        if (gArticleId === e.target.dataset.id) return;
+
         if (container.querySelector(".ck-source-editing-button").matches(".ck-off")) {
             gArticleId = e.target.dataset.id
             edit_text(e);
