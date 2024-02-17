@@ -266,7 +266,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_content:=l_content || '<h2>' || C.domain_name || '</h2>';
             l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.domain_name', C.domain_name, l_session_data.canuse_popover);
             l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.contact_email', C.contact_email, l_session_data.canuse_popover);
-            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.font', C.font, l_session_data.canuse_popover);
+            l_content:=l_content || pck_core.buildSelectWrapper(C.id, 'website.font', C.font, 'google_font.family', l_session_data.canuse_popover);
             l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover);
             l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.color_dark', C.color_dark, l_session_data.canuse_popover);
             l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.color_light', C.color_light, l_session_data.canuse_popover);
@@ -502,7 +502,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_email users.email%type;
         l_domain_name website.domain_name%type;
         l_font website.font%type;
-        l_font_family website.font%type;
         l_max_width website.max_width%type;
         l_fluid_types website.fluid_types%type;
         l_color_dark website.color_dark%type;
@@ -512,8 +511,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_html CLOB;
         l_css CLOB;
         l_javascript CLOB;
-        l_start PLS_INTEGER;
-        l_end PLS_INTEGER;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -563,30 +560,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 l_html:=l_html || pck_core.buildContactForm(l_email);
             END IF;
 
-            /* Get font family from Google fonts url */
-            IF (l_font LIKE 'https://%') THEN
-                l_start:=INSTR(l_font,'=',1,1);
-                l_end:=INSTR(l_font,'&',1,1);
-                IF (l_end=0) THEN
-                    l_font_family:=SUBSTR(l_font,l_start+1);
-                ELSE
-                    l_font_family:=SUBSTR(l_font,l_start+1,l_end-l_start-1);
-                END IF;
-                l_font_family:=REPLACE(l_font_family,'+',' ');
-            ELSE
-                l_font_family:=l_font;
-            END IF;
-
             /* build css */
             l_css:=
             ':root {' ||chr(10) || l_fluid_types || chr(10) ||
-            '    --font-family: ' || l_font_family || ';' || chr(10) ||
+            '    --font-family: ' || l_font || ';' || chr(10) ||
             '    --max-width: ' || l_max_width || ';' || chr(10) ||
             '    --color-light: ' || l_color_light || ';' || chr(10) ||
             '    --color-dark: ' || l_color_dark || ';' || chr(10) ||
             '    --color-primary: ' || l_color_primary || ';' || chr(10) ||
             '}' || chr(10) || chr(10) ||
-            '<link rel="stylesheet" href="' || l_font || '">' || chr(10) || chr(10) || 
+            '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || l_font || '">' || chr(10) || chr(10) || 
             pck_css_js.g_css_start || chr(10) || l_css || pck_css_js.g_css || pck_css_js.g_css_end;
 
 
