@@ -84,7 +84,7 @@ const focusHandler = (e) => {
 const changeHandler = (e) => {
     if (!e.target.matches(".cms")) return;
     let result;
-    if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT") {
+    if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT"  || e.target.tagName == "SELECT") {
         result = e.target.nextElementSibling.querySelector(".result");
     } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
         result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
@@ -870,9 +870,24 @@ signout.addEventListener('click',  () => {
     })
 });
 
+/*
+ ** TECHNICAL LOG
+ */
 const sessionLog = document.querySelector(".session-log");
 sessionLog.addEventListener('click',  () => {
     execProcess("log/"+apex_session,"GET").then( (data) => {
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('afterbegin',data.content);
+        logDialog.showModal();
+    });
+});
+
+/*
+ ** LOAD GOOGLE FONTS
+ */
+const load_fonts = document.querySelector(".load-fonts");
+load_fonts.addEventListener('click',  () => {
+    execProcess("load-fonts","PUT").then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
