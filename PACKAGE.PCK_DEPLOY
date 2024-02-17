@@ -116,9 +116,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_sitemap CLOB;
         l_robots CLOB;
         l_ssl_url VARCHAR2(200);
-        l_font_family website.font%type;
-        l_start PLS_INTEGER;
-        l_end PLS_INTEGER;
         n PLS_INTEGER:=0;
 
         FUNCTION buildNavLabels(pArticleId IN website_article.article_id%type) RETURN VARCHAR2 IS
@@ -148,7 +145,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         WHERE website_id=pWebsiteId 
         ORDER BY display_order;
 
-
         /* Get URL of site to be deployed in order to build navigation links */
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId, pMethod=>'GET', pData=>l_clob);
         SELECT ssl_url INTO l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS(ssl_url));
@@ -168,20 +164,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                      AND u.id=w.user_id
                    ORDER BY wa.display_order)
         LOOP
-            /* Get font family from Google fonts url */
-            IF (C.font LIKE 'https://%') THEN
-                l_start:=INSTR(C.font,'=',1,1);
-                l_end:=INSTR(C.font,'&',1,1);
-                IF (l_end=0) THEN
-                    l_font_family:=SUBSTR(C.font,l_start+1);
-                ELSE
-                    l_font_family:=SUBSTR(C.font,l_start+1,l_end-l_start-1);
-                END IF;
-                l_font_family:=REPLACE(l_font_family,'+',' ');
-            ELSE
-                l_font_family:=C.font;
-            END IF;
-
             l_page:='<!DOCTYPE HTML>' || chr(10) ||
                     '<html lang="en">' || chr(10) ||
                     '<head>' || chr(10) ||
@@ -195,13 +177,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
                         '<style>' || 
                         ':root {' ||chr(10) || C.fluid_types || chr(10) ||
-                        '    --font-family: ' || l_font_family || ';' || chr(10) ||
+                        '    --font-family: ' || C.font || ';' || chr(10) ||
                         '    --max-width: ' || C.max_width || ';' || chr(10) ||
                         '    --color-light: ' || C.color_light || ';' || chr(10) ||
                         '    --color-dark: ' || C.color_dark || ';' || chr(10) ||
                         '    --color-primary: ' || C.color_primary || ';' || chr(10) ||
                         '}' || chr(10) || chr(10) ||
-                        '<link rel="stylesheet" href="' || C.font || '">' || chr(10) || chr(10) || NVL(C.css,pck_css_js.g_css) || chr(10) || 
+                        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || C.font || '">' || chr(10) || chr(10) || NVL(C.css,pck_css_js.g_css) || chr(10) || 
                         '</style>' || chr(10) || 
                     '</head>' || chr(10) || 
                     '<body>' || CASE WHEN c.nb>1 THEN '<nav aria-label="Main Navigation">' || buildNavLabels(C.article_id) || '</nav>' END || chr(10) || 
