@@ -18,31 +18,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
+    FUNCTION buildSelectWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pOptionsColumn IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN CLOB;
+    --
     FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN CLOB, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
+    --
+    FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
+    --
+    FUNCTION getMediaType(pResourceType IN VARCHAR2, pFormat IN VARCHAR2) RETURN VARCHAR2;
+    --
+    FUNCTION getPageContent RETURN CLOB;
+    --
+    FUNCTION getRestUrl RETURN VARCHAR2;
+    --
+    FUNCTION getSessionData RETURN session_data_rt;
+    --
+    PROCEDURE getThumbnails(pArticleId IN article.id%type, pHTML IN OUT NOCOPY CLOB);
+    --
+    PROCEDURE loadGoogleFonts;
     --
     PROCEDURE log(pMsg IN VARCHAR2);
     --
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB);
     --
     PROCEDURE log_error;
-    --
-    FUNCTION getSessionData RETURN session_data_rt;
-    --
-    FUNCTION getRestUrl RETURN VARCHAR2;
-    --
-    FUNCTION getPageContent RETURN CLOB;
-    --
-    FUNCTION getMediaType(pResourceType IN VARCHAR2, pFormat IN VARCHAR2) RETURN VARCHAR2;
-    --
-    FUNCTION getCloudinaryUrl(
-        pCloudname IN VARCHAR2, 
-        pResourceType IN VARCHAR2, 
-        pPublicId IN VARCHAR2, 
-        pFormat IN VARCHAR2, 
-        pWidth IN INTEGER, 
-        pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
-    --
-    PROCEDURE getThumbnails(pArticleId IN article.id%type, pHTML IN OUT NOCOPY CLOB);
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
@@ -171,6 +169,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     END;
 
     /*
+     **  Load Google font family names
+     */
+    PROCEDURE loadGoogleFonts IS
+        l_data CLOB;
+        l_session_data session_data_rt;
+        n PLS_INTEGER;
+    BEGIN
+        pck_api.callGoogleApi(pUserId=>l_session_data.user_id, pData=>l_data);
+
+        MERGE INTO google_font t
+        USING (SELECT family FROM JSON_TABLE(l_data, '$.items[*]' COLUMNS(family))) s
+        ON (t.family=s.family)
+        WHEN NOT MATCHED THEN INSERT (family) VALUES (s.family);
+
+        n:=SQL%ROWCOUNT;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('content', '<p>Loaded '|| n || ' new Google fonts</p>');
+        apex_json.close_object;
+
+        EXCEPTION WHEN OTHERS THEN log_error;
+    END;
+
+    /*
      **  Build Contact Form
      */
     FUNCTION buildContactForm(pContactEmail IN website.contact_email%type) RETURN VARCHAR2 IS
@@ -278,6 +301,60 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END IF;
         RETURN(l_html);
     END;
+
+    /*
+     **  Create wrapper html for select element
+     */
+    FUNCTION buildSelectWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pOptionsColumn IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN CLOB IS
+        l_table_name user_tab_columns.table_name%type;
+        l_column_name user_tab_columns.column_name%type;
+        l_options_table_name user_tab_columns.table_name%type;
+        l_options_column_name user_tab_columns.column_name%type;
+        l_data_length user_tab_columns.data_length%type;
+        l_comments user_col_comments.comments%type;
+        l_data_type user_tab_columns.data_type%type;
+        l_sql VARCHAR2(250);
+        TYPE t_options IS TABLE OF VARCHAR2(50) INDEX BY PLS_INTEGER;
+        l_options t_options;
+        l_select_options CLOB;
+    BEGIN
+        l_table_name:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
+        l_column_name:=UPPER(SUBSTR(pColumn,INSTR(pColumn,'.')+1));
+        l_options_table_name:=UPPER(SUBSTR(pOptionsColumn,1,INSTR(pOptionsColumn,'.')-1));
+        l_options_column_name:=UPPER(SUBSTR(pOptionsColumn,INSTR(pOptionsColumn,'.')+1));
+
+        SELECT c.data_length, NVL(i.comments,'Info not defined yet'), c.data_type
+          INTO l_data_length, l_comments, l_data_type
+          FROM user_tab_columns c, user_col_comments i
+         WHERE c.table_name=l_table_name
+           AND c.column_name=l_column_name
+           AND i.table_name=c.table_name
+           AND i.column_name=c.column_name;
+
+        l_column_name:=LOWER(l_column_name);
+
+        /* Build select options */
+        l_sql:='SELECT ' || l_options_column_name || ' FROM ' || l_options_table_name || ' ORDER BY 1';
+        EXECUTE IMMEDIATE l_sql BULK COLLECT INTO l_options;
+        FOR i IN 1..l_options.COUNT LOOP
+            l_select_options:=l_select_options || '<option' || CASE WHEN l_options(i)=pValue THEN ' selected' END || '>' || l_options(i) || '</option>'; 
+        END LOOP;
+
+        RETURN('
+        <div class="select-wrapper">
+            <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
+                CASE WHEN pCanUsePopover 
+                        THEN '<button type="button" popovertarget="' || l_column_name || '_popover"><svg class="icon"><use href="#info"></use></svg></button>
+                              <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' END ||'
+            </label>
+            <select class="cms" id="' || l_column_name || '" name="' || LOWER(l_column_name) || '" data-column="' || pColumn || '" data-id="' || pId || '">' || l_select_options || 
+            '</select>
+            <div class="button-container">
+                <span class="result"></span>
+                <span>' || TO_CHAR(l_options.COUNT) || ' options</span>
+            </div>
+        </div>');
+    END;    
 
     /*
      **  Create wrapper html for textarea element, optionally including dropdown
@@ -425,14 +502,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <ul class="container">
                     <li class="red">' || pck_icons.g_oracle_svg || '</li>
                     <li class="grey login">
-                        <a class="button" href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_facebook_svg ||'Login w/ Facebook</a>
+                        <!--<a class="button" href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_facebook_svg ||'Login w/ Facebook</a>-->
                         <a class="button" href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_google_svg ||'Login w/ Google</a>
-                        <button data-id="' || C.id || '">Priv</button>
+                        <!--<button data-id="' || C.id || '">Priv</button>-->
                     </li>
-                    <li class="grey">' || pck_icons.g_github_svg || '</li>
+                    <li class="grey">' || pck_icons.g_netlify_svg || '</li>
                     <li class="grey">' || pck_icons.g_cloudinary_svg || '</li>
                     <li class="yellow">ALWAYS FREE</li>
-                    <li class="grey">' || pck_icons.g_netlify_svg ||'</li>
+                    <li class="grey"></li>
                     <li class="blue"></li>
                     <li class="grey"></li>
                     <li class="grey"></li>
@@ -656,7 +733,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             <svg class="icon">
                                 <use href="#list"></use>
                             </svg>
-                            Session Log
+                            Technical Log
+                        </button>
+                    </li>
+                    <li class="load-fonts">
+                        <button type="button" class="with-icon load-fonts">
+                            <svg class="icon">
+                                <use href="#font"></use>
+                            </svg>
+                            Load Google Fonts
                         </button>
                     </li>
                     <li class="signout">
