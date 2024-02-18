@@ -94,9 +94,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_visit_date VARCHAR2(22);
         l_referrer page_hit.referrer%type;
         l_session_data pck_core.session_data_rt;
+        l_domain_name website.domain_name%type;
         n PLS_INTEGER;
     BEGIN
         l_session_data:=pck_core.getSessionData();
+
+        SELECT domain_name INTO l_domain_name FROM website WHERE id=pWebsiteId AND user_id=l_session_data.user_id;
+
+        pck_visits.uploadPageHits(pWebsiteId);
 
         l_content:='
         <ol class="visits">
@@ -686,21 +691,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_rem PLS_INTEGER;
         */
         l_session_data pck_core.session_data_rt;
+        l_word_count article.word_count%type;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        MERGE INTO article t 
-        USING (
+        UPDATE article t SET (t.title, t.word_count, t.body_html) = 
+            (
                 SELECT SUBSTR(title,1,100) title, REGEXP_SUBSTR(word_count,'(\d)+') word_count, body_html
-                FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (website_id, title, word_count, body_html CLOB))
-        ) s
-        ON (t.id=pArticleId)
-        WHEN MATCHED THEN UPDATE 
-            SET t.title=s.title, t.word_count=s.word_count, t.body_html=s.body_html, t.updated_date=current_timestamp
-            WHERE t.author_user_id=l_session_data.user_id;
+                FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (title, word_count, body_html CLOB))
+            )
+        WHERE t.id=pArticleId
+          AND t.author_user_id=l_session_data.user_id
+        RETURNING t.word_count INTO l_word_count;
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
+        APEX_JSON.write('message', 'Saved ' || l_word_count || ' words');
         APEX_JSON.close_object;
 
         /*
