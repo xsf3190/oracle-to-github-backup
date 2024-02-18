@@ -346,8 +346,8 @@ if (!sessionStorage.getItem("website_loaded")) {
     sessionStorage.setItem("website_loaded",Math.round(Date.now()/1000));
 }
 
-page_loaded = Date.now();
-seq = 0;
+let page_loaded = Date.now(),
+    page_visit = 0;
 
 const vitalsQueue = new Set(),
       mediaQueue = new Set();
@@ -359,7 +359,7 @@ const flushQueues = () => {
     if (vitalsQueue.size === 0 && page_loaded === 0) return;
 
     const website_loaded = Number(sessionStorage.getItem("website_loaded"));
-    /* This happens if user manually clears sessionStorage */
+    /* This would happen if user manually clears sessionStorage for example */
     if (website_loaded === 0) return; 
 
     const website_id = document.querySelector("[name=''website_id'']").value,
@@ -370,7 +370,7 @@ const flushQueues = () => {
     json["website_id"] = website_id;
     json["article_id"] = article_id;
     json["website_loaded"] = Number(sessionStorage.getItem("website_loaded"));
-    json["seq"] = seq;
+    json["seq"] = page_visit;
     if (page_loaded !== 0) {
         json["duration_visible"] =  Math.round((Date.now() - page_loaded)/1000);
         page_loaded = 0;
@@ -378,14 +378,14 @@ const flushQueues = () => {
 
     if (vitalsQueue.size > 0) {
         for (const item of vitalsQueue.values()) {
-            json[item.name] = Math.round(item.value * 1) / 1;
+            json[item.name] = item.name === "CLS" ? item.value.toFixed(2) : item.value.toFixed();
             json[item.name+"_rating"] = item.rating;
         }
         vitalsQueue.clear();
     }
 
-    /* We send full detils only on the first call to save network cost */
-    if (seq === 0) {
+    /* Send full details only on first page visit to save network cost */
+    if (page_visit === 0) {
         const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
         if (connection) {
             json["connection"] = connection.downlink + " Mb/s" + " -" + connection.effectiveType;
@@ -408,7 +408,7 @@ const flushQueues = () => {
     }
 
     const body = JSON.stringify(json);
-    seq++;
+    page_visit++;
     (navigator.sendBeacon && navigator.sendBeacon(visit_url, body)) || fetch(visit_url, {body, method: ''POST'', keepalive: true});
 
 
