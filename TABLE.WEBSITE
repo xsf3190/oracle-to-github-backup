@@ -13,7 +13,26 @@ CREATE TABLE "WEBSITE"
 	"CSS" CLOB, 
 	"JAVASCRIPT" CLOB, 
 	"MAX_WIDTH" VARCHAR2(10) DEFAULT '65ch', 
-	"FLUID_TYPES" VARCHAR2(4000), 
+	"FLUID_TYPES" VARCHAR2(4000) DEFAULT '/* Custom properties for fluid type */
+--step--2:  clamp(0.69rem,0.59rem + 0.45vw,1.04rem);
+--step--1:  clamp(0.83rem,0.71rem + 0.54vw,1.25rem);
+--step-0:  clamp(1rem,0.85rem + 0.65vw,1.5rem);
+--step-1:  clamp(1.2rem,1.03rem + 0.77vw,1.8rem);
+--step-2:  clamp(1.44rem,1.23rem + 0.93vw,2.16rem);
+--step-3:  clamp(1.73rem,1.48rem + 1.11vw,2.59rem);
+--step-4:  clamp(2.07rem,1.77rem + 1.34vw,3.11rem);
+--step-5:  clamp(2.49rem,2.13rem + 1.61vw,3.73rem);
+/* Custom properties for fluid spacing */
+--space-3xs:  clamp(0.25rem,0.21rem + 0.16vw,0.38rem);
+--space-2xs:  clamp(0.5rem,0.43rem + 0.32vw,0.75rem);
+--space-xs:  clamp(0.75rem,0.64rem + 0.48vw,1.13rem);
+--space-s:  clamp(1rem,0.85rem + 0.65vw,1.5rem);
+--space-m:  clamp(1.5rem,1.28rem + 0.97vw,2.25rem);
+--space-l:  clamp(2rem,1.71rem + 1.29vw,3rem);
+--space-xl:  clamp(3rem,2.56rem + 1.94vw,4.5rem);
+--space-2xl:  clamp(4rem,3.42rem + 2.58vw,6rem);
+--space-3xl:  clamp(6rem,5.13rem + 3.87vw,9rem);'
+, 
 	"COLOR_DARK" VARCHAR2(7) DEFAULT '#404040', 
 	"COLOR_LIGHT" VARCHAR2(7) DEFAULT '#f3f3f3', 
 	"COLOR_PRIMARY" VARCHAR2(7) DEFAULT '#0042bf', 
