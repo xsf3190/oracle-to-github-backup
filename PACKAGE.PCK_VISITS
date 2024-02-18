@@ -2,7 +2,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE uploadIpLookup;
     --
-    PROCEDURE uploadPageHits;
+    PROCEDURE uploadPageHits(pWebsiteId IN website.id%type DEFAULT NULL);
     --
     PROCEDURE uploadPageVisit(pBodyText IN CLOB);
     --
@@ -66,7 +66,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
      **  This procedure aggregates the data into the page_hit table.
      **  Each page_hit row represents one visit from one ip address to a web page in a discrete client session.
      */
-    PROCEDURE uploadPageHits IS
+    PROCEDURE uploadPageHits(pWebsiteId IN website.id%type) IS
         n PLS_INTEGER;
     BEGIN
         MERGE INTO page_hit t
@@ -82,6 +82,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     MAX(lcp) lcp, MAX(lcp_rating) lcp_rating, MAX(cls) cls, MAX(cls_rating) cls_rating, MAX(inp) inp, MAX(inp_rating) inp_rating, MAX(fid) fid, MAX(fid_rating) fid_rating, 
                     SUM(duration_visible) duration_visible, MAX(browser) browser, MAX(connection) connection, MAX(url) url, MAX(mobile) mobile
                 FROM website_article_cwv 
+                WHERE website_id=NVL(pWebsiteId,website_id)
                 GROUP BY website_id, article_id, ip_address, website_loaded
             )
         ) s
@@ -107,7 +108,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         n:=SQL%ROWCOUNT;
         pck_core.log('Merged '||n||' rows into page_hit table');
 
-        DELETE website_article_cwv;
+        DELETE website_article_cwv WHERE website_id=NVL(pWebsiteId,website_id);
         n:=SQL%ROWCOUNT;
         pck_core.log('Deleted '||n||' rows from website_article_cwv table');
 
