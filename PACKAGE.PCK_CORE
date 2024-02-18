@@ -708,8 +708,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         TYPE tt_domain IS TABLE OF t_domain;
         l_domains tt_domain;  
         l_session_data session_data_rt;
+        l_is_admin PLS_INTEGER;
     BEGIN
         l_session_data:=getSessionData();
+
+        SELECT COUNT(*)
+          INTO l_is_admin
+          FROM apex_workspace_apex_users w, users u 
+         WHERE u.id=l_session_data.user_id
+           AND w.email=u.email
+           AND w.is_admin='Yes'
+         FETCH FIRST ROW ONLY;
 
         l_clob:= TO_CLOB(pck_icons.g_icons_svg);
 
@@ -735,16 +744,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             </svg>
                             Technical Log
                         </button>
-                    </li>
-                    <li class="load-fonts">
+                    </li>' || 
+                    CASE WHEN l_is_admin=1 THEN
+                    '<li class="load-fonts">
                         <button type="button" class="with-icon load-fonts">
                             <svg class="icon">
                                 <use href="#font"></use>
                             </svg>
                             Load Google Fonts
                         </button>
-                    </li>
-                    <li class="signout">
+                    </li>' 
+                    END ||
+                    '<li class="signout">
                         <button type="button" class="with-icon">
                             <svg class="icon">
                                 <use href="#signout"></use>
@@ -983,7 +994,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <div id="editor"></div>
                 <div>
                     <span id="word-count"></span>
-                    <span id="editor-status"></span>
                 </div>
             </div>
         </div>
