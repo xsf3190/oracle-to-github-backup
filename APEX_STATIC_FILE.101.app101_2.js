@@ -151,9 +151,7 @@ const resetWebsite = () => {
  */
 newWebsite.addEventListener("click",  () => {
     resetWebsite();
-    while (websiteNavMenu.childElementCount > 1) {
-        websiteNavMenu.removeChild(websiteNavMenu.firstChild);
-    }
+    websiteNavMenu.replaceChildren();
     gArticleId = 0;
     editor_status_text.textContent = "";
     editor.setData("");
@@ -274,6 +272,8 @@ document.querySelectorAll("button.close").forEach((button) => {
 
 const addToVitalsQueue = (metric) => {
     console.log(metric.name,metric.value);
+    const value = metric.name==="CLS" ? metric.value.toFixed(2) : metric.value.toFixed(0);
+    console.log(metric.name,value);
     vitalsQueue.add(metric);
 }
 
@@ -897,27 +897,25 @@ load_fonts.addEventListener('click',  () => {
 /* 
  ** RICH TEXT EDITOR AUTOSAVE FEATURE FUNCTION TO SEND UPDATED TEXT TO DATABASE. RETURNS data.articleId IF ARTICLE ROW WAS CREATED.
  */
-let editor_status;
-const editor_status_text = document.querySelector("#editor-status");
+let editor_status,
+    editor_status_text;
 
 const saveData = async ( data ) => {
     
-    if (editor_status==="init") {
+    if (editor_status==="init" || !editor_status_text) {
         editor_status="ok";
         return Promise.resolve();
     }
     const pendingActions = editor.plugins.get( 'PendingActions' );
     const action = pendingActions.add( 'Saving changes' );
 
-    editor_status_text.textContent = "saving ...";
-    editor_status_text.style.color = "crimson";
-    const word_count = document.querySelector(".ck-word-count__words").textContent;
+    editor_status_text.textContent = "...";
 
-    
+    const word_count = document.querySelector(".ck-word-count__words").textContent;
     const title = document.querySelector(".ck > h1").textContent;
     await execProcess("article/"+gArticleId, "PUT",  {body_html: data, title: title, word_count: word_count}).then( (data) => {
         pendingActions.remove( action );
-        editor_status_text.textContent = "saved successfully";
+        editor_status_text.textContent = data.message;
         editor_status_text.style.color = "green";
     }).catch( (error) => console.error(error));
 }
@@ -967,7 +965,8 @@ ClassicEditor.create(document.querySelector("#editor"), {
         },
         image: {
             insert: {
-                type: 'auto'
+                type: 'auto',
+                integrations: ['url']
             }
         }
     })
@@ -988,6 +987,10 @@ ClassicEditor.create(document.querySelector("#editor"), {
 			evt.stop();
 			data.preventDefault();
 		}, { priority: 'high' } );
+
+        const toolbar = container.querySelector(".ck-toolbar__items");
+        toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
+        editor_status_text = container.querySelector("#editor-status");
     })
     .catch(error => {
         console.error(error);
