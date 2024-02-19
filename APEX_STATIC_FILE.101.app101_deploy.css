@@ -1,0 +1,340 @@
+*,*::before,*::after {
+    box-sizing: border-box;
+}
+body,h1,h2,h3,h4,p,figure,blockquote,dl,dd {
+  margin-block-end: 0;
+}
+body {
+    background: var(--color-light);
+    color: var(--color-dark);
+    font-family: var(--font-family), sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.5;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    max-inline-size: var(--max-width);
+    margin-inline: auto;
+    padding-inline: 1rem;
+}
+body > * + * {
+    margin-top: var(--space-m);
+}
+
+/* HEADER TYPOGRAPHY STYLES */
+h1 {
+    font-size: var(--step-4);
+    text-align: center;
+}
+h2 {
+    font-size: var(--step-3);
+}
+h3 {
+    font-size: var(--step-2);
+}
+h4 {
+    font-size: var(--step-1);
+}
+
+/* Set shorter line heights on headings and interactive elements */
+h1, h2, h3, h4, button, input, label {
+  line-height: 1.1;
+}
+
+/* Balance text wrapping on headings */
+h1, h2, h3, h4 {
+  text-wrap: balance;
+}
+
+img, picture {
+  max-width: 100%;
+  display: block;
+  object-fit: scale-down;
+}
+
+/* NEED TO REVIEW IMAGE CLASSES - MAYBE DO IT IN CKEDITOR */
+img.float-right {
+    float: right;
+    border-radius: 0.5em;
+    margin: 0 0 1em 1em;
+}
+
+input, textarea, button, select {
+    font: inherit;
+}
+
+/* NAVIGATION LABEL STYLES */
+nav[aria-label="Main Navigation"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1em;
+    justify-content: space-evenly;
+}
+.nav-label:not(.selected) {
+    text-decoration: none;
+}
+.nav-label.selected {
+    text-decoration-color: var(--color-primary);
+    text-decoration-thickness: var(--space-3xs);
+    text-underline-offset: var(--space-3xs);
+    text-decoration-skip-ink: none;
+}
+
+/* LOGO STYLES */
+div.logo {
+    border: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1em;
+}
+
+div.logo svg {
+    inline-size: 5em;
+}
+
+/* ANCHOR (WITH SVG) STYLES */
+a:has(svg) {
+    display: inline-flex;
+    gap: 1em;
+    align-items: center;
+    text-decoration-color: var(--color-primary);
+    text-decoration-thickness: 0.3ex;
+    text-underline-offset: 0.5ex;
+    cursor: pointer;
+}
+svg.icon {
+    inline-size: 1.5em;
+    block-size: 1.5em;
+}
+
+/* ELEMENT WITH BORDER. CENTERED IMAGE */
+.with-border {
+    border: solid 1px var(--color-primary);
+    padding: var(--space-m);
+    border-radius: var(--space-s);
+}
+
+.with-border img {
+    border-radius: var(--space-s);
+    margin-inline: auto;
+}
+
+/* UNORDERED LIST ITEMS WITH BORDER. SET CLASS ON UNSUPPORTED CKEDITOR ANCESTOR ELEMENT */
+.with-border-list ul {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: var(--space-s);
+}
+
+.with-border-list li {
+    list-style: none;
+    border: solid 1px var(--color-primary);
+    border-radius: var(--space-s);
+    padding: var(--space-s);
+}
+
+/* AUTO-FIT CARD ELEMENTS. ELEMENTS AT END OF EACH CARD ALIGNED AT BOTTOM */
+.auto-fit-cards {
+    clear: both;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: var(--space-l);
+    & > * {
+      display:flex;
+      flex-direction: column;
+      justify-content: space-between;
+      & :nth-last-child(2) {
+        margin-block-end: var(--space-s);
+      }
+      & :last-child {
+        margin-block-start: auto;
+      }
+  }
+}
+
+/* CONTACT FORM STYLES */
+.contact {
+    display: grid;
+    place-items: center;
+    gap: 1em;
+}
+
+.contact > p {
+    text-align:center;
+}
+
+.contact .copy-content {
+    display: inline-flex;
+    gap: .5em;
+    cursor: pointer;
+    border: 0;
+}
+
+.contact .copy-content svg {
+    inline-size: .8em;
+}
+
+.contact .result {
+    color: green;
+    opacity: 0;
+    transition: opacity 1ms;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    inline-size: fit-content;
+    border: solid 1px var(--color-primary);
+    padding: 1em;
+    border-radius: 0.5em;
+}
+
+form label {
+    display: block;
+    font-weight: 600;
+}
+
+form input {
+    inline-size: 95%;
+    line-height: 2;
+}
+
+button[type='submit'] {
+    inline-size: fit-content;
+    position: relative;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    outline-offset: 4px;
+    transition: filter 250ms;
+}
+
+/* PUSHABLE BUTTON STYLES */
+.pushable {
+    inline-size: fit-content;
+    position: relative;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    outline-offset: 4px;
+    transition: filter 250ms;
+  }
+  .shadow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+    background: hsl(0deg 0% 0% / 0.25);
+    will-change: transform;
+    transform: translateY(2px);
+    transition:
+      transform
+      600ms
+      cubic-bezier(.3, .7, .4, 1);
+  }
+  .edge {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+    background: linear-gradient(
+      to left,
+      hsl(340deg 100% 16%) 0%,
+      hsl(340deg 100% 32%) 8%,
+      hsl(340deg 100% 32%) 92%,
+      hsl(340deg 100% 16%) 100%
+    );
+  }
+  .front {
+    display: block;
+    position: relative;
+    padding: 12px 42px;
+    border-radius: 12px;
+    color: white;
+    background: hsl(345deg 100% 47%);
+    will-change: transform;
+    transform: translateY(-4px);
+    transition:
+      transform
+      600ms
+      cubic-bezier(.3, .7, .4, 1);
+  }
+  .pushable:hover {
+    filter: brightness(110%);
+  }
+  .pushable:hover .front {
+    transform: translateY(-6px);
+    transition:
+      transform
+      250ms
+      cubic-bezier(.3, .7, .4, 1.5);
+  }
+  .pushable:active .front {
+    transform: translateY(-2px);
+    transition: transform 34ms;
+  }
+  .pushable:hover .shadow {
+    transform: translateY(4px);
+    transition:
+      transform
+      250ms
+      cubic-bezier(.3, .7, .4, 1.5);
+  }
+  .pushable:active .shadow {
+    transform: translateY(1px);
+    transition: transform 34ms;
+  }
+  .pushable:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* DIALOG STYLES */
+  dialog {
+  max-inline-size: min(60ch,90vw);
+  overscroll-behavior: contain;
+}
+
+dialog > div:first-of-type {
+  display: grid;
+  grid-template-columns: 1fr 44px;
+}
+
+dialog h2 {
+  text-align: center;
+}
+
+dialog button.close {
+  place-self: start end;
+  background-color: transparent;
+  font-size: var(--step-2);
+  outline: 0;
+  border: 0;
+  position: sticky;
+  top: 0;
+  cursor: pointer;
+}
+
+/* Remove all animations, transitions and smooth scroll for people that prefer not to see them */
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+   scroll-behavior: auto;
+  } 
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
