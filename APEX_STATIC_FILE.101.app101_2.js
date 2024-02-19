@@ -8,8 +8,6 @@ let gArticleId,
 const apex_app_id = document.querySelector("#pFlowId").value,
       apex_page_id = document.querySelector("#pFlowStepId").value,
       apex_session = document.querySelector("#pInstance").value,
-      vitalsQueue = new Set(),
-      mediaQueue = new Set(),
       container = document.querySelector(".container"),
       logDialog = document.querySelector("dialog.log"),
       logContent = logDialog.querySelector(".content"),
@@ -270,28 +268,6 @@ document.querySelectorAll("button.close").forEach((button) => {
     });
 });
 
-const addToVitalsQueue = (metric) => {
-    console.log(metric.name,metric.value);
-    const value = metric.name==="CLS" ? metric.value.toFixed(2) : metric.value.toFixed(0);
-    console.log(metric.name,value);
-    vitalsQueue.add(metric);
-}
-
-const flushQueues = () => {
-    if (vitalsQueue.size > 0) {    
-        const body =JSON.stringify( {session_id:apex_session, page_id: apex_page_id, cwv: [...vitalsQueue] });
-        let url = gRestUrl + "web-vitals";
-        (navigator.sendBeacon && navigator.sendBeacon(url, body)) || fetch(url, {body, method: 'POST', keepalive: true});
-        vitalsQueue.clear();
-    }
-    if (mediaQueue.size > 0) {    
-        const body = JSON.stringify([...mediaQueue]);
-        let url = gRestUrl + "media-performance";
-        (navigator.sendBeacon && navigator.sendBeacon(url, body)) || fetch(url, {body, method: 'POST', keepalive: true});
-        mediaQueue.clear();
-    }
-}
-
 const checkPerformance = () => {
     if (performance === undefined) {
         console.log("Performance API NOT supported");
@@ -352,18 +328,6 @@ window.addEventListener("DOMContentLoaded", (event) => {
     if (checkPerformance()) {
         const observer = new PerformanceObserver(perfObserver);
         observer.observe({ type: "resource", buffered: true });
-    }
-    
-    addEventListener('visibilitychange', () => {
-        if (document.visibilityState === "hidden") {
-            flushQueues();
-        }
-    }, { capture: true} );
-    
-    if ('onpagehide' in self) {
-        addEventListener('pagehide', () => {
-            flushQueues();
-        }, { capture: true} );
     }
 
     /* display last updated article - i.e. has class selected */
@@ -883,16 +847,18 @@ sessionLog.addEventListener('click',  () => {
 });
 
 /*
- ** LOAD GOOGLE FONTS
+ ** LOAD GOOGLE FONTS. ADMIN FUNCTION
  */
 const load_fonts = document.querySelector(".load-fonts");
-load_fonts.addEventListener('click',  () => {
-    execProcess("load-fonts","PUT").then( (data) => {
-        logContent.replaceChildren();
-        logContent.insertAdjacentHTML('afterbegin',data.content);
-        logDialog.showModal();
+if (load_fonts) {
+    load_fonts.addEventListener('click',  () => {
+        execProcess("load-fonts","PUT").then( (data) => {
+            logContent.replaceChildren();
+            logContent.insertAdjacentHTML('afterbegin',data.content);
+            logDialog.showModal();
+        });
     });
-});
+}
 
 /* 
  ** RICH TEXT EDITOR AUTOSAVE FEATURE FUNCTION TO SEND UPDATED TEXT TO DATABASE. RETURNS data.articleId IF ARTICLE ROW WAS CREATED.
