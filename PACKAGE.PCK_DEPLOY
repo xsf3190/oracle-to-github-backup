@@ -10,7 +10,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type);
     --
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type, pResturl IN VARCHAR2) ;
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type, pResturl IN VARCHAR2, pApplicationId IN VARCHAR2) ;
     --
 end;
 /
@@ -52,7 +52,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             job_name   => l_job_name,
             job_type   =>'STORED_PROCEDURE',
             job_action =>'pck_deploy.runDeployment',
-            number_of_arguments=>4,
+            number_of_arguments=>5,
             start_date=>systimestamp
         );
         dbms_scheduler.set_job_argument_value(
@@ -75,6 +75,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             argument_position => 4,
             argument_value => pck_core.getRestUrl()
         );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 5,
+            argument_value => l_session_data.app_id
+        );
         dbms_scheduler.enable(l_job_name);
 
         apex_json.open_object; 
@@ -89,11 +94,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     /*
     **  DEPLOY BY UPLOADING HTML FILE CONTENT DIRECTLY TO NETLIFY
     */
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type, pRestUrl IN VARCHAR2) IS
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type, pRestUrl IN VARCHAR2, pApplicationId IN VARCHAR2) IS
         l_clob CLOB;
         l_json JSON_OBJECT_T;
         l_files JSON_OBJECT_T;
         l_page CLOB;
+        l_deploy_css CLOB;
+        l_metric_js CLOB;
         l_file_name website_article.navigation_label%type;
         l_sha1 VARCHAR2(40);
         TYPE tt_files IS RECORD (
@@ -139,6 +146,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
+        /* get metric js */
+        SELECT apex_util.blob_to_clob(file_content)
+        INTO l_metric_js
+        FROM APEX_APPLICATION_STATIC_FILES 
+        WHERE application_id=pApplicationId
+        AND file_name='app' || pApplicationId || '_metric.min.js';
+
+        /* get deploy css */
+        SELECT apex_util.blob_to_clob(file_content)
+        INTO l_deploy_css
+        FROM APEX_APPLICATION_STATIC_FILES 
+        WHERE application_id=pApplicationId
+        AND file_name='app' || pApplicationId || '_deploy.min.css';
+
         SELECT article_id, navigation_label, apex_string_util.get_slug(navigation_label) path  
         BULK COLLECT INTO l_labels
         FROM website_article 
@@ -175,32 +196,35 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         '<script src="https://cdn.jsdelivr.net/npm/bowser@latest/es5.js" defer></script>' || chr(10) ||
                         '<link rel="icon" href="https://res.cloudinary.com/mrbapex/believeintalking_favicon_q57es4.svg" type="image/svg+xml">'  || chr(10) ||
                         '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
+                        '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
+                        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(C.font,' ','+') || '&display=swap">' || chr(10) ||
                         '<style>' || 
                         ':root {' ||chr(10) || C.fluid_types || chr(10) ||
-                        '    --font-family: ' || C.font || ';' || chr(10) ||
+                        '    --font-family: "' || C.font || '";' || chr(10) ||
                         '    --max-width: ' || C.max_width || ';' || chr(10) ||
                         '    --color-light: ' || C.color_light || ';' || chr(10) ||
                         '    --color-dark: ' || C.color_dark || ';' || chr(10) ||
                         '    --color-primary: ' || C.color_primary || ';' || chr(10) ||
                         '}' || chr(10) || chr(10) ||
-                        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || C.font || '">' || chr(10) || chr(10) || NVL(C.css,pck_css_js.g_css) || chr(10) || 
+                         chr(10) || NVL(C.css,l_deploy_css) || chr(10) || 
                         '</style>' || chr(10) || 
                     '</head>' || chr(10) || 
                     '<body>' || CASE WHEN c.nb>1 THEN '<nav aria-label="Main Navigation">' || buildNavLabels(C.article_id) || '</nav>' END || chr(10) || 
                         REPLACE(C.body_html,'<h1>&nbsp;</h1>',null) || chr(10) || 
                         CASE WHEN C.contact_form='YES' THEN pck_core.buildContactForm(contactEmail()) END ||
-                        '<!-- Hidden input fields identify performance data sent to database -->
-                        <input type="hidden" name="visit_url" value="' || pRestUrl || 'page-visit"/>
-                        <input type="hidden" name="website_id" value="' || pWebsiteId || '"/>
-                        <input type="hidden" name="article_id" value="' || C.article_id || '"/>
-                        <script type="module">
+                        '<script type="module">
                             import {onCLS, onFID, onLCP, onINP} from ''https://unpkg.com/web-vitals?module'';
                             onCLS(addToVitalsQueue);
                             onFID(addToVitalsQueue);
                             onLCP(addToVitalsQueue);
                             onINP(addToVitalsQueue);
                         </script>
-                        <script>' || NVL(C.javascript,pck_css_js.g_javascript) || '</script>' || chr(10) || '
+                        <script>
+                            gMetricWebsiteId = "' || pWebsiteId || '";' || chr(10) || 
+                            'gMetricArticleId = "' || C.article_id || '";' || chr(10) || 
+                            'gMetricVisitUrl = "' || pRestUrl || 'page-visit";' || chr(10) ||
+                            l_metric_js || 
+                        '</script>' || chr(10) || '
                      </body>' || chr(10) || 
                     '</html>';
 
