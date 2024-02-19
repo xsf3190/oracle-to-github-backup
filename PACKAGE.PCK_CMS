@@ -36,8 +36,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE updateContent(pZipFile IN BLOB, pId IN VARCHAR2);
     --
-    PROCEDURE uploadWebVitals(pBodyText IN CLOB);
-    --
     PROCEDURE uploadCldMetadata(pBodyText IN CLOB);
     --
     PROCEDURE uploadPerformance(pBodyText IN CLOB);
@@ -48,6 +46,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
+
+    g_html_start CONSTANT VARCHAR2(24):='<!-- YOUR CODE START -->';
+    g_html_end CONSTANT VARCHAR2(24):='<!-- YOUR CODE END -->';
+    g_css_js_start CONSTANT VARCHAR2(24):='/* YOUR CODE START */';
+    g_css_js_end CONSTANT VARCHAR2(24):='/* YOUR CODE END */';
 
     PROCEDURE getSessionLog(SessionId IN NUMBER) IS
         l_content CLOB;
@@ -559,28 +562,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                AND a.id=l_id_2;
 
             /* build html */
-            l_html:=l_nav_labels || chr(10) || pck_css_js.g_html_start || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10) || pck_css_js.g_html_end || chr(10);
+            l_html:=l_nav_labels || chr(10) || g_html_start || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10) || g_html_end || chr(10);
             IF (l_contact_form='YES') THEN
                 SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
                 l_html:=l_html || pck_core.buildContactForm(l_email);
             END IF;
 
             /* build css */
+            IF (l_css IS NULL) THEN
+                SELECT apex_util.blob_to_clob(file_content)
+                INTO l_css
+                FROM apex_application_static_files
+                WHERE  application_id=l_session_data.app_id
+                AND file_name='app' || l_session_data.app_id || '_deploy.css';
+            END IF;
+
             l_css:=
             ':root {' ||chr(10) || l_fluid_types || chr(10) ||
-            '    --font-family: ' || l_font || ';' || chr(10) ||
+            '    --font-family: "' || l_font || '";' || chr(10) ||
             '    --max-width: ' || l_max_width || ';' || chr(10) ||
             '    --color-light: ' || l_color_light || ';' || chr(10) ||
             '    --color-dark: ' || l_color_dark || ';' || chr(10) ||
             '    --color-primary: ' || l_color_primary || ';' || chr(10) ||
             '}' || chr(10) || chr(10) ||
-            '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || l_font || '">' || chr(10) || chr(10) || 
-            pck_css_js.g_css_start || chr(10) || l_css || pck_css_js.g_css || pck_css_js.g_css_end;
+            '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(l_font,' ','+') || '&display=swap">' || chr(10) || chr(10) 
+            || g_css_js_start || chr(10) || l_css || chr(10) || g_css_js_end;
 
-
+            /* build javascript */
             IF (l_javascript IS NULL) THEN
-                l_javascript:=pck_css_js.g_javascript;
+                SELECT apex_util.blob_to_clob(file_content)
+                INTO l_javascript
+                FROM apex_application_static_files
+                WHERE  application_id=l_session_data.app_id
+                AND file_name='app' || l_session_data.app_id || '_metric.js';
             END IF;
+            l_javascript:=g_css_js_start || chr(10) || l_javascript || chr(10) || g_css_js_end;
 
             apex_json.open_object;
             apex_json.write('success', TRUE); 
@@ -1339,20 +1355,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error;
-    END;
-
-    /*
-     **  Upload Core Web Vitals uploaded through navigator.beacon - hence no response sent.
-     */      
-    PROCEDURE uploadWebVitals(pBodyText IN CLOB) IS
-        l_bodytext CLOB:=pBodyText;
-        l_ip_address performance.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
-    BEGIN
-        INSERT INTO core_web_vitals (id, session_id, page_id, ip_address, name, value, rating) --, browser, width)
-        SELECT seq_core_web_vitals.nextval, session_id, page_id, l_ip_address, name, value, rating --, l_session_id, l_browser, l_width
-        FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' COLUMNS (session_id, page_id,
-            NESTED '$.cwv[*]' COLUMNS (name, value, rating)))
-        LOG ERRORS INTO core_web_vitals_err REJECT LIMIT UNLIMITED;                 
     END;
 
     /*
