@@ -96,9 +96,10 @@ div.logo {
     flex-direction: column;
     align-items: center;
     gap: 1em;
-  & svg {
+}
+
+div.logo svg {
     inline-size: 5em;
-  }
 }
 
 /* ANCHOR (WITH SVG) STYLES */
@@ -121,10 +122,11 @@ svg.icon {
     border: solid 1px var(--color-primary);
     padding: var(--space-m);
     border-radius: var(--space-s);
-    & img {
-        border-radius: var(--space-s);
-        margin-inline: auto;
-    }
+}
+
+.with-border img {
+    border-radius: var(--space-s);
+    margin-inline: auto;
 }
 
 /* UNORDERED LIST ITEMS WITH BORDER. SET CLASS ON UNSUPPORTED CKEDITOR ANCESTOR ELEMENT */
@@ -133,12 +135,13 @@ svg.icon {
     justify-content: center;
     flex-wrap: wrap;
     gap: var(--space-s);
-    & li {
-        list-style: none;
-        border: solid 1px var(--color-primary);
-        border-radius: var(--space-s);
-        padding: var(--space-s);
-    }
+}
+
+.with-border-list li {
+    list-style: none;
+    border: solid 1px var(--color-primary);
+    border-radius: var(--space-s);
+    padding: var(--space-s);
 }
 
 /* AUTO-FIT CARD ELEMENTS. ELEMENTS AT END OF EACH CARD ALIGNED AT BOTTOM */
@@ -165,50 +168,58 @@ svg.icon {
     display: grid;
     place-items: center;
     gap: 1em;
-    & p {
-        text-align:center;
-    }
-    button.copy-content {
-        display: inline-flex;
-        gap: .5em;
-        cursor: pointer;
-        border: 0;
-        svg {
-            inline-size: .8em;
-        }
-    }
-    & .result {
-        color: green; /*var(--color-primary);*/
-        opacity: 0;
-        transition: opacity 1ms;
-    }
-    & form {
-        display: flex;
-        flex-direction: column;
-        gap: 1em;
-        inline-size: fit-content;
-        border: solid 1px var(--color-primary);
-        padding: 1em;
-        border-radius: 0.5em;
-        & button {
-            inline-size: fit-content;
-            position: relative;
-            border: none;
-            background: transparent;
-            padding: 0;
-            cursor: pointer;
-            outline-offset: 4px;
-            transition: filter 250ms;
-        }
-        & label {
-            display: block;
-            font-weight: 600;
-        }
-        & input {
-            inline-size: 95%;
-            line-height: 2;
-        }
-    }
+}
+
+.contact > p {
+    text-align:center;
+}
+
+.contact .copy-content {
+    display: inline-flex;
+    gap: .5em;
+    cursor: pointer;
+    border: 0;
+}
+
+.contact .copy-content svg {
+    inline-size: .8em;
+}
+
+.contact .result {
+    color: green;
+    opacity: 0;
+    transition: opacity 1ms;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    inline-size: fit-content;
+    border: solid 1px var(--color-primary);
+    padding: 1em;
+    border-radius: 0.5em;
+}
+
+form label {
+    display: block;
+    font-weight: 600;
+}
+
+form input {
+    inline-size: 95%;
+    line-height: 2;
+}
+
+button[type=''submit''] {
+    inline-size: fit-content;
+    position: relative;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    outline-offset: 4px;
+    transition: filter 250ms;
 }
 
 /* PUSHABLE BUTTON STYLES */
