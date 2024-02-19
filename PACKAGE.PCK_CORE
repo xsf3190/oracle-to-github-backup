@@ -1060,6 +1060,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_javascript_file_urls APEX_APPLICATION_PAGES.javascript_file_urls%type;
         l_page_css APEX_APPLICATION_STATIC_FILES.file_name%type;
         l_page_js APEX_APPLICATION_STATIC_FILES.file_name%type;
+        l_metric_js APEX_APPLICATION_STATIC_FILES.file_name%type;
     BEGIN
         SELECT NVL(css_file_urls,' '), NVL(javascript_file_urls,' ')
           INTO l_css_file_urls, l_javascript_file_urls
@@ -1088,22 +1089,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         l_clob:=l_clob || chr(10) || TO_CLOB('
         <script>
-            const gRestUrl = "' || getRestUrl() || '";' || CASE WHEN apex_application.g_flow_step_id=2 THEN '
-            const gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home";' END || '
+            const gRestUrl = "' || getRestUrl() || '";' || 
+            CASE WHEN apex_application.g_flow_step_id=2 THEN '
+            const gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home";' 
+            END || '
+            const gMetricWebsiteId = "' || apex_application.g_flow_id || '";
+            const gMetricArticleId = "' || apex_application.g_flow_step_id || '";
+            const gMetricVisitUrl = "' || getRestUrl() || 'page-visit";
         </script>');
 
         l_page_js:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.js';
+        l_metric_js:='app' || apex_application.g_flow_id || '_metric.min.js';
 
         IF (INSTR(l_javascript_file_urls,l_page_js)=0) THEN
-            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name=REPLACE(l_page_js,'.min')) LOOP
+            FOR C IN (SELECT file_content 
+                        FROM APEX_APPLICATION_STATIC_FILES 
+                       WHERE application_id=apex_application.g_flow_id 
+                         AND (file_name=REPLACE(l_page_js,'.min') OR file_name=l_metric_js))
+            LOOP
                 l_clob:=l_clob || chr(10) || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
             END LOOP;
         END IF;
 
         l_clob:=l_clob || TO_CLOB('
             <script type="module">
-              import {onCLS, onFID, onLCP} from ''https://unpkg.com/web-vitals?module'';
+              import {onCLS, onFID, onINP, onLCP} from ''https://unpkg.com/web-vitals?module'';
               onCLS(addToVitalsQueue);
+              onINP(addToVitalsQueue);
               onFID(addToVitalsQueue);
               onLCP(addToVitalsQueue);
             </script>');
