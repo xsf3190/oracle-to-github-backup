@@ -186,16 +186,17 @@ const edit_website = (e) => {
         deployButtons.replaceChildren();
         deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
 
-        while (websiteNavMenu.childElementCount > 0) {
-            websiteNavMenu.removeChild(websiteNavMenu.firstChild);
-        }
+        websiteNavMenu.replaceChildren();
+        
+        editor_status = "init";
+        editor_status_text.textContent = "";
+
         if (data.nav_labels) {
             websiteNavMenu.insertAdjacentHTML('afterbegin',data.nav_labels);
-            gArticleId = websiteNavMenu.querySelector(".selected").dataset.id;
-            editor_status = "init";
-            editor_status_text.textContent = "";
+            gArticleId = websiteNavMenu.querySelector(".selected").dataset.id; 
             if (data.html) {
                 editor.setData(data.html);
+                editor_status_text.textContent = data.updated_date;
             } else {
                 editor.setData("");
             }
@@ -204,11 +205,9 @@ const edit_website = (e) => {
                 galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
                 lazyload();
             }
-            console.log("data",data);
             selected_contact(data.contact_form);
         } else {
             gArticleId = 0;
-            editor_status_text.textContent = "";
             editor.setData("");
             galleryList.replaceChildren();
         }
@@ -861,14 +860,14 @@ if (load_fonts) {
 }
 
 /* 
- ** RICH TEXT EDITOR AUTOSAVE FEATURE FUNCTION TO SEND UPDATED TEXT TO DATABASE. RETURNS data.articleId IF ARTICLE ROW WAS CREATED.
+ ** RICH TEXT EDITOR AUTOSAVE FEATURE FUNCTION TO SEND UPDATED TEXT TO DATABASE.
  */
 let editor_status,
     editor_status_text;
 
 const saveData = async ( data ) => {
     
-    if (editor_status==="init" || !editor_status_text) {
+    if (editor_status==="init") {
         editor_status="ok";
         return Promise.resolve();
     }
@@ -956,6 +955,7 @@ ClassicEditor.create(document.querySelector("#editor"), {
 
         const toolbar = container.querySelector(".ck-toolbar__items");
         toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
+        editor_status = "init";
         editor_status_text = container.querySelector("#editor-status");
     })
     .catch(error => {
@@ -1006,6 +1006,8 @@ const new_page = () => {
             websiteNavMenu.insertAdjacentHTML('afterbegin',data.nav_label);
         }
         selected_nav(gArticleId);
+        editor_status = "init";
+        editor_status_text = "";
         editor.setData("");
         galleryList.replaceChildren();
     });
@@ -1056,17 +1058,9 @@ const selected_contact = (contact_form) => {
  ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR 
  */
 const edit_text = (e) => {
-    /*
-    const pendingActions = editor.plugins.get( 'PendingActions' );
-    if ( pendingActions.hasAny ) {
-        const arr = Array.from(pendingActions)
-        console.log("arr",arr);
-        return;
-    }
-    */
     execProcess( "article/"+gArticleId,"GET").then( (data) => {
         editor_status = "init";
-        editor_status_text.textContent = "";
+        editor_status_text.textContent = data.updated_date;
         if (data.html) {
             editor.setData(data.html);
         } else {
