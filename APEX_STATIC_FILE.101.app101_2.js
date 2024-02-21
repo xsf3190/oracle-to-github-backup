@@ -11,14 +11,12 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       container = document.querySelector(".container"),
       logDialog = document.querySelector("dialog.log"),
       logContent = logDialog.querySelector(".content"),
-      website = document.querySelector("form.website"),
-      domainName = website.querySelector("#domain_name"),
+      domainName = container.querySelector(".edit-website.selected"),
       domainNameResult = domainName.nextElementSibling.querySelector(".result"),
       websiteDialog = container.querySelector("dialog.website-options"),
       websiteContent = websiteDialog.querySelector(".content"),
-      newWebsite = website.querySelector(".new-website"),
-      deployButtons = website.querySelector(".deploy-buttons > div"),
-      websiteNavMenu = container.querySelector(".website-nav-menu"),
+      deployButtons = container.querySelector(".deploy-buttons > div"),
+      pageNav = container.querySelector(".page-nav"),
       cards = container.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
@@ -114,7 +112,7 @@ const changeHandler = (e) => {
         }
 
         if (table_column === "website_article.navigation_label") {
-            websiteNavMenu.querySelector("a.selected").textContent = value;
+            pageNav.querySelector("a.selected").textContent = value;
         }
     });
 }
@@ -147,53 +145,26 @@ const resetWebsite = () => {
 /*
  **  NEW WEBSITE
  */
-newWebsite.addEventListener("click",  () => {
-    resetWebsite();
-    websiteNavMenu.replaceChildren();
-    gArticleId = 0;
-    editor_status_text.textContent = "";
-    editor.setData("");
-    galleryList.replaceChildren();
-});
+const new_website = () => {
+    console.log("new website please");
+};
 
 /*
  **  EDIT WEBSITE
  */
 const edit_website = (e) => {
     execProcess( "website/"+e.target.dataset.id,"GET").then( (data) => {
-        resetWebsite();
-        
-        const inputs = website.elements;
-        for (let i = 0; i < inputs.length; i++) {
-            if (inputs[i].type === "textarea" || inputs[i].type === "radio") {
-                inputs[i].dataset.id = e.target.dataset.id;
-            }
-        }
-
-        domainName.value = data.domain_name;
-
-        for (let i = 0; i < inputs.length; i++) {
-            if (inputs[i].type === "textarea") {
-                const maxlength = inputs[i].getAttribute("maxlength");
-                let charcounter = inputs[i].value.length;
-                if (maxlength) {
-                    charcounter += "/" + maxlength;
-                }
-                inputs[i].nextElementSibling.querySelector(".charcounter").textContent = charcounter;
-            }
-        }
-
         deployButtons.replaceChildren();
         deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
 
-        websiteNavMenu.replaceChildren();
+        pageNav.replaceChildren();
         
         editor_status = "init";
         editor_status_text.textContent = "";
 
         if (data.nav_labels) {
-            websiteNavMenu.insertAdjacentHTML('afterbegin',data.nav_labels);
-            gArticleId = websiteNavMenu.querySelector(".selected").dataset.id; 
+            pageNav.insertAdjacentHTML('afterbegin',data.nav_labels);
+            gArticleId = pageNav.querySelector(".selected").dataset.id; 
             if (data.html) {
                 editor.setData(data.html);
                 editor_status_text.textContent = data.updated_date;
@@ -331,8 +302,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
 
     /* display last updated article - i.e. has class selected */
 
-    gArticleId = websiteNavMenu.querySelector("a.selected").dataset.id;
-    editor.setData(container.querySelector("#editor-content").textContent);
+    gArticleId = pageNav.querySelector("a.selected").dataset.id;
     lazyload();
 });
 
@@ -523,11 +493,14 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".upload-codepen")) {
         upload_codepen();     
     } else if (e.target.matches(".restore-article")) {
-        restore_article();                                                                                                              
+        /*restore_article();*/
+        console.log("restore article content");                                                                                                           
     } else if (e.target.matches(".upload-media")) {
         upload_media();                                
     } else if (e.target.matches(".edit-field")) {
         edit_field(e); 
+    } else if (e.target.matches(".new-website")) {
+        new_website(); 
     } else if (e.target.matches(".edit-website")) {
         if (container.querySelector(".ck-source-editing-button").matches(".ck-off")) {
             edit_website(e);
@@ -796,7 +769,7 @@ new Sortable(galleryList, {
 /* 
  **  DRAG AND DROP WEBSITE ARTICLES TO RE-ORDER
  */
-new Sortable(websiteNavMenu, {
+new Sortable(pageNav, {
     sort: true,
     animation: 150,
     ghostClass: 'drag-in-progress',
@@ -997,13 +970,13 @@ const get_visits = () => {
  ** CREATE NEW WEBSIITE PAGE
  */
 const new_page = () => {
-    const selected = websiteNavMenu.querySelector(".selected");
+    const selected = pageNav.querySelector(".selected");
     execProcess( "article/"+domainName.dataset.id+","+selected.dataset.id,"POST").then( (data) => {
         gArticleId = data.article_id;
         if (selected) {
             selected.insertAdjacentHTML('afterend',data.nav_label);
         } else {
-            websiteNavMenu.insertAdjacentHTML('afterbegin',data.nav_label);
+            pageNav.insertAdjacentHTML('afterbegin',data.nav_label);
         }
         selected_nav(gArticleId);
         editor_status = "init";
@@ -1032,7 +1005,7 @@ const upload_media = () => {
  ** ASSIGN "selected" CLASS TO NAV ITEM
  */
 const selected_nav = (id) => {
-    websiteNavMenu.querySelectorAll("a").forEach((link) => {
+    pageNav.querySelectorAll("a").forEach((link) => {
         link.classList.remove("selected");
         if (link.dataset.id == id) {
             link.classList.add("selected");
@@ -1094,7 +1067,7 @@ const edit_field = (e) => {
  */
 const add_contact = (e) => {
     execProcess( "contact-form/"+domainName.dataset.id+","+gArticleId,"PUT").then( (data) => {
-        const nav_label = websiteNavMenu.querySelector("[data-id='"+gArticleId+"']");
+        const nav_label = pageNav.querySelector("[data-id='"+gArticleId+"']");
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.classList.add("icon");
         const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
@@ -1112,7 +1085,7 @@ const add_contact = (e) => {
  */
 const remove_contact = (e) => {
     execProcess( "contact-form/"+domainName.dataset.id+","+gArticleId,"DELETE").then( (data) => {
-        const nav_label = websiteNavMenu.querySelector("[data-id='"+gArticleId+"']");
+        const nav_label = pageNav.querySelector("[data-id='"+gArticleId+"']");
         nav_label.querySelector("svg").remove();
         e.target.classList.remove("remove-contact");
         e.target.classList.add("add-contact");
@@ -1178,7 +1151,7 @@ const upload_codepen = async () => {
  */
 const restore_article = () => {
     execProcess( "restore-article/"+gArticleId,"PUT").then( () => {
-        websiteNavMenu.querySelector("a.selected").click();
+        pageNav.querySelector("a.selected").click();
     });
 }
 
@@ -1192,7 +1165,7 @@ const delete_object = (e) => {
     let object_id;
     switch (e.target.dataset.table) {
         case "website_article":
-            const title = websiteNavMenu.querySelector("[data-id='" + gArticleId + "']").textContent;
+            const title = pageNav.querySelector("[data-id='" + gArticleId + "']").textContent;
             const img = document.querySelector(".ck img:first-of-type");
             if (img) {
                 confirm.querySelector("img").src = img.src;
@@ -1243,8 +1216,8 @@ const delete_object_confirm = (e) => {
         let ele;
         switch (pk.table_name) {
             case "website_article":
-                websiteNavMenu.querySelector(".selected").remove();
-                ele = websiteNavMenu.querySelector("a:first-of-type");
+                pageNav.querySelector(".selected").remove();
+                ele = pageNav.querySelector("a:first-of-type");
                 if (ele) {
                     gArticleId = ele.dataset.id;
                     edit_text();
