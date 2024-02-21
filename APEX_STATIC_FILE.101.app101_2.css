@@ -117,20 +117,19 @@ textarea, button, input, select {
   font: inherit;
 }
 
-nav.top-nav {
+/***********************/
+/* APPLICATION STYLES  */
+/***********************/
+.wrapper > * + * {
+    margin-block-start: var(--space-2xl);
+}
+
+.top-nav {
     display: flex;
     justify-content: flex-end;
-    margin: 2rem 2rem 2rem 0;
 }
 
-.page-content > div:first-of-type {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1em;
-}
-
-.page-content nav {
+.website-nav, .page-nav {
     display: flex;
     flex-wrap: wrap;
     gap: 1em;
@@ -138,29 +137,43 @@ nav.top-nav {
     padding: 1em;
 }
 
-.nav-label:not(.selected) {
+.auto-fit-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: var(--space-l);
+}
+
+.space-between {
+    display: flex;
+    justify-content: space-between;
+}
+
+.align-self-center {
+    align-self: center;
+}
+
+a:not(.selected) {
     text-decoration: none;
 }
 
-.nav-label.selected {
+a:not(.selected) + button {
+    opacity: 0;
+}
+
+a.selected {
     text-decoration-color: var(--color-secondary);
     text-decoration-thickness: var(--space-3xs);
     text-underline-offset: var(--space-3xs);
     text-decoration-skip-ink: none;
 }
 
+a.selected _ button {
+    opacity: 1;
+}
+
 .nav-label > svg {
     margin-inline-start: 0.25em;
     pointer-events: none;
-}
-
-form.website {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-around;
-    align-items: center;
-    margin: 2rem;
-    gap: 1rem;
 }
 
 label {
@@ -615,13 +628,17 @@ nav button {
     margin-bottom: 0.5ch;
 }
 
-.cards {
+.page-content {
     display: flex;
     flex-wrap: wrap;
     gap: 2ch;
 }
 
-.cards > div:nth-of-type(1) {
+.page-content > div{
+    padding: 1rem;
+}
+
+.page-content > div:nth-of-type(1) {
     border: solid 0.25ch pink;
     flex-basis: 50ch;
     flex-grow: 1;
@@ -629,11 +646,7 @@ nav button {
     overflow-y: scroll;
 }
 
-.cards > div:nth-of-type(1) > *{
-    margin: 1rem;
-}
-
-.cards > div:nth-of-type(2) {
+.page-content > div:nth-of-type(2) {
     border: solid 0.25ch red;
     flex-basis: 0;
     flex-grow: 999;
