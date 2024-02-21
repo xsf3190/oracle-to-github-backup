@@ -570,5 +570,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
             RAISE_APPLICATION_ERROR(-20050,l_error_message);
         END IF;
     END;
+        /*
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_dns_zones);
+        DELETE netlify_dns_zone;
+        INSERT INTO netlify_dns_zone (id, name, site_id, created_at, updated_at)
+        SELECT id, name, site_id, TO_TIMESTAMP_TZ(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR'), TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR') 
+          FROM JSON_TABLE(l_dns_zones, '$[*]' COLUMNS(id, name, site_id, created_at, updated_at));
+
+        DELETE netlify_dns_zone_server;
+        INSERT INTO netlify_dns_zone_server (dns_zone_id, server)
+        SELECT id, server FROM JSON_TABLE(l_dns_zones, '$[*]' COLUMNS (id, NESTED '$.dns_servers[*]' COLUMNS (server varchar2(50) path '$')));
+
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'GET', pData=>l_sites);
+        DELETE netlify_site;
+        INSERT INTO netlify_site (id, name, custom_domain, url, created_at, updated_at)
+        SELECT id, name, custom_domain, url, TO_TIMESTAMP_TZ(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR'), TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR')
+          FROM JSON_TABLE(l_sites, '$[*]' COLUMNS(id, name, custom_domain, url, created_at, updated_at));
+        */
 END;
 /
