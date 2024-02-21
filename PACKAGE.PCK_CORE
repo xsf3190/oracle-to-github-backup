@@ -273,30 +273,44 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     END;
 
     /*
-     **  Build at most 2 deploy buttons same width as first.
+     **  Build deploy and visit buttons
      */
     FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2 is
-        l_html VARCHAR2(1000);
+        l_html LONG;
         l_text VARCHAR2(50);
-        l_text_custom VARCHAR2(50);
     BEGIN
 
         l_text:='https://' || REPLACE(pDomainName,'.','-') || '.netlify.app';
 
         IF (pNetlifySiteId IS NOT NULL) THEN 
             l_html:=
-            '<button type="button" class="deploy-website pushable" data-site_id="' || pNetlifySiteId || '">
-                <span class="shadow"></span>
-                    <span class="edge"></span>
-                    <span class="front">' || l_text || '</span>
-             </button>';
-            IF (pNetlifySiteIdCustom IS NOT NULL) THEN 
-                l_html:=l_html || 
-                '<button type="button" class="deploy-website pushable" data-site_id="'|| pNetlifySiteIdCustom || '">
+            '<div>
+                <button type="button" class="deploy-website pushable" data-site_id="' || pNetlifySiteId || '">
                     <span class="shadow"></span>
                     <span class="edge"></span>
-                    <span class="front">https://www.' || pDomainName || '</span>
-                 </button>';
+                    <span class="front">' || l_text || '</span>
+                </button>
+                <button type="button" class="visits pushable">
+                    <span class="shadow"></span>
+                    <span class="edge"></span>
+                    <span class="front">VISITS</span>
+                </button>
+            </div';
+            IF (pNetlifySiteIdCustom IS NOT NULL) THEN 
+                l_html:=l_html || 
+                '<hr>
+                <div>
+                    <button type="button" class="deploy-website pushable" data-site_id="'|| pNetlifySiteIdCustom || '">
+                        <span class="shadow"></span>
+                        <span class="edge"></span>
+                        <span class="front">https://www.' || pDomainName || '</span>
+                    </button>
+                    <button type="button" class="visits pushable">
+                        <span class="shadow"></span>
+                        <span class="edge"></span>
+                        <span class="front">VISITS</span>
+                    </button>
+                </div>';
             END IF;
         END IF;
         RETURN(l_html);
@@ -679,52 +693,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 pck_core.log_error;
     END;
 
-    /*
-     **  Build authenticated page
-     */
-    FUNCTION buildAuthPage RETURN CLOB IS
-        l_clob CLOB;
-        l_user_name users.name%type;
-        l_templates CLOB;
-        l_template_html LONG;
-        l_font_html LONG;
-        l_edit_websites CLOB;
-        l_dns_zones CLOB;
-        l_sites CLOB;
-        l_domain_dropdown LONG;
-        l_printed_separator BOOLEAN:=FALSE;
-        l_nav_labels LONG;
-        l_body_html article.body_html%type;
-        l_thumbnails CLOB;
-        l_contact_form website_article.contact_form%type;
-
-        TYPE t_domain IS RECORD (
-            id                      website.id%type,
-            domain_name             website.domain_name%type,
-            netlify_site_id         website.netlify_site_id%type,
-            netlify_site_id_custom  website.netlify_site_id%type,
-            updated_date            article.updated_date%type
-        );
-        TYPE tt_domain IS TABLE OF t_domain;
-        l_domains tt_domain;  
-        l_session_data session_data_rt;
-        l_is_admin PLS_INTEGER;
+    FUNCTION buildTopNav(pIsAdmin IN INTEGER) RETURN VARCHAR2 IS
     BEGIN
-        l_session_data:=getSessionData();
-
-        SELECT COUNT(*)
-          INTO l_is_admin
-          FROM apex_workspace_apex_users w, users u 
-         WHERE u.id=l_session_data.user_id
-           AND w.email=u.email
-           AND w.is_admin='Yes'
-         FETCH FIRST ROW ONLY;
-
-        l_clob:= TO_CLOB(pck_icons.g_icons_svg);
-
-        /* Construct the top navigation menu */
-        l_clob:=l_clob || TO_CLOB('
-        <nav class="top-nav">
+        RETURN (
+        '<nav class="top-nav">
             <div class="dropdown">
                 <span>' || apex_application.g_user || '</span>
                 <button type="button" class="show-dropdown">&blacktriangledown;</button>
@@ -745,7 +717,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             Technical Log
                         </button>
                     </li>' || 
-                    CASE WHEN l_is_admin=1 THEN
+                    CASE WHEN pIsAdmin=1 THEN
                     '<li class="load-fonts">
                         <button type="button" class="with-icon load-fonts">
                             <svg class="icon">
@@ -753,7 +725,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             </svg>
                             Load Google Fonts
                         </button>
-                    </li>' 
+                    </li>
+                    <li class="visits">
+                        <button type="button" class="with-icon visits" >
+                            <svg class="icon">
+                                <use href="#list"></use>
+                            </svg>
+                            Page Hits
+                        </button>
+                    </li>'
                     END ||
                     '<li class="signout">
                         <button type="button" class="with-icon">
@@ -766,238 +746,177 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </ul>
             </div>
         </nav>');
+    END;
 
-        -- should use this to show users available custom domains
-        /*
-        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_dns_zones);
-        DELETE netlify_dns_zone;
-        INSERT INTO netlify_dns_zone (id, name, site_id, created_at, updated_at)
-        SELECT id, name, site_id, TO_TIMESTAMP_TZ(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR'), TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR') 
-          FROM JSON_TABLE(l_dns_zones, '$[*]' COLUMNS(id, name, site_id, created_at, updated_at));
-
-        DELETE netlify_dns_zone_server;
-        INSERT INTO netlify_dns_zone_server (dns_zone_id, server)
-        SELECT id, server FROM JSON_TABLE(l_dns_zones, '$[*]' COLUMNS (id, NESTED '$.dns_servers[*]' COLUMNS (server varchar2(50) path '$')));
-
-        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'GET', pData=>l_sites);
-        DELETE netlify_site;
-        INSERT INTO netlify_site (id, name, custom_domain, url, created_at, updated_at)
-        SELECT id, name, custom_domain, url, TO_TIMESTAMP_TZ(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR'), TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR')
-          FROM JSON_TABLE(l_sites, '$[*]' COLUMNS(id, name, custom_domain, url, created_at, updated_at));
-        */
-
-        SELECT w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom, MAX(COALESCE(a.updated_date, a.created_date)) updated_date
-          BULK COLLECT INTO l_domains
-          FROM website w, website_article wa, article a
-         WHERE w.user_id=l_session_data.user_id
-           AND wa.website_id=w.id
-           AND a.id=wa.article_id
-         GROUP BY w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom
-         ORDER BY updated_date DESC;
-
-        /* Get id of article that will be displayed - i.e article last updated by user */
-
-        IF (l_domains.COUNT>0) THEN
-            FOR C IN (SELECT wa.navigation_label, wa.article_id, wa.contact_form, a.body_html, 
-                                ROW_NUMBER() OVER(ORDER BY COALESCE(a.updated_date, a.created_date) DESC) rn
-                        FROM website_article wa, article a 
-                       WHERE wa.website_id=l_domains(1).id 
-                         AND a.id=wa.article_id 
-                       ORDER BY wa.display_order) 
-            LOOP
-                l_nav_labels:=l_nav_labels || '<a href="#" data-id="' || C.article_id || '"';
-                IF (C.rn=1) THEN
-                    l_nav_labels:=l_nav_labels || ' class="nav-label selected"';
-                ELSE
-                    l_nav_labels:=l_nav_labels || ' class="nav-label"';
-                END IF;
-                l_nav_labels:=l_nav_labels || '>' || C.navigation_label;
-
-                IF (C.contact_form='YES') THEN
-                    l_nav_labels:=l_nav_labels || '<svg class="icon"><use href="#envelope"></use></svg>';
-                END IF;
-                l_nav_labels:=l_nav_labels || '</a>';
-
-                IF (C.rn=1) THEN
-                    l_body_html:=C.body_html;
-                    l_contact_form:=C.contact_form;
-                    getThumbnails(C.article_id, l_thumbnails);
-                END IF;
-            END LOOP;
-        END IF;
-
-        IF (l_domains.COUNT=0) THEN
-            l_domains.EXTEND(1);
-        END IF;
-
-        l_domain_dropdown:='
-        <div class="dropdown">
-            <button type="button" class="show-dropdown">&blacktriangledown;</button>
-            <ul class="dropdown-items">
-                <li>
-                    <button type="button" class="with-icon new-website">
-                        <svg class="icon">
-                            <use href="#plus"></use>
-                        </svg>
-                        NEW WEBSITE
-                    </button>
-                </li>';
-
-        FOR i IN 1..l_domains.COUNT LOOP
-            IF (l_domains(i).id IS NULL) THEN
-                l_domain_dropdown:=l_domain_dropdown ||'<li class="separator"></li>';
-                CONTINUE;
+    FUNCTION buildWebsiteNav(
+        pUserId IN users.id%type, 
+        pSelectedWebsiteId IN OUT website.id%type, 
+        pSelectedWebsiteDomain IN OUT website.domain_name%type, 
+        pNetlifySiteId IN OUT website.netlify_site_id%type, 
+        pNetlifySiteIdCustom IN OUT website.netlify_site_id%type) RETURN VARCHAR2 IS
+        l_html LONG;
+    BEGIN
+        l_html:='<nav class="website-nav">';
+        FOR C IN (SELECT id, domain_name, netlify_site_id, netlify_site_id_custom,ROW_NUMBER() OVER(ORDER BY COALESCE(updated_date, created_date) DESC) rn
+                    FROM website
+                   WHERE user_id=pUserId
+                   ORDER BY domain_name)
+        LOOP
+            l_html:=l_html || '<a href="#" data-id="' || C.id || '" class="edit-website';
+            IF (C.rn=1) THEN
+                l_html:=l_html || ' selected';
+                pSelectedWebsiteId:=C.id;
+                pNetlifySiteId:=C.netlify_site_id;
+                pSelectedWebsiteDomain:=C.domain_name;
+                pNetlifySiteIdCustom:=C.netlify_site_id_custom;
             END IF;
-            IF NOT (l_printed_separator) THEN
-                l_domain_dropdown:=l_domain_dropdown ||'<li class="separator"></li>';
-                l_printed_separator:=TRUE;
-            END IF;
-            l_domain_dropdown:=l_domain_dropdown ||'
-                <li>
-                    <button type="button" class="with-icon edit-website" data-id="' || l_domains(i).id || '">
-                            <svg class="icon">
-                                <use href="#pen-to-square"></use>
-                            </svg>' ||          
-                    l_domains(i).domain_name || '
-                    </button>
-                </li>';
-            IF (i=l_domains.COUNT) THEN
-                l_domain_dropdown:=l_domain_dropdown ||'<li class="separator"></li>';
-            END IF;
+            l_html:=l_html || '">' || C.domain_name || 
+            '</a>
+            <button type="button" class="website-options" data-id="' || C.id || '"><svg class="icon"><use href="#pencil"></use></svg></button>';
         END LOOP;
+        l_html:=l_html || '</nav>';
+        RETURN (l_html);
+    END;
 
-        l_domain_dropdown:=l_domain_dropdown ||'
-                <li>
-                    <button type="button" class="with-icon delete" data-table="website" data-id=' || l_domains(1).id || '>
-                        <svg class="icon">
-                            <use href="#delete">
-                        </svg>
-                        DELETE WEBSITE
-                    </button>
-                </li>
-            </ul>
-        </div>';
+    FUNCTION buildPageNav(pWebsiteId IN website.id%type, pSelectedArticleId IN OUT website_article.article_id%type, pContactForm IN OUT website_article.contact_form%type) RETURN VARCHAR2 IS
+        l_html LONG;
+    BEGIN
+        FOR C IN (SELECT navigation_label, article_id, contact_form, 
+                            ROW_NUMBER() OVER(ORDER BY COALESCE(updated_date, created_date) DESC) rn
+                    FROM website_article
+                   WHERE website_id=pWebsiteId
+                   ORDER BY display_order) 
+        LOOP
+            l_html:=l_html || '<a href="#" data-id="' || C.article_id || '" class="nav-label';
+            IF (C.rn=1) THEN 
+                l_html:=l_html ||' selected';
+                pSelectedArticleId:=C.article_id;
+            END IF;
+            l_html:=l_html  || '">' || C.navigation_label;
+            IF (C.contact_form='YES') THEN
+                l_html:=l_html || '<svg class="icon"><use href="#envelope"></use></svg>';
+                pContactForm:=C.contact_form;
+            END IF;
+            l_html:=l_html || '</a>';
+        END LOOP;
+        RETURN(l_html);
+    END;
 
-        l_clob:=l_clob || TO_CLOB('
-        <form class="website">' ||
-            buildTextareaWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
-            --buildInputWrapper(l_domains(1).id, 'website.domain_name', l_domains(1).domain_name, l_session_data.canuse_popover, l_domain_dropdown) ||
-            --buildRadioWrapper('website.template',l_template_html, l_session_data.canuse_popover) ||
-            --
-            '<button type="button" class="pushable website-options">
-                <span class="shadow"></span>
-                <span class="edge"></span>
-                <span class="front">WEBSITE OPTIONS</span>
-            </button>
-            <fieldset class="deploy-buttons">
-                <legend>Publish Website</legend>
-                <div>' ||
-                buildDeployButtons(l_domains(1).domain_name, l_domains(1).netlify_site_id, l_domains(1).netlify_site_id_custom) ||
-                '</div>
-            </fieldset>
-            <button type="button" class="pushable visits">
-                <span class="shadow"></span>
-                <span class="edge"></span>
-                <span class="front">VISITS</span>
-            </button>
-        </form>
-        <form action="https://codepen.io/pen/define" method="POST" target="_blank">
-            <input type="hidden" name="data" value="">
-        </form>
-        <div class="cards">
-            <!-- First card -->
-            <div>
-                <button type="button" class="pushable upload-media">
-                    <span class="shadow"></span>
-                    <span class="edge"></span>
-                    <span class="front">UPLOAD MEDIA</span>
-                </button>
-                <div role="region" aria-label="gallery">
-                    <ul class="gallery-list">' || l_thumbnails || '</ul>
-                </div>
-                <div class="gallery-overlay">
-                    <img src="">
-                    <span class="counter"></span>
-                    <button type="button" class="close-fullscreen">&times;</button>
-                    <button type="button" class="prev">&lt;</button>
-                    <button type="button" class="next">&gt;</button>
+    FUNCTION buildPushableButton(pClassName IN VARCHAR2, pSvgHref IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS 
+        l_html VARCHAR2(200);
+    BEGIN
+        RETURN(
+        '<button type="button" class="' || pClassName || ' pushable">
+            <span class="shadow"></span>
+            <span class="edge"></span>
+            <span class="front">' || 
+                CASE WHEN pSvgHref IS NOT NULL THEN 
+                    '<svg class=""><use href="' || pSvgHref || '"></use></svg>' 
+                END || 
+                UPPER(REPLACE(pClassName,'-',' ')) || 
+            '</span>
+        </button>');
+    END;
+
+    FUNCTION buildMediaCard(pArticleId IN website.id%type) RETURN VARCHAR2 IS
+        l_thumbnails CLOB;
+    BEGIN
+        getThumbnails(pArticleId, l_thumbnails);
+        RETURN(
+        '<div>' ||
+            buildPushableButton('upload-media') ||
+            '<div role="region" aria-label="gallery">
+                <ul class="gallery-list">' || l_thumbnails || '</ul>
+            </div>
+            <div class="gallery-overlay">
+                <img src="">
+                <span class="counter"></span>
+                <button type="button" class="close-fullscreen">&times;</button>
+                <button type="button" class="prev">&lt;</button>
+                <button type="button" class="next">&gt;</button>
+            </div>
+        </div>');
+    END;
+
+    FUNCTION buildPageCard(pPageNav IN VARCHAR2, pContactForm IN VARCHAR2) RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+        '<div>
+            <div class="space-between">' ||
+                buildPushableButton('new-page','#plus') ||
+                '<div class="dropdown">
+                    <span>Edit Options</span>
+                    <button type="button" class="show-dropdown">&blacktriangledown;</button>
+                    <ul class="dropdown-items">
+                        <li>
+                            <button type="button" class="with-icon edit-field" data-column="website_article.navigation_label">
+                                <svg class="icon"><use href="#link"></use></svg>
+                            Navigation Label
+                            </button>
+                        </li>
+                        <li>
+                            <button type="button" class="with-icon ' || CASE WHEN pContactForm='YES' THEN 'remove-contact' ELSE 'add-contact' END || '">
+                                <svg class="icon"><use href="' || CASE WHEN pContactForm='YES' THEN '#minus' ELSE '#plus' END || '"></use></svg>
+                            Contact Form
+                            </button>
+                        </li>                    
+                        <li>
+                            <button type="button" class="with-icon edit-codepen">
+                                <svg class="icon"><use href="#codepen"></use></svg>
+                            Codepen Editor
+                            </button>
+                        </li>
+                        <li>
+                            <button type="button" class="with-icon upload-codepen">
+                                <svg class="icon"><use href="#upload"></use></svg>
+                            Upload Codepen Zip
+                            </button>
+                        </li>
+                        <li>
+                            <button type="button" class="with-icon restore-article">
+                                <svg class="icon"><use href="#backward"></use></svg>
+                            Restore Before Login
+                            </button>
+                        </li>
+                        <li>
+                            <button type="button" class="with-icon edit-field" data-column="website_article.page_title">
+                                <svg class="icon"><use href="#searchengin"></use></svg>
+                            Page Title (SEO)
+                            </button>
+                        </li>
+                        <li>
+                            <button type="button" class="with-icon edit-field" data-column="website_article.page_description">
+                                <svg class="icon"><use href="#searchengin"></use></svg>
+                            Page Description (SEO)
+                            </button>
+                        </li>
+                        <li>
+                            <hr>
+                        </li>
+                        <li>
+                            <button type="button" class="with-icon delete" data-table="website_article">
+                                <svg class="icon"><use href="#delete"></use></svg>
+                            Delete Page
+                            </button>
+                        </li>     
+                    </ul>
                 </div>
             </div>
-            <!-- Second card -->
-            <div class="page-content">
-                <div>
-                    <button type="button" class="new-page pushable">
-                        <span class="shadow"></span>
-                        <span class="edge"></span>
-                        <span class="front"><svg class=""><use href="#plus"></use></svg>NEW PAGE</span>
-                    </button>
-                    <div class="dropdown">
-                        <span>Edit Options</span>
-                        <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                        <ul class="dropdown-items">
-                            <li>
-                                <button type="button" class="with-icon edit-field" data-column="website_article.navigation_label">
-                                    <svg class="icon"><use href="#link"></use></svg>
-                                Navigation Label
-                                </button>
-                            </li>
-                            <li>
-                                <button type="button" class="with-icon ' || CASE WHEN l_contact_form='YES' THEN 'remove-contact' ELSE 'add-contact' END || '">
-                                    <svg class="icon"><use href="' || CASE WHEN l_contact_form='YES' THEN '#minus' ELSE '#plus' END || '"></use></svg>
-                                Contact Form
-                                </button>
-                            </li>                    
-                            <li>
-                                <button type="button" class="with-icon edit-codepen">
-                                    <svg class="icon"><use href="#codepen"></use></svg>
-                                Codepen Editor
-                                </button>
-                            </li>
-                            <li>
-                                <button type="button" class="with-icon upload-codepen">
-                                    <svg class="icon"><use href="#upload"></use></svg>
-                                Upload Codepen Zip
-                                </button>
-                            </li>
-                            <li>
-                                <button type="button" class="with-icon restore-article">
-                                    <svg class="icon"><use href="#backward"></use></svg>
-                                Restore Before Login
-                                </button>
-                            </li>
-                            <li>
-                                <button type="button" class="with-icon edit-field" data-column="website_article.page_title">
-                                    <svg class="icon"><use href="#searchengin"></use></svg>
-                                Page Title (SEO)
-                                </button>
-                            </li>
-                            <li>
-                                <button type="button" class="with-icon edit-field" data-column="website_article.page_description">
-                                    <svg class="icon"><use href="#searchengin"></use></svg>
-                                Page Description (SEO)
-                                </button>
-                            </li>
-                            <li>
-                                <hr>
-                            </li>
-                            <li>
-                                <button type="button" class="with-icon delete" data-table="website_article">
-                                    <svg class="icon"><use href="#delete"></use></svg>
-                                Delete Page
-                                </button>
-                            </li>     
-                        </ul>
-                    </div>
-                </div>
-                <nav class="website-nav-menu">' || l_nav_labels || '</nav>
-                <textarea id="editor-content" style="display:none">' || l_body_html || '</textarea>
-                <div id="editor"></div>
+            <nav class="page-nav">' || 
+                pPageNav || 
+            '</nav>
+            <div id="editor"></div>
                 <div>
                     <span id="word-count"></span>
                 </div>
             </div>
-        </div>
-        <dialog class="popup">
+        </div>');
+    END;
+
+    FUNCTION buildDialogs RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+        '<dialog class="popup">
             <div>
                 <button type="button" class="close">&times;</button>
                 <h2></h2>
@@ -1046,6 +965,82 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <button type="button" class="close">&times;</button>
             </div>
         </dialog>');
+    END;
+
+    /*
+     **  Build authenticated page
+     */
+    FUNCTION buildAuthPage RETURN CLOB IS
+        l_clob CLOB;
+        l_user_name users.name%type;
+        l_templates CLOB;
+        l_template_html LONG;
+        l_font_html LONG;
+        l_edit_websites CLOB;
+        l_dns_zones CLOB;
+        l_sites CLOB;
+        l_domain_dropdown LONG;
+        l_printed_separator BOOLEAN:=FALSE;
+        l_nav_labels LONG;
+        l_body_html article.body_html%type;
+        l_thumbnails CLOB;
+        l_contact_form website_article.contact_form%type;
+        l_session_data session_data_rt;
+        l_is_admin PLS_INTEGER;
+        l_selected_website_id website.id%type;
+        l_selected_website_domain website.domain_name%type;
+        l_netlify_site_id website.netlify_site_id%type;
+        l_netlify_site_id_custom website.netlify_site_id%type;
+        l_page_nav LONG;
+        l_selected_article_id website_article.article_id%type;
+        l_selected_contact_form website_article.contact_form%type;
+    BEGIN
+        l_session_data:=getSessionData();
+
+        SELECT COUNT(*)
+          INTO l_is_admin
+          FROM apex_workspace_apex_users w, users u 
+         WHERE u.id=l_session_data.user_id
+           AND w.email=u.email
+           AND w.is_admin='Yes'
+         FETCH FIRST ROW ONLY;
+
+        l_clob:=pck_icons.g_icons_svg;
+
+        l_clob:= 
+        '<div class="wrapper">' ||
+            buildTopNav(l_is_admin) ||
+            '<div class="auto-fit-cards">
+                <div>
+                    <div class="space-between">' ||
+                        buildPushableButton('new-website', '#plus') ||
+                        buildPushableButton('website-options') ||
+                    '</div>' ||
+                    buildWebsiteNav(l_session_data.user_id, l_selected_website_id, l_selected_website_domain, l_netlify_site_id, l_netlify_site_id_custom) ||
+                '</div>
+                <div class="align-self-center">
+                    <fieldset class="deploy-buttons">
+                        <legend>Publish Website</legend>
+                        <div>' ||
+                            buildDeployButtons(l_selected_website_domain, l_netlify_site_id, l_netlify_site_id_custom) ||
+                        '</div>
+                    </fieldset>
+                </div>
+            </div>';
+
+            l_page_nav:=buildPageNav(l_selected_website_id, l_selected_article_id, l_selected_contact_form);
+
+            l_clob:=l_clob || 
+            '<div class="page-content">' ||
+                buildMediaCard(l_selected_article_id) ||
+                buildPageCard(l_page_nav, l_selected_contact_form) ||
+            '</div>
+            <form action="https://codepen.io/pen/define" method="POST" target="_blank">
+                <input type="hidden" name="data" value="">
+            </form>' ||
+            buildDialogs() ||
+            pck_icons.g_icons_svg ||
+        '</div>';
 
         RETURN l_clob;
     END;
