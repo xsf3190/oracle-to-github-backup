@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
+    PROCEDURE getVisits(pId IN VARCHAR2);
+    --
     PROCEDURE uploadIpLookup;
     --
     PROCEDURE uploadPageHits(pWebsiteId IN website.id%type DEFAULT NULL);
@@ -114,5 +116,102 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
         uploadIpLookup;
     END;
+
+    /*
+    **  Return log of all visits to website
+    */
+    PROCEDURE getVisits(pId IN VARCHAR2) IS
+        l_website_id website.id%type;
+        l_domain_name VARCHAR2(200);
+        l_content CLOB;
+        l_cwv VARCHAR2(200);
+        l_visit_date VARCHAR2(22);
+        l_referrer page_hit.referrer%type;
+        l_session_data pck_core.session_data_rt;
+        n PLS_INTEGER;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
+        l_domain_name:=SUBSTR(pId,INSTR(pId,',')+1);
+
+        pck_visits.uploadPageHits(l_website_id);
+
+        l_content:='
+        <ol class="visits">
+            <li>
+                <span>Visit Date</span><span>Location</span><span>Referrer</span><span>Browser</span><span>Connection</span><span>Viewing time</span><span style="text-align:center">Performance</span>
+            </li>';
+
+        FOR C IN (
+            WITH website_hits as 
+            (
+                SELECT website_id, ip_address, visit_date, 
+                        MAX(referrer) referrer, 
+                        MAX(lcp_rating) lcp_rating, MAX(cls_rating) cls_rating, MAX(inp_rating) inp_rating, MAX(fid_rating) fid_rating, 
+                        SUM(duration_visible) duration_visible, MAX(browser) browser, MAX(connection) connection, MAX(mobile) mobile
+                  FROM page_hit
+                 WHERE  website_id=l_website_id
+                   AND  url=l_domain_name 
+                 GROUP BY website_id, ip_address, visit_date
+            )
+            SELECT  
+            wh.visit_date, wh.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
+                    wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating, wh.fid_rating
+                FROM website_hits wh, ip_lookup ip
+                WHERE ip.ip=wh.ip_address
+                ORDER BY wh.visit_date desc
+        ) 
+        LOOP
+            l_cwv:='';
+            IF (C.lcp_rating IS NOT NULL) THEN
+                l_cwv:=l_cwv || '<mark class="' || C.lcp_rating || '">LCP</mark>';
+            ELSE
+                l_cwv:=l_cwv || '<mark></mark>';
+            END IF;
+            IF (C.cls_rating IS NOT NULL) THEN
+                l_cwv:=l_cwv || '<mark class="' || C.cls_rating || '">CLS</mark>';
+            ELSE
+                l_cwv:=l_cwv || '<mark></mark>';
+            END IF;
+            IF (C.inp_rating IS NOT NULL) THEN
+                l_cwv:=l_cwv || '<mark class="' || C.inp_rating || '">INP</mark>';
+            ELSIF (C.fid_rating IS NOT NULL) THEN
+                l_cwv:=l_cwv || '<mark class="' || C.fid_rating || '">FID</mark>';
+            ELSE
+                l_cwv:=l_cwv || '<mark></mark>';
+            END IF;
+
+            IF (INSTR(C.referrer,'google')>0) 
+                THEN l_referrer:='google';
+            ELSIF (INSTR(C.referrer,'linkedin')>0) 
+                THEN l_referrer:='linkedin';
+            ELSIF (INSTR(C.referrer,'bing')>0) 
+                THEN l_referrer:='bing';
+            ELSE
+                l_referrer:=C.referrer;
+            END IF;
+
+            l_content:=l_content || '
+                <li>
+                    <span>' || TO_CHAR(C.visit_date AT TIME ZONE l_session_data.timezone, 'dd Mon yyyy fmhh24:fmmi')  || '</span>
+                    <span>' || LTRIM(RTRIM(C.location,','),',') || '</span>
+                    <span>' || l_referrer || '</span>
+                    <span>' || C.browser || '</span>
+                    <span>' || C.connection || CASE WHEN C.mobile='true' THEN ' (Mob)' END || '</span>
+                    <span>' || CASE WHEN C.duration_visible IS NOT NULL THEN TO_CHAR(C.duration_visible) || ' seconds' END || '</span>
+                    <span class="cwv">' || l_cwv || '</span>
+                </li>';
+        END LOOP;
+        l_content:=l_content || '</ol>';
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('content', l_content);
+        apex_json.close_object;
+
+        EXCEPTION WHEN OTHERS THEN pck_core.log_error;
+    END;
+
 END;
 /
