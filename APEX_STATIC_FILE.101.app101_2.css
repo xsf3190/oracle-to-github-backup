@@ -137,6 +137,12 @@ textarea, button, input, select {
     padding: 1em;
 }
 
+a + button > svg {
+    inline-size: 1em;
+    block-size: 1em;
+    pointer-events: none;
+}
+
 .auto-fit-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
@@ -167,13 +173,8 @@ a.selected {
     text-decoration-skip-ink: none;
 }
 
-a.selected _ button {
+a.selected + button {
     opacity: 1;
-}
-
-.nav-label > svg {
-    margin-inline-start: 0.25em;
-    pointer-events: none;
 }
 
 label {
@@ -370,7 +371,7 @@ dialog:,
 ::backdrop{
   opacity: 0;
   transition: opacity 1s, display 1s allow-discrete, overlay 1s allow-discrete;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   border: 1px solid lightgray;
   border-radius: 1rem;
   padding: 1rem;
