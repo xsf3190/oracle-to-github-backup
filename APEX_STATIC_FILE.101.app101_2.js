@@ -1,4 +1,5 @@
-let gArticleId,
+let gWebsiteId,
+    gArticleId,
     gBrowser,
     gConnectionType,
     gFullImage,
@@ -8,24 +9,23 @@ let gArticleId,
 const apex_app_id = document.querySelector("#pFlowId").value,
       apex_page_id = document.querySelector("#pFlowStepId").value,
       apex_session = document.querySelector("#pInstance").value,
-      container = document.querySelector(".container"),
+      wrapper = document.querySelector(".wrapper"),
       logDialog = document.querySelector("dialog.log"),
       logContent = logDialog.querySelector(".content"),
-      domainName = container.querySelector(".edit-website.selected"),
-      domainNameResult = domainName.nextElementSibling.querySelector(".result"),
-      websiteDialog = container.querySelector("dialog.website-options"),
+      websiteDialog = wrapper.querySelector("dialog.website-options"),
       websiteContent = websiteDialog.querySelector(".content"),
-      deployButtons = container.querySelector(".deploy-buttons > div"),
-      pageNav = container.querySelector(".page-nav"),
-      cards = container.querySelector(".cards"),
+      deployButtons = wrapper.querySelector(".deploy-buttons > div"),
+      websiteNav = wrapper.querySelector(".website-nav"),
+      pageNav = wrapper.querySelector(".page-nav"),
+      cards = wrapper.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
-      confirm = container.querySelector("dialog.delete-confirm"),
+      confirm = wrapper.querySelector("dialog.delete-confirm"),
       confirmBtn = confirm.querySelector(".confirmBtn"),
-      editField = container.querySelector("dialog.edit-field"),
-      editorContainer = container.querySelector("div.editor"),
-      galleryList = container.querySelector(".gallery-list"),
-      galleryFull = container.querySelector(".gallery-overlay"),
+      editField = wrapper.querySelector("dialog.edit-field"),
+      editorContainer = wrapper.querySelector("div.editor"),
+      galleryList = wrapper.querySelector(".gallery-list"),
+      galleryFull = wrapper.querySelector(".gallery-overlay"),
       galleryFullImg = galleryFull.querySelector("img"),
       galleryFullCounter = galleryFull.querySelector("span.counter"),
       galleryFullClose = galleryFull.querySelector("button.close-fullscreen"),
@@ -68,7 +68,7 @@ const focusHandler = (e) => {
     if (!e.target.matches(".cms")) return;
 
     let result;
-    if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT") {
+    if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT" || e.target.tagName == "SELECT") {
         result = e.target.nextElementSibling.querySelector(".result");
     } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
         result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
@@ -152,8 +152,8 @@ const new_website = () => {
 /*
  **  EDIT WEBSITE
  */
-const edit_website = (e) => {
-    execProcess( "website/"+e.target.dataset.id,"GET").then( (data) => {
+const edit_website = () => {
+    execProcess( "website/"+gWebsiteId,"GET").then( (data) => {
         deployButtons.replaceChildren();
         deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
 
@@ -176,7 +176,7 @@ const edit_website = (e) => {
                 galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
                 lazyload();
             }
-            selected_contact(data.contact_form);
+            /*selected_contact(data.contact_form);*/
         } else {
             gArticleId = 0;
             editor.setData("");
@@ -188,21 +188,13 @@ const edit_website = (e) => {
 /* 
  ** DEPLOY WEBSITE
  */
-const deploy_website = (e) => {
-
-    if (!domainName.value) {
-        domainNameResult.textContent = "MUST HAVE A DOMAIN NAME";
-        domainNameResult.style.opacity = "1";
-        domainNameResult.style.color = "red";
-        return;
-    }
- 
-    execProcess("deploy","POST",{"websiteid":domainName.dataset.id,"siteid":e.target.dataset.site_id}).then( () => {
+const deploy_website = (e) => { 
+    execProcess("deploy","POST",{"websiteid":gWebsiteId,"siteid":e.target.dataset.site_id}).then( () => {
         popupOpen("Building "+e.target.textContent,"Checking content...");
         if (gIntervalId) {
             clearInterval(gIntervalId);
         }
-        gIntervalId = setInterval(updateDeploymentStatus,3000,domainName.dataset.id, e.target.dataset.site_id);
+        gIntervalId = setInterval(updateDeploymentStatus,3000,gWebsiteId, e.target.dataset.site_id);
     });
 };
 
@@ -262,7 +254,7 @@ const checkPerformance = () => {
     return ok;
 }
 
-window.addEventListener("DOMContentLoaded", (event) => {
+window.addEventListener("DOMContentLoaded", () => {
     console.log("DOM fully loaded and parsed");
     
     console.log("apex_app_id",apex_app_id);
@@ -286,13 +278,13 @@ window.addEventListener("DOMContentLoaded", (event) => {
     }
 
     if (navigator.maxTouchPoints > 1) {
-        container.addEventListener("touchstart",clickHandler);
+        wrapper.addEventListener("touchstart",clickHandler);
     } else {
-        container.addEventListener("click",clickHandler);
+        wrapper.addEventListener("click",clickHandler);
     }
-    container.addEventListener("input",inputHandler);
-    container.addEventListener("focusin",focusHandler);
-    container.addEventListener("change",changeHandler);
+    wrapper.addEventListener("input",inputHandler);
+    wrapper.addEventListener("focusin",focusHandler);
+    wrapper.addEventListener("change",changeHandler);
     
 
     if (checkPerformance()) {
@@ -301,7 +293,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
     }
 
     /* display last updated article - i.e. has class selected */
-
+    gWebsiteId = websiteNav.querySelector("a.selected").dataset.id;
     gArticleId = pageNav.querySelector("a.selected").dataset.id;
     lazyload();
 });
@@ -474,20 +466,26 @@ const clickHandler = (e) => {
 
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
-        if (gArticleId === e.target.dataset.id) return;
-
-        if (container.querySelector(".ck-source-editing-button").matches(".ck-off")) {
-            gArticleId = e.target.dataset.id
-            edit_text(e);
-        } else {
+        if (e.target.matches(".selected")) return;
+        if (!wrapper.querySelector(".ck-source-editing-button").matches(".ck-off")) {
             popupOpen("Click Source button",".. cannot switch pages when in Source editing mode");
+            return;
+        }
+        const nav = e.target.closest("nav");
+        selected_nav(nav,e.target.dataset.id);
+        if (nav.matches(".website-nav")) {
+            gWebsiteId = e.target.dataset.id;
+            edit_website();
+        } else if (nav.matches(".page-nav")) {
+            gArticleId = e.target.dataset.id;
+            edit_text();
         }
     } else if (e.target.matches(".visits")) {
-        get_visits(); 
+        get_visits(e); 
     } else if (e.target.matches(".website-options")) {
         website_options();
     } else if (e.target.matches(".new-page")) {
-        new_page();   
+        new_page(e);   
     } else if (e.target.matches(".edit-codepen")) {
         edit_codepen();   
     } else if (e.target.matches(".upload-codepen")) {
@@ -501,12 +499,6 @@ const clickHandler = (e) => {
         edit_field(e); 
     } else if (e.target.matches(".new-website")) {
         new_website(); 
-    } else if (e.target.matches(".edit-website")) {
-        if (container.querySelector(".ck-source-editing-button").matches(".ck-off")) {
-            edit_website(e);
-        } else {
-            popupOpen("Click Source button",".. cannot switch websites when in Source editing mode");
-        }
     } else if (e.target.matches(".delete")) {
         delete_object(e);
     } else if (e.target.matches(".confirmBtn")) {
@@ -781,7 +773,7 @@ new Sortable(pageNav, {
         set: async function (sortable) {
             let arr = sortable.toArray();
             arr.pop();
-            execProcess("reorder-articles/" + domainName.dataset.id, "PUT", {dbid_string: arr.join(":")} ).then( () => {
+            execProcess("reorder-articles/" + gWebsiteId, "PUT", {dbid_string: arr.join(":")} ).then( () => {
                 console.log("pages reordered");
             });
         }
@@ -926,10 +918,10 @@ ClassicEditor.create(document.querySelector("#editor"), {
 			data.preventDefault();
 		}, { priority: 'high' } );
 
-        const toolbar = container.querySelector(".ck-toolbar__items");
+        const toolbar = wrapper.querySelector(".ck-toolbar__items");
         toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
         editor_status = "init";
-        editor_status_text = container.querySelector("#editor-status");
+        editor_status_text = wrapper.querySelector("#editor-status");
     })
     .catch(error => {
         console.error(error);
@@ -948,7 +940,7 @@ if (window.location.hash === "#_=_"){
  ** GET WEBSIITE OPTIONS
  */
 const website_options = () => {
-   execProcess( "website-options/"+domainName.dataset.id,"GET").then( (data) => {
+   execProcess( "website-options/"+gWebsiteId,"GET").then( (data) => {
         websiteContent.replaceChildren();
         websiteContent.insertAdjacentHTML('afterbegin',data.content);
         websiteDialog.showModal();
@@ -958,8 +950,9 @@ const website_options = () => {
 /* 
  ** GET WEBSIITE VISITS
  */
-const get_visits = () => {
-   execProcess( "visits/"+domainName.dataset.id,"GET").then( (data) => {
+const get_visits = (e) => {
+    const websiteid = e.target.dataset.id ? e.target.dataset.id : gWebsiteId;
+    execProcess( "visits/"+websiteid + "," + e.target.dataset.domain,"GET").then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
@@ -969,16 +962,16 @@ const get_visits = () => {
 /* 
  ** CREATE NEW WEBSIITE PAGE
  */
-const new_page = () => {
+const new_page = (e) => {
     const selected = pageNav.querySelector(".selected");
-    execProcess( "article/"+domainName.dataset.id+","+selected.dataset.id,"POST").then( (data) => {
+    execProcess( "article/"+gWebsiteId+","+selected.dataset.id,"POST").then( (data) => {
         gArticleId = data.article_id;
         if (selected) {
             selected.insertAdjacentHTML('afterend',data.nav_label);
         } else {
             pageNav.insertAdjacentHTML('afterbegin',data.nav_label);
         }
-        selected_nav(gArticleId);
+        selected_nav(pageNav,gArticleId);
         editor_status = "init";
         editor_status_text = "";
         editor.setData("");
@@ -990,7 +983,7 @@ const new_page = () => {
  ** UPLOAD MEDIA TO CLOUDINARY
  */
 const upload_media = () => {
-    if (!domainName.dataset.id) {
+    if (gWebsiteId===0) {
         popupOpen("CANT DO THAT YET","Need a Domain Name");
         return;
     }
@@ -1002,10 +995,10 @@ const upload_media = () => {
 }
 
 /* 
- ** ASSIGN "selected" CLASS TO NAV ITEM
+ ** ASSIGN "selected" CLASS TO CLICKED NAV ITEM
  */
-const selected_nav = (id) => {
-    pageNav.querySelectorAll("a").forEach((link) => {
+const selected_nav = (nav, id) => {
+    nav.querySelectorAll("div > a").forEach((link) => {
         link.classList.remove("selected");
         if (link.dataset.id == id) {
             link.classList.add("selected");
@@ -1030,7 +1023,7 @@ const selected_contact = (contact_form) => {
 /* 
  ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR 
  */
-const edit_text = (e) => {
+const edit_text = () => {
     execProcess( "article/"+gArticleId,"GET").then( (data) => {
         editor_status = "init";
         editor_status_text.textContent = data.updated_date;
@@ -1044,9 +1037,6 @@ const edit_text = (e) => {
             galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
             lazyload();
         }
-
-        selected_contact(data.contact_form);
-        selected_nav(gArticleId);
     });
 }
 
@@ -1054,7 +1044,7 @@ const edit_text = (e) => {
  ** GET HTML FOR SELECTED FIELD TO EDIT IN MODAL DIALOG
  */
 const edit_field = (e) => {
-    execProcess( "edit-field","PUT",{"table_column":e.target.dataset.column, "website_id":domainName.dataset.id, "id":gArticleId}).then( (data) => {
+    execProcess( "edit-field","PUT",{"table_column":e.target.dataset.column, "website_id":gWebsiteId, "id":gArticleId}).then( (data) => {
         const content = editField.querySelector(".content");
         content.replaceChildren();
         content.insertAdjacentHTML('afterbegin',data.content);
@@ -1066,7 +1056,7 @@ const edit_field = (e) => {
  ** ADD CONTACT FORM TO PAGE - TOGGLE LABEL
  */
 const add_contact = (e) => {
-    execProcess( "contact-form/"+domainName.dataset.id+","+gArticleId,"PUT").then( (data) => {
+    execProcess( "contact-form/"+gWebsiteId+","+gArticleId,"PUT").then( (data) => {
         const nav_label = pageNav.querySelector("[data-id='"+gArticleId+"']");
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.classList.add("icon");
@@ -1084,7 +1074,7 @@ const add_contact = (e) => {
  ** REMOVE CONTACT FORM FROM PAGE - - TOGGLE LABEL
  */
 const remove_contact = (e) => {
-    execProcess( "contact-form/"+domainName.dataset.id+","+gArticleId,"DELETE").then( (data) => {
+    execProcess( "contact-form/"+gWebsiteId+","+gArticleId,"DELETE").then( (data) => {
         const nav_label = pageNav.querySelector("[data-id='"+gArticleId+"']");
         nav_label.querySelector("svg").remove();
         e.target.classList.remove("remove-contact");
@@ -1097,9 +1087,9 @@ const remove_contact = (e) => {
  ** GET WEBSITE ARTICLE ASSETS TO OPEN IN CODEPEN
  */
 const edit_codepen = () => {
-    const form = container.querySelector("[action='https://codepen.io/pen/define']");
+    const form = wrapper.querySelector("[action='https://codepen.io/pen/define']");
 
-    execProcess( "article/"+domainName.dataset.id+","+gArticleId,"GET").then( (data) => {
+    execProcess( "article/"+gWebsiteId+","+gArticleId,"GET").then( (data) => {
         let formdata = {
             title: data.domain_name,
             html: data.html,
@@ -1138,7 +1128,7 @@ const upload_codepen = async () => {
     
     const file = await fileHandle.getFile();
 
-    execProcess( "content/"+domainName.dataset.id+","+gArticleId,"POST",file).then( (data) => {
+    execProcess( "content/"+gWebsiteId+","+gArticleId,"POST",file).then( (data) => {
         if (data.html_updated) {
             editor.setData(data.html_updated);
         }
@@ -1189,7 +1179,7 @@ const delete_object = (e) => {
 
         case "website":
             confirm.querySelector("img").style.display = "none";
-            object_id = domainName.dataset.id;
+            object_id = gWebsiteId;
             confirm.querySelector("p").style.display = "block";
             confirm.querySelector("p").textContent = domainName.value;
             break;
@@ -1208,7 +1198,7 @@ const delete_object_confirm = (e) => {
     pk.table_name = e.target.dataset.table;
     if (pk.table_name === "website_article") {
         pk.article_id = e.target.dataset.id;
-        pk.website_id = domainName.dataset.id;
+        pk.website_id = gWebsiteId;
     } else {
         pk.id = e.target.dataset.id;
     }
