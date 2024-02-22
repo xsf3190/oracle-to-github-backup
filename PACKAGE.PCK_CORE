@@ -14,7 +14,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildContactForm(pContactEmail IN website.contact_email%type DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
+    FUNCTION buildDeployButtons(pWebsiteId IN website.id%type, pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
@@ -275,12 +275,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     /*
      **  Build deploy and visit buttons
      */
-    FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2 is
+    FUNCTION buildDeployButtons(pWebsiteId IN website.id%type, pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2 is
         l_html LONG;
-        l_text VARCHAR2(50);
+        l_netlify_url VARCHAR2(50);
     BEGIN
-
-        l_text:='https://' || REPLACE(pDomainName,'.','-') || '.netlify.app';
+        l_netlify_url:=REPLACE(pDomainName,'.','-') || '.netlify.app';
 
         IF (pNetlifySiteId IS NOT NULL) THEN 
             l_html:=
@@ -288,31 +287,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <button type="button" class="deploy-website pushable" data-site_id="' || pNetlifySiteId || '">
                     <span class="shadow"></span>
                     <span class="edge"></span>
-                    <span class="front">' || l_text || '</span>
+                    <span class="front">' || l_netlify_url || '</span>
                 </button>
-                <button type="button" class="visits pushable">
+                <button type="button" class="visits pushable" data-domain="' || l_netlify_url || '">
                     <span class="shadow"></span>
                     <span class="edge"></span>
                     <span class="front">VISITS</span>
                 </button>
-            </div';
-            IF (pNetlifySiteIdCustom IS NOT NULL) THEN 
-                l_html:=l_html || 
-                '<hr>
-                <div>
-                    <button type="button" class="deploy-website pushable" data-site_id="'|| pNetlifySiteIdCustom || '">
-                        <span class="shadow"></span>
-                        <span class="edge"></span>
-                        <span class="front">https://www.' || pDomainName || '</span>
-                    </button>
-                    <button type="button" class="visits pushable">
-                        <span class="shadow"></span>
-                        <span class="edge"></span>
-                        <span class="front">VISITS</span>
-                    </button>
-                </div>';
-            END IF;
+            </div>';
         END IF;
+        IF (pNetlifySiteIdCustom IS NOT NULL) THEN 
+            l_html:=l_html || 
+            '<div>
+                <button type="button" class="deploy-website pushable" data-site_id="'|| pNetlifySiteIdCustom || '">
+                    <span class="shadow"></span>
+                    <span class="edge"></span>
+                    <span class="front">' || pDomainName || '</span>
+                </button>
+                <button type="button" class="visits pushable" data-domain="' || pDomainName || '">
+                    <span class="shadow"></span>
+                    <span class="edge"></span>
+                    <span class="front">VISITS</span>
+                </button>
+            </div>';
+        END IF;
+
         RETURN(l_html);
     END;
 
@@ -727,7 +726,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         </button>
                     </li>
                     <li class="visits">
-                        <button type="button" class="with-icon visits" >
+                        <button type="button" class="with-icon visits" data-id="' || apex_application.g_flow_id || '" data-domain="' || SUBSTR(apex_util.host_url(),9) || '">
                             <svg class="icon">
                                 <use href="#list"></use>
                             </svg>
@@ -756,13 +755,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         pNetlifySiteIdCustom IN OUT website.netlify_site_id%type) RETURN VARCHAR2 IS
         l_html LONG;
     BEGIN
-        l_html:='<nav class="website-nav">';
+        l_html:=
+        '<nav class="website-nav">';
         FOR C IN (SELECT id, domain_name, netlify_site_id, netlify_site_id_custom,ROW_NUMBER() OVER(ORDER BY COALESCE(updated_date, created_date) DESC) rn
                     FROM website
                    WHERE user_id=pUserId
                    ORDER BY domain_name)
         LOOP
-            l_html:=l_html || '<a href="#" data-id="' || C.id || '" class="edit-website';
+            l_html:=l_html || 
+            '<div>
+                <a href="#" data-id="' || C.id || '" class="nav-label';
             IF (C.rn=1) THEN
                 l_html:=l_html || ' selected';
                 pSelectedWebsiteId:=C.id;
@@ -771,10 +773,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 pNetlifySiteIdCustom:=C.netlify_site_id_custom;
             END IF;
             l_html:=l_html || '">' || C.domain_name || 
-            '</a>
-            <button type="button" class="website-options" data-id="' || C.id || '"><svg class="icon"><use href="#pencil"></use></svg></button>';
+                '</a>
+                <button type="button" class="website-options" data-id="' || C.id || '">
+                    <svg><use href="#pencil"></use></svg>
+                </button>
+            </div>';
         END LOOP;
-        l_html:=l_html || '</nav>';
+        l_html:=l_html || 
+        '</nav>';
         RETURN (l_html);
     END;
 
@@ -787,7 +793,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    WHERE website_id=pWebsiteId
                    ORDER BY display_order) 
         LOOP
-            l_html:=l_html || '<a href="#" data-id="' || C.article_id || '" class="nav-label';
+            l_html:=l_html || 
+            '<div>
+                <a href="#" data-id="' || C.article_id || '" class="nav-label';
             IF (C.rn=1) THEN 
                 l_html:=l_html ||' selected';
                 pSelectedArticleId:=C.article_id;
@@ -797,7 +805,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 l_html:=l_html || '<svg class="icon"><use href="#envelope"></use></svg>';
                 pContactForm:=C.contact_form;
             END IF;
-            l_html:=l_html || '</a>';
+            l_html:=l_html || 
+                '</a>
+                <button type="button" class="page-options" data-id="' || C.article_id || '">
+                    <svg><use href="#pencil"></use></svg>
+                </button>
+            </div>';
         END LOOP;
         RETURN(l_html);
     END;
@@ -905,10 +918,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <nav class="page-nav">' || 
                 pPageNav || 
             '</nav>
-            <div id="editor"></div>
-                <div>
-                    <span id="word-count"></span>
-                </div>
+            <div id="editor">
+            </div>
+            <div>
+                <span id="word-count"></span>
             </div>
         </div>');
     END;
@@ -925,8 +938,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </dialog>
         <dialog class="website-options">
             <div>
-                <div class="content"></div>
                 <button type="button" class="close">&times;</button>
+                <div class="content"></div>
             </div>
         </dialog>
         <dialog class="edit-field">
@@ -1005,16 +1018,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
            AND w.is_admin='Yes'
          FETCH FIRST ROW ONLY;
 
-        l_clob:=pck_icons.g_icons_svg;
-
         l_clob:= 
         '<div class="wrapper">' ||
             buildTopNav(l_is_admin) ||
             '<div class="auto-fit-cards">
                 <div>
-                    <div class="space-between">' ||
+                    <div>' ||
                         buildPushableButton('new-website', '#plus') ||
-                        buildPushableButton('website-options') ||
                     '</div>' ||
                     buildWebsiteNav(l_session_data.user_id, l_selected_website_id, l_selected_website_domain, l_netlify_site_id, l_netlify_site_id_custom) ||
                 '</div>
@@ -1022,11 +1032,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <fieldset class="deploy-buttons">
                         <legend>Publish Website</legend>
                         <div>' ||
-                            buildDeployButtons(l_selected_website_domain, l_netlify_site_id, l_netlify_site_id_custom) ||
+                            buildDeployButtons(l_selected_website_id, l_selected_website_domain, l_netlify_site_id, l_netlify_site_id_custom) ||
                         '</div>
                     </fieldset>
                 </div>
-            </div>';
+            </div><!-- END auto-fit-cards-->';
 
             l_page_nav:=buildPageNav(l_selected_website_id, l_selected_article_id, l_selected_contact_form);
 
@@ -1034,13 +1044,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             '<div class="page-content">' ||
                 buildMediaCard(l_selected_article_id) ||
                 buildPageCard(l_page_nav, l_selected_contact_form) ||
-            '</div>
+            '</div><!-- END page-content-->
             <form action="https://codepen.io/pen/define" method="POST" target="_blank">
                 <input type="hidden" name="data" value="">
             </form>' ||
             buildDialogs() ||
             pck_icons.g_icons_svg ||
-        '</div>';
+        '</div><!-- END wrapper-->';
 
         RETURN l_clob;
     END;
