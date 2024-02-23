@@ -16,11 +16,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildDeployButtons(pWebsiteId IN website.id%type, pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
+    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2;
+    --
+    FUNCTION buildPageNav(pWebsiteId IN website.id%type, pSelectedArticleId IN OUT website_article.article_id%type) RETURN CLOB;
+    --
+    FUNCTION buildRadioWrapper(pColumn IN VARCHAR2, pRadioButtons IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2;
     --
     FUNCTION buildSelectWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pOptionsColumn IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN CLOB;
     --
-    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN CLOB, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
+    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2;
     --
     FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
     --
@@ -370,9 +374,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     END;    
 
     /*
-     **  Create wrapper html for textarea element, optionally including dropdown
+     **  Create wrapper html for textarea element
      */
-    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN CLOB, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB IS
+    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2 IS
         l_table_name user_tab_columns.table_name%type;
         l_column_name user_tab_columns.column_name%type;
         l_data_length user_tab_columns.data_length%type;
@@ -393,14 +397,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_column_name:=LOWER(l_column_name);
 
         RETURN('
-        <div class="textarea-wrapper">' ||
-            CASE WHEN pDropdown IS NOT NULL THEN '<div class="button-container">' END || '
+        <div class="textarea-wrapper">
             <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
-                CASE WHEN pCanUsePopover 
-                        THEN '<button type="button" popovertarget="' || l_column_name || '_popover"><svg class="icon"><use href="#info"></use></svg></button>
-                              <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' END ||'
-            </label>' || pDropdown || 
-            CASE WHEN pDropdown IS NOT NULL THEN '</div>' END || '
+            CASE WHEN pCanUsePopover THEN
+            '<button type="button" popovertarget="' || l_column_name || '_popover">
+                <svg class="icon"><use href="#info"></use></svg>
+            </button>
+            <div id="' || l_column_name || '_popover" popover>' || l_comments || 
+            '</div>'
+            END ||
+            '</label>
             <textarea class="cms" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
                 CASE WHEN l_data_type='CLOB' THEN '" rows="5" cols="60"' 
                      WHEN l_data_length=4000 THEN '" rows="5" cols="50" maxlength="' || l_data_length || '"' 
@@ -417,7 +423,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     /*
      **  Create wrapper html for textarea element, optionally including dropdown
      */
-    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDropdown IN VARCHAR2 DEFAULT NULL) RETURN CLOB IS
+    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2 IS
         l_table_name user_tab_columns.table_name%type;
         l_column_name user_tab_columns.column_name%type;
         l_data_length user_tab_columns.data_length%type;
@@ -438,14 +444,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_column_name:=LOWER(l_column_name);
 
         RETURN('
-        <div class="input-wrapper">' ||
-            CASE WHEN pDropdown IS NOT NULL THEN '<div class="button-container">' END || '
+        <div class="input-wrapper">
             <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
-                CASE WHEN pCanUsePopover 
-                        THEN '<button type="button" popovertarget="' || l_column_name || '_popover"><svg class="icon"><use href="#info"></use></svg></button>
-                              <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' END ||'
-            </label>' || pDropdown || 
-            CASE WHEN pDropdown IS NOT NULL THEN '</div>' END || '
+            CASE WHEN pCanUsePopover THEN
+                '<button type="button" popovertarget="' || l_column_name || '_popover">
+                    <svg class="icon"><use href="#info"></use></svg>
+                </button>
+                <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' 
+            END ||
+            '</label>
             <input  class="cms" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
                 '" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '" data-id="' || pId || '">
             <div class="button-container">
@@ -763,8 +770,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    ORDER BY domain_name)
         LOOP
             l_html:=l_html || 
-            '<div>
-                <a href="#" data-id="' || C.id || '" class="nav-label';
+            '<div data-id="' || C.id || '">
+                <a href="#" class="nav-label';
             IF (C.rn=1) THEN
                 l_html:=l_html || ' selected';
                 pSelectedWebsiteId:=C.id;
@@ -774,7 +781,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             END IF;
             l_html:=l_html || '">' || C.domain_name || 
                 '</a>
-                <button type="button" class="website-options" data-id="' || C.id || '">
+                <button type="button" class="website-options">
                     <svg><use href="#pencil"></use></svg>
                 </button>
             </div>';
@@ -784,30 +791,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_html);
     END;
 
-    FUNCTION buildPageNav(pWebsiteId IN website.id%type, pSelectedArticleId IN OUT website_article.article_id%type, pContactForm IN OUT website_article.contact_form%type) RETURN VARCHAR2 IS
-        l_html LONG;
+    FUNCTION buildPageNav(pWebsiteId IN website.id%type, pSelectedArticleId IN OUT website_article.article_id%type) RETURN CLOB IS
+        l_html CLOB;
     BEGIN
-        FOR C IN (SELECT navigation_label, article_id, contact_form, 
+        FOR C IN (SELECT navigation_label, article_id, 
                             ROW_NUMBER() OVER(ORDER BY COALESCE(updated_date, created_date) DESC) rn
                     FROM website_article
                    WHERE website_id=pWebsiteId
                    ORDER BY display_order) 
         LOOP
             l_html:=l_html || 
-            '<div>
-                <a href="#" data-id="' || C.article_id || '" class="nav-label';
+            '<div data-id="' || C.article_id || '">
+                <a href="#" class="nav-label';
             IF (C.rn=1) THEN 
                 l_html:=l_html ||' selected';
                 pSelectedArticleId:=C.article_id;
             END IF;
             l_html:=l_html  || '">' || C.navigation_label;
-            IF (C.contact_form='YES') THEN
-                l_html:=l_html || '<svg class="icon"><use href="#envelope"></use></svg>';
-                pContactForm:=C.contact_form;
-            END IF;
             l_html:=l_html || 
                 '</a>
-                <button type="button" class="page-options" data-id="' || C.article_id || '">
+                <button type="button" class="page-options">
                     <svg><use href="#pencil"></use></svg>
                 </button>
             </div>';
@@ -851,7 +854,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </div>');
     END;
 
-    FUNCTION buildPageCard(pPageNav IN VARCHAR2, pContactForm IN VARCHAR2) RETURN VARCHAR2 IS
+    FUNCTION buildPageCard(pPageNav IN VARCHAR2) RETURN VARCHAR2 IS
     BEGIN
         RETURN(
         '<div>
@@ -868,8 +871,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             </button>
                         </li>
                         <li>
-                            <button type="button" class="with-icon ' || CASE WHEN pContactForm='YES' THEN 'remove-contact' ELSE 'add-contact' END || '">
-                                <svg class="icon"><use href="' || CASE WHEN pContactForm='YES' THEN '#minus' ELSE '#plus' END || '"></use></svg>
+                            <button type="button" class="with-icon add-contact">
+                                <svg class="icon"><use href="#plus"></use></svg>
                             Contact Form
                             </button>
                         </li>                    
@@ -1006,7 +1009,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_netlify_site_id_custom website.netlify_site_id%type;
         l_page_nav LONG;
         l_selected_article_id website_article.article_id%type;
-        l_selected_contact_form website_article.contact_form%type;
     BEGIN
         l_session_data:=getSessionData();
 
@@ -1038,12 +1040,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 </div>
             </div><!-- END auto-fit-cards-->';
 
-            l_page_nav:=buildPageNav(l_selected_website_id, l_selected_article_id, l_selected_contact_form);
+            l_page_nav:=buildPageNav(l_selected_website_id, l_selected_article_id);
 
             l_clob:=l_clob || 
             '<div class="page-content">' ||
                 buildMediaCard(l_selected_article_id) ||
-                buildPageCard(l_page_nav, l_selected_contact_form) ||
+                buildPageCard(l_page_nav) ||
             '</div><!-- END page-content-->
             <form action="https://codepen.io/pen/define" method="POST" target="_blank">
                 <input type="hidden" name="data" value="">
