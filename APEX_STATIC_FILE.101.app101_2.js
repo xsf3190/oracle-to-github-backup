@@ -78,14 +78,13 @@ const focusHandler = (e) => {
 }
 
 const changeHandler = (e) => {
-    if (!e.target.matches(".cms")) return;
+    /*if (!e.target.matches(".cms")) return;*/
     let result;
-    if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT"  || e.target.tagName == "SELECT") {
-        result = e.target.nextElementSibling.querySelector(".result");
-    } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
+    if (e.target.tagName == "INPUT" && e.target.type == "radio") {
+        console.log(e.target.closest("fieldset"));
         result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
     } else {
-        return;
+        result = e.target.nextElementSibling.querySelector(".result");
     }
 
     const table_column = e.target.dataset.column,
@@ -164,7 +163,8 @@ const edit_website = () => {
 
         if (data.nav_labels) {
             pageNav.insertAdjacentHTML('afterbegin',data.nav_labels);
-            gArticleId = pageNav.querySelector(".selected").dataset.id; 
+            gArticleId = data.selected; 
+            console.log("gArticleId",gArticleId);
             if (data.html) {
                 editor.setData(data.html);
                 editor_status_text.textContent = data.updated_date;
@@ -176,7 +176,6 @@ const edit_website = () => {
                 galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
                 lazyload();
             }
-            /*selected_contact(data.contact_form);*/
         } else {
             gArticleId = 0;
             editor.setData("");
@@ -293,8 +292,9 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     /* display last updated article - i.e. has class selected */
-    gWebsiteId = websiteNav.querySelector("a.selected").dataset.id;
-    gArticleId = pageNav.querySelector("a.selected").dataset.id;
+    gWebsiteId = websiteNav.querySelector("a.selected").closest("div").dataset.id;
+    gArticleId = pageNav.querySelector("a.selected").closest("div").dataset.id;
+    edit_text();
     lazyload();
 });
 
@@ -471,19 +471,24 @@ const clickHandler = (e) => {
             popupOpen("Click Source button",".. cannot switch pages when in Source editing mode");
             return;
         }
-        const nav = e.target.closest("nav");
-        selected_nav(nav,e.target.dataset.id);
+        const id = e.target.parentElement.dataset.id,
+              nav = e.target.closest("nav");
+
+        selected_nav(nav,id);
+
         if (nav.matches(".website-nav")) {
-            gWebsiteId = e.target.dataset.id;
+            gWebsiteId = id;
             edit_website();
         } else if (nav.matches(".page-nav")) {
-            gArticleId = e.target.dataset.id;
+            gArticleId = id;
             edit_text();
         }
     } else if (e.target.matches(".visits")) {
         get_visits(e); 
     } else if (e.target.matches(".website-options")) {
         website_options();
+    } else if (e.target.matches(".page-options")) {
+        page_options();
     } else if (e.target.matches(".new-page")) {
         new_page(e);   
     } else if (e.target.matches(".edit-codepen")) {
@@ -765,15 +770,9 @@ new Sortable(pageNav, {
     sort: true,
     animation: 150,
     ghostClass: 'drag-in-progress',
-    filter: ".dropdown",
-    onMove: function (e) {
-          return e.related.className === 'nav-label';
-    },
     store: {
         set: async function (sortable) {
-            let arr = sortable.toArray();
-            arr.pop();
-            execProcess("reorder-articles/" + gWebsiteId, "PUT", {dbid_string: arr.join(":")} ).then( () => {
+            execProcess("reorder-articles/" + gWebsiteId, "PUT", {dbid_string: sortable.toArray().join(":")} ).then( () => {
                 console.log("pages reordered");
             });
         }
@@ -940,7 +939,18 @@ if (window.location.hash === "#_=_"){
  ** GET WEBSIITE OPTIONS
  */
 const website_options = () => {
-   execProcess( "website-options/"+gWebsiteId,"GET").then( (data) => {
+    execProcess( "website-options/"+gWebsiteId,"GET").then( (data) => {
+        websiteContent.replaceChildren();
+        websiteContent.insertAdjacentHTML('afterbegin',data.content);
+        websiteDialog.showModal();
+    });
+}
+
+/* 
+ ** GET PAGE OPTIONS
+ */
+const page_options = () => {
+    execProcess( "page-options/"+gWebsiteId+","+gArticleId,"GET").then( (data) => {
         websiteContent.replaceChildren();
         websiteContent.insertAdjacentHTML('afterbegin',data.content);
         websiteDialog.showModal();
@@ -998,9 +1008,9 @@ const upload_media = () => {
  ** ASSIGN "selected" CLASS TO CLICKED NAV ITEM
  */
 const selected_nav = (nav, id) => {
-    nav.querySelectorAll("div > a").forEach((link) => {
+    nav.querySelectorAll("a").forEach((link) => {
         link.classList.remove("selected");
-        if (link.dataset.id == id) {
+        if (link.parentElement.dataset.id === id) {
             link.classList.add("selected");
         }
     });
