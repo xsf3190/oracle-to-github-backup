@@ -18,7 +18,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2;
     --
+    FUNCTION buildNavLabel(pId IN INTEGER, pSelected IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2) RETURN VARCHAR2;
+    --
     FUNCTION buildPageNav(pWebsiteId IN website.id%type, pSelectedArticleId IN OUT website_article.article_id%type) RETURN CLOB;
+    --
+    FUNCTION buildPushableButton(pClassName IN VARCHAR2, pSvgHref IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildRadioWrapper(pColumn IN VARCHAR2, pRadioButtons IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2;
     --
@@ -754,6 +758,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </nav>');
     END;
 
+    FUNCTION buildNavLabel(pId IN INTEGER, pSelected IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2) RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+        '<div data-id="' || pId || '">
+            <a href="#" class="nav-label' || CASE WHEN pSelected=1 THEN ' selected' END || '">' || pLabel || '</a>
+            <button type="button" class="' || pClassName || '">
+                <svg><use href="#pencil"></use></svg>
+            </button>
+        </div>');
+    END;
+
     FUNCTION buildWebsiteNav(
         pUserId IN users.id%type, 
         pSelectedWebsiteId IN OUT website.id%type, 
@@ -769,22 +784,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    WHERE user_id=pUserId
                    ORDER BY domain_name)
         LOOP
-            l_html:=l_html || 
-            '<div data-id="' || C.id || '">
-                <a href="#" class="nav-label';
+            l_html:=l_html || buildNavLabel(C.id, C.rn, C.domain_name, 'website-options');
             IF (C.rn=1) THEN
-                l_html:=l_html || ' selected';
                 pSelectedWebsiteId:=C.id;
                 pNetlifySiteId:=C.netlify_site_id;
                 pSelectedWebsiteDomain:=C.domain_name;
                 pNetlifySiteIdCustom:=C.netlify_site_id_custom;
             END IF;
-            l_html:=l_html || '">' || C.domain_name || 
-                '</a>
-                <button type="button" class="website-options">
-                    <svg><use href="#pencil"></use></svg>
-                </button>
-            </div>';
         END LOOP;
         l_html:=l_html || 
         '</nav>';
@@ -794,26 +800,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     FUNCTION buildPageNav(pWebsiteId IN website.id%type, pSelectedArticleId IN OUT website_article.article_id%type) RETURN CLOB IS
         l_html CLOB;
     BEGIN
-        FOR C IN (SELECT navigation_label, article_id, 
-                            ROW_NUMBER() OVER(ORDER BY COALESCE(updated_date, created_date) DESC) rn
+        FOR C IN (SELECT navigation_label, article_id, ROW_NUMBER() OVER(ORDER BY COALESCE(updated_date, created_date) DESC) rn
                     FROM website_article
                    WHERE website_id=pWebsiteId
                    ORDER BY display_order) 
         LOOP
-            l_html:=l_html || 
-            '<div data-id="' || C.article_id || '">
-                <a href="#" class="nav-label';
+            l_html:=l_html || TO_CLOB(buildNavLabel(C.article_id, C.rn, C.navigation_label, 'page-options'));
             IF (C.rn=1) THEN 
-                l_html:=l_html ||' selected';
                 pSelectedArticleId:=C.article_id;
             END IF;
-            l_html:=l_html  || '">' || C.navigation_label;
-            l_html:=l_html || 
-                '</a>
-                <button type="button" class="page-options">
-                    <svg><use href="#pencil"></use></svg>
-                </button>
-            </div>';
         END LOOP;
         RETURN(l_html);
     END;
@@ -834,98 +829,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </button>');
     END;
 
-    FUNCTION buildMediaCard(pArticleId IN website.id%type) RETURN VARCHAR2 IS
+    FUNCTION buildMediaCard(pArticleId IN website.id%type) RETURN CLOB IS
         l_thumbnails CLOB;
     BEGIN
         getThumbnails(pArticleId, l_thumbnails);
         RETURN(
-        '<div>' ||
-            buildPushableButton('upload-media') ||
-            '<div role="region" aria-label="gallery">
-                <ul class="gallery-list">' || l_thumbnails || '</ul>
-            </div>
-            <div class="gallery-overlay">
-                <img src="">
-                <span class="counter"></span>
-                <button type="button" class="close-fullscreen">&times;</button>
-                <button type="button" class="prev">&lt;</button>
-                <button type="button" class="next">&gt;</button>
-            </div>
-        </div>');
-    END;
-
-    FUNCTION buildPageCard(pPageNav IN VARCHAR2) RETURN VARCHAR2 IS
-    BEGIN
-        RETURN(
-        '<div>
-            <div class="space-between">' ||
-                buildPushableButton('new-page','#plus') ||
-                '<div class="dropdown">
-                    <span>Edit Options</span>
-                    <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                    <ul class="dropdown-items">
-                        <li>
-                            <button type="button" class="with-icon edit-field" data-column="website_article.navigation_label">
-                                <svg class="icon"><use href="#link"></use></svg>
-                            Navigation Label
-                            </button>
-                        </li>
-                        <li>
-                            <button type="button" class="with-icon add-contact">
-                                <svg class="icon"><use href="#plus"></use></svg>
-                            Contact Form
-                            </button>
-                        </li>                    
-                        <li>
-                            <button type="button" class="with-icon edit-codepen">
-                                <svg class="icon"><use href="#codepen"></use></svg>
-                            Codepen Editor
-                            </button>
-                        </li>
-                        <li>
-                            <button type="button" class="with-icon upload-codepen">
-                                <svg class="icon"><use href="#upload"></use></svg>
-                            Upload Codepen Zip
-                            </button>
-                        </li>
-                        <li>
-                            <button type="button" class="with-icon restore-article">
-                                <svg class="icon"><use href="#backward"></use></svg>
-                            Restore Before Login
-                            </button>
-                        </li>
-                        <li>
-                            <button type="button" class="with-icon edit-field" data-column="website_article.page_title">
-                                <svg class="icon"><use href="#searchengin"></use></svg>
-                            Page Title (SEO)
-                            </button>
-                        </li>
-                        <li>
-                            <button type="button" class="with-icon edit-field" data-column="website_article.page_description">
-                                <svg class="icon"><use href="#searchengin"></use></svg>
-                            Page Description (SEO)
-                            </button>
-                        </li>
-                        <li>
-                            <hr>
-                        </li>
-                        <li>
-                            <button type="button" class="with-icon delete" data-table="website_article">
-                                <svg class="icon"><use href="#delete"></use></svg>
-                            Delete Page
-                            </button>
-                        </li>     
-                    </ul>
-                </div>
-            </div>
-            <nav class="page-nav">' || 
-                pPageNav || 
-            '</nav>
-            <div id="editor">
-            </div>
-            <div>
-                <span id="word-count"></span>
-            </div>
+        buildPushableButton('upload-media') ||
+        '<div role="region" aria-label="gallery">
+            <ul class="gallery-list">' || l_thumbnails || '</ul>
+        </div>
+        <div class="gallery-overlay">
+            <img src="">
+            <span class="counter"></span>
+            <button type="button" class="close-fullscreen">&times;</button>
+            <button type="button" class="prev">&lt;</button>
+            <button type="button" class="next">&gt;</button>
         </div>');
     END;
 
@@ -954,23 +872,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         <span class="shadow"></span>
                         <span class="edge"></span>
                         <span class="front">SAVE</span>
-                    </button>
-                </form>
-            </div>
-        </dialog>
-        <dialog class="delete-confirm">
-            <div>
-                <button type="button" class="close">&times;</button>
-                <h2></h2>
-                <div class="content">
-                    <img>
-                    <p></p>
-                </div>
-                <form method="dialog">
-                    <button type="button" class="confirmBtn pushable">
-                        <span class="shadow"></span>
-                        <span class="edge"></span>
-                        <span class="front">CONFIRM</span>
                     </button>
                 </form>
             </div>
@@ -1007,7 +908,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_selected_website_domain website.domain_name%type;
         l_netlify_site_id website.netlify_site_id%type;
         l_netlify_site_id_custom website.netlify_site_id%type;
-        l_page_nav LONG;
+        l_page_nav CLOB;
         l_selected_article_id website_article.article_id%type;
     BEGIN
         l_session_data:=getSessionData();
@@ -1038,15 +939,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         '</div>
                     </fieldset>
                 </div>
-            </div><!-- END auto-fit-cards-->';
-
-            l_page_nav:=buildPageNav(l_selected_website_id, l_selected_article_id);
-
-            l_clob:=l_clob || 
-            '<div class="page-content">' ||
-                buildMediaCard(l_selected_article_id) ||
-                buildPageCard(l_page_nav) ||
-            '</div><!-- END page-content-->
+            </div><!-- END auto-fit-cards-->
+            <div class="page-content">
+                <div>' ||
+                    buildMediaCard(l_selected_article_id) ||
+                '</div>
+                <div>' ||
+                    buildPushableButton('new-page','#plus') ||
+                    '<nav class="page-nav">' || 
+                        buildPageNav(l_selected_website_id, l_selected_article_id) ||
+                    '</nav>
+                    <div id="editor"></div>
+                    <div>
+                        <span id="word-count"></span>
+                    </div>
+                </div>
+            </div><!-- END page-content-->
             <form action="https://codepen.io/pen/define" method="POST" target="_blank">
                 <input type="hidden" name="data" value="">
             </form>' ||
