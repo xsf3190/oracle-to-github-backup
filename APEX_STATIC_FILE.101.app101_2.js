@@ -1,5 +1,5 @@
 let gWebsiteId,
-    gArticleId,
+    gArticleId=null,
     gBrowser,
     gConnectionType,
     gFullImage,
@@ -20,10 +20,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       cards = wrapper.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
-      confirm = wrapper.querySelector("dialog.delete-confirm"),
-      confirmBtn = confirm.querySelector(".confirmBtn"),
       editField = wrapper.querySelector("dialog.edit-field"),
-      editorContainer = wrapper.querySelector("div.editor"),
       galleryList = wrapper.querySelector(".gallery-list"),
       galleryFull = wrapper.querySelector(".gallery-overlay"),
       galleryFullImg = galleryFull.querySelector("img"),
@@ -111,7 +108,11 @@ const changeHandler = (e) => {
         }
 
         if (table_column === "website_article.navigation_label") {
-            pageNav.querySelector("a.selected").textContent = value;
+            const selected = pageNav.querySelector("[data-id='"+gArticleId+"'] > a");
+            selected.textContent = value;
+        } else if (table_column === "website.domain_name") {
+            const selected = websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a");
+            selected.textContent = value;            
         }
     });
 }
@@ -164,7 +165,6 @@ const edit_website = () => {
         if (data.nav_labels) {
             pageNav.insertAdjacentHTML('afterbegin',data.nav_labels);
             gArticleId = data.selected; 
-            console.log("gArticleId",gArticleId);
             if (data.html) {
                 editor.setData(data.html);
                 editor_status_text.textContent = data.updated_date;
@@ -177,7 +177,7 @@ const edit_website = () => {
                 lazyload();
             }
         } else {
-            gArticleId = 0;
+            gArticleId = null;
             editor.setData("");
             galleryList.replaceChildren();
         }
@@ -293,9 +293,12 @@ window.addEventListener("DOMContentLoaded", () => {
 
     /* display last updated article - i.e. has class selected */
     gWebsiteId = websiteNav.querySelector("a.selected").closest("div").dataset.id;
-    gArticleId = pageNav.querySelector("a.selected").closest("div").dataset.id;
-    edit_text();
-    lazyload();
+
+    if (pageNav.querySelector("a.selected")) {
+        gArticleId = pageNav.querySelector("a.selected").closest("div").dataset.id;
+        edit_text();
+        lazyload();
+    }
 });
 
 const lazyload = () => {
@@ -500,22 +503,16 @@ const clickHandler = (e) => {
         console.log("restore article content");                                                                                                           
     } else if (e.target.matches(".upload-media")) {
         upload_media();                                
-    } else if (e.target.matches(".edit-field")) {
-        edit_field(e); 
     } else if (e.target.matches(".new-website")) {
         new_website(); 
-    } else if (e.target.matches(".delete")) {
-        delete_object(e);
-    } else if (e.target.matches(".confirmBtn")) {
-        delete_object_confirm(e);
+    } else if (e.target.matches(".delete-page")) {
+        delete_page();
     } else if (e.target.matches(".expand")) {
         showFullScreen(e);                                 
     } else if (e.target.matches(".copy")) {
         copy_url(e);                                 
     } else if (e.target.matches(".deploy-website")) {
         deploy_website(e);
-    } else if (e.target.matches(".add-contact")) {
-        add_contact(e);
     } else if (e.target.matches(".remove-contact")) {
         remove_contact(e);
     } else if (e.target.matches(".saveBtn")) {
@@ -835,6 +832,12 @@ const saveData = async ( data ) => {
         editor_status="ok";
         return Promise.resolve();
     }
+    if (!gArticleId) {
+        editor_status_text.textContent = "New Page enables editor";
+        editor_status_text.style.color = "red";
+        return Promise.resolve();
+    }
+
     const pendingActions = editor.plugins.get( 'PendingActions' );
     const action = pendingActions.add( 'Saving changes' );
 
@@ -970,22 +973,26 @@ const get_visits = (e) => {
 }
 
 /* 
- ** CREATE NEW WEBSIITE PAGE
+ ** CREATE NEW WEBSIITE PAGE. INSERTED AFTER SELECTED PAGE
  */
 const new_page = (e) => {
-    const selected = pageNav.querySelector(".selected");
-    execProcess( "article/"+gWebsiteId+","+selected.dataset.id,"POST").then( (data) => {
-        gArticleId = data.article_id;
+    execProcess( "article/"+gWebsiteId+","+gArticleId,"POST").then( (data) => {
+        /* gArticleId points to currently selected page */
+        const selected = pageNav.querySelector("[data-id='"+gArticleId+"']");
+        
         if (selected) {
+            selected.querySelector("a.selected").classList.remove("selected");
             selected.insertAdjacentHTML('afterend',data.nav_label);
         } else {
             pageNav.insertAdjacentHTML('afterbegin',data.nav_label);
         }
-        selected_nav(pageNav,gArticleId);
+
+        gArticleId = data.article_id;
         editor_status = "init";
-        editor_status_text = "";
+        editor_status_text.textContent = "";
         editor.setData("");
         galleryList.replaceChildren();
+        page_options();
     });
 }
 
@@ -1016,20 +1023,6 @@ const selected_nav = (nav, id) => {
     });
 }
 
-const selected_contact = (contact_form) => {
-    const contact_form_btn = document.querySelector(".add-contact,.remove-contact");
-
-    if (contact_form) {
-        contact_form_btn.querySelector("use").setAttribute("href","#minus");
-        contact_form_btn.classList.remove("add-contact");
-        contact_form_btn.classList.add("remove-contact");
-    } else {
-        contact_form_btn.querySelector("use").setAttribute("href","#plus");
-        contact_form_btn.classList.remove("remove-contact");
-        contact_form_btn.classList.add("add-contact");
-    }
-}
-
 /* 
  ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR 
  */
@@ -1047,36 +1040,6 @@ const edit_text = () => {
             galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
             lazyload();
         }
-    });
-}
-
-/* 
- ** GET HTML FOR SELECTED FIELD TO EDIT IN MODAL DIALOG
- */
-const edit_field = (e) => {
-    execProcess( "edit-field","PUT",{"table_column":e.target.dataset.column, "website_id":gWebsiteId, "id":gArticleId}).then( (data) => {
-        const content = editField.querySelector(".content");
-        content.replaceChildren();
-        content.insertAdjacentHTML('afterbegin',data.content);
-        editField.showModal();
-    });
-}
-
-/* 
- ** ADD CONTACT FORM TO PAGE - TOGGLE LABEL
- */
-const add_contact = (e) => {
-    execProcess( "contact-form/"+gWebsiteId+","+gArticleId,"PUT").then( (data) => {
-        const nav_label = pageNav.querySelector("[data-id='"+gArticleId+"']");
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.classList.add("icon");
-        const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-        use.setAttributeNS(null, 'href', '#envelope');
-        svg.appendChild(use);
-        nav_label.appendChild(svg);
-        e.target.classList.remove("add-contact");
-        e.target.classList.add("remove-contact");
-        e.target.querySelector("use").setAttributeNS(null, 'href', '#minus');
     });
 }
 
@@ -1156,50 +1119,32 @@ const restore_article = () => {
 }
 
 /*
- ** DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER - REQUIRES CONFIRMATION
+ ** DELETE PAGE
  */
-const delete_object = (e) => {
-    confirm.querySelector("h2").textContent = "Delete " + e.target.dataset.table.replace("_"," ");
-    confirm.querySelector("img").style.display = "block";
-    confirm.querySelector("p").style.display = "block";
-    let object_id;
-    switch (e.target.dataset.table) {
-        case "website_article":
-            const title = pageNav.querySelector("[data-id='" + gArticleId + "']").textContent;
-            const img = document.querySelector(".ck img:first-of-type");
-            if (img) {
-                confirm.querySelector("img").src = img.src;
-            } else {
-                confirm.querySelector("img").style.display = "none";
-            }
-            if (title) {
-                confirm.querySelector("p").textContent = title;
-            } else {
-                confirm.querySelector("p").style.display = "none";
-            }
-            object_id = gArticleId;
-            break;
-
-        case "asset":
-            const li = e.target.closest("li");
-            object_id = li.dataset.id;
-            confirm.querySelector("img").src = li.querySelector("img").src;
-            confirm.querySelector("p").style.display = "none";
-            break;
-
-        case "website":
-            confirm.querySelector("img").style.display = "none";
-            object_id = gWebsiteId;
-            confirm.querySelector("p").style.display = "block";
-            confirm.querySelector("p").textContent = domainName.value;
-            break;
-    }
-    
-    confirmBtn.dataset.id = object_id;
-    confirmBtn.dataset.table = e.target.dataset.table;
-    confirm.showModal();
+delete_page = () => {
+    execProcess("dml","DELETE",{table_name: "website_article", website_id: gWebsiteId, article_id: gArticleId}).then( () => {
+        let selected = pageNav.querySelector("[data-id='"+gArticleId+"']");
+        /* selected points to page we just removed from database. Need to get next article in navigation  */
+        if (selected.previousElementSibling) {
+            gArticleId = selected.previousElementSibling.dataset.id;
+        } else if (selected.nextElementSibling) {
+            gArticleId = selected.nextElementSibling.dataset.id;
+        } else {
+            gArticleId = null;
+        }
+        selected.remove();
+        selected = pageNav.querySelector("[data-id='"+gArticleId+"']");
+        if (selected) {
+            selected.querySelector("a").classList.add("selected");
+            edit_text();
+        } else {
+            editor_status = "init";
+            editor_status_text.textContent = "";
+            editor.setData("");
+        }
+        websiteDialog.close();
+    });
 }
-
 /*
  ** EXECUTE DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER
  */
