@@ -4,11 +4,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE deleteTable(pBodyText IN CLOB);
     --
-    PROCEDURE getArticle(pId IN VARCHAR2);
+    PROCEDURE getArticle(pArticleId IN article.id%type);
     --
     PROCEDURE getCldDetails;
     --
     PROCEDURE getCldSignature(pParamsToSign IN CLOB);
+    --
+    PROCEDURE getCodepen(pArticleId IN article.id%type);
     --
     PROCEDURE getFieldHTML(pParams IN CLOB);
     --
@@ -52,7 +54,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     g_css_js_start CONSTANT VARCHAR2(24):='/* YOUR CODE START */';
     g_css_js_end CONSTANT VARCHAR2(24):='/* YOUR CODE END */';
 
-        PROCEDURE getCldDetails IS
+    PROCEDURE getCldDetails IS
         l_user_id users.id%type;
         l_cld_cloud_name users.cld_cloud_name%type;
         l_cld_api_key users.cld_api_key%type;
@@ -200,7 +202,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pck_core.buildInputWrapper(pId, 'website_article.navigation_label', C.navigation_label, l_session_data.canuse_popover) ||
                 pck_core.buildTextareaWrapper(pId, 'website_article.page_title', C.page_title, l_session_data.canuse_popover) ||
                 pck_core.buildTextareaWrapper(pId, 'website_article.page_description', C.page_description, l_session_data.canuse_popover) ||
-                pck_core.buildRadioWrapper('website_article.contact_form', l_radio, l_session_data.canuse_popover);        
+                pck_core.buildRadioWrapper('website_article.contact_form', l_radio, l_session_data.canuse_popover) || 
+                '<hr>
+                <details>
+                    <summary>PERMANENTLY DELETE PAGE</summary>' ||
+                    pck_core.buildPushableButton('delete-page') ||
+                '</details>';      
 
             apex_json.open_object;
             apex_json.write('content', l_content);
@@ -458,14 +465,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Get article HTML if 1 parameter passed
-     **  Get all assets (HTML/CSS/JS) for codepen when both parameters passed
-     */    
-    PROCEDURE getArticle(pId IN VARCHAR2)  IS
-        l_id_1 NUMBER;
-        l_id_2 NUMBER;
-        l_thumbnails_html CLOB;
-        l_session_data pck_core.session_data_rt;
+    ** Build resources to open requested article in Codepen
+    */
+    PROCEDURE getCodepen(pArticleId IN article.id%type) IS
+        l_website_id website.id%type;
         l_nav_labels LONG;
         l_email users.email%type;
         l_domain_name website.domain_name%type;
@@ -479,111 +482,110 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_html CLOB;
         l_css CLOB;
         l_javascript CLOB;
+        l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        /* pId contains website_id,article_id or just the article_id */
-        IF (INSTR(pId,',')=0) THEN
-            l_id_1:=pId;
-        ELSE
-            l_id_1:=SUBSTR(pId,1,INSTR(pId,',')-1);
-            l_id_2:=SUBSTR(pId,INSTR(pId,',')+1);
+        SELECT website_id INTO l_website_id FROM website_article WHERE article_id=pArticleId AND user_id=l_session_data.user_id;
+
+        FOR C IN (
+            SELECT wa.navigation_label, wa.article_id, COUNT(*) OVER () nb_pages
+                FROM website w, website_article wa
+                WHERE w.id=l_website_id
+                AND w.user_id=l_session_data.user_id
+                AND wa.website_id=w.id
+            ORDER BY wa.display_order) 
+        LOOP
+            /* Build navigation labels for multi-page websites */
+            IF (C.nb_pages>1) THEN
+                l_nav_labels:=l_nav_labels || 
+                '<a href="#" class="nav-label' || CASE WHEN C.article_id=pArticleId THEN ' selected' END  || '" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
+            END IF;
+        END LOOP;
+
+        IF (l_nav_labels IS NOT NULL) THEN
+            l_nav_labels:='<nav aria-label="Main Navigation">' || l_nav_labels || '</nav>';
         END IF;
 
-        /* Return website resources and content for selected page to be then opened in codepen */
-        IF (l_id_1 IS NOT NULL AND l_id_2 IS NOT NULL) THEN
-            FOR C IN (
-                SELECT wa.navigation_label, wa.article_id, COUNT(*) OVER () nb_pages
-                  FROM website w, website_article wa
-                 WHERE w.id=l_id_1
-                  AND w.user_id=l_session_data.user_id
-                  AND wa.website_id=w.id
-                ORDER BY wa.display_order) 
-            LOOP
-                /* Build navigation labels for multi-page websites */
-                IF (C.nb_pages>1) THEN
-                    l_nav_labels:=l_nav_labels || 
-                    '<a href="#" class="nav-label' || CASE WHEN C.article_id=l_id_2 THEN ' selected' END  || '" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
-                END IF;
-            END LOOP;
+        /* Build page resources */
+        SELECT w.domain_name,  w.font, w.max_width, w.fluid_types, w.color_light, w.color_dark, w.color_primary, a.body_html, w.css, w.javascript, wa.contact_form
+            INTO l_domain_name,  l_font, l_max_width, l_fluid_types, l_color_light, l_color_dark, l_color_primary, l_html, l_css, l_javascript, l_contact_form
+            FROM website w, website_article wa, article a
+            WHERE w.id=l_website_id
+            AND w.user_id=l_session_data.user_id
+            AND wa.website_id=w.id
+            AND wa.article_id=a.id
+            AND a.id=pArticleId;
 
-            IF (l_nav_labels IS NOT NULL) THEN
-                l_nav_labels:='<nav aria-label="Main Navigation">' || l_nav_labels || '</nav>';
-            END IF;
+        /* build html */
+        l_html:=l_nav_labels || chr(10) || g_html_start || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10) || g_html_end || chr(10);
+        IF (l_contact_form='YES') THEN
+            SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
+            l_html:=l_html || pck_core.buildContactForm(l_email);
+        END IF;
 
-            /* Build page resources */
-            SELECT w.domain_name,  w.font, w.max_width, w.fluid_types, w.color_light, w.color_dark, w.color_primary, a.body_html, w.css, w.javascript, wa.contact_form
-              INTO l_domain_name,  l_font, l_max_width, l_fluid_types, l_color_light, l_color_dark, l_color_primary, l_html, l_css, l_javascript, l_contact_form
-              FROM website w, website_article wa, article a
-             WHERE w.id=l_id_1
-               AND w.user_id=l_session_data.user_id
-               AND wa.website_id=w.id
-               AND wa.article_id=a.id
-               AND a.id=l_id_2;
+        /* build css */
+        IF (l_css IS NULL) THEN
+            SELECT apex_util.blob_to_clob(file_content)
+            INTO l_css
+            FROM apex_application_static_files
+            WHERE  application_id=l_session_data.app_id
+            AND file_name='app' || l_session_data.app_id || '_deploy.css';
+        END IF;
 
-            /* build html */
-            l_html:=l_nav_labels || chr(10) || g_html_start || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10) || g_html_end || chr(10);
-            IF (l_contact_form='YES') THEN
-                SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
-                l_html:=l_html || pck_core.buildContactForm(l_email);
-            END IF;
+        l_css:=
+        ':root {' ||chr(10) || l_fluid_types || chr(10) ||
+        '    --font-family: "' || l_font || '";' || chr(10) ||
+        '    --max-width: ' || l_max_width || ';' || chr(10) ||
+        '    --color-light: ' || l_color_light || ';' || chr(10) ||
+        '    --color-dark: ' || l_color_dark || ';' || chr(10) ||
+        '    --color-primary: ' || l_color_primary || ';' || chr(10) ||
+        '}' || chr(10) || chr(10) ||
+        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(l_font,' ','+') || '&display=swap">' || chr(10) || chr(10) 
+        || g_css_js_start || chr(10) || l_css || chr(10) || g_css_js_end;
 
-            /* build css */
-            IF (l_css IS NULL) THEN
-                SELECT apex_util.blob_to_clob(file_content)
-                INTO l_css
-                FROM apex_application_static_files
-                WHERE  application_id=l_session_data.app_id
-                AND file_name='app' || l_session_data.app_id || '_deploy.css';
-            END IF;
+        /* build javascript */
+        IF (l_javascript IS NULL) THEN
+            SELECT apex_util.blob_to_clob(file_content)
+            INTO l_javascript
+            FROM apex_application_static_files
+            WHERE  application_id=l_session_data.app_id
+            AND file_name='app' || l_session_data.app_id || '_metric.js';
+        END IF;
+        l_javascript:=g_css_js_start || chr(10) || l_javascript || chr(10) || g_css_js_end;
 
-            l_css:=
-            ':root {' ||chr(10) || l_fluid_types || chr(10) ||
-            '    --font-family: "' || l_font || '";' || chr(10) ||
-            '    --max-width: ' || l_max_width || ';' || chr(10) ||
-            '    --color-light: ' || l_color_light || ';' || chr(10) ||
-            '    --color-dark: ' || l_color_dark || ';' || chr(10) ||
-            '    --color-primary: ' || l_color_primary || ';' || chr(10) ||
-            '}' || chr(10) || chr(10) ||
-            '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(l_font,' ','+') || '&display=swap">' || chr(10) || chr(10) 
-            || g_css_js_start || chr(10) || l_css || chr(10) || g_css_js_end;
+        apex_json.open_object;
+        apex_json.write('success', TRUE); 
+        apex_json.write('domain_name', l_domain_name);
+        apex_json.write('html', l_html);
+        apex_json.write('css', l_css);
+        apex_json.write('js', l_javascript);
+        apex_json.close_object;
+    END;
 
-            /* build javascript */
-            IF (l_javascript IS NULL) THEN
-                SELECT apex_util.blob_to_clob(file_content)
-                INTO l_javascript
-                FROM apex_application_static_files
-                WHERE  application_id=l_session_data.app_id
-                AND file_name='app' || l_session_data.app_id || '_metric.js';
-            END IF;
-            l_javascript:=g_css_js_start || chr(10) || l_javascript || chr(10) || g_css_js_end;
+    /*
+     **  Get requested page content (text and media)
+     */    
+    PROCEDURE getArticle(pArticleId IN article.id%type)  IS
+        l_thumbnails CLOB;
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
 
+        FOR C IN (
+            SELECT body_html, apex_util.get_since(COALESCE(updated_date, created_date)) updated_date
+            FROM article
+            WHERE id=pArticleId
+            AND author_user_id=l_session_data.user_id)
+        LOOP
+            pck_core.getThumbnails(pArticleId, l_thumbnails);
             apex_json.open_object;
             apex_json.write('success', TRUE); 
-            apex_json.write('domain_name', l_domain_name);
-            apex_json.write('html', l_html);
-            apex_json.write('css', l_css);
-            apex_json.write('js', l_javascript);
+            apex_json.write('html', C.body_html);
+            apex_json.write('thumbnails', l_thumbnails);
+            apex_json.write('updated_date', C.updated_date);
             apex_json.close_object;
-        ELSE
-            FOR C IN (
-                SELECT a.body_html, apex_util.get_since(COALESCE(a.updated_date, a.created_date)) updated_date, wa.contact_form
-                FROM article a, website_article wa
-                WHERE a.id=l_id_1
-                AND a.author_user_id=l_session_data.user_id
-                AND a.id=wa.article_id
-                FETCH FIRST ROW ONLY)  /* got to change this bollox */
-            LOOP
-                pck_core.getThumbnails(l_id_1, l_thumbnails_html);
-                apex_json.open_object;
-                apex_json.write('success', TRUE); 
-                apex_json.write('html', C.body_html);
-                apex_json.write('thumbnails', l_thumbnails_html);
-                apex_json.write('contact_form', CASE WHEN C.contact_form='YES' THEN TRUE ELSE FALSE END);
-                apex_json.write('updated_date', C.updated_date);
-                apex_json.close_object;
-            END LOOP;
-        END IF;
+        END LOOP;
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -626,26 +628,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_session_data:=pck_core.getSessionData();
 
         l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
-        l_selected_id:=SUBSTR(pId,INSTR(pId,',')+1);
 
-        /* Build string of article id to be reordered */ 
         l_next_article_id:=seq_article.nextval;
-        FOR C IN (SELECT article_id FROM website_article WHERE website_id=l_website_id ORDER BY display_order) LOOP
-            apex_string.push(l_dbid_string, C.article_id);
-            IF (C.article_id=l_selected_id) THEN
-                apex_string.push(l_dbid_string, l_next_article_id);
-            END IF;
-        END LOOP;
-
         INSERT INTO article (id, author_user_id, created_date) VALUES (l_next_article_id, l_session_data.user_id, current_timestamp);
         INSERT INTO website_article(article_id, website_id, navigation_label, display_order, user_id) VALUES (l_next_article_id, l_website_id, '[New Page]', 0, l_session_data.user_id);
 
-        reorderWebsiteArticles(l_website_id,'{"dbid_string":"'|| apex_string.join(l_dbid_string,':') ||'"}',pReturnJson=>FALSE);
+        IF (SUBSTR(pId,INSTR(pId,',')+1)<>'null') THEN /* this will be character string "null" if pageNav is empty else reorder pages */
+            l_selected_id:=SUBSTR(pId,INSTR(pId,',')+1);  
+            FOR C IN (SELECT article_id FROM website_article WHERE website_id=l_website_id ORDER BY display_order) LOOP
+                apex_string.push(l_dbid_string, C.article_id);
+                IF (C.article_id=l_selected_id) THEN
+                    apex_string.push(l_dbid_string, l_next_article_id);
+                END IF;
+            END LOOP;
+            reorderWebsiteArticles(l_website_id,'{"dbid_string":"'|| apex_string.join(l_dbid_string,':') ||'"}',pReturnJson=>FALSE);
+        END IF;
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
         APEX_JSON.write('article_id', seq_article.currval);
-        APEX_JSON.write('nav_label','<a href="#" class="nav-label selected" data-id="' || seq_article.currval || '">[New Page]</a>');
+        APEX_JSON.write('nav_label', pck_core.buildNavLabel(seq_article.currval, 1, '[New Page]', 'page-options'));
 
         APEX_JSON.close_object;
 
@@ -738,7 +740,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
            AND website_id=pWebsiteId;
 
         n:=sql%rowcount;
-        /* Confirm current user owned the deleted website_article */
+        /* Confirms that logged onent user owned the deleted website_article */
 
         IF (n=1) THEN 
             SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_article WHERE article_id=pArticleId);
@@ -1249,10 +1251,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                     FROM users, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value CLOB)) t
                    WHERE users.id=l_session_data.user_id)
         LOOP
+            pck_core.log(C.id||'-'||C.table_column);
             IF (INSTR(C.id,',')>0) THEN
                 l_id_1:=SUBSTR(C.id,1,INSTR(C.id,',')-1);
                 l_id_2:=SUBSTR(C.id,INSTR(C.id,',')+1);
-            END IF;            
+            END IF;     
+
 
             CASE C.table_column
                 WHEN 'website.domain_name' THEN
