@@ -74,7 +74,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         MERGE INTO page_hit t
         USING (
             SElECT 
-                website_id, article_id, website_loaded, ip_address, referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, NVL(duration_visible,0) duration_visible, browser, connection, url, mobile,
+                website_id, article_id, website_loaded, ip_address, apex_string_util.get_domain(referrer) referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, NVL(duration_visible,0) duration_visible, browser, connection, url, mobile,
                 to_timestamp('1970-01-01','yyyy-mm-dd') + numtodsinterval(website_loaded,'second') visit_date
             FROM
             (
@@ -126,7 +126,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_content CLOB;
         l_cwv VARCHAR2(200);
         l_visit_date VARCHAR2(22);
-        l_referrer page_hit.referrer%type;
         l_session_data pck_core.session_data_rt;
         n PLS_INTEGER;
     BEGIN
@@ -156,7 +155,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                  GROUP BY website_id, ip_address, visit_date
             )
             SELECT  
-            wh.visit_date, wh.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
+                    wh.visit_date, wh.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
                     wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating, wh.fid_rating
                 FROM website_hits wh, ip_lookup ip
                 WHERE ip.ip=wh.ip_address
@@ -182,21 +181,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 l_cwv:=l_cwv || '<mark></mark>';
             END IF;
 
-            IF (INSTR(C.referrer,'google')>0) 
-                THEN l_referrer:='google';
-            ELSIF (INSTR(C.referrer,'linkedin')>0) 
-                THEN l_referrer:='linkedin';
-            ELSIF (INSTR(C.referrer,'bing')>0) 
-                THEN l_referrer:='bing';
-            ELSE
-                l_referrer:=C.referrer;
-            END IF;
-
             l_content:=l_content || '
                 <li>
                     <span>' || TO_CHAR(C.visit_date AT TIME ZONE l_session_data.timezone, 'dd Mon yyyy fmhh24:fmmi')  || '</span>
                     <span>' || LTRIM(RTRIM(C.location,','),',') || '</span>
-                    <span>' || l_referrer || '</span>
+                    <span>' || C.referrer || '</span>
                     <span>' || C.browser || '</span>
                     <span>' || C.connection || CASE WHEN C.mobile='true' THEN ' (Mob)' END || '</span>
                     <span>' || CASE WHEN C.duration_visible IS NOT NULL THEN TO_CHAR(C.duration_visible) || ' seconds' END || '</span>
