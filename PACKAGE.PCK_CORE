@@ -414,9 +414,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <textarea class="cms" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
                 CASE WHEN l_data_type='CLOB' THEN '" rows="5" cols="60"' 
                      WHEN l_data_length=4000 THEN '" rows="5" cols="50" maxlength="' || l_data_length || '"' 
-                     ELSE '" maxlength="' || l_data_length || '" rows="1"' 
-                END || ' data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '
-            </textarea>        
+                     ELSE '" maxlength="' || l_data_length || '" rows="1" cols="0"' 
+                END || ' data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>        
             <div class="button-container">
                 <span class="result"></span>
                 <span class="charcounter">' || NVL(LENGTH(pValue),0) || CASE WHEN l_data_type<>'CLOB' THEN '/' || l_data_length END || '</span>
@@ -861,19 +860,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <div>
                 <button type="button" class="close">&times;</button>
                 <div class="content"></div>
-            </div>
-        </dialog>
-        <dialog class="edit-field">
-            <div>
-                <button type="button" class="close">&times;</button>
-                <div class="content"></div>
-                <form method="dialog">
-                    <button type="button" class="saveBtn pushable">
-                        <span class="shadow"></span>
-                        <span class="edge"></span>
-                        <span class="front">SAVE</span>
-                    </button>
-                </form>
             </div>
         </dialog>
         <dialog class="log">
