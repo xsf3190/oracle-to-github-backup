@@ -466,7 +466,7 @@ const clickHandler = (e) => {
     if (!open && e.target.matches(".show-dropdown")) {
         e.target.nextElementSibling.classList.toggle("visible");
     }
-
+    
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
         if (e.target.matches(".selected")) return;
@@ -513,8 +513,6 @@ const clickHandler = (e) => {
         copy_url(e);                                 
     } else if (e.target.matches(".deploy-website")) {
         deploy_website(e);
-    } else if (e.target.matches(".remove-contact")) {
-        remove_contact(e);
     } else if (e.target.matches(".saveBtn")) {
         console.log("saveBtn clicked - do nothing!");
     }
@@ -942,6 +940,7 @@ if (window.location.hash === "#_=_"){
  ** GET WEBSIITE OPTIONS
  */
 const website_options = () => {
+    if (websiteDialog.open) return;
     execProcess( "website-options/"+gWebsiteId,"GET").then( (data) => {
         websiteContent.replaceChildren();
         websiteContent.insertAdjacentHTML('afterbegin',data.content);
@@ -1044,25 +1043,12 @@ const edit_text = () => {
 }
 
 /* 
- ** REMOVE CONTACT FORM FROM PAGE - - TOGGLE LABEL
- */
-const remove_contact = (e) => {
-    execProcess( "contact-form/"+gWebsiteId+","+gArticleId,"DELETE").then( (data) => {
-        const nav_label = pageNav.querySelector("[data-id='"+gArticleId+"']");
-        nav_label.querySelector("svg").remove();
-        e.target.classList.remove("remove-contact");
-        e.target.classList.add("add-contact");
-        e.target.querySelector("use").setAttributeNS(null, 'href', '#plus');
-    });
-}
-
-/* 
  ** GET WEBSITE ARTICLE ASSETS TO OPEN IN CODEPEN
  */
 const edit_codepen = () => {
     const form = wrapper.querySelector("[action='https://codepen.io/pen/define']");
 
-    execProcess( "article/"+gWebsiteId+","+gArticleId,"GET").then( (data) => {
+    execProcess( "codepen/"+gArticleId,"GET").then( (data) => {
         let formdata = {
             title: data.domain_name,
             html: data.html,
