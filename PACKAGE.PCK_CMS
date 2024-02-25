@@ -144,15 +144,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                    WHERE id=pWebsiteId
                      AND user_id=l_session_data.user_id) 
         LOOP
-            l_content:=l_content || '<h2>' || C.domain_name || '</h2>';
-            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.domain_name', C.domain_name, l_session_data.canuse_popover);
-            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.contact_email', C.contact_email, l_session_data.canuse_popover);
-            l_content:=l_content || pck_core.buildSelectWrapper(C.id, 'website.font', C.font, 'google_font.family', l_session_data.canuse_popover);
-            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover);
-            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.color_dark', C.color_dark, l_session_data.canuse_popover);
-            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.color_light', C.color_light, l_session_data.canuse_popover);
-            l_content:=l_content || pck_core.buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover);
-            l_content:=l_content || pck_core.buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover);
+            l_content:='<h2>' || C.domain_name || '</h2>' ||
+                pck_core.buildInputWrapper(C.id, 'website.domain_name', C.domain_name, l_session_data.canuse_popover) ||
+                pck_core.buildInputWrapper(C.id, 'website.contact_email', C.contact_email, l_session_data.canuse_popover) ||
+                pck_core.buildSelectWrapper(C.id, 'website.font', C.font, 'google_font.family', l_session_data.canuse_popover) ||
+                pck_core.buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover) ||
+                pck_core.buildInputWrapper(C.id, 'website.color_dark', C.color_dark, l_session_data.canuse_popover) ||
+                pck_core.buildInputWrapper(C.id, 'website.color_light', C.color_light, l_session_data.canuse_popover) ||
+                pck_core.buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover) ||
+                pck_core.buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover) ||
+                '<details>
+                    <summary>PERMANENTLY DELETE PAGE</summary>' ||
+                    pck_core.buildPushableButton('delete-page','#delete') ||
+                '</details>';
 
             apex_json.open_object;
             apex_json.write('content', l_content);
@@ -203,7 +207,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pck_core.buildTextareaWrapper(pId, 'website_article.page_title', C.page_title, l_session_data.canuse_popover) ||
                 pck_core.buildTextareaWrapper(pId, 'website_article.page_description', C.page_description, l_session_data.canuse_popover) ||
                 pck_core.buildRadioWrapper('website_article.contact_form', l_radio, l_session_data.canuse_popover) || 
-                '<hr>
+                '<details>
+                    <summary>CODEPEN FEATURES</summary>' ||
+                    pck_core.buildPushableButton('edit-codepen','#codepen') ||
+                    pck_core.buildPushableButton('upload-codepen','#codepen') ||
+                '</details>
                 <details>
                     <summary>PERMANENTLY DELETE PAGE</summary>' ||
                     pck_core.buildPushableButton('delete-page') ||
@@ -1273,11 +1281,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 WHEN 'website_article.navigation_label' THEN
                     UPDATE website_article SET navigation_label=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'website_article.page_title' THEN
-                    UPDATE website_article SET page_title=C.value WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'website_article.page_description' THEN
-                    UPDATE website_article SET page_description=C.value WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
                 WHEN 'website_article.contact_form' THEN
-                    UPDATE website_article SET contact_form=C.value WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;       
+                    UPDATE website_article SET contact_form=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;       
             END CASE;
             n:=sql%rowcount;
         END LOOP;
