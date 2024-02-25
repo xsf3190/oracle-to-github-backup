@@ -117,6 +117,20 @@ textarea, button, input, select {
   font: inherit;
 }
 
+details > summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+details > button {
+    margin-block-start: 1em;
+    display: block;
+}
+
+dialog .content > * + * {
+    margin-block-start: var(--space-m);
+}
+
 /***********************/
 /* APPLICATION STYLES  */
 /***********************/
@@ -183,12 +197,10 @@ label {
 }
 
 textarea {
-    border: 0.2ch solid var(--color-pale);
-    border-radius: 0.5ch;
+    border: 0.1em solid var(--color-pale);
+    border-radius: 0.2em;
     resize: both;
     line-height: 1.5;
-    padding-left: 0.5ch;
-    max-width: 90vw;
 }
 
 .textarea-wrapper, radio-wrapper {
@@ -391,33 +403,6 @@ dialog:,
 
 dialog:not(.gallery)::backdrop {
   background-color: rgba(0,0,0,.6);
-}
-
-dialog.delete-confirm > div, dialog.edit-field > div {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    place-items: center;
-}
-
-dialog.delete-confirm button.close, dialog.edit-field button.close {
-    place-self: flex-end;
-}
-
-dialog.delete-confirm div.content {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-}
-
-dialog.delete-confirm div.content > img {
-    inline-size: 10ch;
-    aspect-ratio: 1;
-    object-fit: cover;
-}
-
-dialog.delete-confirm div.content > p {
-    inline-size: fit-content;
 }
 
 dialog.popup > div {
@@ -849,7 +834,7 @@ video {
         width: 1em;
         height: 1em;
         fill: white;
-        margin-right: 0.5em;
+        margin-inline-end: 1em;
         vertical-align: middle;
     }
   }
