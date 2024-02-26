@@ -944,9 +944,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <form action="https://codepen.io/pen/define" method="POST" target="_blank">
                 <input type="hidden" name="data" value="">
             </form>' ||
-            buildDialogs() ||
             pck_icons.g_icons_svg ||
-        '</div><!-- END wrapper-->';
+        '</div><!-- END wrapper-->' || 
+        buildDialogs();
 
         RETURN l_clob;
     END;
