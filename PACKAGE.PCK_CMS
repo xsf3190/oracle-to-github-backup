@@ -1,7 +1,5 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
-    PROCEDURE addContactForm(id IN VARCHAR2);
-    --
     PROCEDURE deleteTable(pBodyText IN CLOB);
     --
     PROCEDURE getArticle(pArticleId IN article.id%type);
@@ -24,7 +22,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE insertArticle(pId IN VARCHAR2);
     --
-    PROCEDURE removeContactForm(id IN VARCHAR2);
+    PROCEDURE insertWebsite(pWebsiteId IN website.id%type);
     --
     PROCEDURE reorderAssets(pBodyText IN CLOB);
     --
@@ -152,10 +150,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 pck_core.buildInputWrapper(C.id, 'website.color_dark', C.color_dark, l_session_data.canuse_popover) ||
                 pck_core.buildInputWrapper(C.id, 'website.color_light', C.color_light, l_session_data.canuse_popover) ||
                 pck_core.buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover) ||
-                pck_core.buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover) ||
+                --pck_core.buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover) ||
                 '<details>
-                    <summary>PERMANENTLY DELETE PAGE</summary>' ||
-                    pck_core.buildPushableButton('delete-page','#delete') ||
+                    <summary>PERMANENTLY DELETE WEBSITE</summary>' ||
+                    pck_core.buildPushableButton('delete-website','#delete') ||
                 '</details>';
 
             apex_json.open_object;
@@ -269,13 +267,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     */
     PROCEDURE getWebsite(pWebsiteId IN website.id%type) IS
         l_session_data pck_core.session_data_rt;
+        l_website_id website.id%type;
         l_nav_labels LONG;
         l_thumbnails LONG;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
         apex_json.open_object;
-
         FOR C IN (
             SELECT w.domain_name, w.css, w.javascript, w.netlify_site_id, w.netlify_site_id_custom
               FROM website w
@@ -624,6 +622,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
+     **  Insert new website.
+     */        
+    PROCEDURE insertWebsite(pWebsiteId IN website.id%type) IS
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        INSERT INTO website (id, domain_name, user_id, created_date) VALUES (seq_website.nextval, '[New Website]', l_session_data.user_id, current_timestamp);
+
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.write('website_id', seq_website.currval);
+        APEX_JSON.write('nav_label', pck_core.buildNavLabel(seq_website.currval, 1, '[New Website]', 'website-options'));
+
+        APEX_JSON.close_object;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
+    /*
      **  Insert new page in website
      */        
     PROCEDURE insertArticle(pId IN VARCHAR2) IS
@@ -641,7 +661,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         INSERT INTO article (id, author_user_id, created_date) VALUES (l_next_article_id, l_session_data.user_id, current_timestamp);
         INSERT INTO website_article(article_id, website_id, navigation_label, display_order, user_id) VALUES (l_next_article_id, l_website_id, '[New Page]', 0, l_session_data.user_id);
 
-        IF (SUBSTR(pId,INSTR(pId,',')+1)<>'null') THEN /* this will be character string "null" if pageNav is empty else reorder pages */
+        IF (SUBSTR(pId,INSTR(pId,',')+1)<>'0') THEN /* this will be character string "0" if pageNav is empty else reorder pages */
             l_selected_id:=SUBSTR(pId,INSTR(pId,',')+1);  
             FOR C IN (SELECT article_id FROM website_article WHERE website_id=l_website_id ORDER BY display_order) LOOP
                 apex_string.push(l_dbid_string, C.article_id);
@@ -971,54 +991,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error;
-    END;          
-
-    /*
-     **  Add Contact Form to website article
-     */   
-    PROCEDURE addContactForm(id IN VARCHAR2) IS
-        l_session_data pck_core.session_data_rt;
-        l_website_id website_article.website_id%type;
-        l_article_id website_article.article_id%type;
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-        l_website_id:=SUBSTR(id,1,INSTR(id,',')-1);
-        l_article_id:=SUBSTR(id,INSTR(id,',')+1);
-
-        UPDATE website_article SET contact_form='YES', updated_date=current_date WHERE website_id=l_website_id AND article_id=l_article_id AND user_id=l_session_data.user_id;
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.close_object;        
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
     END;
-
-    /*
-     **  Remove Contact Form from website article
-     */   
-    PROCEDURE removeContactForm(id IN VARCHAR2) IS
-        l_session_data pck_core.session_data_rt;
-        l_website_id website_article.website_id%type;
-        l_article_id website_article.article_id%type;
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-        l_website_id:=SUBSTR(id,1,INSTR(id,',')-1);
-        l_article_id:=SUBSTR(id,INSTR(id,',')+1);
-
-        UPDATE website_article SET contact_form='NO', updated_date=current_date WHERE website_id=l_website_id AND article_id=l_article_id AND user_id=l_session_data.user_id;
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.close_object;        
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-                RAISE;
-    END;    
 
     /*
      **  Reorder website articles
@@ -1310,7 +1283,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /**
-     **    Delete Table row
+     **    Delete Website / Page / Media Asset / User
      */
     PROCEDURE deleteTable(pBodyText IN CLOB) IS
         l_session_data pck_core.session_data_rt;
@@ -1325,7 +1298,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                 WHEN 'user' THEN
                     null;            
                 WHEN 'website' THEN
-                    deleteWebsite(l_session_data.user_id,C.id);
+                    deleteWebsite(l_session_data.user_id,C.website_id);
                 WHEN 'website_article' THEN
                     deleteArticle(l_session_data.user_id,C.article_id,C.website_id);
                 WHEN 'asset' THEN
