@@ -1,5 +1,5 @@
 let gWebsiteId,
-    gArticleId=null,
+    gArticleId,
     gBrowser,
     gConnectionType,
     gFullImage,
@@ -12,7 +12,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       wrapper = document.querySelector(".wrapper"),
       logDialog = document.querySelector("dialog.log"),
       logContent = logDialog.querySelector(".content"),
-      websiteDialog = wrapper.querySelector("dialog.website-options"),
+      websiteDialog = document.querySelector("dialog.website-options"),
       websiteContent = websiteDialog.querySelector(".content"),
       deployButtons = wrapper.querySelector(".deploy-buttons > div"),
       websiteNav = wrapper.querySelector(".website-nav"),
@@ -20,7 +20,6 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       cards = wrapper.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
-      editField = wrapper.querySelector("dialog.edit-field"),
       galleryList = wrapper.querySelector(".gallery-list"),
       galleryFull = wrapper.querySelector(".gallery-overlay"),
       galleryFullImg = galleryFull.querySelector("img"),
@@ -75,6 +74,7 @@ const focusHandler = (e) => {
 }
 
 const changeHandler = (e) => {
+    console.log("changeHandler");
     /*if (!e.target.matches(".cms")) return;*/
     let result;
     if (e.target.tagName == "INPUT" && e.target.type == "radio") {
@@ -143,13 +143,6 @@ const resetWebsite = () => {
 }
 
 /*
- **  NEW WEBSITE
- */
-const new_website = () => {
-    console.log("new website please");
-};
-
-/*
  **  EDIT WEBSITE
  */
 const edit_website = () => {
@@ -177,7 +170,7 @@ const edit_website = () => {
                 lazyload();
             }
         } else {
-            gArticleId = null;
+            gArticleId = 0;
             editor.setData("");
             galleryList.replaceChildren();
         }
@@ -254,27 +247,11 @@ const checkPerformance = () => {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-    console.log("DOM fully loaded and parsed");
+    console.log("DOMContentLoaded");
     
     console.log("apex_app_id",apex_app_id);
     console.log("apex_page_id",apex_page_id);
     console.log("apex_session",apex_session);
-
-    const browser = bowser.getParser(window.navigator.userAgent),
-          browserName = browser.getBrowserName(),
-          browserVersion = browser.getBrowserVersion().split(".");
-
-    gBrowser = browserName + " " + browserVersion[0];
-    if (browserVersion[1]!=="0") {
-        gBrowser+="."+browserVersion[1];
-    }
-    console.log("gBrowser",gBrowser);
-
-    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (connection) {
-        gConnectionType = connection.downlink + " Mb/s" + " -" + connection.effectiveType;
-        console.log("gConnectionType",gConnectionType);
-    }
 
     if (navigator.maxTouchPoints > 1) {
         wrapper.addEventListener("touchstart",clickHandler);
@@ -291,11 +268,12 @@ window.addEventListener("DOMContentLoaded", () => {
         observer.observe({ type: "resource", buffered: true });
     }
 
-    /* display last updated article - i.e. has class selected */
-    gWebsiteId = websiteNav.querySelector("a.selected").closest("div").dataset.id;
+    /* display last updated website and article */
+    gWebsiteId = websiteNav.querySelector("a.selected") ?  websiteNav.querySelector("a.selected").closest("div").dataset.id : 0;
+    gArticleId = pageNav.querySelector("a.selected") ? pageNav.querySelector("a.selected").closest("div").dataset.id : 0;
+    console.log("gWebsiteId,gArticleId",gWebsiteId,gArticleId);
 
-    if (pageNav.querySelector("a.selected")) {
-        gArticleId = pageNav.querySelector("a.selected").closest("div").dataset.id;
+    if (gArticleId > 0) {
         edit_text();
         lazyload();
     }
@@ -399,8 +377,13 @@ const execProcess = (template, method, input) => {
             }
 
             if (!response.ok) {
-                const data = await response.json();
-                popupOpen(data.action, data.cause);
+                if (response.status===404) {
+                    popupOpen(response.status, method+" "+url);
+                    /*reject("https response =" +response.status);*/
+                } else {
+                    const data = await response.json();
+                    popupOpen(data.action, data.cause);
+                }
                 throw new Error("Network response was not OK");
             }
 
@@ -466,7 +449,7 @@ const clickHandler = (e) => {
     if (!open && e.target.matches(".show-dropdown")) {
         e.target.nextElementSibling.classList.toggle("visible");
     }
-    
+    console.log(e.target.classList);
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
         if (e.target.matches(".selected")) return;
@@ -488,6 +471,8 @@ const clickHandler = (e) => {
         }
     } else if (e.target.matches(".visits")) {
         get_visits(e); 
+    } else if (e.target.matches(".new-website")) {
+        new_website(); 
     } else if (e.target.matches(".website-options")) {
         website_options();
     } else if (e.target.matches(".page-options")) {
@@ -502,11 +487,11 @@ const clickHandler = (e) => {
         /*restore_article();*/
         console.log("restore article content");                                                                                                           
     } else if (e.target.matches(".upload-media")) {
-        upload_media();                                
-    } else if (e.target.matches(".new-website")) {
-        new_website(); 
+        upload_media();                            
     } else if (e.target.matches(".delete-page")) {
         delete_page();
+    } else if (e.target.matches(".delete-website")) {
+        delete_website();
     } else if (e.target.matches(".expand")) {
         showFullScreen(e);                                 
     } else if (e.target.matches(".copy")) {
@@ -971,6 +956,29 @@ const get_visits = (e) => {
     });
 }
 
+/*
+ **  NEW WEBSITE
+ */
+const new_website = () => {
+    execProcess( "website/"+gWebsiteId,"POST").then( (data) => {
+        const selected = websiteNav.querySelector("[data-id='"+gWebsiteId+"']");
+        
+        if (selected) {
+            selected.querySelector("a.selected").classList.remove("selected");
+            selected.insertAdjacentHTML('afterend',data.nav_label);
+        } else {
+            websiteNav.insertAdjacentHTML('afterbegin',data.nav_label);
+        }
+
+        gWebsiteId = data.website_id;
+        editor_status = "init";
+        editor_status_text.textContent = "";
+        editor.setData("");
+        galleryList.replaceChildren();
+        website_options();
+    });
+};
+
 /* 
  ** CREATE NEW WEBSIITE PAGE. INSERTED AFTER SELECTED PAGE
  */
@@ -1116,7 +1124,7 @@ delete_page = () => {
         } else if (selected.nextElementSibling) {
             gArticleId = selected.nextElementSibling.dataset.id;
         } else {
-            gArticleId = null;
+            gArticleId = 0;
         }
         selected.remove();
         selected = pageNav.querySelector("[data-id='"+gArticleId+"']");
@@ -1134,41 +1142,26 @@ delete_page = () => {
 /*
  ** EXECUTE DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER
  */
-const delete_object_confirm = (e) => {
-    let pk={};
-    pk.table_name = e.target.dataset.table;
-    if (pk.table_name === "website_article") {
-        pk.article_id = e.target.dataset.id;
-        pk.website_id = gWebsiteId;
-    } else {
-        pk.id = e.target.dataset.id;
-    }
-    execProcess("dml","DELETE",pk).then( () => {
-        let ele;
-        switch (pk.table_name) {
-            case "website_article":
-                pageNav.querySelector(".selected").remove();
-                ele = pageNav.querySelector("a:first-of-type");
-                if (ele) {
-                    gArticleId = ele.dataset.id;
-                    edit_text();
-                }
-                break;
-
-            case "asset":
-                ele = galleryList.querySelector("[data-id='" + pk.id + "']");
-                ele.classList.add("fade-out");
-                ele.remove();
-                break;
-
-            case "website":
-                ele = website.querySelector("[data-id='" + pk.id + "']");
-                resetWebsite();
-                ele.remove();
-                // replace with first website in dropdown
-                website.querySelector(".edit-website").click();
-                break;                    
+const delete_website = () => {
+    console.log("before delete",gWebsiteId);
+    execProcess("dml","DELETE",{table_name: "website", website_id: gWebsiteId}).then( () => {
+        let selected = websiteNav.querySelector("[data-id='"+gWebsiteId+"']");
+        /* selected points to page we just removed from database. Need to get next article in navigation  */
+        if (selected.previousElementSibling) {
+            gWebsiteId = selected.previousElementSibling.dataset.id;
+        } else if (selected.nextElementSibling) {
+            gWebsiteId = selected.nextElementSibling.dataset.id;
+        } else {
+            gWebsiteId = 0;
         }
-        confirm.close();
+        console.log("after delete",gWebsiteId);
+        if (gWebsiteId === 0) {
+            editor_status = "init";
+            editor_status_text.textContent = "";
+            editor.setData("");
+        } else {
+            websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").click();
+        }
+        websiteDialog.close();
     });
 }
