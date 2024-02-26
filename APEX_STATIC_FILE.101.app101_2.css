@@ -91,13 +91,6 @@
     inline-size: min(95vw, 70ch);
 }
 
-h4, ul {
-    margin-block-start: 0;
-    margin-block-end: 0;
-    padding-inline-start: 0;
-    padding-inline-end: 0;
-}
-
 body {
     font-family: var(--font-serif);
     font-size: var(--step-0);
@@ -326,7 +319,6 @@ legend {
 
 ol.visits {
     font-size: var(--step--1);
-    border-top: solid 1px var(--color-solid);
     & li {
         list-style: none;
         display: grid;
@@ -621,24 +613,22 @@ nav button {
 }
 
 .page-content > div{
-    padding: 1rem;
+    padding: 1em;
 }
 
 .page-content > div:nth-of-type(1) {
-    border: solid 0.25ch pink;
+    border: solid 1px var(--color-solid);
     flex-basis: 50ch;
     flex-grow: 1;
-    height: 100vh;
     overflow-y: scroll;
 }
 
 .page-content > div:nth-of-type(2) {
-    border: solid 0.25ch red;
+    border: solid 1px var(--color-solid);
     flex-basis: 0;
     flex-grow: 999;
     min-inline-size: 50%;
     margin-inline-end: 1rem;
-    height: 100vh;
     overflow-y: scroll;
 }
 
@@ -668,14 +658,13 @@ nav button {
   list-style: none;
   margin: 0;
   display: grid;
-  gap: 0.25rem;
-  grid-template-columns: repeat(auto-fill, minmax(min(7rem, 100%), 1fr));
+  gap: 0.25em;
+  grid-template-columns: repeat(auto-fill, minmax(min(4em, 100%), 1fr));
 }
 
 .gallery-list li {
     border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 5px;
+    padding: var(--space-3xs);
     display: grid;
     grid-template-areas: "overlay";
 }
