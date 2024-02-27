@@ -283,15 +283,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     /*
      **  Build deploy and visit buttons
      */
-    FUNCTION buildDeployButtons(pWebsiteId IN website.id%type, pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2 is
-        l_html LONG;
+    FUNCTION buildDeployButtons(pWebsiteId IN website.id%type, pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2 IS
         l_netlify_url VARCHAR2(50);
     BEGIN
         l_netlify_url:=REPLACE(pDomainName,'.','-') || '.netlify.app';
 
-        IF (pNetlifySiteId IS NOT NULL) THEN 
-            l_html:=
-            '<div>
+        RETURN('
+            <div>
                 <button type="button" class="deploy-website pushable" data-site_id="' || pNetlifySiteId || '">
                     <span class="shadow"></span>
                     <span class="edge"></span>
@@ -302,11 +300,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <span class="edge"></span>
                     <span class="front">VISITS</span>
                 </button>
-            </div>';
-        END IF;
-        IF (pNetlifySiteIdCustom IS NOT NULL) THEN 
-            l_html:=l_html || 
-            '<div>
+            </div>
+            <div' || CASE WHEN pNetlifySiteIdCustom IS NULL THEN ' style="opacity:0"' END || '>
                 <button type="button" class="deploy-website pushable" data-site_id="'|| pNetlifySiteIdCustom || '">
                     <span class="shadow"></span>
                     <span class="edge"></span>
@@ -317,10 +312,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <span class="edge"></span>
                     <span class="front">VISITS</span>
                 </button>
-            </div>';
-        END IF;
-
-        RETURN(l_html);
+            </div>');
     END;
 
     /*
@@ -668,7 +660,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <div class="actions">
                         <button type="button" class="copy"><svg><use href="#copy"></use></svg></button>
                         <button type="button" class="expand"><svg><use href="#expand"></use></svg></button>
-                        <button type="button" class="delete" data-table="asset"><svg><use href="#delete"></use></svg></button>
+                        <button type="button" class="delete-asset"><svg><use href="#delete"></use></svg></button>
                     </div>');
 
             CASE l_media_type
@@ -862,6 +854,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <div class="content"></div>
             </div>
         </dialog>
+        <dialog class="page-options">
+            <div>
+                <button type="button" class="close">&times;</button>
+                <div class="content"></div>
+            </div>
+        </dialog>
         <dialog class="log">
             <div>
                 <div class="content"></div>
@@ -944,9 +942,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <form action="https://codepen.io/pen/define" method="POST" target="_blank">
                 <input type="hidden" name="data" value="">
             </form>' ||
+            buildDialogs() ||
             pck_icons.g_icons_svg ||
-        '</div><!-- END wrapper-->' || 
-        buildDialogs();
+        '</div><!-- END wrapper-->';
 
         RETURN l_clob;
     END;
