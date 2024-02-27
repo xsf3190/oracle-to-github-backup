@@ -1,7 +1,6 @@
 let gWebsiteId,
     gArticleId,
     gBrowser,
-    gConnectionType,
     gFullImage,
     gIntervalId,
     gExpiredSession = false;
@@ -14,6 +13,8 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       logContent = logDialog.querySelector(".content"),
       websiteDialog = document.querySelector("dialog.website-options"),
       websiteContent = websiteDialog.querySelector(".content"),
+      pageDialog = document.querySelector("dialog.page-options"),
+      pageContent = pageDialog.querySelector(".content"),
       deployButtons = wrapper.querySelector(".deploy-buttons > div"),
       websiteNav = wrapper.querySelector(".website-nav"),
       pageNav = wrapper.querySelector(".page-nav"),
@@ -74,8 +75,7 @@ const focusHandler = (e) => {
 }
 
 const changeHandler = (e) => {
-    console.log("changeHandler");
-    /*if (!e.target.matches(".cms")) return;*/
+    if (!e.target.matches(".cms")) return;
     let result;
     if (e.target.tagName == "INPUT" && e.target.type == "radio") {
         console.log(e.target.closest("fieldset"));
@@ -253,6 +253,13 @@ window.addEventListener("DOMContentLoaded", () => {
     console.log("apex_page_id",apex_page_id);
     console.log("apex_session",apex_session);
 
+    let browser = bowser.getParser(window.navigator.userAgent),
+        browserName = browser.getBrowserName(),
+        browserVersion = browser.getBrowserVersion();
+
+    gBrowser = browserName + "," + browserVersion;
+    console.log("gBrowser",gBrowser);
+
     if (navigator.maxTouchPoints > 1) {
         wrapper.addEventListener("touchstart",clickHandler);
     } else {
@@ -345,7 +352,7 @@ const perfObserver = (list) => {
                     mediaQueue.add(
                         {"session_id": apex_session, "cld_cloud_name": parts[3], "resource_type": resource_type, "public_id": public_id, "epoch": Math.round(Date.now()/1000),
                         "url": entry.name, "transfersize": transferSize, "duration": duration, "content_type":contentType,
-                        "window_innerwidth": window.innerWidth, "browser":gBrowser, "connection_type": gConnectionType, "servertiming": entry.serverTiming}
+                        "window_innerwidth": window.innerWidth, "browser":gBrowser, "servertiming": entry.serverTiming}
                     );
                 })
                 .catch(error => {
@@ -449,7 +456,7 @@ const clickHandler = (e) => {
     if (!open && e.target.matches(".show-dropdown")) {
         e.target.nextElementSibling.classList.toggle("visible");
     }
-    console.log(e.target.classList);
+
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
         if (e.target.matches(".selected")) return;
@@ -492,6 +499,8 @@ const clickHandler = (e) => {
         delete_page();
     } else if (e.target.matches(".delete-website")) {
         delete_website();
+    } else if (e.target.matches(".delete-asset")) {
+        delete_asset(e);
     } else if (e.target.matches(".expand")) {
         showFullScreen(e);                                 
     } else if (e.target.matches(".copy")) {
@@ -925,7 +934,6 @@ if (window.location.hash === "#_=_"){
  ** GET WEBSIITE OPTIONS
  */
 const website_options = () => {
-    if (websiteDialog.open) return;
     execProcess( "website-options/"+gWebsiteId,"GET").then( (data) => {
         websiteContent.replaceChildren();
         websiteContent.insertAdjacentHTML('afterbegin',data.content);
@@ -938,9 +946,9 @@ const website_options = () => {
  */
 const page_options = () => {
     execProcess( "page-options/"+gWebsiteId+","+gArticleId,"GET").then( (data) => {
-        websiteContent.replaceChildren();
-        websiteContent.insertAdjacentHTML('afterbegin',data.content);
-        websiteDialog.showModal();
+        pageContent.replaceChildren();
+        pageContent.insertAdjacentHTML('afterbegin',data.content);
+        pageDialog.showModal();
     });
 }
 
@@ -1007,12 +1015,11 @@ const new_page = (e) => {
  ** UPLOAD MEDIA TO CLOUDINARY
  */
 const upload_media = () => {
-    if (gWebsiteId===0) {
-        popupOpen("CANT DO THAT YET","Need a Domain Name");
+    if (gArticleId===0) {
+        popupOpen("CANT DO THAT YET","Media are uploaded to a selected Page");
         return;
     }
     execProcess( "cld-details","GET").then( (data) => {
-        //console.log(data);
         widget.open();
         widget.update({tags: [gArticleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
     });
@@ -1113,6 +1120,16 @@ const restore_article = () => {
 }
 
 /*
+ ** DELETE MEDIA ASSET
+ */
+delete_asset = (e) => {
+    const asset = e.target.closest("li");
+    execProcess("dml","DELETE",{table_name: "asset", asset_id: asset.dataset.id}).then( () => {
+        asset.remove();
+    });
+}
+
+/*
  ** DELETE PAGE
  */
 delete_page = () => {
@@ -1136,9 +1153,10 @@ delete_page = () => {
             editor_status_text.textContent = "";
             editor.setData("");
         }
-        websiteDialog.close();
+        pageDialog.close();
     });
 }
+
 /*
  ** EXECUTE DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER
  */
@@ -1146,7 +1164,7 @@ const delete_website = () => {
     console.log("before delete",gWebsiteId);
     execProcess("dml","DELETE",{table_name: "website", website_id: gWebsiteId}).then( () => {
         let selected = websiteNav.querySelector("[data-id='"+gWebsiteId+"']");
-        /* selected points to page we just removed from database. Need to get next article in navigation  */
+        /* selected points to website we just removed from database. Need to get next article in navigation  */
         if (selected.previousElementSibling) {
             gWebsiteId = selected.previousElementSibling.dataset.id;
         } else if (selected.nextElementSibling) {
@@ -1154,7 +1172,7 @@ const delete_website = () => {
         } else {
             gWebsiteId = 0;
         }
-        console.log("after delete",gWebsiteId);
+        selected.remove();
         if (gWebsiteId === 0) {
             editor_status = "init";
             editor_status_text.textContent = "";
