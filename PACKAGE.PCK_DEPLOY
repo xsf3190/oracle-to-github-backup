@@ -6,9 +6,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE deployWebsite(pBodyText IN CLOB);
     --
-    PROCEDURE updateDeploymentStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB);
+    PROCEDURE getDeploymentStatus(pId IN VARCHAR2);
     --
-    PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type);
+    --PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type);
     --
     PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type, pResturl IN VARCHAR2, pApplicationId IN VARCHAR2) ;
     --
@@ -35,7 +35,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /* Check no other session currently deploying */
 
         FOR C IN (SELECT job_name FROM user_scheduler_running_jobs WHERE job_name LIKE 'DEPLOY_%') LOOP
-            logDeployment('{"site_id":"' || l_site_id || '","status":"Someone else is deploying ... try again later","exitcode":1}',l_website_id);
+            logDeployment(l_website_id, l_site_id, 'Someone else is deploying ... try again later' 'NOK');
             apex_json.open_object;
             apex_json.write('success', TRUE);
             apex_json.close_object;
@@ -43,9 +43,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END LOOP;
 
 
-        DELETE website_deploy WHERE website_id=l_website_id AND site_id=l_site_id;
+        DELETE website_deploy WHERE website_id=l_website_id;
 
-        logDeployment('{"site_id":"' || l_site_id || '","status":"Preparing Deployment"}',l_website_id);
+        logDeployment(l_website_id, l_site_id, 'Preparing Deployment');
 
         l_job_name:=dbms_scheduler.generate_job_name('DEPLOY_');
         dbms_scheduler.create_job(
@@ -123,6 +123,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_sitemap CLOB;
         l_robots CLOB;
         l_ssl_url VARCHAR2(200);
+        l_netlify_deploy_id website.netlify_deploy_id%type;
         n PLS_INTEGER:=0;
 
         FUNCTION buildNavLabels(pArticleId IN website_article.article_id%type) RETURN VARCHAR2 IS
@@ -270,18 +271,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json.put('files',l_files);
 
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId || '/deploys', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
-        pck_core.log(l_clob);
 
         /* upload to Netlify if required - i.e. file content has changed since last deployment  */
 
         FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
-            logDeployment('{"site_id":"' || pSiteId || '","status":"Uploading ' || l_deploy_files(C.sha1).file_name || '"}',pWebsiteId);
+            l_netlify_deploy_id:=C.id;
+            logDeployment(pWebsiteId, pSiteId, 'Uploading ' || l_deploy_files(C.sha1).file_name);
             pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', pBody=>l_deploy_files(C.sha1).file_content, pData=>l_clob);
         END LOOP;
 
+        UPDATE website SET netlify_deploy_id=l_netlify_deploy_id WHERE id=pWebsiteId;
+
         EXCEPTION
             WHEN OTHERS THEN
-                logDeployment('{"site_id":"' || pSiteId || '","status":"' || SUBSTR(SQLERRM,1,100) || '", "exitcode": 1}',pWebsiteId);
+                logDeployment(pWebsiteId, pSiteId, SUBSTR(SQLERRM,1,100));
                 pck_core.log_error;
     END;
 
@@ -290,16 +293,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
      **  1) Invoked via curl from Github Action
      **  2) called internally within this package to log Netlify actions
      */      
-    PROCEDURE logDeployment(pBodyText IN CLOB, pWebsiteId IN website.id%type) IS 
+    PROCEDURE logDeployment(pWebsiteId IN website.id%type, pSiteId IN website_deploy.site_id%type, pStatus IN VARCHAR2) IS 
         l_site_id website_deploy.site_id%type;
         l_exitcode PLS_INTEGER;
         l_status website_deploy.status%type;
     BEGIN
-        SELECT site_id, status, NVL(exitcode,0)
-          INTO l_site_id, l_status, l_exitcode
-          FROM JSON_TABLE(pBodyText, '$' COLUMNS (site_id, status, exitcode));
-
-        INSERT INTO website_deploy(id, website_id, site_id, status) VALUES (seq_log.nextval, pWebsiteId, l_site_id, l_status || ' - ' || CASE WHEN l_exitcode=0 THEN 'OK' ELSE 'NOK' END);
+        INSERT INTO website_deploy(id, website_id, site_id, status) VALUES (seq_log.nextval, pWebsiteId, pSiteId, pStatus);
 
         COMMIT;
 
