@@ -1,0 +1,261 @@
+CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS_DELETE" IS
+    --
+    PROCEDURE init(pBodyText IN CLOB);
+    --
+    PROCEDURE runDeleteArticle(pUserId IN users.id%type, pEndpoint IN VARCHAR2);
+    --
+    PROCEDURE runDeleteAsset(pUserId IN users.id%type, pCldCloudName IN asset.cld_cloud_name%type, pPublicId IN asset.public_id%type, pCldApiKey IN users.cld_api_key%type, pCldApiSecret IN users.cld_api_secret%type);
+    --
+END;
+/
+CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
+
+    /*
+     **  Delete website_article. If deleted article not in any other website delete the article and any assets
+     */   
+    PROCEDURE deleteArticle(pUserId IN users.id%type, pArticleId IN website_article.article_id%type, pWebsiteId IN website_article.website_id%type, pSendResponse IN BOOLEAN DEFAULT TRUE) IS
+        l_clob CLOB;
+        l_url VARCHAR2(500);
+        l_error_message VARCHAR2(4000);
+        n PLS_INTEGER;
+        l_job_name VARCHAR2(30);
+    BEGIN
+        DELETE website_article 
+         WHERE user_id=pUserId 
+           AND article_id=pArticleId 
+           AND website_id=pWebsiteId;
+
+        n:=sql%rowcount;
+        /* Confirms that logged on user owned the deleted website_article */
+
+        IF (n=1) THEN 
+            SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_article WHERE article_id=pArticleId);
+            IF (n=0) THEN
+                /* Delete externally managed assets in background */
+                FOR C IN (SELECT DISTINCT cld_cloud_name, resource_type
+                            FROM asset
+                           WHERE article_id=pArticleId)
+                LOOP
+                    l_job_name:=dbms_scheduler.generate_job_name('DELETE_'||C.resource_type);
+                    dbms_scheduler.create_job(
+                        job_name   => l_job_name,
+                        job_type   =>'STORED_PROCEDURE',
+                        job_action =>'pck_cms.runDeleteArticle',
+                        number_of_arguments=>2,
+                        start_date=>systimestamp
+                    );
+                    dbms_scheduler.set_job_argument_value(
+                        job_name => l_job_name,
+                        argument_position => 1,
+                        argument_value => pUserId
+                    );
+                    dbms_scheduler.set_job_argument_value(
+                        job_name => l_job_name,
+                        argument_position => 2,
+                        argument_value => C.cld_cloud_name || '/resources/' || C.resource_type || '/tags/' || pArticleId
+                    );
+                    dbms_scheduler.enable(l_job_name);
+                END LOOP;
+
+                /* Delete the article. Referential integrity constraint cascades to linked asset rows */
+                DELETE article WHERE id=pArticleId;
+
+            END IF;
+        END IF;
+
+        IF (pSendResponse) THEN
+            apex_json.open_object;
+            apex_json.write('success', TRUE);
+            apex_json.close_object;
+        END IF;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
+    /*
+    ** DELETE MEDIA ASSETS TAGGED BY DELETED ARTICLE
+    */
+    PROCEDURE runDeleteArticle(pUserId IN users.id%type, pEndpoint IN VARCHAR2) IS
+        l_clob CLOB;
+    BEGIN
+        pck_api.callCloudinaryAPI(pUserId=>pUserId, pEndpoint=>pEndpoint, pMethod=>'DELETE', pData=>l_clob);
+        IF (apex_web_service.g_status_code<>200) THEN
+            pck_core.log(l_clob);
+        END IF;
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
+    PROCEDURE deleteAsset(pUserId IN users.id%type, pAssetId IN asset.id%type) IS
+        l_job_name VARCHAR2(30);
+        n PLS_INTEGER;
+        l_cld_cloud_name asset.cld_cloud_name%type;
+        l_public_id asset.public_id%type;
+        l_cld_api_key users.cld_api_key%type;
+        l_cld_api_secret users.cld_api_secret%type;
+    BEGIN
+        DELETE asset WHERE id=pAssetId AND user_id=pUserId RETURNING cld_cloud_name, public_id INTO l_cld_cloud_name, l_public_id;
+        n:=SQL%ROWCOUNT;
+
+        IF (n=1) THEN
+            SELECT cld_api_key, cld_api_secret INTO l_cld_api_key, l_cld_api_secret FROM users WHERE id=pUserId;
+            l_job_name:=dbms_scheduler.generate_job_name('DELETE_ASSET_');
+            dbms_scheduler.create_job(
+                job_name   => l_job_name,
+                job_type   =>'STORED_PROCEDURE',
+                job_action =>'pck_cms.runDeleteAsset',
+                number_of_arguments=>5,
+                start_date=>systimestamp
+            );
+            dbms_scheduler.set_job_argument_value(
+                job_name => l_job_name,
+                argument_position => 1,
+                argument_value => pUserId
+            );
+            dbms_scheduler.set_job_argument_value(
+                job_name => l_job_name,
+                argument_position => 2,
+                argument_value => l_cld_cloud_name
+            );
+            dbms_scheduler.set_job_argument_value(
+                job_name => l_job_name,
+                argument_position => 3,
+                argument_value => l_public_id
+            );
+            dbms_scheduler.set_job_argument_value(
+                job_name => l_job_name,
+                argument_position => 4,
+                argument_value => l_cld_api_key
+            );
+            dbms_scheduler.set_job_argument_value(
+                job_name => l_job_name,
+                argument_position => 5,
+                argument_value => l_cld_api_secret
+            );
+            dbms_scheduler.enable(l_job_name);
+        END IF;
+
+        apex_json.open_object;  
+        apex_json.write('success',TRUE);
+        apex_json.close_object;        
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
+    /*
+     **  Delete ASSET row and its Cloudinary media
+     */   
+    PROCEDURE runDeleteAsset(pUserId IN users.id%type, pCldCloudName IN asset.cld_cloud_name%type, pPublicId IN asset.public_id%type, pCldApiKey IN users.cld_api_key%type, pCldApiSecret IN users.cld_api_secret%type) IS
+        l_parm_names apex_application_global.VC_ARR2;
+        l_parm_values apex_application_global.VC_ARR2;
+        l_timestamp NUMBER:=trunc((cast(current_timestamp at time zone 'UTC' as date) - to_date('01-jan-1970','dd-mon-yyyy')) * (86400));
+        l_signature VARCHAR2(100);
+        l_string_to_sign varchar2(2000);  
+        l_clob CLOB;
+        l_json JSON_OBJECT_T;
+    BEGIN
+        l_parm_names(1):='invalidate';
+        l_parm_values(1):='true';
+        l_parm_names(2):='public_id';
+        l_parm_values(2):=pPublicId;        
+        l_parm_names(3):='timestamp';    
+        l_parm_values(3):=l_timestamp;                
+
+        l_string_to_sign:=NULL;
+        FOR i IN 1..3 LOOP
+            l_string_to_sign:=l_string_to_sign || l_parm_names(i) || '=' || l_parm_values(i) || '&';
+        END LOOP;
+        l_string_to_sign:=RTRIM(l_string_to_sign,'&') || pCldApiSecret;
+        l_parm_names(4):='signature';
+        l_parm_values(4):=dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign), dbms_crypto.HASH_SH1);   
+        l_parm_names(5):='api_key';
+        l_parm_values(5):=pCldApiKey;    
+
+        l_json:=new JSON_OBJECT_T;
+        FOR i IN 1..l_parm_names.COUNT LOOP
+            l_json.put(l_parm_names(i), l_parm_values(i));
+        END LOOP;        
+
+        pck_api.callCloudinaryAPI(pUserId=>pUserId, pEndpoint=>pCldCloudName || '/image/destroy', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+        IF (apex_web_service.g_status_code<>200) THEN
+            pck_core.log(l_clob);
+        END IF;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
+    /*
+     **  Delete Website and articles from schema and Netlify
+     */  
+    PROCEDURE deleteWebsite(pUserId IN website.user_id%type, pWebsiteId IN website.id%type) IS
+        TYPE t_website_article IS TABLE OF website_article%rowtype;
+        l_website_articles t_website_article;
+        l_netlify_site_id website.netlify_site_id%type;
+        l_netlify_site_id_custom website.netlify_site_id%type;
+        l_clob CLOB;
+    BEGIN
+        SELECT * BULK COLLECT INTO l_website_articles FROM website_article WHERE website_id=pWebsiteId AND user_id=pUserId;
+
+        FOR i IN 1..l_website_articles.COUNT LOOP
+            deleteArticle(pUserId, l_website_articles(i).article_id, l_website_articles(i).website_id, pSendResponse=>FALSE);
+        END LOOP;
+
+        DELETE website WHERE id=pWebsiteId AND user_id=pUserId 
+            RETURNING netlify_site_id, netlify_site_id_custom INTO l_netlify_site_id, l_netlify_site_id_custom;
+
+        IF (l_netlify_site_id IS NOT NULL) THEN
+            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
+        END IF;
+
+        IF (l_netlify_site_id_custom IS NOT NULL) THEN
+            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id_custom, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
+        END IF;
+
+        apex_json.open_object;  
+        apex_json.write('success',TRUE);
+        apex_json.close_object;        
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
+    /**
+     **    Delete Website / Page / Media Asset / User
+     */
+    PROCEDURE init(pBodyText IN CLOB) IS
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        FOR C IN (SELECT t.asset_id, t.article_id, t.website_id, t.table_name
+                    FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (asset_id, article_id, website_id, table_name)) t
+                   WHERE u.id=l_session_data.user_id)
+        LOOP
+            CASE C.table_name
+                WHEN 'user' THEN
+                    null;            
+                WHEN 'website' THEN
+                    deleteWebsite(l_session_data.user_id,C.website_id);
+                WHEN 'website_article' THEN
+                    deleteArticle(l_session_data.user_id,C.article_id,C.website_id);
+                WHEN 'asset' THEN
+                    deleteAsset(l_session_data.user_id,C.asset_id);               
+            END CASE;
+        END LOOP;
+
+        /* NB: each procedure returns its own JSON response */
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+END;
+/
