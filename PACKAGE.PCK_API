@@ -282,7 +282,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
     */
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
         l_netlify_token users.netlify_token%type;
-        l_netlify_url VARCHAR2(100):='https://api.netlify.com/api/v1/';
+        l_netlify_url VARCHAR2(200):='https://api.netlify.com/api/v1/';
         l_error_message LONG;
     BEGIN
         /* Get user's netlify token */
