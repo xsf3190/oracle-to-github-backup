@@ -1,0 +1,186 @@
+CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS_UPDATE" IS
+    --
+    PROCEDURE init(pBodyText IN CLOB);
+    --
+    PROCEDURE netlify_status;
+    --
+END;
+/
+CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
+    
+    /*
+    **  Maintain separate Netlify site objects for TEST and LIVE websites
+    **  Auto-create the LIVE site if a dns zone exists with same domain name
+    **  N.b. 1) DNS zone created automatically if custom domain purchased through Netlify 
+    **       2) DNS delegated to Netlify from registrar (e.g. Godaddy, Namecheap) requires that Dns zone is created in a separate process
+    */
+    PROCEDURE processDomainName(pUserId IN website.user_id%type, pWebsiteId IN website.id%type, pDomainName IN website.domain_name%type) IS
+        l_json JSON_OBJECT_T;
+        l_clob CLOB;
+        l_dns_zones CLOB;
+        l_netlify_site_id               website.netlify_site_id%type;
+        l_netlify_site_id_custom        website.netlify_site_id%type;
+        l_website_id website.id%type;
+        l_endpoint VARCHAR2(100);
+        l_method VARCHAR2(6);
+        l_message VARCHAR2(50);
+
+        FUNCTION name_taken RETURN BOOLEAN IS
+        BEGIN
+            IF (apex_web_service.g_status_code=422) THEN
+                apex_json.open_object;
+                apex_json.write('success', TRUE);
+                apex_json.write('message', 'Name already taken');
+                apex_json.write('color', 'red');
+                apex_json.close_object;
+                RETURN TRUE;
+            ELSE
+                RETURN FALSE;
+            END IF;
+        END;
+    BEGIN
+
+        SELECT netlify_site_id, netlify_site_id_custom 
+          INTO l_netlify_site_id, l_netlify_site_id_custom 
+          FROM website 
+         WHERE id=pWebsiteId
+           AND user_id=pUserId;
+
+        /* Change Netlify site name  at user's request */
+        l_json:=new JSON_OBJECT_T;
+        l_json.put('name', pDomainName);
+        l_endpoint:='sites' || CASE WHEN l_netlify_site_id IS NOT NULL THEN '/' || l_netlify_site_id END;
+        l_method:=CASE WHEN l_netlify_site_id IS NULL THEN 'POST' ELSE 'PATCH' END;
+
+        /* Netlify sites API returns 422 if domain name unavailable */
+        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>l_endpoint, pMethod=>l_method, pBody=>l_json.stringify, pStatusAllowed=>422, pData=>l_clob);
+        IF (name_taken) THEN
+            RETURN;
+        END IF;
+
+        /* Get Netlify site_id for TEST site */
+        SELECT site_id INTO l_netlify_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
+
+        /* Create Netlify LIVE site with custom_domain if domain_name in dns_zones */
+        IF (l_netlify_site_id_custom IS NULL) THEN
+            pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_dns_zones);
+            FOR C IN (SELECT name FROM JSON_TABLE(l_dns_zones, '$[*]' COLUMNS(name)) WHERE name=pDomainName) LOOP
+
+                l_json:=new JSON_OBJECT_T;
+                l_json.put('name', pDomainName || ' custom domain');
+                l_json.put('custom_domain', pDomainName);
+
+                pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pStatusAllowed=>422, pData=>l_clob);
+                IF (name_taken) THEN
+                    RETURN;
+                END IF;
+                SELECT site_id INTO l_netlify_site_id_custom FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
+            END LOOP;
+        END IF;
+
+        UPDATE website SET 
+                domain_name=pDomainName, 
+                netlify_site_id=l_netlify_site_id,
+                netlify_site_id_custom=l_netlify_site_id_custom, 
+                updated_date=current_timestamp 
+         WHERE id=pWebsiteId;
+        l_message:='Updated OK';
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE);
+        apex_json.write('message', l_message);
+        apex_json.write('color', 'green');
+        apex_json.write('deploy_buttons', pck_core.buildDeployButtons(pDomainName, l_netlify_site_id, l_netlify_site_id_custom));
+        apex_json.close_object;
+
+    END;
+
+    /**
+     **    Update the column value of 1 row.
+     **    Complex processing for Domain name change
+     */
+    PROCEDURE init(pBodyText IN CLOB) IS
+        l_id_1 NUMBER;
+        l_id_2 NUMBER;
+
+        l_message VARCHAR2(50);
+        l_color VARCHAR2(5);
+        l_website_id website.id%type;
+        n PLS_INTEGER:=0;
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        FOR C IN (SELECT t.id, t.table_column, t.value
+                    FROM users, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value CLOB)) t
+                   WHERE users.id=l_session_data.user_id)
+        LOOP
+            IF (INSTR(C.id,',')>0) THEN
+                l_id_1:=SUBSTR(C.id,1,INSTR(C.id,',')-1);
+                l_id_2:=SUBSTR(C.id,INSTR(C.id,',')+1);
+            END IF;     
+
+            CASE C.table_column
+                WHEN 'website.domain_name' THEN
+                    processDomainName(l_session_data.user_id, C.id, C.value);
+                    RETURN;
+                WHEN 'website.contact_email' THEN
+                    UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.font' THEN
+                    UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.max_width' THEN
+                    UPDATE website SET max_width=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.fluid_types' THEN
+                    UPDATE website SET fluid_types=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website_article.navigation_label' THEN
+                    UPDATE website_article SET navigation_label=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+                WHEN 'website_article.page_title' THEN
+                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+                WHEN 'website_article.page_description' THEN
+                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+                WHEN 'website_article.contact_form' THEN
+                    UPDATE website_article SET contact_form=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+            END CASE;
+            n:=sql%rowcount;
+        END LOOP;
+
+        IF (n=1) THEN  /* means last DML was successful */
+            l_color:='green';
+            l_message:='Updated OK';
+        ELSE  /* means update or insert failed */
+            l_color:='red';
+            l_message:='Updated NOK';
+        END IF;
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE);
+        apex_json.write('message', CASE WHEN n=1 THEN 'Updated OK' ELSE 'Updated NOK' END);
+        apex_json.write('color', CASE WHEN n=1 THEN 'green' ELSE 'red' END);
+        apex_json.close_object;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
+    PROCEDURE netlify_status IS 
+        l_clob CLOB;
+    BEGIN
+        pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_clob);
+        DELETE netlify_dns_zone;
+        INSERT INTO netlify_dns_zone (id, name, site_id, created_at, updated_at)
+        SELECT id, name, site_id, TO_TIMESTAMP_TZ(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR'), TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR') 
+          FROM JSON_TABLE(l_clob, '$[*]' COLUMNS(id, name, site_id, created_at, updated_at));
+
+        DELETE netlify_dns_zone_server;
+        INSERT INTO netlify_dns_zone_server (dns_zone_id, server)
+        SELECT id, server FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (id, NESTED '$.dns_servers[*]' COLUMNS (server varchar2(50) path '$')));
+
+        pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'sites', pMethod=>'GET', pData=>l_clob);
+        DELETE netlify_site;
+        INSERT INTO netlify_site (id, name, custom_domain, url, created_at, updated_at)
+        SELECT id, name, custom_domain, url, TO_TIMESTAMP_TZ(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR'), TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR')
+          FROM JSON_TABLE(l_clob, '$[*]' COLUMNS(id, name, custom_domain, url, created_at, updated_at));
+    END;
+END;
+/
