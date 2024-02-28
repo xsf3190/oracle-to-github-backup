@@ -118,31 +118,6 @@ const changeHandler = (e) => {
 }
 
 /*
- **  RESET PAGE ELEMENTS WHEN USER CLICKS NEW OR DELETE WEBSITE
- */
-const resetWebsite = () => {
-    const inputs = website.elements;
-    for (let i = 0; i < inputs.length; i++) {
-        if (inputs[i].type === "textarea") {
-            inputs[i].dataset.id = "";
-            inputs[i].value = "";
-            const maxchars = inputs[i].getAttribute("maxlength"),
-                  result = inputs[i].nextElementSibling.querySelector(".result"),
-                  charcounter = inputs[i].nextElementSibling.querySelector(".charcounter");
-            charcounter.textContent = "0/" + maxchars;
-            result.textContent = "";
-        } else if (inputs[i].type === "radio") {
-            inputs[i].dataset.id = "";
-            inputs[i].checked = false;
-            const result = inputs[i].closest(".radio-wrapper").querySelector(".result");
-            result.textContent = "";
-        } else if (inputs[i].matches(".deploy-website")) {
-            inputs[i].remove();
-        }
-    }
-}
-
-/*
  **  EDIT WEBSITE
  */
 const edit_website = () => {
@@ -181,18 +156,19 @@ const edit_website = () => {
  ** DEPLOY WEBSITE
  */
 const deploy_website = (e) => { 
-    execProcess("deploy","POST",{"websiteid":gWebsiteId,"siteid":e.target.dataset.site_id}).then( () => {
+    const site_id = e.target.dataset.site_id;
+    execProcess("deploy","POST",{"websiteid":gWebsiteId,"siteid":site_id}).then( () => {
         popupOpen("Building "+e.target.textContent,"Checking content...");
         if (gIntervalId) {
             clearInterval(gIntervalId);
         }
-        gIntervalId = setInterval(updateDeploymentStatus,3000,gWebsiteId, e.target.dataset.site_id);
+        gIntervalId = setInterval(getDeploymentStatus,3000,gWebsiteId, site_id);
     });
 };
 
-updateDeploymentStatus = (websiteid, siteid) => {
+getDeploymentStatus = (websiteid, siteid) => {
     const status = popup.querySelector("p");
-    execProcess("deploy-status/"+websiteid,"PUT",{"site_id":siteid}).then( (data) => {
+    execProcess("deploy-status/"+websiteid+","+siteid,"GET").then( (data) => {
         if (data.status) {
             status.replaceChildren();
             status.insertAdjacentHTML('afterbegin',data.status);
@@ -443,7 +419,7 @@ const preview_article = (articleId,button) => {
 }
 
 /*
- ** CARD CLICK HANDLER
+ **  CLICK HANDLER
  */
 const clickHandler = (e) => {
 
@@ -1016,7 +992,7 @@ const new_page = (e) => {
  */
 const upload_media = () => {
     if (gArticleId===0) {
-        popupOpen("CANT DO THAT YET","Media are uploaded to a selected Page");
+        popupOpen("CANT DO THAT YET","Click NEW PAGE first");
         return;
     }
     execProcess( "cld-details","GET").then( (data) => {
@@ -1153,6 +1129,7 @@ delete_page = () => {
             editor_status_text.textContent = "";
             editor.setData("");
         }
+        galleryList.replaceChildren();
         pageDialog.close();
     });
 }
@@ -1180,6 +1157,7 @@ const delete_website = () => {
         } else {
             websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").click();
         }
+        galleryList.replaceChildren();
         websiteDialog.close();
     });
 }
