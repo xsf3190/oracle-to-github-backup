@@ -1,7 +1,5 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
-    gWidthThumbnail CONSTANT INTEGER:=360;
-    --
     TYPE session_data_rt IS RECORD (
         app_id NUMBER, 
         session_id NUMBER,
@@ -14,7 +12,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildContactForm(pContactEmail IN website.contact_email%type DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildDeployButtons(pWebsiteId IN website.id%type, pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
+    FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2;
     --
@@ -30,17 +28,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2;
     --
-    FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
-    --
-    FUNCTION getMediaType(pResourceType IN VARCHAR2, pFormat IN VARCHAR2) RETURN VARCHAR2;
-    --
     FUNCTION getPageContent RETURN CLOB;
     --
     FUNCTION getRestUrl RETURN VARCHAR2;
     --
     FUNCTION getSessionData RETURN session_data_rt;
-    --
-    PROCEDURE getThumbnails(pArticleId IN article.id%type, pHTML IN OUT NOCOPY CLOB);
     --
     PROCEDURE loadGoogleFonts;
     --
@@ -283,7 +275,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     /*
      **  Build deploy and visit buttons
      */
-    FUNCTION buildDeployButtons(pWebsiteId IN website.id%type, pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2 IS
+    FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2 IS
         l_netlify_url VARCHAR2(50);
     BEGIN
         l_netlify_url:=REPLACE(pDomainName,'.','-') || '.netlify.app';
@@ -524,7 +516,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <li class="grey">' || pck_icons.g_netlify_svg || '</li>
                     <li class="grey">' || pck_icons.g_cloudinary_svg || '</li>
                     <li class="yellow">ALWAYS FREE</li>
-                    <li class="grey"></li>
+                    <li class="grey">无广告免费网站</li>
                     <li class="blue"></li>
                     <li class="grey"></li>
                     <li class="grey"></li>
@@ -537,161 +529,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     </div>
                 </dialog>');
         END LOOP;
-    END;
-
-    FUNCTION getMediaType(pResourceType IN VARCHAR2, pFormat IN VARCHAR2) RETURN VARCHAR2 
-    IS
-    BEGIN
-        IF (pResourceType='image') THEN
-            RETURN ('image');
-        ELSIF (pResourceType='video' AND pFormat IN ('mp4')) THEN
-            RETURN ('video');
-        ELSIF (pResourceType='video' AND pFormat IN ('m4a','wav')) THEN
-            RETURN('audio');
-        ELSE
-            RETURN (NULL);
-        END IF;
-    END;
-
-    /*
-     **  Format Cloudinary URL
-     */    
-    FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2 
-    IS
-        l_url VARCHAR2(500);
-        l_media_type VARCHAR(5);
-
-        FUNCTION getWidth RETURN VARCHAR2 IS
-            l_left PLS_INTEGER:=1;
-            l_right PLS_INTEGER:=3;
-            TYPE t_arr IS VARRAY(3) OF INTEGER;
-            l_arr t_arr:=t_arr(1,2,3);
-            l_width INTEGER:=pWidth; 
-        BEGIN
-            IF (pWidth=0) THEN
-                RETURN NULL;
-            END IF;
-            IF (pDimension IS NOT NULL) THEN
-                IF (pDimension=1) THEN
-                    RETURN NULL;
-                ELSE
-                    RETURN ',w_' || ROUND(pWidth*pDimension);
-                END IF;
-            END IF;
-            l_arr(1):=pWidth*.25;
-            l_arr(2):=pWidth*.625;
-            l_arr(3):=pWidth;
-            IF (l_arr(1)>gWidthThumbnail) THEN
-                l_arr(1):=gWidthThumbnail;
-                l_arr(2):=(pWidth-gWidthThumbnail)/2;
-            END IF;
-            l_left:=1;
-            l_right:=3;
-            WHILE (l_left<l_right) LOOP
-                IF (ABS(l_arr(l_left)-gWidthThumbnail) <= ABS(l_arr(l_right)-gWidthThumbnail)) THEN
-                    l_right:=l_right-1;
-                ELSE
-                    l_left:=l_left+1;
-                END IF;
-            END LOOP;
-            IF (l_arr(l_left)=pWidth) THEN
-                RETURN NULL;
-            END IF;
-            RETURN ',w_' || ROUND(l_arr(l_left));
-        END;
-    BEGIN
-        /* 
-         ** Return best-fit thumbnail url of Cloudinary asset
-         */
-        IF (pResourceType IS NOT NULL) THEN
-            l_media_type:=getMediaType(pResourceType, pFormat);
-            l_url:='https://res.cloudinary.com/' || pCloudname ||
-                    CASE l_media_type
-                        WHEN 'image' THEN '/q_auto,f_auto' || getwidth() || '/' || pPublicId
-                        WHEN 'video' THEN '/video/upload/q_auto,f_auto' || getwidth() || '/' || pPublicId || '.jpg' -- video poster
-                        WHEN 'audio' THEN '/video/upload/q_auto,f_auto,w_' || gWidthThumbnail || '/fl_waveform' || '/' || pPublicId || '.png'  --audio waveform
-                    END;
-        END IF;        
-        RETURN (l_url);
-    END;
-
-    /*
-     **  Build gallery of thumbnail images for a given article
-     */
-    PROCEDURE getThumbnails(pArticleId IN article.id%type, pHTML IN OUT NOCOPY CLOB)
-    IS
-        l_clob CLOB;
-        l_user_id users.id%type;
-        l_url_image VARCHAR2(300);
-        l_media_type VARCHAR2(5);
-        l_dimensions VARCHAR2(50);
-        l_aspect_ratio NUMBER;
-        n PLS_INTEGER:=0;
-        l_session_data pck_core.session_data_rt;
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-
-        FOR C IN (
-            SELECT a.id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
-                   DECODE(a.width,0,pck_core.gWidthThumbnail,a.width) width, DECODE(a.height,0,pck_core.gWidthThumbnail,a.height) height, a.bytes, a.format
-              FROM asset a
-             WHERE a.article_id=pArticleId
-               AND a.user_id=l_session_data.user_id
-               AND NVL(a.format,'N/A')<>'clt'
-             ORDER BY a.display_order )
-        LOOP
-            n:=n+1;
-            l_media_type:=pck_core.getMediaType(C.resource_type, C.format);
-
-            l_url_image:=pck_core.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
-
-            IF (C.width>0 AND C.width*.25>pck_core.gWidthThumbnail) THEN
-                l_dimensions:=pck_core.gWidthThumbnail || 'xheight:' ||
-                              ROUND((C.width-pck_core.gWidthThumbnail)/2) || 'xheight:';
-            ELSE
-                l_dimensions:=ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || 
-                              ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':';
-            END IF;
-
-            pHTML:=pHTML || TO_CLOB(
-                '<li class="card' || CASE WHEN c.width>C.height THEN ' landscape' END || '" tabindex="0" data-id="' || C.id || '">
-                    <img class="fullscreen" data-dimensions="'  || l_dimensions || 
-                                C.width || 'x' || C.height || '" data-src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>
-                    <div class="actions">
-                        <button type="button" class="copy"><svg><use href="#copy"></use></svg></button>
-                        <button type="button" class="expand"><svg><use href="#expand"></use></svg></button>
-                        <button type="button" class="delete-asset"><svg><use href="#delete"></use></svg></button>
-                    </div>');
-
-            CASE l_media_type
-
-                WHEN 'video' THEN
-                    pHTML:=pHTML || TO_CLOB(
-                    '<video controls preload="metadata" poster="' || l_url_image || '">
-                        <source src="' || REPLACE(l_url_image,'.jpg','.webm') || '" type="video/webm"></source>
-                        <source src="' || REPLACE(l_url_image,'.jpg','.mp4') || '" type="video/mp4"></source>
-                    </video>');
-
-                WHEN 'audio' THEN
-                    l_url_image:=REGEXP_REPLACE(l_url_image,',w_(\d)+\/fl_waveform',NULL);
-                    pHTML:=pHTML || TO_CLOB(
-                    '<audio preload="metadata" controls>
-                        <source src="' || REPLACE(l_url_image,'.png','.aac') || '" type="audio/aac"></source>
-                        <source src="' || REPLACE(l_url_image,'.png','.ogg') || '" type="audio/ogg"></source>
-                        <source src="' || REPLACE(l_url_image,'.png','.mp3') || '" type="audio/mpeg"></source>
-                        <source src="' || REPLACE(l_url_image,'.png','.wav') || '" type="audio/wav"></source>
-                    </audio>');
-
-                ELSE NULL;
-            END CASE;
-
-            pHTML:=pHTML || TO_CLOB('</li>');
-
-        END LOOP;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
     END;
 
     FUNCTION buildTopNav(pIsAdmin IN INTEGER) RETURN VARCHAR2 IS
@@ -823,7 +660,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     FUNCTION buildMediaCard(pArticleId IN website.id%type) RETURN CLOB IS
         l_thumbnails CLOB;
     BEGIN
-        getThumbnails(pArticleId, l_thumbnails);
+        pck_media.getThumbnails(pArticleId, l_thumbnails);
         RETURN(
         buildPushableButton('upload-media') ||
         '<div role="region" aria-label="gallery">
@@ -919,7 +756,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <fieldset class="deploy-buttons">
                         <legend>Publish Website</legend>
                         <div>' ||
-                            buildDeployButtons(l_selected_website_id, l_selected_website_domain, l_netlify_site_id, l_netlify_site_id_custom) ||
+                            buildDeployButtons(l_selected_website_domain, l_netlify_site_id, l_netlify_site_id_custom) ||
                         '</div>
                     </fieldset>
                 </div>
