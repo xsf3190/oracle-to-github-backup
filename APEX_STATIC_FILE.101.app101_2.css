@@ -318,6 +318,21 @@ legend {
 /* DIALOG STYLES */
 /* ************* */
 
+ol.deploy {
+    font-family: monospace;
+    & li {
+        list-style: none;
+        display: grid;
+        grid-template-columns: 1fr 4fr;
+    }
+    & li.nok {
+        color: red;
+    }
+    & li.ready {
+        line-height: 2.5;
+    }
+}
+
 ol.visits {
     font-size: var(--step--1);
     & li {
@@ -364,14 +379,7 @@ ol.visits {
         color: white;
     }
 }
-/*
-dialog {
-    border: none !important;
-    border-radius: 0.7em;
-    box-shadow: 0 0 #0000, 0 0 #0000, 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    font-size: var(--step-0);    
-}
-*/
+
 dialog:,
 ::backdrop{
   opacity: 0;
@@ -477,7 +485,6 @@ dialog legend > button {
 }
 
 dialog.log {
-    inline-size: 100vw;
     padding: 0;
     & div:first-of-type {
         display: grid;
@@ -494,18 +501,6 @@ dialog.log {
     }
 }
 
-/*
-dialog.log th:nth-of-type(1) {
-    width: 10%;
-    text-align: left;
-    vertical-align: top;
-}
-
-dialog.log th:nth-of-type(2) {
-    width: 90%;
-    text-align: left;
-}
-*/
 
 dialog.log td {
     vertical-align: top;
