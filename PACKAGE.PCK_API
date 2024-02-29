@@ -321,8 +321,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         END IF;
 
         l_error_message:=pMethod || ' ' || l_netlify_url || ' https status:' || apex_web_service.g_status_code;
-        FOR C IN (SELECT message FROM JSON_TABLE(pData,'$' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
-            l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
+        FOR C IN (SELECT error_message FROM JSON_TABLE(pData,'$' COLUMNS (error_message)) WHERE error_message IS NOT NULL) LOOP
+            l_error_message:=l_error_message || chr(10) || 'API message: ' || C.error_message;
         END LOOP;
         RAISE_APPLICATION_ERROR(-20030,l_error_message);
     END;
@@ -367,8 +367,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         END IF;
 
         l_error_message:=pMethod || ' ' || l_netlify_url || ' https status:' || apex_web_service.g_status_code;
-        FOR C IN (SELECT message FROM JSON_TABLE(pData,'$' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
-            l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
+        FOR C IN (SELECT error_message FROM JSON_TABLE(pData,'$' COLUMNS (error_message)) WHERE error_message IS NOT NULL) LOOP
+            l_error_message:=l_error_message || chr(10) || 'API message: ' || C.error_message;
         END LOOP;
         RAISE_APPLICATION_ERROR(-20030,l_error_message);
     END;
