@@ -157,8 +157,11 @@ const edit_website = () => {
  */
 const deploy_website = (e) => { 
     const site_id = e.target.dataset.site_id;
-    execProcess("deploy","POST",{"websiteid":gWebsiteId,"siteid":site_id}).then( () => {
-        popupOpen("Building "+e.target.textContent,"Checking content...");
+    execProcess("deploy","POST",{"websiteid":gWebsiteId,"siteid":site_id,"url":e.target.textContent}).then( (data) => {
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('afterbegin',data.content);
+        logDialog.showModal();
+        if (data.stop) return;
         if (gIntervalId) {
             clearInterval(gIntervalId);
         }
@@ -167,14 +170,11 @@ const deploy_website = (e) => {
 };
 
 getDeploymentStatus = (websiteid, siteid) => {
-    const status = popup.querySelector("p");
     execProcess("deploy-status/"+websiteid+","+siteid,"GET").then( (data) => {
-        if (data.status) {
-            status.replaceChildren();
-            status.insertAdjacentHTML('afterbegin',data.status);
-            if (data.completed) {
-                clearInterval(gIntervalId);
-            }
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('afterbegin',data.content);
+        if (data.completed) {
+            clearInterval(gIntervalId);
         }
     });
 }
