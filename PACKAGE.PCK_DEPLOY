@@ -17,6 +17,15 @@ end;
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as 
     
     /*
+    **  Insert row in website_deploy logging table
+    */      
+    PROCEDURE logDeployment(pWebsiteId IN website.id%type, pSiteId IN website_deploy.site_id%type, pMessage IN VARCHAR2, pStatus IN VARCHAR2 DEFAULT 'OK', pLogTime IN TIMESTAMP DEFAULT current_timestamp) IS 
+    BEGIN
+        INSERT INTO website_deploy(id, website_id, site_id, message, status, log_time) VALUES (seq_log.nextval, pWebsiteId, pSiteId, pMessage, pStatus, pLogTime);
+        COMMIT;
+    END; 
+
+    /*
     ** Build and deploy website to Netlify by submitting Github action
     */    
     PROCEDURE deployWebsite(pBodyText IN CLOB) IS
@@ -26,24 +35,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_body_text CLOB:=pBodyText;
         l_website_id website.id%type;
         l_site_id website.netlify_site_id%type;
+        l_url VARCHAR2(250);
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT websiteid, siteid INTO l_website_id, l_site_id FROM users, JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid)) WHERE users.id=l_session_data.user_id;
+        SELECT websiteid, siteid, url INTO l_website_id, l_site_id, l_url FROM users, JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid, url)) WHERE users.id=l_session_data.user_id;
 
-        /* Check no other session currently deploying */
+        /* Check no other session currently deploying - simultaneous deployments not allowed on Netlify free plan */
 
         FOR C IN (SELECT job_name FROM user_scheduler_running_jobs WHERE job_name LIKE 'DEPLOY_%') LOOP
-            logDeployment(l_website_id, l_site_id, 'Someone else is deploying ... try again later' 'NOK');
             apex_json.open_object;
+            apex_json.write('content', '<h2>Someone else is deploying ... try again later</h2>');
+            apex_json.write('stop', TRUE);
             apex_json.write('success', TRUE);
             apex_json.close_object;
             RETURN;
         END LOOP;
 
-
         DELETE website_deploy WHERE website_id=l_website_id;
+        UPDATE website SET netlify_deploy_id=NULL WHERE id=l_website_id;
 
         logDeployment(l_website_id, l_site_id, 'Preparing Deployment');
 
@@ -84,6 +95,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
+        apex_json.write('content', '<h2>Starting deployment of ' || l_url || '</h2>');
         apex_json.close_object;
 
         EXCEPTION
@@ -123,7 +135,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_sitemap CLOB;
         l_robots CLOB;
         l_ssl_url VARCHAR2(200);
-        l_netlify_deploy_id website.netlify_deploy_id%type;
         n PLS_INTEGER:=0;
 
         FUNCTION buildNavLabels(pArticleId IN website_article.article_id%type) RETURN VARCHAR2 IS
@@ -186,48 +197,49 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                      AND u.id=w.user_id
                    ORDER BY wa.display_order)
         LOOP
-            l_page:='<!DOCTYPE HTML>' || chr(10) ||
-                    '<html lang="en">' || chr(10) ||
-                    '<head>' || chr(10) ||
-                        '<meta charset="UTF-8">' || chr(10) ||
-                        '<meta name="viewport" content="width=device-width, initial-scale=1.0">' || chr(10) || 
-                        '<title>' || C.page_title || '</title>' || chr(10) ||
-                        '<meta name="description" content=">' || C.page_description || '">' || chr(10) ||
-                        '<meta name="author" content=">' || C.name || '">' || chr(10) ||
-                        '<script src="https://cdn.jsdelivr.net/npm/bowser@latest/es5.js" defer></script>' || chr(10) ||
-                        '<link rel="icon" href="https://res.cloudinary.com/mrbapex/believeintalking_favicon_q57es4.svg" type="image/svg+xml">'  || chr(10) ||
-                        '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
-                        '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
-                        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(C.font,' ','+') || '&display=swap">' || chr(10) ||
-                        '<style>' || 
-                        ':root {' ||chr(10) || C.fluid_types || chr(10) ||
-                        '    --font-family: "' || C.font || '";' || chr(10) ||
-                        '    --max-width: ' || C.max_width || ';' || chr(10) ||
-                        '    --color-light: ' || C.color_light || ';' || chr(10) ||
-                        '    --color-dark: ' || C.color_dark || ';' || chr(10) ||
-                        '    --color-primary: ' || C.color_primary || ';' || chr(10) ||
-                        '}' || chr(10) || chr(10) ||
-                         chr(10) || NVL(C.css,l_deploy_css) || chr(10) || 
-                        '</style>' || chr(10) || 
-                    '</head>' || chr(10) || 
-                    '<body>' || CASE WHEN c.nb>1 THEN '<nav aria-label="Main Navigation">' || buildNavLabels(C.article_id) || '</nav>' END || chr(10) || 
-                        REPLACE(C.body_html,'<h1>&nbsp;</h1>',null) || chr(10) || 
-                        CASE WHEN C.contact_form='YES' THEN pck_core.buildContactForm(contactEmail()) END ||
-                        '<script type="module">
-                            import {onCLS, onFID, onLCP, onINP} from ''https://unpkg.com/web-vitals?module'';
-                            onCLS(addToVitalsQueue);
-                            onFID(addToVitalsQueue);
-                            onLCP(addToVitalsQueue);
-                            onINP(addToVitalsQueue);
-                        </script>
-                        <script>
-                            gMetricWebsiteId = "' || pWebsiteId || '";' || chr(10) || 
-                            'gMetricArticleId = "' || C.article_id || '";' || chr(10) || 
-                            'gMetricVisitUrl = "' || pRestUrl || 'page-visit";' || chr(10) ||
-                            l_metric_js || 
-                        '</script>' || chr(10) || '
-                     </body>' || chr(10) || 
-                    '</html>';
+            l_page:=
+            '<!DOCTYPE HTML>' || chr(10) ||
+            '<html lang="en">' || chr(10) ||
+            '<head>' || chr(10) ||
+                '<meta charset="UTF-8">' || chr(10) ||
+                '<meta name="viewport" content="width=device-width, initial-scale=1.0">' || chr(10) || 
+                '<title>' || C.page_title || '</title>' || chr(10) ||
+                '<meta name="description" content=">' || C.page_description || '">' || chr(10) ||
+                '<meta name="author" content=">' || C.name || '">' || chr(10) ||
+                '<script src="https://cdn.jsdelivr.net/npm/bowser@latest/es5.js" defer></script>' || chr(10) ||
+                '<link rel="icon" href="https://res.cloudinary.com/mrbapex/believeintalking_favicon_q57es4.svg" type="image/svg+xml">'  || chr(10) ||
+                '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
+                '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
+                '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(C.font,' ','+') || '&display=swap">' || chr(10) ||
+                '<style>' || 
+                ':root {' ||chr(10) || C.fluid_types || chr(10) ||
+                '    --font-family: "' || C.font || '";' || chr(10) ||
+                '    --max-width: ' || C.max_width || ';' || chr(10) ||
+                '    --color-light: ' || C.color_light || ';' || chr(10) ||
+                '    --color-dark: ' || C.color_dark || ';' || chr(10) ||
+                '    --color-primary: ' || C.color_primary || ';' || chr(10) ||
+                '}' || chr(10) || chr(10) ||
+                    chr(10) || NVL(C.css,l_deploy_css) || chr(10) || 
+                '</style>' || chr(10) || 
+            '</head>' || chr(10) || 
+            '<body>' || CASE WHEN c.nb>1 THEN '<nav aria-label="Main Navigation">' || buildNavLabels(C.article_id) || '</nav>' END || chr(10) || 
+                REPLACE(C.body_html,'<h1>&nbsp;</h1>',null) || chr(10) || 
+                CASE WHEN C.contact_form='YES' THEN pck_core.buildContactForm(contactEmail()) END ||
+                '<script type="module">
+                    import {onCLS, onFID, onLCP, onINP} from ''https://unpkg.com/web-vitals?module'';
+                    onCLS(addToVitalsQueue);
+                    onFID(addToVitalsQueue);
+                    onLCP(addToVitalsQueue);
+                    onINP(addToVitalsQueue);
+                </script>
+                <script>
+                    gMetricWebsiteId = "' || pWebsiteId || '";' || chr(10) || 
+                    'gMetricArticleId = "' || C.article_id || '";' || chr(10) || 
+                    'gMetricVisitUrl = "' || pRestUrl || 'page-visit";' || chr(10) ||
+                    l_metric_js || 
+                '</script>' || chr(10) || '
+                </body>' || chr(10) || 
+            '</html>';
 
             l_sha1:=LOWER(dbms_crypto.hash(src => l_page, typ => dbms_crypto.hash_sh1));
             l_file_name:=CASE WHEN C.rn=1 THEN 'index' ELSE NVL(C.path_name,'Page_'||C.rn) END || '.html';
@@ -271,104 +283,114 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json.put('files',l_files);
 
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId || '/deploys', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
-
-        /* upload to Netlify if required - i.e. file content has changed since last deployment  */
-
-        FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
-            l_netlify_deploy_id:=C.id;
-            logDeployment(pWebsiteId, pSiteId, 'Uploading ' || l_deploy_files(C.sha1).file_name);
-            pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', pBody=>l_deploy_files(C.sha1).file_content, pData=>l_clob);
-        END LOOP;
-
-        UPDATE website SET netlify_deploy_id=l_netlify_deploy_id WHERE id=pWebsiteId;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                logDeployment(pWebsiteId, pSiteId, SUBSTR(SQLERRM,1,100));
-                pck_core.log_error;
-    END;
-
-    /*
-     **  Insert row in website_deploy logging table
-     **  1) Invoked via curl from Github Action
-     **  2) called internally within this package to log Netlify actions
-     */      
-    PROCEDURE logDeployment(pWebsiteId IN website.id%type, pSiteId IN website_deploy.site_id%type, pStatus IN VARCHAR2) IS 
-        l_site_id website_deploy.site_id%type;
-        l_exitcode PLS_INTEGER;
-        l_status website_deploy.status%type;
-    BEGIN
-        INSERT INTO website_deploy(id, website_id, site_id, status) VALUES (seq_log.nextval, pWebsiteId, pSiteId, pStatus);
-
+        UPDATE website SET netlify_deploy_id=(SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) WHERE id=pWebsiteId;
         COMMIT;
 
+        /* upload to Netlify if required - i.e. file content has changed since last deployment  */
+        n:=0;
+        FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
+            pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', pBody=>l_deploy_files(C.sha1).file_content, pData=>l_clob);
+            logDeployment(pWebsiteId, pSiteId, 'Successfully uploaded ' || l_deploy_files(C.sha1).file_name);
+            n:=n+1;
+        END LOOP;
+        IF (n>0) THEN
+            logDeployment(pWebsiteId, pSiteId, 'Uploaded files: ' || n || '. Unchanged files: ' || TO_CHAR(l_deploy_files.COUNT-n));
+        ELSE
+            logDeployment(pWebsiteId, pSiteId, 'All files unchanged since last deployment');
+        END IF;
+
         EXCEPTION
             WHEN OTHERS THEN
+                logDeployment(pWebsiteId, pSiteId, SUBSTR(SQLERRM,1,100),'NOK');
                 pck_core.log_error;
-    END;    
-
+    END;   
 
     /*
-     **  Get deployment status from website_deploy logging table
+     **  Get deployment status from website_deploy logging table - called from Javascript every 3 seconds
      */
-    PROCEDURE updateDeploymentStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS 
+    PROCEDURE getDeploymentStatus(pId IN VARCHAR2) IS 
+        l_website_id website_deploy.website_id%type;
         l_site_id website_deploy.site_id%type;
-        l_status CLOB;
-        l_clob CLOB:=pBodyText;
+        l_content CLOB;
+        l_clob CLOB;
         l_ssl_url VARCHAR2(100);
         l_deployment_complete BOOLEAN:=FALSE;
+        l_deployment_failed BOOLEAN:=FALSE;
         l_netlify_status website_deploy.status%type;
         l_job_name VARCHAR2(30);
+        l_netlify_deploy_id website.netlify_deploy_id%type;
+        l_state VARCHAR2(200);
+        l_updated_at website.netlify_last_published%type;
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT site_id INTO l_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
+        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
+        l_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
 
-        /* Get latest deployment status */
-        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys', pMethod=>'GET', pData=>l_clob);
-        FOR C IN (SELECT state, ssl_url, error_message, created_at
-                    FROM JSON_TABLE(l_clob, '$[0]' COLUMNS (state, ssl_url, created_at, error_message))) 
-        LOOP
-            IF (C.state='ready') THEN
-                l_deployment_complete:=TRUE;
+        SELECT netlify_deploy_id INTO l_netlify_deploy_id FROM website WHERE id=l_website_id;
+
+        /* Get latest deployment status if started */
+        IF (l_netlify_deploy_id IS NOT NULL) THEN
+            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys/' || l_netlify_deploy_id, pMethod=>'GET', pData=>l_clob);
+            FOR C IN (SELECT state, ssl_url, TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR')
+                        FROM JSON_TABLE(l_clob, '$' COLUMNS (state, ssl_url, updated_at)) 
+                       WHERE state='ready') 
+            LOOP
+                logDeployment(l_website_id, l_site_id, C.state, pLogTime=>l_updated_at);
                 l_ssl_url:=C.ssl_url;
-            END IF;
-            logDeployment('{"site_id":"' || l_site_id || '","status":"' || 'Status is ' || C.state || '","exitcode":' || CASE WHEN C.error_message IS NULL THEN 0 ELSE 1 END || '}',pWebsiteId);
-        END LOOP;
+            END LOOP;
+        END IF;
 
-        /* return list of all deployment status to client */
-        FOR C IN (SELECT id, status, ROUND(EXTRACT (second FROM diff),1) ela_sec
-                    FROM 
-                        (
-                         SELECT id, status, NVL(LEAD(log_time) OVER (ORDER BY id),current_timestamp) - log_time as diff
-                           FROM website_deploy 
-                          WHERE website_id=pWebsiteId
-                            AND site_id=l_site_id
-                        )
+        /* Now return list of all deployment status messaages to client */
+        l_content:='<ol class="deploy">';
+        FOR C IN (SELECT TO_CHAR(log_time,'hh24:mi:ss') log_time, message, status
+                    FROM website_deploy 
+                   WHERE website_id=l_website_id
+                     AND site_id=l_site_id
                    ORDER BY id) 
         LOOP
-            l_status:=l_status || TO_CLOB('<span>' || C.status || ' - ' || C.ela_sec || ' seconds</span><br>');
-            IF (SUBSTR(C.status,-3)='NOK') THEN
+            IF (c.message='ready') THEN 
+                l_content:=l_content ||'<li class="ready"><span></span><span><a target="_blank" href="' || l_ssl_url || '">' || l_ssl_url || '</a></span></li>';
                 l_deployment_complete:=TRUE;
                 EXIT;
             END IF;
-        END LOOP;
 
-        IF (l_ssl_url IS NOT NULL) THEN
-            FOR C IN (SELECT ROUND(EXTRACT (second FROM diff),1)  total_elapsed FROM 
-                        (SELECT MAX(log_time)-MIN(log_time) as diff FROM website_deploy WHERE website_id=pWebsiteId AND site_id=l_site_id) )
-            LOOP
-                l_status:=l_status || TO_CLOB('<span>DEPLOYMENT COMPLETE  - ' || C.total_elapsed || ' seconds</span><br>');
-            END LOOP;
-            l_status:=l_status || TO_CLOB('<a target="_blank" href="' || l_ssl_url || '">' || l_ssl_url || '<a>');
-        END IF;
+            IF (C.status='OK') THEN 
+                l_content:=l_content ||'<li><span>' || C.log_time || '</span><span>' || C.message || '</span></li>'; 
+            ELSE
+                l_content:=l_content ||'<li class="nok"><span>' || C.log_time || '</span><span>' || C.message || '</span></li>'; 
+                l_deployment_complete:=TRUE;
+            END IF;
+        END LOOP;
+        l_content:=l_content || '</ol>';
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.write('completed', l_deployment_complete);
-        apex_json.write('status', l_status);
+        apex_json.write('content', l_content);
         apex_json.close_object;
+
+        IF (l_deployment_complete) THEN
+            UPDATE website 
+                SET netlify_last_published = CASE WHEN netlify_site_id=l_site_id THEN current_timestamp ELSE netlify_last_published END,
+                    netlify_last_published_custom = CASE WHEN netlify_site_id_custom=l_site_id THEN current_timestamp ELSE netlify_last_published_custom END
+             WHERE id=l_website_id;
+
+            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys', pMethod=>'GET', pData=>l_clob);
+            FOR C IN (
+                SELECT id, published_at, MAX(published_at) OVER() last_published_at 
+                FROM
+                    (
+                    SELECT id, TO_TIMESTAMP_TZ(published_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR') published_at FROM JSON_TABLE(l_clob, '$[*]' COLUMNS (id, published_at))
+                    )
+            )
+            LOOP
+                IF (C.published_at<C.last_published_at) THEN
+                    pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys/' || C.id, pMethod=>'DELETE', pData=>l_clob);
+                END IF;
+            END LOOP;
+        END IF;
 
         EXCEPTION
             WHEN OTHERS THEN
