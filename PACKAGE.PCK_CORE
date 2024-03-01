@@ -442,6 +442,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             '</label>
             <input  class="cms" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
                 '" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '" data-id="' || pId || '">
+            <button type="button" class="clear-input" title="clear input" aria-label="clear input">&times;</button>
             <div class="button-container">
                 <span class="result"></span>
                 <span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</span>
@@ -580,7 +581,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             </svg>
                             Log Out
                         </button>
-                    </li>      
+                    </li>  
+                    <li class="signout">
+                        <button type="button" class="with-icon delete-user">
+                            <svg class="icon">
+                                <use href="#delete"></use>
+                            </svg>
+                            Delete My Data
+                        </button>
+                    </li>     
                 </ul>
             </div>
         </nav>');
