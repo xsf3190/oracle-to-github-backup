@@ -44,7 +44,7 @@ const inputHandler = (e) => {
     };
 
     const maxchars = e.target.getAttribute("maxlength");
-    const counter = e.target.nextElementSibling.querySelector(".charcounter");
+    const counter = e.target.parentElement.querySelector(".charcounter");
     let numOfEnteredChars = e.target.value.length;
 
     if (maxchars) {
@@ -78,10 +78,9 @@ const changeHandler = (e) => {
     if (!e.target.matches(".cms")) return;
     let result;
     if (e.target.tagName == "INPUT" && e.target.type == "radio") {
-        console.log(e.target.closest("fieldset"));
         result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
     } else {
-        result = e.target.nextElementSibling.querySelector(".result");
+        result = e.target.parentElement.querySelector(".result");
     }
 
     const table_column = e.target.dataset.column,
@@ -92,16 +91,6 @@ const changeHandler = (e) => {
         result.textContent = data.message;
         result.style.color = data.color;
         result.style.opacity = "1";
-        if (data.website_id) {
-            const inputs = website.elements;
-            for (let i = 0; i < inputs.length; i++) {
-                if (inputs[i].type === "textarea" || inputs[i].type === "radio") {
-                    inputs[i].dataset.id = data.website_id;
-                }
-            }
-            const li = e.target.previousElementSibling.querySelector(".dropdown-items .separator");
-            li.insertAdjacentHTML('afterend',data.dropdown);
-        }
         if (data.deploy_buttons) {
             deployButtons.replaceChildren();
             deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
@@ -157,6 +146,7 @@ const edit_website = () => {
  */
 const deploy_website = (e) => { 
     const site_id = e.target.dataset.site_id;
+    if (!site_id) return;
     execProcess("deploy","POST",{"websiteid":gWebsiteId,"siteid":site_id,"url":e.target.textContent}).then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
@@ -165,14 +155,15 @@ const deploy_website = (e) => {
         if (gIntervalId) {
             clearInterval(gIntervalId);
         }
-        gIntervalId = setInterval(getDeploymentStatus,3000,gWebsiteId, site_id);
+        gIntervalId = setInterval(getDeploymentStatus,2000,gWebsiteId, site_id);
     });
 };
 
 getDeploymentStatus = (websiteid, siteid) => {
     execProcess("deploy-status/"+websiteid+","+siteid,"GET").then( (data) => {
-        logContent.replaceChildren();
-        logContent.insertAdjacentHTML('afterbegin',data.content);
+        if (data.content) {
+            logContent.querySelector("ol.deploy").insertAdjacentHTML('beforeend',data.content);
+        }
         if (data.completed) {
             clearInterval(gIntervalId);
         }
@@ -477,6 +468,8 @@ const clickHandler = (e) => {
         delete_website();
     } else if (e.target.matches(".delete-asset")) {
         delete_asset(e);
+    } else if (e.target.matches(".delete-user")) {
+        delete_user();
     } else if (e.target.matches(".expand")) {
         showFullScreen(e);                                 
     } else if (e.target.matches(".copy")) {
@@ -842,10 +835,10 @@ ClassicEditor.create(document.querySelector("#editor"), {
             }
         },
         title: {
-            placeholder: 'Enter title'
+            placeholder: 'Page title (optional)'
         },
-        placeholder: 'Enter content',
-        wordCount: {displayCharacters: false},
+        placeholder: 'Page content',
+        wordCount: {displayCharacters: true},
         list: {
             properties: {
                 styles: true,
@@ -1159,5 +1152,18 @@ const delete_website = () => {
         }
         galleryList.replaceChildren();
         websiteDialog.close();
+    });
+}
+
+/*
+ ** EXECUTE DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER
+ */
+const delete_user = () => {
+    execProcess("dml","DELETE",{table_name: "users"}).then( (data) => {
+        if (data.deleted===0) {
+            document.querySelector(".signout").click();
+        } else {
+            popupOpen("Delete Websites", "To avoid inadvertent loss, you should delete your websites first");
+        }
     });
 }
