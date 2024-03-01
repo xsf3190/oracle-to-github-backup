@@ -280,6 +280,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
     /*
     **  NETLIFY API - pBody is VARCHAR2
     */
+    FUNCTION getNetlifyResponse RETURN VARCHAR2 IS
+        l_response_message VARCHAR2(500);
+    BEGIN
+        FOR i IN 1.. apex_web_service.g_headers.count LOOP
+            IF (apex_web_service.g_headers(i).name IN ('X-Ratelimit-Limit', 'X-Ratelimit-Remaining', 'X-Runtime')) THEN
+                l_response_message:=l_response_message || apex_web_service.g_headers(i).name || ':' || apex_web_service.g_headers(i).value || ',';
+            END IF;
+        END LOOP;
+        RETURN (' | ' || RTRIM(l_response_message,','));
+    END;
+
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
         l_netlify_token users.netlify_token%type;
         l_netlify_url VARCHAR2(200):='https://api.netlify.com/api/v1/';
@@ -314,7 +325,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
             pData := apex_web_service.make_rest_request(p_url=>l_netlify_url, p_http_method=>pMethod, p_body=>pBody);
         END IF;
 
-        pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_netlify_url);
+        pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_netlify_url || getNetlifyResponse());
 
         IF (apex_web_service.g_status_code BETWEEN 200 AND 299) OR (apex_web_service.g_status_code=pStatusAllowed) THEN
             RETURN;
