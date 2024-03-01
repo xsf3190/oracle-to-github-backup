@@ -79,6 +79,13 @@
     border: 1px solid red;
 }
 
+.ck-word-count {
+    font: monospace;
+    display: flex;
+    gap: var(--space-m);
+    margin-block-start: var(--space-s);
+}
+
 /******************/
 /* PAGE CONTAINER */
 /******************/
@@ -185,8 +192,9 @@ a.selected + button {
 }
 
 label {
-    display: block;
     font-weight: 600;
+    display: block;
+    white-space: nowrap;
 }
 
 textarea {
@@ -241,23 +249,50 @@ hr {
     inline-size: 100%;
 }
 
-/* ************** */
-/* WEBSITE FORM   */
-/* ************** */
+/* ******** */
+/*  FORMS   */
+/* ******** */
 
 form {
-    /*border: 1px solid var(--color-pale);*/
-    padding: 1rem;
-    margin-block-start: 1rem;
-    margin-block-end: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-l);
+    inline-size: fit-content;
+    border: solid 1px var(--color-primary);
+    padding: 1em;
+    border-radius: 0.5em;
 }
 
-form > * + *   {
-    margin-block-start: 2ch;
+form  div.input-wrapper {
+  position: relative;
+  display: inline-block;
 }
 
-input {
+form button.clear-input {
+  position: absolute;
+  line-height: 2;
+  appearance: none;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  right: 0.2em;
+  top: 1.4em;
+}
+
+form fieldset {
+    display: flex;
+    flex-wrap: nowrap;
+    flex-direction: row;
+    gap: var(--space-s);
+    & div.input-wrapper {
+        max-width: 7em;
+    }
+}
+
+input, select {
     inline-size: 100%;
+    line-height: 2;
 }
 
 input[type="text"] + span {
@@ -473,15 +508,8 @@ dialog button.close {
     font-size: var(--step-4);
     color: var(--color-button);
     outline: 0;
-    /*margin-inline-start: 2ch;*/
     position: sticky;
     top: 0;
-}
-
-dialog legend > button {
-    color: var(--color-light);
-    background-color: transparent;
-    vertical-align: text-bottom;
 }
 
 dialog.log {
