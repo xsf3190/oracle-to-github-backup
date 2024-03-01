@@ -227,6 +227,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
                 pck_core.log_error;
     END;
 
+    /*
+     **  Delete User (if no websites)
+     */  
+    PROCEDURE deleteUser(pUserId IN website.user_id%type) IS
+        n PLS_INTEGER;
+    BEGIN
+        SELECT COUNT(*) INTO n FROM website WHERE user_id=pUserId;
+
+        IF (n=0) THEN
+            DELETE users WHERE id=pUserId;
+        END IF;
+
+        apex_json.open_object;
+        apex_json.write('deleted',n);
+        apex_json.write('success',TRUE);
+        apex_json.close_object;        
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
     /**
      **    Delete Website / Page / Media Asset / User
      */
@@ -240,8 +262,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
                    WHERE u.id=l_session_data.user_id)
         LOOP
             CASE C.table_name
-                WHEN 'user' THEN
-                    null;            
+                WHEN 'users' THEN
+                    deleteUser(l_session_data.user_id);            
                 WHEN 'website' THEN
                     deleteWebsite(l_session_data.user_id,C.website_id);
                 WHEN 'website_article' THEN
