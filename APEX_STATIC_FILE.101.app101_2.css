@@ -201,12 +201,7 @@ textarea {
     border: 0.1em solid var(--color-pale);
     border-radius: 0.2em;
     resize: both;
-    line-height: 1.5;
-}
-
-.textarea-wrapper, radio-wrapper {
-    display: flex;
-    flex-direction: column;
+    line-height: 2;
 }
 
 ul {
@@ -257,40 +252,55 @@ form {
     display: flex;
     flex-direction: column;
     gap: var(--space-l);
-    inline-size: fit-content;
     border: solid 1px var(--color-primary);
-    padding: 1em;
-    border-radius: 0.5em;
-}
-
-form  div.input-wrapper {
-  position: relative;
-  display: inline-block;
-}
-
-form button.clear-input {
-  position: absolute;
-  line-height: 2;
-  appearance: none;
-  border: none;
-  padding: 0;
-  background: transparent;
-  cursor: pointer;
-  right: 0.2em;
-  top: 1.4em;
-}
-
-form fieldset {
-    display: flex;
-    flex-wrap: nowrap;
-    flex-direction: row;
-    gap: var(--space-s);
-    & div.input-wrapper {
-        max-width: 7em;
+    padding: var(--space-s);
+    border-radius: var(--space-xs);
+    & div.input-wrapper, div.textarea-wrapper {
+        position: relative;
+        display: inline-block;
+    }
+    & label {
+        margin-block-end: var(--space-3xs);
+    }
+    & label > button {
+        margin-inline-start: var(--space-2xs);
+    }
+    & button > svg {
+        inline-size: 0.5em;
+        block-size: 0.5em;
+        fill: white;
+    }
+    & button {
+        appearance: none;
+        border: none;
+        border-radius: 50%;
+        inline-size: 1em;
+        padding: 0;
+        background: var(--color-pale);
+        color: white;
+        cursor: pointer;
+        transition: 0.5s all linear;
+    }
+    & button.clear-input {
+        position: absolute;
+        right: -0.45em;
+        top: 0.7em;
+    }
+    & button:hover {
+        background: var(--color-solid);
+    }
+    & fieldset {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-m);
+        padding: var(--space-s);
+    }
+    & .charcounter {
+        font-size: var(--step--1);
     }
 }
 
-input, select {
+input, textarea, select {
     inline-size: 100%;
     line-height: 2;
 }
@@ -325,13 +335,6 @@ input[type="radio"]:checked {
 .cluster label {
     display: initial;
     font-weight: initial;
-}
-
-fieldset {
-    inline-size: fit-content;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
 }
 
 legend {
