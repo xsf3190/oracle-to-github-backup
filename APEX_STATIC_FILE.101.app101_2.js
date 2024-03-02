@@ -66,7 +66,7 @@ const focusHandler = (e) => {
 
     let result;
     if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT" || e.target.tagName == "SELECT") {
-        result = e.target.nextElementSibling.querySelector(".result");
+        result = e.target.parentElement.querySelector(".result");
     } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
         result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
     }
@@ -96,12 +96,22 @@ const changeHandler = (e) => {
             deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
         }
 
-        if (table_column === "website_article.navigation_label") {
-            const selected = pageNav.querySelector("[data-id='"+gArticleId+"'] > a");
-            selected.textContent = value;
-        } else if (table_column === "website.domain_name") {
-            const selected = websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a");
-            selected.textContent = value;            
+        switch (table_column) {
+            case 'website.color_dark': 
+                e.target.style.color = value;
+                break;
+            case 'website.color_light': 
+                e.target.style.background = value;
+                break;
+            case 'website.color_primary':
+                e.target.style.borderColor = value;
+                break;
+            case 'website_article.navigation_label' :
+                pageNav.querySelector("[data-id='"+gArticleId+"'] > a").textContent = value;
+                break;
+            case 'website.domain_name' :
+                websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").textContent = value;
+                break;         
         }
     });
 }
@@ -445,10 +455,14 @@ const clickHandler = (e) => {
         }
     } else if (e.target.matches(".visits")) {
         get_visits(e); 
+    } else if (e.target.matches(".clear-input")) {
+        clear_input(e); 
     } else if (e.target.matches(".new-website")) {
         new_website(); 
     } else if (e.target.matches(".website-options")) {
         website_options();
+    } else if (e.target.matches(".use_eyedropper")) {
+        eye_dropper(e);
     } else if (e.target.matches(".page-options")) {
         page_options();
     } else if (e.target.matches(".new-page")) {
@@ -480,6 +494,48 @@ const clickHandler = (e) => {
         console.log("saveBtn clicked - do nothing!");
     }
 }
+
+/*
+ **  CLEAR INPUT
+ */
+const clear_input = (e) => {
+    const input = e.target.previousElementSibling;
+    input.value = "";
+    input.focus();
+};
+
+/*
+ **  START EYEDROPPER API TO SELECT COLOR FROM SCREEN
+ */
+const eye_dropper = async (e) => {
+    const eyeDropper = new EyeDropper();
+    const result = await eyeDropper.open();
+    if (result.sRGBHex) {
+        const input = e.target.parentElement.nextElementSibling;
+        input.value = result.sRGBHex;
+        
+        execProcess("dml","PUT",{id:input.dataset.id,table_column:input.dataset.column,value:input.value}).then( (data) => {
+            const result = e.target.closest(".input-wrapper").querySelector(".result");
+            result.textContent = data.message;
+            result.style.color = data.color;
+            result.style.opacity = "1";
+            switch (input.dataset.column) {
+                case 'website.color_dark': 
+                    input.style.color = input.value;
+                    break;
+                case 'website.color_light': 
+                    input.style.background = input.value;
+                    break;
+                case 'website.color_primary':
+                    input.style.borderColor = input.value;
+                    input.style.borderWidth = "4px";
+                    break;
+            }
+
+            
+        });
+    }
+};
 
 /*
  **  COPY URL
