@@ -2,6 +2,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       apex_page_id = document.querySelector("#pFlowStepId").value,
       apex_session = document.querySelector("#pInstance").value,
       supportsPopover = HTMLElement.prototype.hasOwnProperty("popover").toString(),
+      supportsEyedropper = window.EyeDropper ? "true" : "false",
       popup = document.querySelector("dialog.popup");
 
 /* 
@@ -41,6 +42,11 @@ const popupOpen = (heading, text) => {
     popup.showModal();
 }
 
-execProcess( "client-info", "POST", {"session_id": apex_session, "timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, "maxtouchpoints": navigator.maxTouchPoints, "supports_popover":supportsPopover}).then( () => {
+execProcess( "client-info", "POST", {
+        "session_id": apex_session, 
+        "timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, 
+        "maxtouchpoints": navigator.maxTouchPoints, 
+        "supports_popover":supportsPopover,
+        "supports_eyedropper":supportsEyedropper}).then( () => {
     console.log("client info sent to database");
 });
