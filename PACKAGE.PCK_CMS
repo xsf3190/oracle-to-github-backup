@@ -8,13 +8,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getCodepen(pArticleId IN article.id%type);
     --
-    PROCEDURE getPageoptions(pId IN VARCHAR2);
-    --
     PROCEDURE getSessionLog(SessionId IN NUMBER);
     --
     PROCEDURE getWebsite(pWebsiteId IN website.id%type);
-    --
-    PROCEDURE getWebsiteoptions(pWebsiteId IN website.id%type);
     --
     PROCEDURE insertArticle(pId IN VARCHAR2);
     --
@@ -107,117 +103,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_ip_address session_data.ip_address%type;
     BEGIN
         l_ip_address:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
-        INSERT INTO session_data (session_id, timezone, maxtouchpoints, supports_popover, ip_address)
-        SELECT session_id, timezone, maxtouchpoints, supports_popover, l_ip_address
-          FROM JSON_TABLE(pBodyText FORMAT JSON, '$[*]' COLUMNS (session_id, timezone, maxtouchpoints, supports_popover));
+        INSERT INTO session_data (session_id, timezone, maxtouchpoints, supports_popover, supports_eyedropper, ip_address)
+        SELECT session_id, timezone, maxtouchpoints, supports_popover, supports_eyedropper, l_ip_address
+          FROM JSON_TABLE(pBodyText FORMAT JSON, '$[*]' COLUMNS (session_id, timezone, maxtouchpoints, supports_popover, supports_eyedropper));
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         apex_json.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-    END;
-
-    /*
-    ** GET WEBSITE OPTIONS TO DISPLAY IN DIALOG
-    */
-    PROCEDURE getWebsiteoptions(pWebsiteId IN website.id%type) IS
-        l_session_data pck_core.session_data_rt;
-        l_content CLOB;
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-
-        FOR C IN (SELECT id, domain_name, font, contact_email, max_width, fluid_types, color_dark, color_light, color_primary, netlify_site_id_custom
-                    FROM website 
-                   WHERE id=pWebsiteId
-                     AND user_id=l_session_data.user_id) 
-        LOOP
-            l_content:=
-            '<form>' ||
-                CASE WHEN C.netlify_site_id_custom IS NULL THEN pck_core.buildInputWrapper(C.id, 'website.domain_name', C.domain_name, l_session_data.canuse_popover) END ||
-                pck_core.buildInputWrapper(C.id, 'website.contact_email', C.contact_email, l_session_data.canuse_popover) ||
-                pck_core.buildSelectWrapper(C.id, 'website.font', C.font, 'google_font.family', l_session_data.canuse_popover) ||
-                pck_core.buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover) ||
-                '<fieldset>' ||
-                pck_core.buildInputWrapper(C.id, 'website.color_dark', C.color_dark, l_session_data.canuse_popover) ||
-                pck_core.buildInputWrapper(C.id, 'website.color_light', C.color_light, l_session_data.canuse_popover) ||
-                pck_core.buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover) ||
-                '</fieldset>' ||
-                --pck_core.buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover) ||
-                '<details>
-                    <summary>PERMANENTLY DELETE WEBSITE</summary>' ||
-                    pck_core.buildPushableButton('delete-website','#delete') ||
-                '</details>
-            </form>';
-
-            apex_json.open_object;
-            apex_json.write('content', l_content);
-            apex_json.write('success', TRUE);
-            apex_json.close_object;        
-        END LOOP;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-    END;
-
-    /*
-    ** GET PAGE OPTIONS TO EDIT IN DIALOG
-    */
-    PROCEDURE getPageOptions(pId IN VARCHAR2) IS
-        l_session_data pck_core.session_data_rt;
-        l_content CLOB;
-        l_website_id website_article.website_id%type;
-        l_article_id website_article.article_id%type;
-        l_radio LONG;
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-
-        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
-        l_article_id:=SUBSTR(pId,INSTR(pId,',')+1);
-
-        FOR C IN (SELECT navigation_label, contact_form, page_title, page_description
-                    FROM website_article 
-                   WHERE website_id=l_website_id
-                     AND article_id=l_article_id
-                     AND user_id=l_session_data.user_id) 
-        LOOP
-            l_radio:=
-            '<div>
-                <input class="cms" type="radio" data-column="website_article.contact_form" data-id="' || pId || '" id="contact_form-yes" name="template" value="YES"' ||
-                CASE WHEN C.contact_form='YES' THEN ' checked' END || '>
-                </input>
-                <label for="contact_form-yes">YES</label>
-            </div>
-            <div>
-                <input type="radio" class="cms" data-column="website_article.contact_form" data-id="' || pId || '" id="contact_form-no" name="template" value="NO"' ||
-                CASE WHEN C.contact_form='NO' THEN ' checked' END || '>
-                </input> <label for="contact_form-no">NO</label>
-            </div>';
-            l_content:=l_content || 
-            '<form>' ||
-                pck_core.buildInputWrapper(pId, 'website_article.navigation_label', C.navigation_label, l_session_data.canuse_popover) ||
-                pck_core.buildTextareaWrapper(pId, 'website_article.page_title', C.page_title, l_session_data.canuse_popover) ||
-                pck_core.buildTextareaWrapper(pId, 'website_article.page_description', C.page_description, l_session_data.canuse_popover) ||
-                pck_core.buildRadioWrapper('website_article.contact_form', l_radio, l_session_data.canuse_popover) || 
-                '<details>
-                    <summary>CODEPEN FEATURES</summary>' ||
-                    pck_core.buildPushableButton('edit-codepen','#codepen') ||
-                    pck_core.buildPushableButton('upload-codepen','#codepen') ||
-                '</details>
-                <details>
-                    <summary>PERMANENTLY DELETE PAGE</summary>' ||
-                    pck_core.buildPushableButton('delete-page') ||
-                '</details>
-            </form>';      
-
-            apex_json.open_object;
-            apex_json.write('content', l_content);
-            apex_json.write('success', TRUE);
-            apex_json.close_object;        
-        END LOOP;
 
         EXCEPTION
             WHEN OTHERS THEN
