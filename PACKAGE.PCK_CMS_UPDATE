@@ -1,5 +1,9 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS_UPDATE" IS
     --
+    PROCEDURE getPageoptions(pId IN VARCHAR2);
+    --
+    PROCEDURE getWebsiteoptions(pWebsiteId IN website.id%type);
+    --
     PROCEDURE init(pBodyText IN CLOB);
     --
     PROCEDURE netlify_status;
@@ -7,7 +11,300 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS_UPDATE" IS
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
-    
+
+    /*
+     **  Create wrapper html for input element
+     */
+    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pUseEyeDropper IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2 IS
+        l_table_name user_tab_columns.table_name%type;
+        l_column_name user_tab_columns.column_name%type;
+        l_data_length user_tab_columns.data_length%type;
+        l_comments user_col_comments.comments%type;
+        l_data_type user_tab_columns.data_type%type;
+    BEGIN
+        l_table_name:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
+        l_column_name:=UPPER(SUBSTR(pColumn,INSTR(pColumn,'.')+1));
+
+        SELECT c.data_length, NVL(i.comments,'Info not defined yet'), c.data_type
+          INTO l_data_length, l_comments, l_data_type
+          FROM user_tab_columns c, user_col_comments i
+         WHERE c.table_name=l_table_name
+           AND c.column_name=l_column_name
+           AND i.table_name=c.table_name
+           AND i.column_name=c.column_name;
+
+        l_column_name:=LOWER(l_column_name);
+
+        RETURN('
+        <div class="input-wrapper">
+            <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
+            CASE WHEN pCanUsePopover THEN
+                '<button type="button" popovertarget="' || l_column_name || '_popover">
+                    <svg><use href="#info"></use></svg>
+                </button>
+                <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' 
+            END ||
+            CASE WHEN pUseEyeDropper THEN
+                '<button type="button" class="use_eyedropper" title="Select color from screen" aria-label="Select color from screen">
+                    <svg><use href="#eyedropper"></use></svg>
+                </button>' 
+            END ||
+            '</label>
+            <input  class="cms" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
+                '" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '" data-id="' || pId || '">
+            <button type="button" class="clear-input" title="clear input" aria-label="clear input">&times;</button>
+            <div class="button-container">
+                <span class="result"></span>
+                <span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</span>
+            </div>
+        </div>');
+    END;
+
+    /*
+     **  Create wrapper html for radio elements
+     */
+    FUNCTION buildRadioWrapper(pColumn IN VARCHAR2, pRadioButtons IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2 IS
+        l_table_name user_tab_columns.table_name%type;
+        l_column_name user_tab_columns.column_name%type;
+        l_comments user_col_comments.comments%type;
+    BEGIN
+        l_table_name:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
+        l_column_name:=UPPER(SUBSTR(pColumn,INSTR(pColumn,'.')+1));
+
+        SELECT NVL(i.comments,'Info not defined yet') 
+          INTO l_comments
+          FROM user_tab_columns c, user_col_comments i
+         WHERE c.table_name=l_table_name
+           AND c.column_name=l_column_name
+           AND i.table_name=c.table_name
+           AND i.column_name=c.column_name;
+
+        l_column_name:=LOWER(l_column_name);
+
+        RETURN('
+        <div class="radio-wrapper">
+                <fieldset>
+                    <legend>' || INITCAP(l_column_name) || 
+                    CASE WHEN pCanUsePopover 
+                        THEN '<button type="button" popovertarget="' || l_column_name || '_popover"><svg><use href="#info"></use></svg></button>
+                              <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' END || '
+                    </legend>
+                    <div class="cluster">' || pRadioButtons || '
+                    </div>
+                </fieldset>
+                <div class="button-container">
+                    <span class="result"></span><span>&nbsp;</span>
+                </div>
+            </div>');
+    END;
+
+    /*
+     **  Create wrapper html for select element
+     */
+    FUNCTION buildSelectWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pOptionsColumn IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN CLOB IS
+        l_table_name user_tab_columns.table_name%type;
+        l_column_name user_tab_columns.column_name%type;
+        l_options_table_name user_tab_columns.table_name%type;
+        l_options_column_name user_tab_columns.column_name%type;
+        l_data_length user_tab_columns.data_length%type;
+        l_comments user_col_comments.comments%type;
+        l_data_type user_tab_columns.data_type%type;
+        l_sql VARCHAR2(250);
+        TYPE t_options IS TABLE OF VARCHAR2(50) INDEX BY PLS_INTEGER;
+        l_options t_options;
+        l_select_options CLOB;
+    BEGIN
+        l_table_name:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
+        l_column_name:=UPPER(SUBSTR(pColumn,INSTR(pColumn,'.')+1));
+        l_options_table_name:=UPPER(SUBSTR(pOptionsColumn,1,INSTR(pOptionsColumn,'.')-1));
+        l_options_column_name:=UPPER(SUBSTR(pOptionsColumn,INSTR(pOptionsColumn,'.')+1));
+
+        SELECT c.data_length, NVL(i.comments,'Info not defined yet'), c.data_type
+          INTO l_data_length, l_comments, l_data_type
+          FROM user_tab_columns c, user_col_comments i
+         WHERE c.table_name=l_table_name
+           AND c.column_name=l_column_name
+           AND i.table_name=c.table_name
+           AND i.column_name=c.column_name;
+
+        l_column_name:=LOWER(l_column_name);
+
+        /* Build select options */
+        l_sql:='SELECT ' || l_options_column_name || ' FROM ' || l_options_table_name || ' ORDER BY 1';
+        EXECUTE IMMEDIATE l_sql BULK COLLECT INTO l_options;
+        FOR i IN 1..l_options.COUNT LOOP
+            l_select_options:=l_select_options || '<option' || CASE WHEN l_options(i)=pValue THEN ' selected' END || '>' || l_options(i) || '</option>'; 
+        END LOOP;
+
+        RETURN('
+        <div class="select-wrapper">
+            <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
+                CASE WHEN pCanUsePopover 
+                        THEN '<button type="button" popovertarget="' || l_column_name || '_popover"><svg><use href="#info"></use></svg></button>
+                              <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' END ||'
+            </label>
+            <select class="cms" id="' || l_column_name || '" name="' || LOWER(l_column_name) || '" data-column="' || pColumn || '" data-id="' || pId || '">' || l_select_options || 
+            '</select>
+            <div class="button-container">
+                <span class="result"></span>
+                <span>' || TO_CHAR(l_options.COUNT) || ' options</span>
+            </div>
+        </div>');
+    END;
+
+    /*
+     **  Create wrapper html for textarea element
+     */
+    FUNCTION buildTextareaWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2 IS
+        l_table_name user_tab_columns.table_name%type;
+        l_column_name user_tab_columns.column_name%type;
+        l_data_length user_tab_columns.data_length%type;
+        l_comments user_col_comments.comments%type;
+        l_data_type user_tab_columns.data_type%type;
+    BEGIN
+        l_table_name:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
+        l_column_name:=UPPER(SUBSTR(pColumn,INSTR(pColumn,'.')+1));
+
+        SELECT c.data_length, NVL(i.comments,'Info not defined yet'), c.data_type
+          INTO l_data_length, l_comments, l_data_type
+          FROM user_tab_columns c, user_col_comments i
+         WHERE c.table_name=l_table_name
+           AND c.column_name=l_column_name
+           AND i.table_name=c.table_name
+           AND i.column_name=c.column_name;
+
+        l_column_name:=LOWER(l_column_name);
+
+        RETURN('
+        <div class="textarea-wrapper">
+            <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
+            CASE WHEN pCanUsePopover THEN
+            '<button type="button" popovertarget="' || l_column_name || '_popover">
+                <svg><use href="#info"></use></svg>
+            </button>
+            <div id="' || l_column_name || '_popover" popover>' || l_comments || 
+            '</div>'
+            END ||
+            '</label>
+            <textarea class="cms" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
+                CASE WHEN l_data_type='CLOB' THEN '" rows="5" cols="60"' 
+                     WHEN l_data_length=4000 THEN '" rows="5" cols="50" maxlength="' || l_data_length || '"' 
+                     ELSE '" maxlength="' || l_data_length || '" rows="1" cols="0"' 
+                END || ' data-column="' || pColumn || '" data-id="' || pId || '">' || pValue || '</textarea>
+            <button type="button" class="clear-input" title="clear input" aria-label="clear input">&times;</button>        
+            <div class="button-container">
+                <span class="result"></span>
+                <span class="charcounter">' || NVL(LENGTH(pValue),0) || CASE WHEN l_data_type<>'CLOB' THEN '/' || l_data_length END || '</span>
+            </div>
+        </div>');
+    END;
+
+    /*
+    ** GET WEBSITE OPTIONS TO DISPLAY IN DIALOG
+    */
+    PROCEDURE getWebsiteoptions(pWebsiteId IN website.id%type) IS
+        l_session_data pck_core.session_data_rt;
+        l_content CLOB;
+        l_website_id website.id%type;
+        l_eyedropper VARCHAR2(3);
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        FOR C IN (SELECT id, domain_name, font, contact_email, max_width, fluid_types, color_dark, color_light, color_primary, netlify_site_id_custom
+                    FROM website 
+                   WHERE id=pWebsiteId
+                     AND user_id=l_session_data.user_id) 
+        LOOP
+            l_content:=
+            '<form>' ||
+                CASE WHEN C.netlify_site_id_custom IS NULL THEN buildInputWrapper(C.id, 'website.domain_name', C.domain_name, l_session_data.canuse_popover) END ||
+                buildInputWrapper(C.id, 'website.contact_email', C.contact_email, l_session_data.canuse_popover) ||
+                buildSelectWrapper(C.id, 'website.font', C.font, 'google_font.family', l_session_data.canuse_popover) ||
+                buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover) ||
+                '<fieldset>' ||
+                buildInputWrapper(C.id, 'website.color_dark', C.color_dark, l_session_data.canuse_popover, l_session_data.canuse_eyedropper) ||
+                buildInputWrapper(C.id, 'website.color_light', C.color_light, l_session_data.canuse_popover, l_session_data.canuse_eyedropper) ||
+                buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover, l_session_data.canuse_eyedropper) ||
+                '</fieldset>' ||
+                --buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover) ||
+                '<details>
+                    <summary>DELETE WEBSITE</summary>' ||
+                    pck_core.buildPushableButton('delete-website','#delete') ||
+                '</details>
+            </form>';
+
+            apex_json.open_object;
+            apex_json.write('content', l_content);
+            apex_json.write('success', TRUE);
+            apex_json.close_object;        
+        END LOOP;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
+    /*
+    ** GET PAGE OPTIONS TO EDIT IN DIALOG
+    */
+    PROCEDURE getPageOptions(pId IN VARCHAR2) IS
+        l_session_data pck_core.session_data_rt;
+        l_content CLOB;
+        l_website_id website_article.website_id%type;
+        l_article_id website_article.article_id%type;
+        l_radio LONG;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
+        l_article_id:=SUBSTR(pId,INSTR(pId,',')+1);
+
+        FOR C IN (SELECT navigation_label, contact_form, page_title, page_description
+                    FROM website_article 
+                   WHERE website_id=l_website_id
+                     AND article_id=l_article_id
+                     AND user_id=l_session_data.user_id) 
+        LOOP
+            l_radio:=
+            '<div>
+                <input class="cms" type="radio" data-column="website_article.contact_form" data-id="' || pId || '" id="contact_form-yes" name="template" value="YES"' ||
+                CASE WHEN C.contact_form='YES' THEN ' checked' END || '>
+                </input>
+                <label for="contact_form-yes">YES</label>
+            </div>
+            <div>
+                <input type="radio" class="cms" data-column="website_article.contact_form" data-id="' || pId || '" id="contact_form-no" name="template" value="NO"' ||
+                CASE WHEN C.contact_form='NO' THEN ' checked' END || '>
+                </input> <label for="contact_form-no">NO</label>
+            </div>';
+            l_content:=l_content || 
+            '<form>' ||
+                buildInputWrapper(pId, 'website_article.navigation_label', C.navigation_label, l_session_data.canuse_popover) ||
+                buildTextareaWrapper(pId, 'website_article.page_title', C.page_title, l_session_data.canuse_popover) ||
+                buildTextareaWrapper(pId, 'website_article.page_description', C.page_description, l_session_data.canuse_popover) ||
+                buildRadioWrapper('website_article.contact_form', l_radio, l_session_data.canuse_popover) || 
+                '<details>
+                    <summary>CODEPEN FEATURES</summary>' ||
+                    pck_core.buildPushableButton('edit-codepen','#codepen') ||
+                    pck_core.buildPushableButton('upload-codepen','#codepen') ||
+                '</details>
+                <details>
+                    <summary>DELETE PAGE</summary>' ||
+                    pck_core.buildPushableButton('delete-page') ||
+                '</details>
+            </form>';      
+
+            apex_json.open_object;
+            apex_json.write('content', l_content);
+            apex_json.write('success', TRUE);
+            apex_json.close_object;        
+        END LOOP;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
+
     /*
     **  Maintain separate Netlify site objects for TEST and LIVE websites
     **  Auto-create the LIVE site if a dns zone exists with same domain name
@@ -130,6 +427,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website.max_width' THEN
                     UPDATE website SET max_width=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.color_light' THEN
+                    UPDATE website SET color_light=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.color_primary' THEN
+                    UPDATE website SET color_primary=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.color_dark' THEN
+                    UPDATE website SET color_dark=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website.fluid_types' THEN
                     UPDATE website SET fluid_types=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website_article.navigation_label' THEN
@@ -163,6 +466,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 pck_core.log_error;
     END;
 
+    /*
+    **  Run this to get a status of Netlify sites
+    */
     PROCEDURE netlify_status IS 
         l_clob CLOB;
     BEGIN
