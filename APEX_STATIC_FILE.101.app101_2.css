@@ -283,8 +283,15 @@ form {
     }
     & button.clear-input {
         position: absolute;
-        right: -0.45em;
-        top: 0.7em;
+        right: 0.25em;
+        top: 1.9em;
+        opacity: 0;
+    }
+    & .clear-input--touched:focus + .clear-input,
+      .clear-input--touched:hover + .clear-input,
+      .clear-input--touched + .clear-input:hover {
+        /*display: inline-flex;*/
+        opacity: 1;
     }
     & button:hover {
         background: var(--color-solid);
