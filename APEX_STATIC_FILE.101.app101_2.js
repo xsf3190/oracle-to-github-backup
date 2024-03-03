@@ -955,6 +955,14 @@ if (window.location.hash === "#_=_"){
         : window.location.hash = "";
 }
 
+const handleInputChange = (e) => {
+    if (e.target.value && !e.target.classList.contains("clear-input--touched")) {
+        e.target.classList.add("clear-input--touched")
+    } else if (!e.target.value && e.target.classList.contains("clear-input--touched")) {
+        e.target.classList.remove("clear-input--touched")
+    }
+}
+
 /* 
  ** GET WEBSIITE OPTIONS
  */
@@ -962,6 +970,10 @@ const website_options = () => {
     execProcess( "website-options/"+gWebsiteId,"GET").then( (data) => {
         websiteContent.replaceChildren();
         websiteContent.insertAdjacentHTML('afterbegin',data.content);
+        websiteContent.querySelectorAll("input,textarea").forEach((input) => {
+            input.addEventListener("focus", handleInputChange);
+            input.addEventListener("input", handleInputChange);
+        });
         websiteDialog.showModal();
     });
 }
