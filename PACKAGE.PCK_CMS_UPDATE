@@ -225,7 +225,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 buildInputWrapper(C.id, 'website.color_dark', C.color_dark, l_session_data.canuse_popover, l_session_data.canuse_eyedropper) ||
                 buildInputWrapper(C.id, 'website.color_light', C.color_light, l_session_data.canuse_popover, l_session_data.canuse_eyedropper) ||
                 buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover, l_session_data.canuse_eyedropper) ||
-                '</fieldset>' ||
+                '<output style="background:' || C.color_light || ';color:' || C.color_dark || ';border-color:' || C.color_primary || '">Dark text with Light background and Primary border</output>
+                </fieldset>' ||
                 --buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover) ||
                 '<details>
                     <summary>DELETE WEBSITE</summary>' ||
