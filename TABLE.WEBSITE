@@ -44,12 +44,12 @@ CREATE TABLE "WEBSITE"
    ) ;
 COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'Websites are deployed to "https://{Domain Name}.netlify.app".<p>Domain names purchased on Netlify or transferred from a registrar are published live on the internet.</p><p>The same content can therefore be published independently on separate TEST and LIVE websites to allow previewing changes.';
    COMMENT ON COLUMN "WEBSITE"."CONTACT_EMAIL" IS '<p>Email to receive details entered in contact form(s) included in the website.</p><p>This feature is provided under Page "Edit Options".</p><p>Contact forms are auto-generated with digital signature to guarantee authenticity</p>';
-   COMMENT ON COLUMN "WEBSITE"."FONT" IS 'Google font name. Default is "Roboto Serif" as used for this application.';
+   COMMENT ON COLUMN "WEBSITE"."FONT" IS '<p>Select a Google font name for your website</p><p>Sample text appears with selected colors in the output below</p><p>Default is "Roboto Serif" as used for this application.</p>';
    COMMENT ON COLUMN "WEBSITE"."MAX_WIDTH" IS '<p>Constrains width of displayed content to aid reading. Default is "65ch" which means lines of text do not exceed 65 characters in the website font.</p>';
    COMMENT ON COLUMN "WEBSITE"."FLUID_TYPES" IS '<p>Fluid typography custom properties for type and space.</p><p>Ensures that website content scales linearly with viewport width avoiding need for media queries.</p><p><a href="https://codepen.io/xsf3190/full/WNgddVz" target="_blank">Fluid Typography tool</a> generates custom properties that can be manually copied/pasted</p>';
-   COMMENT ON COLUMN "WEBSITE"."COLOR_DARK" IS '<p>Color code for text.</p><p>Will provide a fancy color picker for this - using experimental EyeDropper API</p>';
-   COMMENT ON COLUMN "WEBSITE"."COLOR_LIGHT" IS '<p>Color code for background.</p><p>Will provide a fancy color picker for this - using experimental EyeDropper API</p>';
-   COMMENT ON COLUMN "WEBSITE"."COLOR_PRIMARY" IS '<p>Color code for your website "brand".</p><p>Will provide a fancy color picker for this - using experimental EyeDropper API</p>';
+   COMMENT ON COLUMN "WEBSITE"."COLOR_DARK" IS '<p>Color code for text as it will appear in your website</p><p>Must be a valid hex value in format #RRGGBB</p><p>Modern browsers provide a color icon allowing you to select a color from anywhere on your screen.</p>';
+   COMMENT ON COLUMN "WEBSITE"."COLOR_LIGHT" IS '<p>Color code for background as it will appear in your website.</p><p>Modern browsers provide a color icon allowing you to select a color from anywhere on your screen.</p>';
+   COMMENT ON COLUMN "WEBSITE"."COLOR_PRIMARY" IS '<p>Color code for your website "brand".</p><p>Modern browsers provide a color icon allowing you to select a color from anywhere on your screen.</p>';
 CREATE UNIQUE INDEX "PK_WEBSITE" ON "WEBSITE" ("ID") 
   ;
   CREATE UNIQUE INDEX "IX_WEBSITE_DOMAIN_NAME" ON "WEBSITE" ("DOMAIN_NAME") 
