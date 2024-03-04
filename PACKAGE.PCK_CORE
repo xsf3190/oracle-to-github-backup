@@ -173,9 +173,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         pck_api.callGoogleApi(pUserId=>l_session_data.user_id, pData=>l_data);
 
         MERGE INTO google_font t
-        USING (SELECT family FROM JSON_TABLE(l_data, '$.items[*]' COLUMNS(family))) s
+        USING (SELECT seq, family, url_regular FROM JSON_TABLE(l_data, '$.items[*]' COLUMNS(seq for ordinality, family, url_regular PATH '$.files.regular'))) s
         ON (t.family=s.family)
-        WHEN NOT MATCHED THEN INSERT (family) VALUES (s.family);
+        WHEN NOT MATCHED THEN INSERT (seq, family, url_regular) VALUES (s.seq, s.family, s.url_regular);
 
         n:=SQL%ROWCOUNT;
 
