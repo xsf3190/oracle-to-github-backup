@@ -90,14 +90,6 @@
 /* PAGE CONTAINER */
 /******************/
 
-[popover] {
-    font-family: var(--font-serif);
-    padding: var(--space-s) var(--space-m);
-    line-height: 1.5;
-    background-color: var(--color-pale-hover);
-    inline-size: min(95vw, 70ch);
-}
-
 body {
     font-family: var(--font-serif);
     font-size: var(--step-0);
@@ -273,11 +265,7 @@ form {
     & button {
         appearance: none;
         border: none;
-        border-radius: 50%;
-        inline-size: 1em;
         padding: 0;
-        background: var(--color-pale);
-        color: white;
         cursor: pointer;
         transition: 0.5s all linear;
     }
@@ -294,7 +282,7 @@ form {
         opacity: 1;
     }
     & button:hover {
-        background: var(--color-solid);
+        font-weight: 900;
     }
     & fieldset {
         display: flex;
