@@ -96,24 +96,36 @@ const changeHandler = (e) => {
             deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
         }
 
+        /* Update UI if domain name or rnavigation label are change */
+
         switch (table_column) {
-            case 'website.color_dark': 
-                e.target.style.color = value;
-                break;
-            case 'website.color_light': 
-                e.target.style.background = value;
-                break;
-            case 'website.color_primary':
-                e.target.style.borderColor = value;
-                break;
             case 'website_article.navigation_label' :
                 pageNav.querySelector("[data-id='"+gArticleId+"'] > a").textContent = value;
                 break;
             case 'website.domain_name' :
                 websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").textContent = value;
-                break;         
+                break;
+            case 'website.font' :
+                const fontFile = new FontFace(data.font_family,data.font_url);
+                document.fonts.add(fontFile);
+                fontFile.load().then(()=>{
+                    console.log("font " + data.font_family + " loaded");
+                    websiteContent.querySelector(".demo").style.fontFamily = data.font_family;
+                });
+                break;
+        }
+
+        if (table_column.substring(8,13)==="color") {
+            demo();
         }
     });
+}
+
+const demo = () => {
+    console.log("do demo");
+    const font = websiteContent.querySelector("[data-column='website.font']");
+    const selectedFont = font.options[font.selectedIndex].text;
+    websiteContent.querySelector(".demo").textContent = `Dark text in ${selectedFont} font against light background`;
 }
 
 /*
@@ -511,7 +523,9 @@ const eye_dropper = async (e) => {
     const eyeDropper = new EyeDropper();
     const result = await eyeDropper.open();
     if (result.sRGBHex) {
-        const input = e.target.parentElement.nextElementSibling;
+        const input = e.target.parentElement.nextElementSibling,
+              output = websiteContent.querySelector(".demo");
+        
         input.value = result.sRGBHex;
         
         execProcess("dml","PUT",{id:input.dataset.id,table_column:input.dataset.column,value:input.value}).then( (data) => {
@@ -519,19 +533,22 @@ const eye_dropper = async (e) => {
             result.textContent = data.message;
             result.style.color = data.color;
             result.style.opacity = "1";
+
+            const font = websiteContent.querySelector("[name='font]").value;
+
+            output.textContent = `This is dark text in ${font} font against a light background`;
+            
             switch (input.dataset.column) {
                 case 'website.color_dark': 
-                    input.style.color = input.value;
+                    output.style.color = input.value;
                     break;
                 case 'website.color_light': 
-                    input.style.background = input.value;
+                    output.style.background = input.value;
                     break;
                 case 'website.color_primary':
-                    input.style.borderColor = input.value;
-                    input.style.borderWidth = "4px";
+                    output.style.borderColor = input.value;
                     break;
             }
-
             
         });
     }
