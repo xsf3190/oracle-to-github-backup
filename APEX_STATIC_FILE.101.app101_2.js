@@ -91,6 +91,7 @@ const changeHandler = (e) => {
         result.textContent = data.message;
         result.style.color = data.color;
         result.style.opacity = "1";
+
         if (data.deploy_buttons) {
             deployButtons.replaceChildren();
             deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
@@ -105,27 +106,28 @@ const changeHandler = (e) => {
             case 'website.domain_name' :
                 websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").textContent = value;
                 break;
+            case 'website.color_dark' :
+                websiteContent.querySelector(".demo").style.color = value;
+                break;
+            case 'website.color_light' :
+                websiteContent.querySelector(".demo").style.background = value;
+                break;
+            case 'website.color_primary' :
+                websiteContent.querySelector(".demo>section").style.background = value;
+                break;
             case 'website.font' :
                 const fontFile = new FontFace(data.font_family,data.font_url);
                 document.fonts.add(fontFile);
                 fontFile.load().then(()=>{
                     console.log("font " + data.font_family + " loaded");
                     websiteContent.querySelector(".demo").style.fontFamily = data.font_family;
+                    const font = websiteContent.querySelector("[data-column='website.font']");
+                    const selectedFont = font.options[font.selectedIndex].text;
+                    websiteContent.querySelector(".demo>p").textContent = `I'm "${selectedFont}" dark-coloured text in light background`;
                 });
                 break;
         }
-
-        if (table_column.substring(8,13)==="color") {
-            demo();
-        }
     });
-}
-
-const demo = () => {
-    console.log("do demo");
-    const font = websiteContent.querySelector("[data-column='website.font']");
-    const selectedFont = font.options[font.selectedIndex].text;
-    websiteContent.querySelector(".demo").textContent = `Dark text in ${selectedFont} font against light background`;
 }
 
 /*
@@ -523,8 +525,7 @@ const eye_dropper = async (e) => {
     const eyeDropper = new EyeDropper();
     const result = await eyeDropper.open();
     if (result.sRGBHex) {
-        const input = e.target.parentElement.nextElementSibling,
-              output = websiteContent.querySelector(".demo");
+        const input = e.target.parentElement.nextElementSibling;
         
         input.value = result.sRGBHex;
         
@@ -534,19 +535,18 @@ const eye_dropper = async (e) => {
             result.style.color = data.color;
             result.style.opacity = "1";
 
-            const font = websiteContent.querySelector("[name='font]").value;
+            /* simulate "change" event */
+            const demo = websiteContent.querySelector(".demo");
 
-            output.textContent = `This is dark text in ${font} font against a light background`;
-            
             switch (input.dataset.column) {
                 case 'website.color_dark': 
-                    output.style.color = input.value;
+                    demo.style.color = input.value;
                     break;
                 case 'website.color_light': 
-                    output.style.background = input.value;
+                    demo.style.background = input.value;
                     break;
                 case 'website.color_primary':
-                    output.style.borderColor = input.value;
+                    demo.querySelector("section").style.background = input.value;
                     break;
             }
             
