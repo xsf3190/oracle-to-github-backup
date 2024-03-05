@@ -15,7 +15,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     /*
      **  Create wrapper html for input element
      */
-    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pUseEyeDropper IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2 IS
+    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pUseEyeDropper IN BOOLEAN DEFAULT FALSE, pUseCharcounter IN BOOLEAN DEFAULT TRUE) RETURN VARCHAR2 IS
         l_table_name user_tab_columns.table_name%type;
         l_column_name user_tab_columns.column_name%type;
         l_data_length user_tab_columns.data_length%type;
@@ -40,13 +40,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
             CASE WHEN pCanUsePopover THEN
                 '<button type="button" popovertarget="' || l_column_name || '_popover">&#9432;
-                    <!--<svg><use href="#info"></use></svg>-->
                 </button>
                 <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' 
             END ||
             CASE WHEN pUseEyeDropper THEN
                 '<button type="button" class="use_eyedropper" aria-label="Select color from screen">
-                    <!--<svg><use href="#eyedropper"></use></svg>-->
                     &#128997;&#129001;&#128998;
                 </button>' 
             END ||
@@ -55,9 +53,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 '" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '" data-id="' || pId || '">
             <button type="button" class="clear-input" title="clear input" aria-label="clear input">&times;</button>
             <div class="button-container">
-                <span class="result"></span>
-                <span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</span>
-            </div>
+                <span class="result">&nbsp;</span>' ||
+                CASE WHEN pUseCharcounter THEN
+                '<span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</span>'
+                END ||
+            '</div>
         </div>');
     END;
 
@@ -221,19 +221,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 CASE WHEN C.netlify_site_id_custom IS NULL THEN buildInputWrapper(C.id, 'website.domain_name', C.domain_name, l_session_data.canuse_popover) END ||
                 buildInputWrapper(C.id, 'website.contact_email', C.contact_email, l_session_data.canuse_popover) ||
                 buildSelectWrapper(C.id, 'website.font', C.font, 'google_font.family', 'seq', l_session_data.canuse_popover) ||
-                '<fieldset>' ||
-                buildInputWrapper(C.id, 'website.color_dark', C.color_dark, l_session_data.canuse_popover, l_session_data.canuse_eyedropper) ||
-                buildInputWrapper(C.id, 'website.color_light', C.color_light, l_session_data.canuse_popover, l_session_data.canuse_eyedropper) ||
-                buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover, l_session_data.canuse_eyedropper) ||
-                '<div class="demo" style="background:' || C.color_light || ';color:' || C.color_dark || ';border-color:' || C.color_primary || '">
-                Dark text in ' || C.font || ' font against light background
-                </div>
-                </fieldset>' ||
                 buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover) ||
+                '<details>
+                    <summary>Website Colours</summary>
+                    <fieldset>' ||
+                    buildInputWrapper(C.id, 'website.color_dark', C.color_dark, l_session_data.canuse_popover, l_session_data.canuse_eyedropper, FALSE) ||
+                    buildInputWrapper(C.id, 'website.color_light', C.color_light, l_session_data.canuse_popover, l_session_data.canuse_eyedropper, FALSE) ||
+                    buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover, l_session_data.canuse_eyedropper, FALSE) ||
+                    '</fieldset>
+                </details>
+                <div class="demo">
+                    <section style="clip-path:polygon(0 0, 100% 0, 100% 80%, 0 100%); height:5vw; background:' || C.color_primary || '"></section>
+                </div>
+                <textarea readonly style="background:' || C.color_light || ';color:' || C.color_dark || ';padding:0.5em;">I''m "' || C.font || '" dark-coloured text against light-coloured background with a fancy primary-coloured banner</textarea>' ||
                 --buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover) ||
                 '<details>
                     <summary>DELETE WEBSITE</summary>' ||
-                    pck_core.buildPushableButton('delete-website','#delete') ||
+                    pck_core.buildPushableButton('delete-website','&#128686;') ||
                 '</details>
             </form>';
 
@@ -289,12 +293,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 buildRadioWrapper('website_article.contact_form', l_radio, l_session_data.canuse_popover) || 
                 '<details>
                     <summary>CODEPEN FEATURES</summary>' ||
-                    pck_core.buildPushableButton('edit-codepen','#codepen') ||
-                    pck_core.buildPushableButton('upload-codepen','#codepen') ||
+                    pck_core.buildPushableButton('edit-codepen','&#9917;') ||
+                    pck_core.buildPushableButton('upload-codepen','&#9917;') ||
                 '</details>
                 <details>
                     <summary>DELETE PAGE</summary>' ||
-                    pck_core.buildPushableButton('delete-page') ||
+                    pck_core.buildPushableButton('delete-page', '&#128686;') ||
                 '</details>
             </form>';      
 
