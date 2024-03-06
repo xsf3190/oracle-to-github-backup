@@ -32,11 +32,31 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       galleryFullLegend = galleryFull.querySelector("legend > span"),
       galleryFullDimensions = galleryFull.querySelectorAll("fieldset button.dimensions");
 
+
 /*
-**  TEXT INPUT COMPONENT
+**  ENABLE USER TO CLEAR TEXT CONTENT
+*/
+const clearInput = (e) => {
+    if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT") {
+        if (e.target.value && !e.target.classList.contains("clear-input--touched")) {
+            e.target.classList.add("clear-input--touched")
+        } else if (!e.target.value && e.target.classList.contains("clear-input--touched")) {
+            e.target.classList.remove("clear-input--touched")
+        }
+    }
+}
+
+/*
+**  COUNT CHARACTER ENTERED IN TEXT FIELDS
 */
 const inputHandler = (e) => {
     if (!e.target.matches(".cms")) return;
+
+    clearInput(e);
+
+    const counter = e.target.parentElement.querySelector(".charcounter");
+    if (!counter) return;
+
     if (e.target.tagName !== "TEXTAREA" && e.target.tagName !== "INPUT") return;
 
     if (e.target.id==="domain_name") {
@@ -44,7 +64,7 @@ const inputHandler = (e) => {
     };
 
     const maxchars = e.target.getAttribute("maxlength");
-    const counter = e.target.parentElement.querySelector(".charcounter");
+    
     let numOfEnteredChars = e.target.value.length;
 
     if (maxchars) {
@@ -64,6 +84,8 @@ const inputHandler = (e) => {
 const focusHandler = (e) => {
     if (!e.target.matches(".cms")) return;
 
+    clearInput(e);
+
     let result;
     if (e.target.tagName == "TEXTAREA" || e.target.tagName == "INPUT" || e.target.tagName == "SELECT") {
         result = e.target.parentElement.querySelector(".result");
@@ -74,8 +96,80 @@ const focusHandler = (e) => {
     result.style.opacity = "0";
 }
 
+/*
+**  COLOR CONTRAST VALiDATION. RATIO LIGTH/DARK >= 4.5/1
+*/
+const hexToRgb = (hex) => {
+    const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+    hex = hex.replace(shorthandRegex, function(m, r, g, b) {
+        return r + r + g + g + b + b;
+    });
+
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : null;
+}
+
+const luminance = (r, g, b) => {
+    const a = [r, g, b].map(function (v) {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow( (v + 0.055) / 1.055, 2.4 );
+    });
+    return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+}
+
+const validColor = (e,result) => {
+    const color1 = hexToRgb(e.target.value);
+    if (!color1) {
+        result.textContent = "INVALID COLOR FORMAT";
+        result.style.color = 'red';
+        result.style.opacity = "1";
+        return false;
+    }
+    let color2;
+    if (e.target.id==="color_dark") {
+        color2 = hexToRgb(document.getElementById("color_light").value);
+    } else {
+        color2 = hexToRgb(document.getElementById("color_dark").value);
+    }
+    const luminance1 = luminance(color1.r, color1.g, color1.b),
+          luminance2 = luminance(color2.r, color2.g, color2.b),
+          ratio = luminance1 > luminance2 ? ((luminance2 + 0.05) / (luminance1 + 0.05)) : ((luminance1 + 0.05) / (luminance2 + 0.05));
+
+    console.log("ratio", 1/ratio, "wcag",1/4.5);
+    if (ratio < 1/4.5) return true;
+
+    result.textContent = "FAILED WGAC COLOR CONTRAST TEST";
+    result.style.color = 'red';
+    result.style.opacity = "1";
+    return false;
+}
+
+const websiteFont = (font_family, font_url) => {
+    const fontFile = new FontFace(font_family,font_url);
+    document.fonts.add(fontFile);
+    fontFile.load();
+    document.fonts.ready.then(()=>{
+        console.log("font " + font_family + " loaded");
+        websiteContent.querySelector("textarea.demo").style.fontFamily = font_family;
+        /*
+        websiteContent.querySelector("textarea.demo").style.fontFamily = data.font_family;
+        const font = websiteContent.querySelector("[data-column='website.font']");
+        const selectedFont = font.options[font.selectedIndex].text;
+        websiteContent.querySelector("textarea.demo").value = `I'm "${selectedFont}" text in light background`;
+        */
+    });
+}
+
+/*
+**  HANDLE FORM FIELD CHANGE. UPDATE DATABASE IF PASSES ANY VALIDATION CHECK
+*/
 const changeHandler = (e) => {
     if (!e.target.matches(".cms")) return;
+
     let result;
     if (e.target.tagName == "INPUT" && e.target.type == "radio") {
         result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
@@ -86,6 +180,10 @@ const changeHandler = (e) => {
     const table_column = e.target.dataset.column,
           id = e.target.dataset.id,
           value = e.target.value;
+
+    if (e.target.id==="color_dark" || e.target.id==="color_light") {
+        if (!validColor(e,result)) return;
+    }
 
     execProcess("dml","PUT",{id:id,table_column:table_column,value:value}).then( (data) => {
         result.textContent = data.message;
@@ -107,24 +205,16 @@ const changeHandler = (e) => {
                 websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").textContent = value;
                 break;
             case 'website.color_dark' :
-                websiteContent.querySelector(".demo").style.color = value;
+                websiteContent.querySelector("textarea.demo").style.color = value;
                 break;
             case 'website.color_light' :
-                websiteContent.querySelector(".demo").style.background = value;
+                websiteContent.querySelector("textarea.demo").style.background = value;
                 break;
             case 'website.color_primary' :
-                websiteContent.querySelector(".demo>section").style.background = value;
+                websiteContent.querySelector("div.demo").style.background = value;
                 break;
             case 'website.font' :
-                const fontFile = new FontFace(data.font_family,data.font_url);
-                document.fonts.add(fontFile);
-                fontFile.load().then(()=>{
-                    console.log("font " + data.font_family + " loaded");
-                    websiteContent.querySelector(".demo").style.fontFamily = data.font_family;
-                    const font = websiteContent.querySelector("[data-column='website.font']");
-                    const selectedFont = font.options[font.selectedIndex].text;
-                    websiteContent.querySelector(".demo>p").textContent = `I'm "${selectedFont}" dark-coloured text in light background`;
-                });
+                websiteFont(data.font_family, data.font_url);
                 break;
         }
     });
@@ -963,21 +1053,10 @@ ClassicEditor.create(document.querySelector("#editor"), {
         console.error(error);
     });
 
-
-
-
 if (window.location.hash === "#_=_"){
     history.replaceState 
         ? history.replaceState(null, null, window.location.href.split("#")[0])
         : window.location.hash = "";
-}
-
-const handleInputChange = (e) => {
-    if (e.target.value && !e.target.classList.contains("clear-input--touched")) {
-        e.target.classList.add("clear-input--touched")
-    } else if (!e.target.value && e.target.classList.contains("clear-input--touched")) {
-        e.target.classList.remove("clear-input--touched")
-    }
 }
 
 /* 
@@ -987,11 +1066,8 @@ const website_options = () => {
     execProcess( "website-options/"+gWebsiteId,"GET").then( (data) => {
         websiteContent.replaceChildren();
         websiteContent.insertAdjacentHTML('afterbegin',data.content);
-        websiteContent.querySelectorAll("input,textarea").forEach((input) => {
-            input.addEventListener("focus", handleInputChange);
-            input.addEventListener("input", handleInputChange);
-        });
         websiteDialog.showModal();
+        websiteFont(data.font_family, data.font_url);
     });
 }
 
