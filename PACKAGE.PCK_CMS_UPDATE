@@ -211,10 +211,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        FOR C IN (SELECT id, domain_name, font, contact_email, max_width, fluid_types, color_dark, color_light, color_primary, netlify_site_id_custom
-                    FROM website 
-                   WHERE id=pWebsiteId
-                     AND user_id=l_session_data.user_id) 
+        FOR C IN (SELECT w.id, w.domain_name, w.font, g.url_regular, w.contact_email, w.max_width, w.fluid_types, w.color_dark, w.color_light, w.color_primary, w.netlify_site_id_custom
+                    FROM website w, google_font g
+                   WHERE w.id=pWebsiteId
+                     AND w.font=g.family
+                     AND w.user_id=l_session_data.user_id) 
         LOOP
             l_content:=
             '<form>' ||
@@ -230,10 +231,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover, l_session_data.canuse_eyedropper, FALSE) ||
                     '</fieldset>
                 </details>
-                <div class="demo">
-                    <section style="clip-path:polygon(0 0, 100% 0, 100% 80%, 0 100%); height:5vw; background:' || C.color_primary || '"></section>
-                </div>
-                <textarea readonly style="background:' || C.color_light || ';color:' || C.color_dark || ';padding:0.5em;">I''m "' || C.font || '" dark-coloured text against light-coloured background with a fancy primary-coloured banner</textarea>' ||
+                <div class="demo" style="clip-path:polygon(0 0, 100% 0, 100% 80%, 0 100%); height:5vw; background:' || C.color_primary || '"></div>
+                <textarea class="demo" readonly style="background:' || C.color_light || ';color:' || C.color_dark || ';margin-top:calc(var(--space-m) * -1);padding:0.5em;">Dark text against light background</textarea>' ||
                 --buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover) ||
                 '<details>
                     <summary>DELETE WEBSITE</summary>' ||
@@ -243,6 +242,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
 
             apex_json.open_object;
             apex_json.write('content', l_content);
+            apex_json.write('font_family', '"FontFamily ' || C.font || '"');
+            apex_json.write('font_url','url(' || C.url_regular || ')');
             apex_json.write('success', TRUE);
             apex_json.close_object;        
         END LOOP;
