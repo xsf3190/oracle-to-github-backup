@@ -200,6 +200,11 @@ textarea {
     line-height: 2;
 }
 
+textarea.demo {
+    --font-family: none;
+    font-family: var(--font-family);
+}
+
 ul {
   list-style: none;
   min-width: 25ch;
