@@ -150,11 +150,12 @@ const validColor = (e,result) => {
 
 const websiteFont = (font_family, font_url) => {
     const fontFile = new FontFace(font_family,font_url);
+    /*const fontFile = new FontFace("Poppins","url(https://fonts.gstatic.com/s/poppins/v20/pxiEyp8kv8JHgFVrFJXUc1NECPY.woff2)");*/
     document.fonts.add(fontFile);
     fontFile.load();
     document.fonts.ready.then(()=>{
         console.log("font " + font_family + " loaded");
-        websiteContent.querySelector("textarea.demo").style.fontFamily = font_family;
+        websiteContent.querySelector("textarea.demo").style.setProperty("--font-family",font_family);
         /*
         websiteContent.querySelector("textarea.demo").style.fontFamily = data.font_family;
         const font = websiteContent.querySelector("[data-column='website.font']");
