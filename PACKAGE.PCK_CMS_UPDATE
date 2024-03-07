@@ -242,8 +242,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
 
             apex_json.open_object;
             apex_json.write('content', l_content);
-            apex_json.write('font_family', '"FontFamily ' || C.font || '"');
-            apex_json.write('font_url','url(' || C.url_regular || ')');
+            apex_json.write('font_family', C.font);
+            apex_json.write('font_url', 'url(' || C.url_regular || ')');
             apex_json.write('success', TRUE);
             apex_json.close_object;        
         END LOOP;
