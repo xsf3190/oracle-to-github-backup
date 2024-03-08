@@ -332,8 +332,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_font website.font%type;
         l_max_width website.max_width%type;
         l_fluid_types website.fluid_types%type;
-        l_color_dark website.color_dark%type;
-        l_color_light website.color_light%type;
+        l_color_text website.color_text%type;
+        l_color_background website.color_background%type;
         l_color_primary website.color_primary%type;
         l_contact_form website_article.contact_form%type;
         l_html CLOB;
@@ -365,8 +365,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END IF;
 
         /* Build page resources */
-        SELECT w.domain_name,  w.font, w.max_width, w.fluid_types, w.color_light, w.color_dark, w.color_primary, a.body_html, w.css, w.javascript, wa.contact_form
-            INTO l_domain_name,  l_font, l_max_width, l_fluid_types, l_color_light, l_color_dark, l_color_primary, l_html, l_css, l_javascript, l_contact_form
+        SELECT w.domain_name,  w.font, w.max_width, w.fluid_types, w.color_background, w.color_text, w.color_primary, a.body_html, w.css, w.javascript, wa.contact_form
+            INTO l_domain_name,  l_font, l_max_width, l_fluid_types, l_color_background, l_color_text, l_color_primary, l_html, l_css, l_javascript, l_contact_form
             FROM website w, website_article wa, article a
             WHERE w.id=l_website_id
             AND w.user_id=l_session_data.user_id
@@ -394,8 +394,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         ':root {' ||chr(10) || l_fluid_types || chr(10) ||
         '    --font-family: "' || l_font || '";' || chr(10) ||
         '    --max-width: ' || l_max_width || ';' || chr(10) ||
-        '    --color-light: ' || l_color_light || ';' || chr(10) ||
-        '    --color-dark: ' || l_color_dark || ';' || chr(10) ||
+        '    --color-background: ' || l_color_background || ';' || chr(10) ||
+        '    --color-text: ' || l_color_text || ';' || chr(10) ||
         '    --color-primary: ' || l_color_primary || ';' || chr(10) ||
         '}' || chr(10) || chr(10) ||
         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(l_font,' ','+') || '&display=swap">' || chr(10) || chr(10) 
