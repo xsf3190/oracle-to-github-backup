@@ -15,7 +15,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     /*
      **  Create wrapper html for input element
      */
-    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pUseEyeDropper IN BOOLEAN DEFAULT FALSE, pUseCharcounter IN BOOLEAN DEFAULT TRUE) RETURN VARCHAR2 IS
+    FUNCTION buildInputWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pUseEyeDropper IN BOOLEAN DEFAULT FALSE, pUseCharcounter IN BOOLEAN DEFAULT TRUE, puseCmsClass IN BOOLEAN DEFAULT TRUE) RETURN VARCHAR2 IS
         l_table_name user_tab_columns.table_name%type;
         l_column_name user_tab_columns.column_name%type;
         l_data_length user_tab_columns.data_length%type;
@@ -49,7 +49,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 </button>' 
             END ||
             '</label>
-            <input  class="cms" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
+            <input  ' || 
+            CASE WHEN pUseCmsClass THEN 
+                'class="cms" ' 
+            END ||
+            'placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
                 '" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '" data-id="' || pId || '">
             <button type="button" class="clear-input" title="clear input" aria-label="clear input">&times;</button>
             <div class="button-container">
@@ -211,7 +215,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        FOR C IN (SELECT w.id, w.domain_name, w.font, g.url_regular, w.contact_email, w.max_width, w.fluid_types, w.color_dark, w.color_light, w.color_primary, w.netlify_site_id_custom
+        FOR C IN (SELECT w.id, w.domain_name, w.font, g.url_regular, w.contact_email, w.max_width, w.fluid_types, w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom
                     FROM website w, google_font g
                    WHERE w.id=pWebsiteId
                      AND w.font=g.family
@@ -226,13 +230,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 '<details>
                     <summary>Website Colours</summary>
                     <fieldset>' ||
-                    buildInputWrapper(C.id, 'website.color_dark', C.color_dark, l_session_data.canuse_popover, l_session_data.canuse_eyedropper, FALSE) ||
-                    buildInputWrapper(C.id, 'website.color_light', C.color_light, l_session_data.canuse_popover, l_session_data.canuse_eyedropper, FALSE) ||
-                    buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover, l_session_data.canuse_eyedropper, FALSE) ||
+                    buildInputWrapper(C.id, 'website.color_text', C.color_text, l_session_data.canuse_popover, l_session_data.canuse_eyedropper, FALSE, FALSE) ||
+                    buildInputWrapper(C.id, 'website.color_background', C.color_background, l_session_data.canuse_popover, l_session_data.canuse_eyedropper, FALSE, FALSE) ||
+                    buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover, l_session_data.canuse_eyedropper, FALSE, FALSE) ||
+                    pck_core.buildPushableButton('save-colors') ||
                     '</fieldset>
                 </details>
-                <div class="demo" style="clip-path:polygon(0 0, 100% 0, 100% 80%, 0 100%); height:5vw; background:' || C.color_primary || '"></div>
-                <textarea class="demo" readonly style="background:' || C.color_light || ';color:' || C.color_dark || ';margin-top:calc(var(--space-m) * -1);padding:0.5em;">Dark text against light background</textarea>' ||
+                <div class="demo"></div>
+                <textarea class="demo" readonly></textarea>' ||
                 --buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover) ||
                 '<details>
                     <summary>DELETE WEBSITE</summary>' ||
@@ -244,6 +249,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             apex_json.write('content', l_content);
             apex_json.write('font_family', C.font);
             apex_json.write('font_url', 'url(' || C.url_regular || ')');
+            apex_json.write('background', C.color_background);
+            apex_json.write('color', C.color_text);
+            apex_json.write('color_primary', C.color_primary);
             apex_json.write('success', TRUE);
             apex_json.close_object;        
         END LOOP;
@@ -424,7 +432,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     FROM users, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value)) t
                    WHERE users.id=l_session_data.user_id)
         LOOP
-            IF (C.table_column IN ('website.color_light','website.color_dark','website.color_primary')) THEN
+            IF (C.table_column IN ('website.color_background','website.color_text','website.color_primary')) THEN
                 IF NOT (REGEXP_LIKE(C.value,'^#[0-9A-F]{6}[0-9a-f]{0,2}$','i')) THEN
                     EXIT;
                 END IF;
@@ -446,12 +454,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     l_getFontUrl:=TRUE;
                 WHEN 'website.max_width' THEN
                     UPDATE website SET max_width=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
-                WHEN 'website.color_light' THEN
-                    UPDATE website SET color_light=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.color_background' THEN
+                    UPDATE website SET color_background=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website.color_primary' THEN
                     UPDATE website SET color_primary=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
-                WHEN 'website.color_dark' THEN
-                    UPDATE website SET color_dark=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                WHEN 'website.color_text' THEN
+                    UPDATE website SET color_text=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website.fluid_types' THEN
                     UPDATE website SET fluid_types=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
                 WHEN 'website_article.navigation_label' THEN
@@ -482,7 +490,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         apex_json.write('message', CASE WHEN n=1 THEN 'Updated OK' ELSE 'Updated NOK' END);
         apex_json.write('color', CASE WHEN n=1 THEN 'green' ELSE 'red' END);
         IF (l_getFontUrl) THEN
-            apex_json.write('font_family', '"' || l_family || '"');
+            apex_json.write('font_family', l_family);
             apex_json.write('font_url','url(' || l_url_regular || ')');
         END IF;
         apex_json.close_object;
