@@ -50,7 +50,7 @@ const clearInput = (e) => {
 **  COUNT CHARACTER ENTERED IN TEXT FIELDS
 */
 const inputHandler = (e) => {
-    if (!e.target.matches(".cms")) return;
+    /*if (!e.target.matches(".cms")) return;*/
 
     clearInput(e);
 
@@ -121,28 +121,29 @@ const luminance = (r, g, b) => {
     return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
 }
 
-const validColor = (e,result) => {
-    const color1 = hexToRgb(e.target.value);
-    if (!color1) {
-        result.textContent = "INVALID COLOR FORMAT";
+const validColor = (id, result) => {
+    const color1 = hexToRgb(document.getElementById(id).value);
+    if (!color1) {        
+        result.textContent = "INVALID COLOR";
         result.style.color = 'red';
         result.style.opacity = "1";
         return false;
     }
+
     let color2;
-    if (e.target.id==="color_dark") {
-        color2 = hexToRgb(document.getElementById("color_light").value);
+    if (id==="color_text") {
+        color2 = hexToRgb(document.getElementById("color_background").value);
     } else {
-        color2 = hexToRgb(document.getElementById("color_dark").value);
+        color2 = hexToRgb(document.getElementById("color_text").value);
     }
     const luminance1 = luminance(color1.r, color1.g, color1.b),
           luminance2 = luminance(color2.r, color2.g, color2.b),
           ratio = luminance1 > luminance2 ? ((luminance2 + 0.05) / (luminance1 + 0.05)) : ((luminance1 + 0.05) / (luminance2 + 0.05));
 
-    console.log("ratio", 1/ratio, "wcag",1/4.5);
+    console.log("WCAG", 1/ratio);
     if (ratio < 1/4.5) return true;
 
-    result.textContent = "FAILED WGAC COLOR CONTRAST TEST";
+    result.textContent = "POOR COLOR CONTRAST";
     result.style.color = 'red';
     result.style.opacity = "1";
     return false;
@@ -150,18 +151,13 @@ const validColor = (e,result) => {
 
 const websiteFont = (font_family, font_url) => {
     const fontFile = new FontFace(font_family,font_url);
-    /*const fontFile = new FontFace("Poppins","url(https://fonts.gstatic.com/s/poppins/v20/pxiEyp8kv8JHgFVrFJXUc1NECPY.woff2)");*/
     document.fonts.add(fontFile);
     fontFile.load();
     document.fonts.ready.then(()=>{
         console.log("font " + font_family + " loaded");
-        websiteContent.querySelector("textarea.demo").style.setProperty("--font-family",font_family);
-        /*
-        websiteContent.querySelector("textarea.demo").style.fontFamily = data.font_family;
-        const font = websiteContent.querySelector("[data-column='website.font']");
-        const selectedFont = font.options[font.selectedIndex].text;
-        websiteContent.querySelector("textarea.demo").value = `I'm "${selectedFont}" text in light background`;
-        */
+        const demo = websiteContent.querySelector("textarea.demo");
+        demo.style.setProperty("--font-family",font_family);
+        demo.textContent = `"${font_family}" text against light background`;
     });
 }
 
@@ -178,13 +174,15 @@ const changeHandler = (e) => {
         result = e.target.parentElement.querySelector(".result");
     }
 
+    if (e.target.id==="color_text" || e.target.id==="color_background") {
+        if (!validColor(e.target.id, result)) {
+            return;
+        };
+    }
+
     const table_column = e.target.dataset.column,
           id = e.target.dataset.id,
           value = e.target.value;
-
-    if (e.target.id==="color_dark" || e.target.id==="color_light") {
-        if (!validColor(e,result)) return;
-    }
 
     execProcess("dml","PUT",{id:id,table_column:table_column,value:value}).then( (data) => {
         result.textContent = data.message;
@@ -205,14 +203,14 @@ const changeHandler = (e) => {
             case 'website.domain_name' :
                 websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").textContent = value;
                 break;
-            case 'website.color_dark' :
-                websiteContent.querySelector("textarea.demo").style.color = value;
+            case 'website.color_text' :
+                websiteContent.querySelector("textarea.demo").style.setProperty("--color", value);
                 break;
-            case 'website.color_light' :
-                websiteContent.querySelector("textarea.demo").style.background = value;
+            case 'website.color_background' :
+                websiteContent.querySelector("textarea.demo").style.setProperty("--background", value);
                 break;
             case 'website.color_primary' :
-                websiteContent.querySelector("div.demo").style.background = value;
+                websiteContent.querySelector("div.demo").style.setProperty("--background", value);
                 break;
             case 'website.font' :
                 websiteFont(data.font_family, data.font_url);
@@ -568,6 +566,8 @@ const clickHandler = (e) => {
         website_options();
     } else if (e.target.matches(".use_eyedropper")) {
         eye_dropper(e);
+    } else if (e.target.matches(".save-colors")) {
+        save_colors(e);
     } else if (e.target.matches(".page-options")) {
         page_options();
     } else if (e.target.matches(".new-page")) {
@@ -614,36 +614,74 @@ const clear_input = (e) => {
  */
 const eye_dropper = async (e) => {
     const eyeDropper = new EyeDropper();
-    const result = await eyeDropper.open();
-    if (result.sRGBHex) {
-        const input = e.target.parentElement.nextElementSibling;
-        
-        input.value = result.sRGBHex;
-        
-        execProcess("dml","PUT",{id:input.dataset.id,table_column:input.dataset.column,value:input.value}).then( (data) => {
-            const result = e.target.closest(".input-wrapper").querySelector(".result");
-            result.textContent = data.message;
-            result.style.color = data.color;
-            result.style.opacity = "1";
-
-            /* simulate "change" event */
-            const demo = websiteContent.querySelector(".demo");
-
-            switch (input.dataset.column) {
-                case 'website.color_dark': 
-                    demo.style.color = input.value;
-                    break;
-                case 'website.color_light': 
-                    demo.style.background = input.value;
-                    break;
-                case 'website.color_primary':
-                    demo.querySelector("section").style.background = input.value;
-                    break;
-            }
-            
-        });
+    const color = await eyeDropper.open();
+    if (color.sRGBHex) {
+        e.target.parentElement.nextElementSibling.value = color.sRGBHex;
     }
 };
+
+/*
+**  SAVE VALID COLORS TO DATABASE - NOTE THAT COMMON CHANGE HANDLER DOES NOT APPLY BECAUSE OF CONTRAST CHECK TEXT/BACKGROUND
+*/
+const save_colors = () => {
+    let valid = true;
+    const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+    let contrast1, contrast2;
+
+    const luminance = (r, g, b) => {
+        const a = [r, g, b].map(function (v) {
+            v /= 255;
+            return v <= 0.03928 ? v / 12.92 : Math.pow( (v + 0.055) / 1.055, 2.4 );
+        });
+        return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+    }
+
+    ['color_text','color_background','color_primary'].forEach(id => {
+        const ele = document.getElementById(id);
+        const value = ele.value.replace(shorthandRegex, function(m, r, g, b) {
+            return r + r + g + g + b + b;
+        });
+        const arr = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(value);
+        const result = ele.parentElement.querySelector(".result");
+        if (arr) {
+            result.textContent = "";
+            if (id==="color_text") {
+                contrast1=arr;
+            } else if (id==="color_background") {
+                contrast2=arr;
+            }
+        } else {
+            valid = false;
+            result.textContent = "INVALID COLOR";
+            result.style.color = "red";
+            result.style.opacity = "1";
+        }
+    });
+    if (!valid) return;
+
+    /* Calculate WCAG color contract ratio */
+    const luminance1 = luminance(parseInt(contrast1[1], 16), parseInt(contrast1[2], 16), parseInt(contrast1[3], 16)),
+          luminance2 = luminance(parseInt(contrast2[1], 16), parseInt(contrast2[2], 16), parseInt(contrast2[3], 16)),
+          ratio = luminance1 > luminance2 ? ((luminance2 + 0.05) / (luminance1 + 0.05)) : ((luminance1 + 0.05) / (luminance2 + 0.05));
+
+    console.log("ratio", 1/ratio, "wcag",1/4.5);
+
+    valid = ratio>=1/4.5;
+
+    console.log(valid);
+
+    if (!valid) {
+        ['color_text','color_background'].forEach(id => {
+            const ele = document.getElementById(id);
+            const result = ele.parentElement.querySelector(".result");
+            result.textContent = "CONTRAST TOO LOW";
+            result.style.color = "red";
+            result.style.opacity = "1";
+        });
+        return;
+    };
+
+}
 
 /*
  **  COPY URL
@@ -1069,6 +1107,10 @@ const website_options = () => {
         websiteContent.insertAdjacentHTML('afterbegin',data.content);
         websiteDialog.showModal();
         websiteFont(data.font_family, data.font_url);
+        const demo = websiteContent.querySelector("textarea.demo");
+        demo.style.setProperty("--color",data.color);
+        demo.style.setProperty("--background",data.background);
+        demo.previousElementSibling.style.setProperty("--background", data.color_primary);
     });
 }
 
