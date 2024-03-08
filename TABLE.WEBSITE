@@ -33,8 +33,8 @@ CREATE TABLE "WEBSITE"
 --space-2xl:  clamp(4rem,3.42rem + 2.58vw,6rem);
 --space-3xl:  clamp(6rem,5.13rem + 3.87vw,9rem);'
 , 
-	"COLOR_DARK" VARCHAR2(7) DEFAULT '#404040' NOT NULL ENABLE, 
-	"COLOR_LIGHT" VARCHAR2(7) DEFAULT '#f3f3f3', 
+	"COLOR_TEXT" VARCHAR2(7) DEFAULT '#404040' NOT NULL ENABLE, 
+	"COLOR_BACKGROUND" VARCHAR2(7) DEFAULT '#f3f3f3', 
 	"COLOR_PRIMARY" VARCHAR2(7) DEFAULT '#0042bf', 
 	"NETLIFY_LAST_PUBLISHED" TIMESTAMP (6) WITH TIME ZONE, 
 	"NETLIFY_LAST_PUBLISHED_CUSTOM" TIMESTAMP (6) WITH TIME ZONE, 
@@ -47,8 +47,8 @@ COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'Websites are deployed to "https://
    COMMENT ON COLUMN "WEBSITE"."FONT" IS '<p>Select a Google font name for your website</p><p>Sample text appears with selected colors in the output below</p><p>Default is "Roboto Serif" as used for this application.</p>';
    COMMENT ON COLUMN "WEBSITE"."MAX_WIDTH" IS '<p>Constrains width of displayed content to aid reading. Default is "65ch" which means lines of text do not exceed 65 characters in the website font.</p>';
    COMMENT ON COLUMN "WEBSITE"."FLUID_TYPES" IS '<p>Fluid typography custom properties for type and space.</p><p>Ensures that website content scales linearly with viewport width avoiding need for media queries.</p><p><a href="https://codepen.io/xsf3190/full/WNgddVz" target="_blank">Fluid Typography tool</a> generates custom properties that can be manually copied/pasted</p>';
-   COMMENT ON COLUMN "WEBSITE"."COLOR_DARK" IS '<p>Color code for text as it will appear in your website</p><p>Must be a valid hex value in format #RRGGBB</p><p>Modern browsers provide a color icon allowing you to select a color from anywhere on your screen.</p>';
-   COMMENT ON COLUMN "WEBSITE"."COLOR_LIGHT" IS '<p>Color code for background as it will appear in your website.</p><p>Modern browsers provide a color icon allowing you to select a color from anywhere on your screen.</p>';
+   COMMENT ON COLUMN "WEBSITE"."COLOR_TEXT" IS '<p>Color code for text as it will appear in your website</p><p>Must be a valid hex value in format #RRGGBB</p><p>Modern browsers provide a color icon allowing you to select a color from anywhere on your screen.</p>';
+   COMMENT ON COLUMN "WEBSITE"."COLOR_BACKGROUND" IS '<p>Color code for background as it will appear in your website.</p><p>Modern browsers provide a color icon allowing you to select a color from anywhere on your screen.</p>';
    COMMENT ON COLUMN "WEBSITE"."COLOR_PRIMARY" IS '<p>Color code for your website "brand".</p><p>Modern browsers provide a color icon allowing you to select a color from anywhere on your screen.</p>';
 CREATE UNIQUE INDEX "PK_WEBSITE" ON "WEBSITE" ("ID") 
   ;
