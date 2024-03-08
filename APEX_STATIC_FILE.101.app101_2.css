@@ -200,9 +200,22 @@ textarea {
     line-height: 2;
 }
 
+div.demo {
+    --background: none;
+    clip-path:polygon(0 0, 100% 0, 100% 80%, 0 100%); 
+    height:5vw;
+    background: var(--background);
+}
+
 textarea.demo {
     --font-family: none;
+    --color: none;
+    --background: none;
     font-family: var(--font-family);
+    color: var(--color);
+    background: var(--background);
+    padding: 1em;
+    margin-top:calc(var(--space-m) * -1);
 }
 
 ul {
