@@ -82,7 +82,7 @@ const inputHandler = (e) => {
 }
 
 const focusHandler = (e) => {
-    if (!e.target.matches(".cms")) return;
+    /*if (!e.target.matches(".cms")) return;*/
 
     clearInput(e);
 
@@ -92,92 +92,26 @@ const focusHandler = (e) => {
     } else if (e.target.tagName == "INPUT" && e.target.type == "radio") {
         result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
     }
-    result.textContent = "";
-    result.style.opacity = "0";
-}
-
-/*
-**  COLOR CONTRAST VALiDATION. RATIO LIGTH/DARK >= 4.5/1
-*/
-const hexToRgb = (hex) => {
-    const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
-    hex = hex.replace(shorthandRegex, function(m, r, g, b) {
-        return r + r + g + g + b + b;
-    });
-
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-    } : null;
-}
-
-const luminance = (r, g, b) => {
-    const a = [r, g, b].map(function (v) {
-        v /= 255;
-        return v <= 0.03928 ? v / 12.92 : Math.pow( (v + 0.055) / 1.055, 2.4 );
-    });
-    return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
-}
-
-const validColor = (id, result) => {
-    const color1 = hexToRgb(document.getElementById(id).value);
-    if (!color1) {        
-        result.textContent = "INVALID COLOR";
-        result.style.color = 'red';
-        result.style.opacity = "1";
-        return false;
+    if (result) {
+        result.textContent = "";
+        result.style.opacity = "0";
     }
-
-    let color2;
-    if (id==="color_text") {
-        color2 = hexToRgb(document.getElementById("color_background").value);
-    } else {
-        color2 = hexToRgb(document.getElementById("color_text").value);
-    }
-    const luminance1 = luminance(color1.r, color1.g, color1.b),
-          luminance2 = luminance(color2.r, color2.g, color2.b),
-          ratio = luminance1 > luminance2 ? ((luminance2 + 0.05) / (luminance1 + 0.05)) : ((luminance1 + 0.05) / (luminance2 + 0.05));
-
-    console.log("WCAG", 1/ratio);
-    if (ratio < 1/4.5) return true;
-
-    result.textContent = "POOR COLOR CONTRAST";
-    result.style.color = 'red';
-    result.style.opacity = "1";
-    return false;
-}
-
-const websiteFont = (font_family, font_url) => {
-    const fontFile = new FontFace(font_family,font_url);
-    document.fonts.add(fontFile);
-    fontFile.load();
-    document.fonts.ready.then(()=>{
-        console.log("font " + font_family + " loaded");
-        const demo = websiteContent.querySelector("textarea.demo");
-        demo.style.setProperty("--font-family",font_family);
-        demo.textContent = `"${font_family}" text against light background`;
-    });
 }
 
 /*
 **  HANDLE FORM FIELD CHANGE. UPDATE DATABASE IF PASSES ANY VALIDATION CHECK
 */
 const changeHandler = (e) => {
-    if (!e.target.matches(".cms")) return;
+    if (!e.target.matches(".cms")) {
+        websiteColors(e.target.id, e.target.value);
+        return;
+    }
 
     let result;
     if (e.target.tagName == "INPUT" && e.target.type == "radio") {
         result = e.target.closest("fieldset").nextElementSibling.querySelector(".result");
     } else {
         result = e.target.parentElement.querySelector(".result");
-    }
-
-    if (e.target.id==="color_text" || e.target.id==="color_background") {
-        if (!validColor(e.target.id, result)) {
-            return;
-        };
     }
 
     const table_column = e.target.dataset.column,
@@ -202,15 +136,6 @@ const changeHandler = (e) => {
                 break;
             case 'website.domain_name' :
                 websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").textContent = value;
-                break;
-            case 'website.color_text' :
-                websiteContent.querySelector("textarea.demo").style.setProperty("--color", value);
-                break;
-            case 'website.color_background' :
-                websiteContent.querySelector("textarea.demo").style.setProperty("--background", value);
-                break;
-            case 'website.color_primary' :
-                websiteContent.querySelector("div.demo").style.setProperty("--background", value);
                 break;
             case 'website.font' :
                 websiteFont(data.font_family, data.font_url);
@@ -616,7 +541,9 @@ const eye_dropper = async (e) => {
     const eyeDropper = new EyeDropper();
     const color = await eyeDropper.open();
     if (color.sRGBHex) {
-        e.target.parentElement.nextElementSibling.value = color.sRGBHex;
+        const ele = e.target.parentElement.nextElementSibling;
+        ele.value = color.sRGBHex;
+        websiteColors(ele.id, color.sRGBHex);
     }
 };
 
@@ -657,6 +584,7 @@ const save_colors = () => {
             result.style.opacity = "1";
         }
     });
+
     if (!valid) return;
 
     /* Calculate WCAG color contract ratio */
@@ -664,23 +592,40 @@ const save_colors = () => {
           luminance2 = luminance(parseInt(contrast2[1], 16), parseInt(contrast2[2], 16), parseInt(contrast2[3], 16)),
           ratio = luminance1 > luminance2 ? ((luminance2 + 0.05) / (luminance1 + 0.05)) : ((luminance1 + 0.05) / (luminance2 + 0.05));
 
-    console.log("ratio", 1/ratio, "wcag",1/4.5);
+    let rating;
 
-    valid = ratio>=1/4.5;
+    if (ratio < 1/7) {
+        rating = "AAA PASS";
+    } 
+    else if (ratio < 1/4.5) {
+        rating = "AA PASS";
+    } else {
+        rating = "CONTRAST FAIL";
+        valid = false;
+    }
 
-    console.log(valid);
+    ['color_text','color_background'].forEach(id => {
+        const ele = document.getElementById(id);
+        const result = ele.parentElement.querySelector(".result");
+        result.textContent = rating;
+        result.style.opacity = "1";
+        result.style.color = valid ? "green" : "red";
+    });
 
-    if (!valid) {
-        ['color_text','color_background'].forEach(id => {
-            const ele = document.getElementById(id);
-            const result = ele.parentElement.querySelector(".result");
-            result.textContent = "CONTRAST TOO LOW";
-            result.style.color = "red";
+    if (!valid) return;
+
+    /* All colors valid - update database */
+
+    ['color_text','color_background','color_primary'].forEach(color => {
+        const ele = document.getElementById(color);
+        const result = ele.parentElement.querySelector(".result");
+
+        execProcess("dml","PUT",{id:ele.dataset.id, table_column:ele.dataset.column, value:ele.value}).then( (data) => {
+            result.textContent = color==="color_primary" ? data.message : data.message + " - " + rating;
+            result.style.color = data.color;
             result.style.opacity = "1";
         });
-        return;
-    };
-
+    });
 }
 
 /*
@@ -1092,10 +1037,39 @@ ClassicEditor.create(document.querySelector("#editor"), {
         console.error(error);
     });
 
-if (window.location.hash === "#_=_"){
-    history.replaceState 
-        ? history.replaceState(null, null, window.location.href.split("#")[0])
-        : window.location.hash = "";
+
+/*
+ ** SET FONT FOR WEBSIITE DEMO
+ */
+const websiteFont = (font_family, font_url) => {
+    const fontFile = new FontFace(font_family,font_url);
+    document.fonts.add(fontFile);
+    fontFile.load();
+    document.fonts.ready.then(()=>{
+        console.log("font " + font_family + " loaded");
+        const demo = websiteContent.querySelector("textarea.demo");
+        demo.style.setProperty("--font-family",font_family);
+        demo.textContent = `"${font_family}" text with background color`;
+    });
+}
+
+
+/* 
+ ** SET COLORS FOR WEBSIITE DEMO
+ */
+const websiteColors = (color, value) => {
+    const demo = websiteContent.querySelector("textarea.demo");
+    switch (color) {
+        case 'color_text' :
+            demo.style.setProperty("--color", value);
+            break;
+        case 'color_background' :
+            demo.style.setProperty("--background", value);
+            break;
+        case 'color_primary' :
+            demo.previousElementSibling.style.setProperty("--background", value);
+            break;
+    }
 }
 
 /* 
@@ -1107,10 +1081,9 @@ const website_options = () => {
         websiteContent.insertAdjacentHTML('afterbegin',data.content);
         websiteDialog.showModal();
         websiteFont(data.font_family, data.font_url);
-        const demo = websiteContent.querySelector("textarea.demo");
-        demo.style.setProperty("--color",data.color);
-        demo.style.setProperty("--background",data.background);
-        demo.previousElementSibling.style.setProperty("--background", data.color_primary);
+        websiteColors("color_text",data.color_text);
+        websiteColors("color_background",data.color_background);
+        websiteColors("color_primary",data.color_primary);
     });
 }
 
