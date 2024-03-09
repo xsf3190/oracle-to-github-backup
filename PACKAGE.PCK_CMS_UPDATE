@@ -212,10 +212,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_content CLOB;
         l_website_id website.id%type;
         l_eyedropper VARCHAR2(3);
+
+        FUNCTION buildScale(pScale IN NUMBER) RETURN VARCHAR2 IS
+
+        BEGIN
+            null;
+        END;
+
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        FOR C IN (SELECT w.id, w.domain_name, w.font, g.url_regular, w.contact_email, w.max_width, w.fluid_types, w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom
+        FOR C IN (SELECT w.id, w.domain_name, w.font, g.url_regular, w.contact_email, w.max_width, w.fluid_types,  
+                         w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, 
+                         w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom
                     FROM website w, google_font g
                    WHERE w.id=pWebsiteId
                      AND w.font=g.family
@@ -228,6 +237,53 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 buildSelectWrapper(C.id, 'website.font', C.font, 'google_font.family', 'seq', l_session_data.canuse_popover) ||
                 buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover) ||
                 '<details>
+                    <summary>Fluid Typography</summary>
+                    <div class="cards-50-50">
+                        <fieldset>
+                            <legend>Min Viewport</legend>
+                            <div>
+                                <label for="clamp-min-font">Font Size (rem)</label>
+                                <input id="clamp-min-font" type="number" value="' || C.min_font_size || '" min="1" max="2" step="0.1">
+                            </div>
+                            <div>
+                                <label for="clamp-min-width">Width (px)</label>
+                                <input id="clamp-min-width" type="number" value="' || C.min_width_px || '" min="320" max="400">
+                            </div>
+                            <div>
+                                <label for="clamp-min-scale">Modular Scale</label>
+                                <select id="clamp-min-scale">
+                                    <option value="1.2"' || CASE WHEN C.min_scale=1.2 THEN ' selected' END || '>1.2</option>
+                                    <option value="1.25"' || CASE WHEN C.min_scale=1.25 THEN ' selected' END || '>1.25</option>
+                                    <option value="1.33"' || CASE WHEN C.min_scale=1.33 THEN ' selected' END || '>1.33</option>
+                                    <option value="1.618"' || CASE WHEN C.min_scale=1.618 THEN ' selected' END || '>1.618</option>
+                                </select>
+                            </div>
+                        </fieldset>
+                        <fieldset>
+                            <legend>Max Viewport</legend>
+                            <div>
+                                <label for="clamp-max-font">Font Size (rem)</label>
+                                <input id="clamp-max-font" type="number" value="1.25" min="1.5" max="5" step="0.1">
+                            </div>
+                            <div>
+                                <label for="clamp-max-width">Width (px)</label>
+                                <input id="clamp-max-width" type="number" value="1240" min="1000" max="1920">
+                            </div>
+                            <div>
+                                <label for="clamp-max-scale">Modular Scale</label>
+                                <select id="clamp-max-scale">
+                                    <option value="1.2">1.2</option>
+                                    <option value="1.25">1.25</option>
+                                    <option value="1.33">1.33</option>
+                                    <option value="1.618">1.618</option>
+                                </select>
+                            </div>
+                        </fieldset>
+                    </div>' ||
+                    pck_core.buildPushableButton('calculate-fluid-types') ||
+                    '<hr>
+                </details>
+                <details>
                     <summary>Website Colours</summary>
                     <fieldset>' ||
                     buildInputWrapper(C.id, 'website.color_text', C.color_text, l_session_data.canuse_popover, l_session_data.canuse_eyedropper, FALSE, FALSE) ||
@@ -236,8 +292,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     pck_core.buildPushableButton('save-colors') ||
                     '</fieldset>
                 </details>
-                <div class="demo"></div>
-                <textarea class="demo" readonly></textarea>' ||
+                <div>
+                    <hr>
+                    <div class="demo"></div>
+                    <textarea class="demo" readonly></textarea>
+                </div>' ||
                 --buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover) ||
                 '<details>
                     <summary>DELETE WEBSITE</summary>' ||
@@ -249,8 +308,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             apex_json.write('content', l_content);
             apex_json.write('font_family', C.font);
             apex_json.write('font_url', 'url(' || C.url_regular || ')');
-            apex_json.write('background', C.color_background);
-            apex_json.write('color', C.color_text);
+            apex_json.write('color_text', C.color_text);
+            apex_json.write('color_background', C.color_background);
             apex_json.write('color_primary', C.color_primary);
             apex_json.write('success', TRUE);
             apex_json.close_object;        
@@ -432,12 +491,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     FROM users, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (id, table_column, value)) t
                    WHERE users.id=l_session_data.user_id)
         LOOP
-            IF (C.table_column IN ('website.color_background','website.color_text','website.color_primary')) THEN
-                IF NOT (REGEXP_LIKE(C.value,'^#[0-9A-F]{6}[0-9a-f]{0,2}$','i')) THEN
-                    EXIT;
-                END IF;
-            END IF;
-
             IF (INSTR(C.id,',')>0) THEN
                 l_id_1:=SUBSTR(C.id,1,INSTR(C.id,',')-1);
                 l_id_2:=SUBSTR(C.id,INSTR(C.id,',')+1);
@@ -448,28 +501,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     processDomainName(l_session_data.user_id, C.id, C.value);
                     RETURN;
                 WHEN 'website.contact_email' THEN
-                    UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                    UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website.font' THEN
-                    UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                    UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id;
                     l_getFontUrl:=TRUE;
                 WHEN 'website.max_width' THEN
-                    UPDATE website SET max_width=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                    UPDATE website SET max_width=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website.color_background' THEN
-                    UPDATE website SET color_background=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                    UPDATE website SET color_background=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website.color_primary' THEN
-                    UPDATE website SET color_primary=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                    UPDATE website SET color_primary=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website.color_text' THEN
-                    UPDATE website SET color_text=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                    UPDATE website SET color_text=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website.fluid_types' THEN
-                    UPDATE website SET fluid_types=C.value, updated_date=current_timestamp WHERE id=C.id AND user_id=l_session_data.user_id;
+                    UPDATE website SET fluid_types=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website_article.navigation_label' THEN
-                    UPDATE website_article SET navigation_label=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+                    UPDATE website_article SET navigation_label=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'website_article.page_title' THEN
-                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'website_article.page_description' THEN
-                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'website_article.contact_form' THEN
-                    UPDATE website_article SET contact_form=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2 AND user_id=l_session_data.user_id;
+                    UPDATE website_article SET contact_form=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
             END CASE;
             n:=sql%rowcount;
             IF (l_getFontUrl AND n=1) THEN
