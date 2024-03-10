@@ -208,10 +208,22 @@ textarea {
     line-height: 2;
 }
 
+div.demo-container {
+    container-type: inline-size;
+
+    :is(textarea) {
+    /* Select p, ul, ol and apply styles */
+    @container (width >= 0) {
+      line-height: 1.5;
+      font-size: clamp(1rem, 0.8548rem + 0.6452cqi, 1.5rem);
+    }
+  }
+}
+
 div.demo {
     --background: none;
-    clip-path:polygon(0 0, 100% 0, 100% 80%, 0 100%); 
-    height:5vw;
+    clip-path: polygon(0 0, 100% 0, 100% 80%, 0 100%); 
+    height: 5vw;
     background: var(--background);
 }
 
