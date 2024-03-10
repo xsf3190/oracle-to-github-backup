@@ -212,11 +212,53 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_content CLOB;
         l_website_id website.id%type;
         l_eyedropper VARCHAR2(3);
+        l_min_width NUMBER;
+        l_max_width NUMBER;
+        l_min_font NUMBER;
+        l_max_font NUMBER;
+        l_slope NUMBER;
+        l_intersect NUMBER;
+        l_clamp LONG;
+        l_font_size VARCHAR2(250);
 
-        FUNCTION buildScale(pScale IN NUMBER) RETURN VARCHAR2 IS
+        TYPE tt_spaces IS RECORD(dimension VARCHAR2(3), multiplier NUMBER);
+        TYPE t_spaces IS TABLE OF tt_spaces INDEX BY PLS_INTEGER;
+        l_spaces t_spaces:=t_spaces(
+            1=>tt_spaces('3xs',0.25), 
+            2=>tt_spaces('2xs',0.5), 
+            3=>tt_spaces('xs',0.75), 
+            4=>tt_spaces('s',1), 
+            5=>tt_spaces('m',1.5), 
+            6=>tt_spaces('l',2), 
+            7=>tt_spaces('xl',3), 
+            8=>tt_spaces('2xl',4), 
+            9=>tt_spaces('3xl',6)
+        );
 
+        FUNCTION buildScaleOptions(pScale IN NUMBER) RETURN VARCHAR2 IS
+            TYPE t_scale IS VARRAY(4) OF NUMBER;
+            l_scale t_scale:=t_scale(1.2, 1.25, 1.33, 1.618);
+            l_options LONG;
         BEGIN
-            null;
+            FOR i IN 1..L_scale.COUNT LOOP
+                l_options:=l_options || '<option value="' || l_scale(i) || '"';
+                IF (l_scale(i)=pScale) THEN
+                    l_options:=l_options || ' selected';
+                END IF;
+                l_options:=l_options || '>' || l_scale(i) || '</option>';
+            END LOOP;
+            RETURN (l_options);
+        END;
+
+        FUNCTION round4dp(pNumber IN NUMBER) RETURN VARCHAR2 IS
+            l_number NUMBER;
+        BEGIN
+            l_number:=ROUND(pNumber,4);
+            IF (MOD(l_number,1)=0) THEN /* integer */
+                RETURN (TO_CHAR(l_number));
+            ELSE
+                RETURN(RTRIM(TO_CHAR(ROUND(pNumber,4),'0.0000'),'0'));
+            END IF;
         END;
 
     BEGIN
@@ -243,20 +285,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                             <legend>Min Viewport</legend>
                             <div>
                                 <label for="clamp-min-font">Font Size (rem)</label>
-                                <input id="clamp-min-font" type="number" value="' || C.min_font_size || '" min="1" max="2" step="0.1">
+                                <input id="clamp-min-font" type="number" value="' || TO_CHAR(C.min_font_size) || '" min="1" max="2" step="0.1">
                             </div>
                             <div>
                                 <label for="clamp-min-width">Width (px)</label>
-                                <input id="clamp-min-width" type="number" value="' || C.min_width_px || '" min="320" max="400">
+                                <input id="clamp-min-width" type="number" value="' || TO_CHAR(C.min_width_px) || '" min="320" max="400">
                             </div>
                             <div>
                                 <label for="clamp-min-scale">Modular Scale</label>
-                                <select id="clamp-min-scale">
-                                    <option value="1.2"' || CASE WHEN C.min_scale=1.2 THEN ' selected' END || '>1.2</option>
-                                    <option value="1.25"' || CASE WHEN C.min_scale=1.25 THEN ' selected' END || '>1.25</option>
-                                    <option value="1.33"' || CASE WHEN C.min_scale=1.33 THEN ' selected' END || '>1.33</option>
-                                    <option value="1.618"' || CASE WHEN C.min_scale=1.618 THEN ' selected' END || '>1.618</option>
-                                </select>
+                                <select id="clamp-min-scale">' || 
+                                    buildScaleOptions(C.min_scale) ||
+                                '</select>
                             </div>
                         </fieldset>
                         <fieldset>
@@ -271,12 +310,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                             </div>
                             <div>
                                 <label for="clamp-max-scale">Modular Scale</label>
-                                <select id="clamp-max-scale">
-                                    <option value="1.2">1.2</option>
-                                    <option value="1.25">1.25</option>
-                                    <option value="1.33">1.33</option>
-                                    <option value="1.618">1.618</option>
-                                </select>
+                                <select id="clamp-max-scale">' ||
+                                    buildScaleOptions(C.max_scale) ||
+                                '</select>
                             </div>
                         </fieldset>
                     </div>' ||
@@ -292,7 +328,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     pck_core.buildPushableButton('save-colors') ||
                     '</fieldset>
                 </details>
-                <div>
+                <div class="demo-container">
                     <hr>
                     <div class="demo"></div>
                     <textarea class="demo" readonly></textarea>
@@ -304,10 +340,49 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 '</details>
             </form>';
 
+            l_min_width:=C.min_width_px/16; 
+            l_max_width:=C.max_width_px/16;
+
+            FOR i IN -2 .. 6 LOOP
+                IF (i<0) THEN
+                    l_min_font:=C.min_font_size/(C.min_scale**ABS(i));
+                    l_max_font:=C.max_font_size/(C.max_scale**ABS(i));
+                ELSE
+                    l_min_font:=C.min_font_size*(C.min_scale**i);
+                    l_max_font:=C.max_font_size*(C.max_scale**i);
+                END IF;
+                l_slope:=(l_max_font - l_min_font) / (l_max_width - l_min_width);
+                l_intersect:= -l_min_width * l_slope + l_min_font;
+                IF (i=-1) THEN
+                    l_font_size:='clamp(' || round4dp(l_min_font) || 'rem,' || round4dp(l_intersect) || 'rem + ' || round4dp(l_slope * 100) || 'cqi,' || round4dp(l_max_font) || 'rem)';
+                END IF;
+                l_clamp:=l_clamp || '--step-' || i || ': clamp(' || round4dp(l_min_font) || 'rem,' || round4dp(l_intersect) || 'rem + ' || round4dp(l_slope * 100) || 'vi,' || round4dp(l_max_font) || 'rem);' || chr(10);
+            END LOOP;
+
+            l_clamp:=NULL;
+            FOR i IN 1..l_spaces.COUNT LOOP
+                l_min_font:=C.min_font_size*l_spaces(i).multiplier;
+                l_max_font:=C.max_font_size*l_spaces(i).multiplier;
+                l_slope:=(l_max_font - l_min_font) / (l_max_width - l_min_width);
+                l_intersect:= -l_min_width * l_slope + l_min_font;
+                l_clamp:=l_clamp || '--space-' || l_spaces(i).dimension || ': clamp(' || round4dp(l_min_font) || 'rem,' || round4dp(l_intersect) || 'rem + ' || round4dp(l_slope * 100) || 'vi,' || round4dp(l_max_font) || 'rem);' || chr(10);
+            END LOOP;
+/*
+spaces.forEach((space) => {
+      const minFont = minFontSize * space.multiplier;
+      const maxFont = maxFontSize * space.multiplier;
+      const slope = (maxFont - minFont) / (maxWidth - minWidth);
+      const yAxisIntersection = -minWidth * slope + minFont;
+      const clamp = `clamp(${round(minFont)}rem,${round(yAxisIntersection)}rem + ${round(slope * 100)}vw,${round(maxFont)}rem)`;
+      document.documentElement.style.setProperty("--space-" + space.size, clamp);
+  });
+*/
+
             apex_json.open_object;
             apex_json.write('content', l_content);
             apex_json.write('font_family', C.font);
             apex_json.write('font_url', 'url(' || C.url_regular || ')');
+            apex_json.write('font_size', l_font_size);
             apex_json.write('color_text', C.color_text);
             apex_json.write('color_background', C.color_background);
             apex_json.write('color_primary', C.color_primary);
