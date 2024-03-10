@@ -1041,7 +1041,7 @@ ClassicEditor.create(document.querySelector("#editor"), {
 /*
  ** SET FONT FOR WEBSIITE DEMO
  */
-const websiteFont = (font_family, font_url) => {
+const websiteFont = (font_family, font_url, font_size) => {
     const fontFile = new FontFace(font_family,font_url);
     document.fonts.add(fontFile);
     fontFile.load();
@@ -1050,6 +1050,11 @@ const websiteFont = (font_family, font_url) => {
         const demo = websiteContent.querySelector("textarea.demo");
         demo.style.setProperty("--font-family",font_family);
         demo.textContent = `"${font_family}" text with background color`;
+        /*
+        if (font_size) {
+            demo.style.setProperty("--font-size",font_size);
+        }
+        */
     });
 }
 
@@ -1080,7 +1085,7 @@ const website_options = () => {
         websiteContent.replaceChildren();
         websiteContent.insertAdjacentHTML('afterbegin',data.content);
         websiteDialog.showModal();
-        websiteFont(data.font_family, data.font_url);
+        websiteFont(data.font_family, data.font_url, data.font_size);
         websiteColors("color_text",data.color_text);
         websiteColors("color_background",data.color_background);
         websiteColors("color_primary",data.color_primary);
