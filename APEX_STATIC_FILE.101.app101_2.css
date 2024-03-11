@@ -208,38 +208,49 @@ textarea {
     line-height: 2;
 }
 
-div.demo-container {
-    container-type: inline-size;
-
-    :is(textarea) {
-    /* Select p, ul, ol and apply styles */
+.demo-container {
+  container-type: inline-size;
+  resize: horizontal;
+  overflow: auto;
+  border: 1px solid black;
+  background: var(--background);
+  color: var(--color);
+  & > div {
+    clip-path: polygon(0 0, 100% 0, 100% 80%, 0 100%);
+    height: 5vw;
+    background: var(--background-primary);
+    & > span {
+      background: black;
+      color: white;
+      padding-inline: 0.25em;
+      font-size: var(--font-size-small);
+    }
+  }
+  :is(h1) {
+    @container (width >= 0) {
+      line-height: 1.1;
+      font-size: var(--font-size-large);
+    }
+  }
+    :is(p) {
     @container (width >= 0) {
       line-height: 1.5;
-      font-size: clamp(1rem, 0.8548rem + 0.6452cqi, 1.5rem);
+      font-size: var(--font-size-medium);
     }
   }
 }
 
-div.demo {
-    --background: none;
-    clip-path: polygon(0 0, 100% 0, 100% 80%, 0 100%); 
-    height: 5vw;
-    background: var(--background);
+.demo-container:after {
+    content:"Resize Me \2192";
+    position: absolute;
+    bottom: 0;
+    right: 1rem;
+    color: white;
+    background: #000;
+    padding-inline: 0.25em;
+    font-size: var(--font-size-small);
 }
 
-textarea.demo {
-    --font-family: none;
-    --color: none;
-    --background: none;
-    font-family: var(--font-family);
-    color: var(--color);
-    background: var(--background);
-    padding: 2em 1em 0;
-    line-height: 3;
-    margin-top:calc(var(--space-m) * -1);
-    min-width: 35ch;
-    text-align: center;
-}
 
 ul {
   list-style: none;
