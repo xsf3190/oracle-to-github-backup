@@ -219,7 +219,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_slope NUMBER;
         l_intersect NUMBER;
         l_clamp LONG;
-        l_font_size VARCHAR2(250);
+        l_font_size_small VARCHAR2(250);
+        l_font_size_medium VARCHAR2(250);
+        l_font_size_large VARCHAR2(250);
 
         TYPE tt_spaces IS RECORD(dimension VARCHAR2(3), multiplier NUMBER);
         TYPE t_spaces IS TABLE OF tt_spaces INDEX BY PLS_INTEGER;
@@ -317,8 +319,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                         </fieldset>
                     </div>' ||
                     pck_core.buildPushableButton('calculate-fluid-types') ||
-                    '<hr>
-                </details>
+                '</details>
                 <details>
                     <summary>Website Colours</summary>
                     <fieldset>' ||
@@ -329,9 +330,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     '</fieldset>
                 </details>
                 <div class="demo-container">
-                    <hr>
-                    <div class="demo"></div>
-                    <textarea class="demo" readonly></textarea>
+                    <div class="demo"><span></span></div>
+                    <h1 class="demo"></h1>
+                    <p></p>
                 </div>' ||
                 --buildTextareaWrapper(C.id, 'website.fluid_types', C.fluid_types, l_session_data.canuse_popover) ||
                 '<details>
@@ -354,7 +355,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 l_slope:=(l_max_font - l_min_font) / (l_max_width - l_min_width);
                 l_intersect:= -l_min_width * l_slope + l_min_font;
                 IF (i=-1) THEN
-                    l_font_size:='clamp(' || round4dp(l_min_font) || 'rem,' || round4dp(l_intersect) || 'rem + ' || round4dp(l_slope * 100) || 'cqi,' || round4dp(l_max_font) || 'rem)';
+                    l_font_size_small:='clamp(' || round4dp(l_min_font) || 'rem,' || round4dp(l_intersect) || 'rem + ' || round4dp(l_slope * 100) || 'cqi,' || round4dp(l_max_font) || 'rem)';
+                ELSIF (i=0) THEN
+                    l_font_size_medium:='clamp(' || round4dp(l_min_font) || 'rem,' || round4dp(l_intersect) || 'rem + ' || round4dp(l_slope * 100) || 'cqi,' || round4dp(l_max_font) || 'rem)';    
+                ELSIF (i=4) THEN
+                    l_font_size_large:='clamp(' || round4dp(l_min_font) || 'rem,' || round4dp(l_intersect) || 'rem + ' || round4dp(l_slope * 100) || 'cqi,' || round4dp(l_max_font) || 'rem)';                
                 END IF;
                 l_clamp:=l_clamp || '--step-' || i || ': clamp(' || round4dp(l_min_font) || 'rem,' || round4dp(l_intersect) || 'rem + ' || round4dp(l_slope * 100) || 'vi,' || round4dp(l_max_font) || 'rem);' || chr(10);
             END LOOP;
@@ -367,22 +372,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 l_intersect:= -l_min_width * l_slope + l_min_font;
                 l_clamp:=l_clamp || '--space-' || l_spaces(i).dimension || ': clamp(' || round4dp(l_min_font) || 'rem,' || round4dp(l_intersect) || 'rem + ' || round4dp(l_slope * 100) || 'vi,' || round4dp(l_max_font) || 'rem);' || chr(10);
             END LOOP;
-/*
-spaces.forEach((space) => {
-      const minFont = minFontSize * space.multiplier;
-      const maxFont = maxFontSize * space.multiplier;
-      const slope = (maxFont - minFont) / (maxWidth - minWidth);
-      const yAxisIntersection = -minWidth * slope + minFont;
-      const clamp = `clamp(${round(minFont)}rem,${round(yAxisIntersection)}rem + ${round(slope * 100)}vw,${round(maxFont)}rem)`;
-      document.documentElement.style.setProperty("--space-" + space.size, clamp);
-  });
-*/
 
             apex_json.open_object;
             apex_json.write('content', l_content);
             apex_json.write('font_family', C.font);
             apex_json.write('font_url', 'url(' || C.url_regular || ')');
-            apex_json.write('font_size', l_font_size);
+            apex_json.write('font_small', l_font_size_small);
+            apex_json.write('font_medium', l_font_size_medium);
+            apex_json.write('font_large', l_font_size_large);
             apex_json.write('color_text', C.color_text);
             apex_json.write('color_background', C.color_background);
             apex_json.write('color_primary', C.color_primary);
