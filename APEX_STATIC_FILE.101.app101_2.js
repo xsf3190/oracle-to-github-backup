@@ -1,5 +1,6 @@
 let gWebsiteId,
     gArticleId,
+    gWebsiteDemo,
     gBrowser,
     gFullImage,
     gIntervalId,
@@ -1041,40 +1042,48 @@ ClassicEditor.create(document.querySelector("#editor"), {
 /*
  ** SET FONT FOR WEBSIITE DEMO
  */
-const websiteFont = (font_family, font_url, font_size) => {
+const websiteFont = (font_family, font_url) => {
     const fontFile = new FontFace(font_family,font_url);
     document.fonts.add(fontFile);
     fontFile.load();
     document.fonts.ready.then(()=>{
         console.log("font " + font_family + " loaded");
-        const demo = websiteContent.querySelector("textarea.demo");
-        demo.style.setProperty("--font-family",font_family);
-        demo.textContent = `"${font_family}" text with background color`;
-        /*
-        if (font_size) {
-            demo.style.setProperty("--font-size",font_size);
-        }
-        */
+        gWebsiteDemo.style.setProperty("--font-family",font_family);
+        gWebsiteDemo.querySelector("h1").textContent = "Heading 1";
+        gWebsiteDemo.querySelector("p").textContent = `"${font_family}" text with background color`;
     });
 }
 
+/*
+ ** SET FONT SIZE FOR WEBSIITE DEMO
+ */
+const websiteFontSize = (small, medium, large) => {
+    gWebsiteDemo.style.setProperty("--font-size-small", small);
+    gWebsiteDemo.style.setProperty("--font-size-medium", medium);
+    gWebsiteDemo.style.setProperty("--font-size-large", large);
+}
 
 /* 
  ** SET COLORS FOR WEBSIITE DEMO
  */
 const websiteColors = (color, value) => {
-    const demo = websiteContent.querySelector("textarea.demo");
     switch (color) {
         case 'color_text' :
-            demo.style.setProperty("--color", value);
+            gWebsiteDemo.style.setProperty("--color", value);
             break;
         case 'color_background' :
-            demo.style.setProperty("--background", value);
+            gWebsiteDemo.style.setProperty("--background", value);
             break;
         case 'color_primary' :
-            demo.previousElementSibling.style.setProperty("--background", value);
+            gWebsiteDemo.style.setProperty("--background-primary", value);
             break;
     }
+}
+
+
+const resize = () => {
+    const span = gWebsiteDemo.querySelector("span");
+    span.textContent = gWebsiteDemo.offsetWidth + "px";
 }
 
 /* 
@@ -1085,10 +1094,14 @@ const website_options = () => {
         websiteContent.replaceChildren();
         websiteContent.insertAdjacentHTML('afterbegin',data.content);
         websiteDialog.showModal();
-        websiteFont(data.font_family, data.font_url, data.font_size);
+        gWebsiteDemo = websiteContent.querySelector(".demo-container");
+        websiteFont(data.font_family, data.font_url);
+        websiteFontSize(data.font_small, data.font_medium, data.font_large);
         websiteColors("color_text",data.color_text);
         websiteColors("color_background",data.color_background);
         websiteColors("color_primary",data.color_primary);
+        resize();
+        new ResizeObserver(resize).observe(gWebsiteDemo);
     });
 }
 
