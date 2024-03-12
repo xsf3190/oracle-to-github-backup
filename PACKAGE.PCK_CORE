@@ -11,6 +11,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
         user_id NUMBER
     );
     --
+    TYPE fluid_type_rt IS RECORD(
+        property VARCHAR2(30),
+        value VARCHAR2(200)
+    );
+    TYPE fluid_type_t IS TABLE OF fluid_type_rt;
+    --
+    FUNCTION getFluidTypes(pMinFontSize IN NUMBER, pMinWidthPx IN NUMBER, pMinScale IN NUMBER, pMaxFontSize IN NUMBER, pMaxWidthPx IN NUMBER, pMaxScale IN NUMBER) RETURN fluid_type_t;
+    --
     FUNCTION buildContactForm(pContactEmail IN website.contact_email%type DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
@@ -40,6 +48,50 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
+
+    FUNCTION getFluidTypes(pMinFontSize IN NUMBER, pMinWidthPx IN NUMBER, pMinScale IN NUMBER, pMaxFontSize IN NUMBER, pMaxWidthPx IN NUMBER, pMaxScale IN NUMBER) RETURN fluid_type_t IS
+        l_fluid_type fluid_type_t:=fluid_type_t();
+        l_min_font NUMBER;
+        l_max_font NUMBER;
+        l_min_width NUMBER;
+        l_max_width NUMBER;
+        l_slope NUMBER;
+        l_intersect NUMBER;
+        l_clamp VARCHAR2(200);
+
+        FUNCTION round4dp(pNumber IN NUMBER) RETURN VARCHAR2 IS
+            l_number NUMBER;
+        BEGIN
+            l_number:=ROUND(pNumber,4);
+            IF (MOD(l_number,1)=0) THEN /* integer */
+                RETURN (TO_CHAR(l_number));
+            ELSE
+                RETURN(LTRIM(RTRIM(TO_CHAR(ROUND(pNumber,4),'fm90.0000'),'0')));
+            END IF;
+        END;
+
+    BEGIN
+        l_min_width:=pMinWidthPx/16; 
+        l_max_width:=pMaxWidthPx/16;
+        FOR i IN -2 .. 6 LOOP
+            IF (i<0) THEN
+                l_min_font:=pMinFontSize/(pMinScale**ABS(i));
+                l_max_font:=pMaxFontSize/(pMaxScale**ABS(i));
+            ELSE
+                l_min_font:=pMinFontSize*(pMinScale**i);
+                l_max_font:=pMaxFontSize*(pMaxScale**i);
+            END IF;
+            l_slope:=(l_max_font - l_min_font) / (l_max_width - l_min_width);
+            l_intersect:= -l_min_width * l_slope + l_min_font;
+            /*pck_core.log(l_slope);*/
+            l_fluid_type.EXTEND;
+            l_fluid_type(l_fluid_type.LAST).property:='--step-' || i;
+            l_clamp:='clamp(' || round4dp(l_min_font) || 'rem,' || round4dp(l_intersect) || 'rem + ' || round4dp(l_slope * 100) || 'cqi,' || round4dp(l_max_font) || 'rem)';
+            l_fluid_type(l_fluid_type.LAST).value:=l_clamp;
+        END LOOP;
+
+        RETURN l_fluid_type;
+    END;
 
     FUNCTION getSessionData RETURN session_data_rt IS
         l_apex_session VARCHAR2(50);
