@@ -223,19 +223,23 @@ textarea {
       background: black;
       color: white;
       padding-inline: 0.25em;
-      font-size: var(--font-size-small);
+      font-size: var(--step--1);
+      position: absolute;
     }
   }
   :is(h1) {
     @container (width >= 0) {
       line-height: 1.1;
-      font-size: var(--font-size-large);
+      font-size: var(--step-4);
+      margin-inline-start: 5cqi;
     }
   }
     :is(p) {
     @container (width >= 0) {
       line-height: 1.5;
-      font-size: var(--font-size-medium);
+      font-size: var(--step-0);
+      margin-inline-start: 5cqi;
+      margin-block: 5cqi;
     }
   }
 }
@@ -248,7 +252,7 @@ textarea {
     color: white;
     background: #000;
     padding-inline: 0.25em;
-    font-size: var(--font-size-small);
+    font-size: var(--step--1);
 }
 
 
