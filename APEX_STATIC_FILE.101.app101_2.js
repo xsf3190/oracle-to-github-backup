@@ -51,7 +51,7 @@ const clearInput = (e) => {
 **  COUNT CHARACTER ENTERED IN TEXT FIELDS
 */
 const inputHandler = (e) => {
-    /*if (!e.target.matches(".cms")) return;*/
+    if (e.target.matches(".fluid")) return;
 
     clearInput(e);
 
@@ -83,7 +83,7 @@ const inputHandler = (e) => {
 }
 
 const focusHandler = (e) => {
-    /*if (!e.target.matches(".cms")) return;*/
+    if (e.target.matches(".fluid")) return;
 
     clearInput(e);
 
@@ -103,8 +103,13 @@ const focusHandler = (e) => {
 **  HANDLE FORM FIELD CHANGE. UPDATE DATABASE IF PASSES ANY VALIDATION CHECK
 */
 const changeHandler = (e) => {
-    if (!e.target.matches(".cms")) {
+    if (e.target.matches(".color")) {
         websiteColors(e.target.id, e.target.value);
+        return;
+    }
+
+    if (e.target.matches(".fluid")) {
+        websiteFontSize(e.target.id, e.target.value);
         return;
     }
 
@@ -492,6 +497,8 @@ const clickHandler = (e) => {
         website_options();
     } else if (e.target.matches(".use_eyedropper")) {
         eye_dropper(e);
+    } else if (e.target.matches(".save-fluid-types")) {
+        save_fluid_types(e);
     } else if (e.target.matches(".save-colors")) {
         save_colors(e);
     } else if (e.target.matches(".page-options")) {
@@ -547,6 +554,22 @@ const eye_dropper = async (e) => {
         websiteColors(ele.id, color.sRGBHex);
     }
 };
+
+/*
+**  SAVE FLUID TYPE PARAMETERS TO DATABASE
+*/
+const save_fluid_types = () => {
+    ['min_font_size','min_width_px','min_scale','max_font_size','max_width_px','max_scale'].forEach(type => {
+        const ele = document.getElementById(type);
+        const result = ele.parentElement.querySelector(".result");
+
+        execProcess("dml","PUT",{id:ele.dataset.id, table_column:ele.dataset.column, value:ele.value}).then( (data) => {
+            result.textContent = data.message;
+            result.style.color = data.color;
+            result.style.opacity = "1";
+        });
+    });
+}
 
 /*
 **  SAVE VALID COLORS TO DATABASE - NOTE THAT COMMON CHANGE HANDLER DOES NOT APPLY BECAUSE OF CONTRAST CHECK TEXT/BACKGROUND
@@ -1049,7 +1072,7 @@ const websiteFont = (font_family, font_url) => {
     document.fonts.ready.then(()=>{
         console.log("font " + font_family + " loaded");
         gWebsiteDemo.style.setProperty("--font-family",font_family);
-        gWebsiteDemo.querySelector("h1").textContent = "Heading 1";
+        gWebsiteDemo.querySelector("h1").textContent = websiteNav.querySelector("[data-id='"+gWebsiteId+"']").textContent.toUpperCase();
         gWebsiteDemo.querySelector("p").textContent = `"${font_family}" text with background color`;
     });
 }
@@ -1057,10 +1080,35 @@ const websiteFont = (font_family, font_url) => {
 /*
  ** SET FONT SIZE FOR WEBSIITE DEMO
  */
-const websiteFontSize = (small, medium, large) => {
-    gWebsiteDemo.style.setProperty("--font-size-small", small);
-    gWebsiteDemo.style.setProperty("--font-size-medium", medium);
-    gWebsiteDemo.style.setProperty("--font-size-large", large);
+const websiteFontSize = (id, value) => {
+    console.log("this one changed-->",id, value);
+    const min_font_size = document.getElementById("min_font_size").value,
+          min_width_px = document.getElementById("min_width_px").value,
+          min_scale = document.getElementById("min_scale").value,
+          max_font_size = document.getElementById("max_font_size").value,
+          max_width_px = document.getElementById("max_width_px").value,
+          max_scale = document.getElementById("max_scale").value;
+
+    const minWidth = min_width_px / 16;
+    const maxWidth = max_width_px / 16;
+    const round = (number, decimals=10000) => {
+        return Math.round(number * decimals) / decimals;
+    }
+
+    for (let i=-2; i<6; i++) {
+        let minFont,maxFont;
+        if (i<0) {
+            minFont = min_font_size/(min_scale**Math.abs(i));
+            maxFont = max_font_size/(max_scale**Math.abs(i));
+        } else {
+            minFont = min_font_size*(min_scale**i); 
+            maxFont = max_font_size*(max_scale**i);
+        }
+        const slope = (maxFont - minFont) / (maxWidth - minWidth);
+        const yAxisIntersection = -minWidth * slope + minFont;
+        const clamp = `clamp(${round(minFont)}rem,${round(yAxisIntersection)}rem + ${round(slope * 100)}cqi,${round(maxFont)}rem)`;
+        gWebsiteDemo.style.setProperty("--step-" + i, clamp);
+    }
 }
 
 /* 
@@ -1096,7 +1144,10 @@ const website_options = () => {
         websiteDialog.showModal();
         gWebsiteDemo = websiteContent.querySelector(".demo-container");
         websiteFont(data.font_family, data.font_url);
-        websiteFontSize(data.font_small, data.font_medium, data.font_large);
+        data.fluid_types.forEach((obj) => {
+            gWebsiteDemo.style.setProperty(obj.property,obj.value);
+        })
+
         websiteColors("color_text",data.color_text);
         websiteColors("color_background",data.color_background);
         websiteColors("color_primary",data.color_primary);
