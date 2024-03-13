@@ -238,31 +238,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_website_id website.id%type;
         l_eyedropper VARCHAR2(3);
         l_select_options LONG;
-        l_min_width NUMBER;
-        l_max_width NUMBER;
-        l_min_font NUMBER;
-        l_max_font NUMBER;
-        l_slope NUMBER;
-        l_intersect NUMBER;
-        l_clamp LONG;
-        l_font_size_small VARCHAR2(250);
-        l_font_size_medium VARCHAR2(250);
-        l_font_size_large VARCHAR2(250);
         l_fluid_types pck_core.fluid_type_t;
-
-        TYPE tt_spaces IS RECORD(dimension VARCHAR2(3), multiplier NUMBER);
-        TYPE t_spaces IS TABLE OF tt_spaces INDEX BY PLS_INTEGER;
-        l_spaces t_spaces:=t_spaces(
-            1=>tt_spaces('3xs',0.25), 
-            2=>tt_spaces('2xs',0.5), 
-            3=>tt_spaces('xs',0.75), 
-            4=>tt_spaces('s',1), 
-            5=>tt_spaces('m',1.5), 
-            6=>tt_spaces('l',2), 
-            7=>tt_spaces('xl',3), 
-            8=>tt_spaces('2xl',4), 
-            9=>tt_spaces('3xl',6)
-        );
 
         FUNCTION buildScaleOptions(pScale IN NUMBER) RETURN VARCHAR2 IS
             TYPE t_scale IS VARRAY(4) OF NUMBER;
@@ -277,17 +253,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 l_options:=l_options || '>' || l_scale(i) || '</option>';
             END LOOP;
             RETURN (l_options);
-        END;
-
-        FUNCTION round4dp(pNumber IN NUMBER) RETURN VARCHAR2 IS
-            l_number NUMBER;
-        BEGIN
-            l_number:=ROUND(pNumber,4);
-            IF (MOD(l_number,1)=0) THEN /* integer */
-                RETURN (TO_CHAR(l_number));
-            ELSE
-                RETURN(RTRIM(TO_CHAR(ROUND(pNumber,4),'0.0000'),'0'));
-            END IF;
         END;
 
     BEGIN
@@ -360,40 +325,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             apex_json.write('color_primary', C.color_primary);
 
             l_fluid_types:=pck_core.getFluidTypes(C.min_font_size, C.min_width_px, C.min_scale, C.max_font_size, C.max_width_px, C.max_scale);
-            FOR i IN 1..l_fluid_types.COUNT LOOP
-                pck_core.log(l_fluid_types(i).property || ':' || l_fluid_types(i).value);
-            END LOOP;
-
-            l_min_width:=C.min_width_px/16; 
-            l_max_width:=C.max_width_px/16;
-
             apex_json.open_array('fluid_types');
-
-            FOR i IN -2 .. 6 LOOP
-                IF (i<0) THEN
-                    l_min_font:=C.min_font_size/(C.min_scale**ABS(i));
-                    l_max_font:=C.max_font_size/(C.max_scale**ABS(i));
-                ELSE
-                    l_min_font:=C.min_font_size*(C.min_scale**i);
-                    l_max_font:=C.max_font_size*(C.max_scale**i);
+            FOR i IN 1..l_fluid_types.COUNT LOOP
+                IF (INSTR(l_fluid_types(i).property,'step')>0) THEN
+                    apex_json.open_object;
+                    apex_json.write('property',l_fluid_types(i).property);
+                    apex_json.write('value', l_fluid_types(i).value);
+                    apex_json.close_object;
                 END IF;
-                l_slope:=(l_max_font - l_min_font) / (l_max_width - l_min_width);
-                l_intersect:= -l_min_width * l_slope + l_min_font;
-                apex_json.open_object;
-                apex_json.write('property','--step-' || i);
-                apex_json.write('value', 'clamp(' || round4dp(l_min_font) || 'rem,' || round4dp(l_intersect) || 'rem + ' || round4dp(l_slope * 100) || 'cqi,' || round4dp(l_max_font) || 'rem)');
-                apex_json.close_object;
             END LOOP;
             apex_json.close_array;
-
-            l_clamp:=NULL;
-            FOR i IN 1..l_spaces.COUNT LOOP
-                l_min_font:=C.min_font_size*l_spaces(i).multiplier;
-                l_max_font:=C.max_font_size*l_spaces(i).multiplier;
-                l_slope:=(l_max_font - l_min_font) / (l_max_width - l_min_width);
-                l_intersect:= -l_min_width * l_slope + l_min_font;
-                l_clamp:=l_clamp || '--space-' || l_spaces(i).dimension || ': clamp(' || round4dp(l_min_font) || 'rem,' || round4dp(l_intersect) || 'rem + ' || round4dp(l_slope * 100) || 'vi,' || round4dp(l_max_font) || 'rem);' || chr(10);
-            END LOOP;
 
             apex_json.write('success', TRUE);
             apex_json.close_object;        
