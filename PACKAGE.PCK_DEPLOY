@@ -133,6 +133,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_sitemap CLOB;
         l_robots CLOB;
         l_ssl_url VARCHAR2(200);
+        l_fluid_types pck_core.fluid_type_t;
+        l_fluid_css LONG;
+
         n PLS_INTEGER:=0;
 
         FUNCTION buildNavLabels(pArticleId IN website_article.article_id%type) RETURN VARCHAR2 IS
@@ -184,7 +187,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
 
-        FOR C IN (SELECT w.domain_name, w.font, w.max_width, w.fluid_types, w.color_light, w.color_dark, w.color_primary, w.css, w.javascript, 
+        FOR C IN (SELECT w.domain_name, w.font, w.max_width, w.color_text, w.color_background, w.color_primary, w.css, w.javascript, 
+                         w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, 
                          wa.article_id, wa.page_title, wa.page_description, apex_string_util.get_slug(wa.navigation_label) path_name, wa.contact_form,
                          COALESCE(a.updated_date,a.created_date) lastmod, a.body_html, 
                          u.name, ROW_NUMBER() OVER (ORDER BY wa.display_order) rn, COUNT(*) OVER () nb
@@ -196,6 +200,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                    ORDER BY wa.display_order)
         LOOP
             logDeployment(pWebsiteId, pSiteId, 'Building page ' || C.rn || ' of ' || C.nb);
+            IF (C.rn=1) THEN
+                /* build fluid types */
+                l_fluid_types:=pck_core.getFluidTypes(C.min_font_size, C.min_width_px, C.min_scale, C.max_font_size, C.max_width_px, C.max_scale);
+                l_fluid_css:=chr(9) || '/* Custom properties for Fluid typography and spacing */';
+                FOR i IN 1..l_fluid_types.COUNT LOOP
+                    l_fluid_css:=l_fluid_css || chr(9) || l_fluid_types(i).property || ': ' || l_fluid_types(i).value || ';' || chr(10);
+                END LOOP;
+            END IF;
+
             dbms_session.sleep(1);
             l_page:=
             '<!DOCTYPE HTML>' || chr(10) ||
@@ -211,13 +224,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
                 '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
                 '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(C.font,' ','+') || '&display=swap">' || chr(10) ||
-                '<style>' || 
-                ':root {' ||chr(10) || C.fluid_types || chr(10) ||
-                '    --font-family: "' || C.font || '";' || chr(10) ||
-                '    --max-width: ' || C.max_width || ';' || chr(10) ||
-                '    --color-light: ' || C.color_light || ';' || chr(10) ||
-                '    --color-dark: ' || C.color_dark || ';' || chr(10) ||
-                '    --color-primary: ' || C.color_primary || ';' || chr(10) ||
+                '<style>' || chr(10) ||
+                ':root {' || chr(10) || l_fluid_css || 
+                    chr(9) || '--font-family: "' || C.font || '";' || chr(10) ||
+                    chr(9) || '--max-width: ' || C.max_width || ';' || chr(10) ||
+                    chr(9) || '--color-text: ' || C.color_text || ';' || chr(10) ||
+                    chr(9) || '--color-background: ' || C.color_background || ';' || chr(10) ||
+                    chr(9) || '--color-primary: ' || C.color_primary || ';' || chr(10) ||
                 '}' || chr(10) || chr(10) ||
                     chr(10) || NVL(C.css,l_deploy_css) || chr(10) || 
                 '</style>' || chr(10) || 
