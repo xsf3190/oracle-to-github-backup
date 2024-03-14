@@ -513,7 +513,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Insert new page in website
+     **  Insert new page in website or a new subpage in existing article 
      */        
     PROCEDURE insertArticle(pId IN VARCHAR2) IS
         l_session_data pck_core.session_data_rt;
@@ -523,6 +523,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_next_article_id article.id%type;
     BEGIN
         l_session_data:=pck_core.getSessionData();
+
+        IF (INSTR(pId,',')=0) THEN
+            INSERT INTO article (id, parent_id, author_user_id, created_date) VALUES (seq_article.nextval, pId, l_session_data.user_id, current_timestamp);
+            APEX_JSON.open_object; 
+            APEX_JSON.write('success', TRUE);
+            APEX_JSON.write('article_id', seq_article.currval);
+            APEX_JSON.close_object;
+            RETURN;
+        END IF;
 
         l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
 
@@ -545,7 +554,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         APEX_JSON.write('success', TRUE);
         APEX_JSON.write('article_id', seq_article.currval);
         APEX_JSON.write('nav_label', pck_core.buildNavLabel(seq_article.currval, 1, '[New Page]', 'page-options'));
-
         APEX_JSON.close_object;
 
         EXCEPTION
