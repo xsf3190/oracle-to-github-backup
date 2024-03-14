@@ -505,6 +505,8 @@ const clickHandler = (e) => {
         page_options();
     } else if (e.target.matches(".new-page")) {
         new_page(e);   
+    } else if (e.target.matches(".new-subpage")) {
+        new_subpage(e);   
     } else if (e.target.matches(".edit-codepen")) {
         edit_codepen();   
     } else if (e.target.matches(".upload-codepen")) {
@@ -1223,6 +1225,19 @@ const new_page = (e) => {
         editor.setData("");
         galleryList.replaceChildren();
         page_options();
+    });
+}
+
+/* 
+ ** CREATE NEW SUB PAGE
+ */
+const new_subpage = (e) => {
+    execProcess( "article/"+gArticleId,"POST").then( (data) => {
+        gArticleId = data.article_id;
+        editor_status = "init";
+        editor_status_text.textContent = "";
+        editor.setData("");
+        galleryList.replaceChildren();
     });
 }
 
