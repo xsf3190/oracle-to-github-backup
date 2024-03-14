@@ -17,7 +17,7 @@
   --minScale:  1.2;
   --maxFontSize:  1.5;
   --maxWidthPx:  1600;
-  --maxScale:  1.2;x
+  --maxScale:  1.2;
   
   /* Custom properties for fluid type */
   --step--2:  clamp(0.69rem,0.59rem + 0.45vw,1.04rem);
@@ -155,7 +155,7 @@ dialog .content > * + * {
     padding: 1em;
 }
 
-a + button > svg {
+button > svg {
     inline-size: 1em;
     block-size: 1em;
     pointer-events: none;
@@ -180,7 +180,7 @@ a:not(.selected) {
     text-decoration: none;
 }
 
-a:not(.selected) + button {
+a:not(.selected) ~ button {
     opacity: 0;
 }
 
