@@ -289,6 +289,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         */
         DELETE log WHERE log_date<current_timestamp-1;
 
+        /*
+        **   6. Load google Fonts (apparently, the url can change which would bugger up my demo section in website options
+        */
+        pck_api.callGoogleApi(pUserId=>l_user_id, pData=>l_clob);
+
+        DELETE google_font;
+        INSERT INTO google_font (seq, family, url_regular)
+        SELECT seq, family, url_regular FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(seq for ordinality, family, url_regular PATH '$.files.regular'));
+
 
         EXCEPTION
             WHEN OTHERS THEN
