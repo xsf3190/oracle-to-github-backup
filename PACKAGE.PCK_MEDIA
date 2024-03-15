@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_MEDIA" IS
     --
+    FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
+    --
     PROCEDURE getThumbnails(pArticleId IN article.id%type, pHTML IN OUT NOCOPY CLOB);
     --
 END;
