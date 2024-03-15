@@ -292,7 +292,7 @@ window.addEventListener("DOMContentLoaded", () => {
     console.log("gWebsiteId,gArticleId",gWebsiteId,gArticleId);
 
     if (gArticleId > 0) {
-        edit_text();
+        edit_text(false);
         lazyload();
     }
 });
@@ -507,6 +507,8 @@ const clickHandler = (e) => {
         new_page(e);   
     } else if (e.target.matches(".new-subpage")) {
         new_subpage(e);   
+    } else if (e.target.matches(".show-subpages")) {
+        show_subpages(e);   
     } else if (e.target.matches(".edit-codepen")) {
         edit_codepen();   
     } else if (e.target.matches(".upload-codepen")) {
@@ -1242,6 +1244,15 @@ const new_subpage = (e) => {
 }
 
 /* 
+ ** SHOW SUB PAGES
+ */
+const show_subpages = () => {
+    execProcess( "articles/"+gArticleId,"GET").then( (data) => {
+        pageNav.insertAdjacentHTML('beforeend',data.content);
+    });
+}
+
+/* 
  ** UPLOAD MEDIA TO CLOUDINARY
  */
 const upload_media = () => {
@@ -1268,9 +1279,9 @@ const selected_nav = (nav, id) => {
 }
 
 /* 
- ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR 
+ ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR. REPLACE GALLERY. REMOVE ANY SUB-PAGES
  */
-const edit_text = () => {
+const edit_text = (click=true) => {
     execProcess( "article/"+gArticleId,"GET").then( (data) => {
         editor_status = "init";
         editor_status_text.textContent = data.updated_date;
@@ -1283,6 +1294,11 @@ const edit_text = () => {
         if (data.thumbnails) {
             galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
             lazyload();
+        }
+        if (click) {
+            pageNav.querySelectorAll(".subpage").forEach((subpage) => {
+                subpage.remove();
+            });
         }
     });
 }
