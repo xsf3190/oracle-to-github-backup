@@ -35,8 +35,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION getSessionData RETURN session_data_rt;
     --
-    PROCEDURE loadGoogleFonts;
-    --
     PROCEDURE log(pMsg IN VARCHAR2);
     --
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB);
@@ -241,31 +239,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     END;
 
     /*
-     **  Load Google font family names
-     */
-    PROCEDURE loadGoogleFonts IS
-        l_data CLOB;
-        l_session_data session_data_rt;
-        n PLS_INTEGER;
-    BEGIN
-        pck_api.callGoogleApi(pUserId=>l_session_data.user_id, pData=>l_data);
-
-        MERGE INTO google_font t
-        USING (SELECT seq, family, url_regular FROM JSON_TABLE(l_data, '$.items[*]' COLUMNS(seq for ordinality, family, url_regular PATH '$.files.regular'))) s
-        ON (t.family=s.family)
-        WHEN NOT MATCHED THEN INSERT (seq, family, url_regular) VALUES (s.seq, s.family, s.url_regular);
-
-        n:=SQL%ROWCOUNT;
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('content', '<p>Loaded '|| n || ' new Google fonts</p>');
-        apex_json.close_object;
-
-        EXCEPTION WHEN OTHERS THEN log_error;
-    END;
-
-    /*
      **  Build Contact Form
      */
     FUNCTION buildContactForm(pContactEmail IN website.contact_email%type) RETURN VARCHAR2 IS
@@ -448,15 +421,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         </button>
                     </li>' || 
                     CASE WHEN pIsAdmin=1 THEN
-                    '<li class="load-fonts">
-                        <button type="button" class="with-icon load-fonts">
-                            <svg class="icon">
-                                <use href="#font"></use>
-                            </svg>
-                            Load Google Fonts
-                        </button>
-                    </li>
-                    <li class="visits">
+                    '<li class="visits">
                         <button type="button" class="with-icon visits" data-id="' || apex_application.g_flow_id || '" data-domain="' || SUBSTR(apex_util.host_url(),9) || '">
                             <svg class="icon">
                                 <use href="#list"></use>
@@ -490,14 +455,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
     FUNCTION buildNavLabel(pId IN INTEGER, pSelected IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pSubPages IN INTEGER DEFAULT NULL) RETURN VARCHAR2 IS
     BEGIN
+        log('pSubPages:'||pSubPages);
         RETURN(
-        '<div data-id="' || pId || '">
+        '<div data-id="' || pId || '"' || CASE WHEN pSubPages>0 THEN ' class="subpage"' END || '>
             <a href="#" class="nav-label' || CASE WHEN pSelected=1 THEN ' selected' END || '">' || pLabel || '</a>
             <button type="button" class="' || pClassName || '">
                 <svg><use href="#pencil"></use></svg>
             </button>' ||
             CASE WHEN pSubPages>0 THEN
-            '<button type="button" class="">
+            '<button type="button" class="show-subpages">
                 <svg><use href="#bars"></use></svg>
             </button>'
             END ||
