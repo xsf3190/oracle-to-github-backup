@@ -2,6 +2,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getArticle(pArticleId IN article.id%type);
     --
+    PROCEDURE getArticles(pArticleId IN article.id%type);
+    --
     PROCEDURE getCldDetails;
     --
     PROCEDURE getCldSignature(pParamsToSign IN CLOB);
@@ -224,10 +226,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT article_id INTO l_article_id FROM JSON_TABLE(l_bodytext,'$.images[*]' COLUMNS (article_id))  WHERE ROWNuM=1;
+        SELECT article_id INTO l_article_id FROM users, JSON_TABLE(l_bodytext,'$.images[*]' COLUMNS (article_id))  WHERE ROWNuM=1 AND users.id=l_session_data.user_id;
 
-        INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, created_date, user_id)
-        SELECT seq_asset.nextval, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, current_timestamp, l_session_data.user_id
+        INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, display_order, created_date, user_id)
+        SELECT seq_asset.nextval, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, seq_asset.currval, current_timestamp, l_session_data.user_id
           FROM JSON_TABLE(l_bodytext, '$.images[*]' COLUMNS (article_id, public_id, width, height, bytes, resource_type, format, cld_cloud_name));
 
 
@@ -461,6 +463,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('updated_date', C.updated_date);
             apex_json.close_object;
         END LOOP;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END; 
+
+    /*
+     **  Return list of articles owned by requested article (i.e. subpages)
+     */    
+    PROCEDURE getArticles(pArticleId IN article.id%type)  IS
+        l_content CLOB;
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        FOR C IN (
+            SELECT art.id, art.cover_asset_id, art.title, apex_util.get_since(COALESCE(art.updated_date, art.created_date)) updated_date,
+                    ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
+              FROM article art, asset ass
+             WHERE art.parent_id=pArticleId
+               AND art.author_user_id=l_session_data.user_id
+               AND art.cover_asset_id=ass.id(+)
+             ORDER BY art.title)
+        LOOP
+            l_content:=l_content || pck_core.buildNavLabel(C.id, 0, C.title, 'page-options');
+        END LOOP;
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE); 
+        apex_json.write('content', l_content);
+        apex_json.close_object;
 
         EXCEPTION
             WHEN OTHERS THEN
