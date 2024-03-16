@@ -292,7 +292,7 @@ window.addEventListener("DOMContentLoaded", () => {
     console.log("gWebsiteId,gArticleId",gWebsiteId,gArticleId);
 
     if (gArticleId > 0) {
-        edit_text(false);
+        edit_text();
         lazyload();
     }
 });
@@ -477,8 +477,10 @@ const clickHandler = (e) => {
         }
         const id = e.target.parentElement.dataset.id,
               nav = e.target.closest("nav");
-
-        selected_nav(nav,id);
+        
+        if (e.target.tagName==="A") {
+            selected_nav(nav,id);
+        }
 
         if (nav.matches(".website-nav")) {
             gWebsiteId = id;
@@ -1244,11 +1246,14 @@ const new_subpage = (e) => {
 }
 
 /* 
- ** SHOW SUB PAGES
+ ** SHOW SUB PAGES. RETURNED AS AN ORDERED SERIES OF ITEMS TO BE INSERTED IN DROPDOWN LIST
  */
-const show_subpages = () => {
-    execProcess( "articles/"+gArticleId,"GET").then( (data) => {
-        pageNav.insertAdjacentHTML('beforeend',data.content);
+const show_subpages = (e) => {
+    const id = e.target.closest("[data-id]").dataset.id;
+    execProcess( "articles/"+id,"GET").then( (data) => {
+        const ul = e.target.nextElementSibling;
+        ul.replaceChildren();
+        ul.insertAdjacentHTML('afterbegin',data.content);
     });
 }
 
@@ -1281,7 +1286,7 @@ const selected_nav = (nav, id) => {
 /* 
  ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR. REPLACE GALLERY. REMOVE ANY SUB-PAGES
  */
-const edit_text = (click=true) => {
+const edit_text = () => {
     execProcess( "article/"+gArticleId,"GET").then( (data) => {
         editor_status = "init";
         editor_status_text.textContent = data.updated_date;
@@ -1294,11 +1299,6 @@ const edit_text = (click=true) => {
         if (data.thumbnails) {
             galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
             lazyload();
-        }
-        if (click) {
-            pageNav.querySelectorAll(".subpage").forEach((subpage) => {
-                subpage.remove();
-            });
         }
     });
 }
