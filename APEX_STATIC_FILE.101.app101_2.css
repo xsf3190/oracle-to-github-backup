@@ -65,7 +65,7 @@
 /*******************/
 .ck-content {
     padding-inline: var(--space-m);
-    font-family: Lato;
+    font-family: var(--font-serif);
 }
 
 .ck-content div.auto-fit-sections {
@@ -110,7 +110,7 @@ img {
 }
 
 textarea, button, input, select {
-    font: inherit;
+    font: inherit;.
 }
 
 input, textarea, select {
@@ -180,19 +180,27 @@ a:not(.selected) {
     text-decoration: none;
 }
 
-a:not(.selected) ~ button {
-    opacity: 0;
-}
-
-a.selected {
+a.selected{
     text-decoration-color: var(--color-secondary);
     text-decoration-thickness: var(--space-3xs);
     text-underline-offset: var(--space-3xs);
     text-decoration-skip-ink: none;
 }
 
-a.selected + button {
-    opacity: 1;
+nav [class$="options"]:has(+ a.selected) {
+    opacity:1;
+}
+
+nav [class$="options"]:not(:has(+ a.selected)) {
+    opacity:0;
+}
+
+nav a.selected + .dropdown {
+    opacity:1;
+}
+
+nav a:not(.selected) + .dropdown {
+    opacity:0;
 }
 
 label {
@@ -267,12 +275,6 @@ button {
     border: 0;
     cursor: pointer;
     white-space: nowrap;
-}
-
-.show-dropdown {
-    color: var(--color-solid);
-    background-color: var(--color-pale);
-    border-radius: 0.5ch;
 }
 
 /* UPDATE RESULT SHOWN IN SPAN BENEATH INPUT ELEMENT */
@@ -599,7 +601,8 @@ dialog.log tr {
 /* *************** */
 
 .dropdown {
-  position: relative;
+    position: relative;
+    display: inline-block;
 }
 
 .dropdown .dropdown-items {
