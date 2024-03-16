@@ -162,6 +162,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_website_id website.id%type;
         l_nav_labels LONG;
         l_thumbnails LONG;
+        l_selected_articleid article.id%type;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -175,37 +176,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('domain_name', C.domain_name);
             apex_json.write('deploy_buttons', pck_core.buildDeployButtons(C.domain_name, C.netlify_site_id, C.netlify_site_id_custom));
         END LOOP;
+        
+        apex_json.write('nav_labels', pck_core.buildPageNav(pWebsiteId, l_selected_articleid));
+        apex_json.write('selected', l_selected_articleid);
+        
+        pck_media.getThumbnails(l_selected_articleid, l_thumbnails);
+        apex_json.write('thumbnails', l_thumbnails);
 
-        FOR C IN (SELECT wa.article_id, wa.navigation_label, wa.contact_form, a.body_html, apex_util.get_since(COALESCE(a.updated_date,a.created_date)) updated_date,
-                        ROW_NUMBER() OVER (ORDER BY COALESCE(a.updated_date,a.created_date) DESC) rn
-                    FROM website_article wa, article a  
-                   WHERE wa.website_id=pWebsiteId 
-                     AND a.id=wa.article_id
-                   ORDER BY display_order) 
-        LOOP
-            l_nav_labels:=l_nav_labels || 
-            '<div data-id="' || C.article_id || '">
-                <a href="#" class="nav-label';
-            IF (C.rn=1) THEN
-                l_nav_labels:=l_nav_labels || ' selected';
-                apex_json.write('selected', C.article_id);
-                apex_json.write('html', C.body_html);
-                apex_json.write('updated_date', C.updated_date);
-                pck_media.getThumbnails(C.article_id, l_thumbnails);
-                apex_json.write('thumbnails', l_thumbnails);
-            END IF;
-            l_nav_labels:=l_nav_labels || 
-                '">' || C.navigation_label || '</a>
-                <button type="button" class="page-options">
-                    <svg><use href="#pencil"></use></svg>
-                </button>
-            </div>';
+        FOR C IN (SELECT body_html FROM article WHERE id=l_selected_articleid) LOOp
+            apex_json.write('html', C.body_html);
         END LOOP;
-
-        IF (l_nav_labels IS NOT NULL) THEN
-            apex_json.write('nav_labels', l_nav_labels);
-        END IF;
-
+        
         apex_json.write('success', TRUE);
         apex_json.close_object;
 
@@ -479,17 +460,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_session_data:=pck_core.getSessionData();
 
         FOR C IN (
-            SELECT art.id, art.cover_asset_id, art.title, apex_util.get_since(COALESCE(art.updated_date, art.created_date)) updated_date,
-                    ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
-              FROM article art, asset ass
+            SELECT art.id, art.title, apex_util.get_since(COALESCE(art.updated_date, art.created_date)) updated_date
+              FROM article art
              WHERE art.parent_id=pArticleId
                AND art.author_user_id=l_session_data.user_id
-               AND art.cover_asset_id=ass.id(+)
-             ORDER BY art.title)
+             ORDER BY updated_date)
         LOOP
-            l_content:=l_content || pck_core.buildNavLabel(C.id, 0, C.title, 'page-options');
+            l_content:=l_content || '<li data-id="' || C.id || '"><button type="button" class="with-icon nav-label"><svg><use href="#pencil"></use></svg>' || C.title || '</li>';
         END LOOP;
-
+        pck_core.log(l_content);
         apex_json.open_object;
         apex_json.write('success', TRUE); 
         apex_json.write('content', l_content);
