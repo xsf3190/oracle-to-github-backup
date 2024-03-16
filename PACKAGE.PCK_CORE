@@ -455,17 +455,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
     FUNCTION buildNavLabel(pId IN INTEGER, pSelected IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pSubPages IN INTEGER DEFAULT NULL) RETURN VARCHAR2 IS
     BEGIN
-        log('pSubPages:'||pSubPages);
         RETURN(
-        '<div data-id="' || pId || '"' || CASE WHEN pSubPages>0 THEN ' class="subpage"' END || '>
-            <a href="#" class="nav-label' || CASE WHEN pSelected=1 THEN ' selected' END || '">' || pLabel || '</a>
+        '<div data-id="' || pId || '">
             <button type="button" class="' || pClassName || '">
                 <svg><use href="#pencil"></use></svg>
-            </button>' ||
+            </button>
+            <a href="#" class="nav-label' || CASE WHEN pSelected=1 THEN ' selected' END || '">' || pLabel || '</a>' ||
             CASE WHEN pSubPages>0 THEN
-            '<button type="button" class="show-subpages">
-                <svg><use href="#bars"></use></svg>
-            </button>'
+            '<div class="dropdown">
+                <button type="button" class="show-dropdown show-subpages">&blacktriangledown;</button>
+                <ol class="dropdown-items">
+                </ol>
+            </div>'
             END ||
         '</div>');
     END;
@@ -502,13 +503,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_html CLOB;
         n PLS_INTEGER;
     BEGIN
-        FOR C IN (SELECT navigation_label, article_id, ROW_NUMBER() OVER(ORDER BY COALESCE(updated_date, created_date) DESC) rn
+        FOR C IN (SELECT navigation_label, article_id, ROW_NUMBER() OVER(ORDER BY COALESCE(updated_date, created_date) DESC) rn,
+                            (SELECT COUNT(*) FROM article WHERE parent_id=article_id) childpages
                     FROM website_article
                    WHERE website_id=pWebsiteId
                    ORDER BY display_order) 
         LOOP
-            SELECT COUNT(*) INto n FROM dual WHERE EXISTS (SELECT null FROM article WHERE parent_id=C.article_id);
-            l_html:=l_html || TO_CLOB(buildNavLabel(C.article_id, C.rn, C.navigation_label, 'page-options',n));
+            l_html:=l_html || TO_CLOB(buildNavLabel(C.article_id, C.rn, C.navigation_label, 'page-options',C.childpages));
             IF (C.rn=1) THEN 
                 pSelectedArticleId:=C.article_id;
             END IF;
