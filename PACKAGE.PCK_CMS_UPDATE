@@ -353,20 +353,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_content CLOB;
         l_website_id website_article.website_id%type;
         l_article_id website_article.article_id%type;
-        l_radio LONG;
+        l_collection_type_radio LONG;
+        l_contact_form_radio LONG;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
         l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
         l_article_id:=SUBSTR(pId,INSTR(pId,',')+1);
 
-        FOR C IN (SELECT navigation_label, contact_form, page_title, page_description
+        FOR C IN (SELECT navigation_label, collection_type, contact_form, page_title, page_description
                     FROM website_article 
                    WHERE website_id=l_website_id
                      AND article_id=l_article_id
                      AND user_id=l_session_data.user_id) 
         LOOP
-            l_radio:=
+            l_collection_type_radio:=
+            '<div>
+                <input class="cms" type="radio" data-column="website_article.collection_type" data-id="' || pId || '" id="collection_type-blog" name="collection-type" value="BLOG"' ||
+                CASE WHEN C.collection_type='BLOG' THEN ' checked' END || '>
+                </input>
+                <label for="collection_type-blog">BLOG</label>
+            </div>
+            <div>
+                <input class="cms" type="radio" data-column="website_article.collection_type" data-id="' || pId || '" id="collection_type-media" name="collection-type" value="MEDIA"' ||
+                CASE WHEN C.collection_type='MEDIA' THEN ' checked' END || '>
+                </input>
+                <label for="collection_type-media">MEDIA</label>
+            </div>
+            <div>
+                <input class="cms" type="radio" data-column="website_article.collection_type" data-id="' || pId || '" id="collection_type-na" name="collection-type" value="N/A"' ||
+                CASE WHEN C.collection_type='N/A' THEN ' checked' END || '>
+                </input>
+                <label for="collection_type-na">N/A</label>
+            </div>';
+            
+            l_contact_form_radio:=
             '<div>
                 <input class="cms" type="radio" data-column="website_article.contact_form" data-id="' || pId || '" id="contact_form-yes" name="template" value="YES"' ||
                 CASE WHEN C.contact_form='YES' THEN ' checked' END || '>
@@ -378,12 +399,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 CASE WHEN C.contact_form='NO' THEN ' checked' END || '>
                 </input> <label for="contact_form-no">NO</label>
             </div>';
+
             l_content:=l_content || 
             '<form>' ||
                 buildInputWrapper(pId, 'website_article.navigation_label', C.navigation_label, l_session_data.canuse_popover) ||
+                buildRadioWrapper('website_article.collection_type', l_collection_type_radio, l_session_data.canuse_popover) || 
                 buildTextareaWrapper(pId, 'website_article.page_title', C.page_title, l_session_data.canuse_popover) ||
                 buildTextareaWrapper(pId, 'website_article.page_description', C.page_description, l_session_data.canuse_popover) ||
-                buildRadioWrapper('website_article.contact_form', l_radio, l_session_data.canuse_popover) || 
+                buildRadioWrapper('website_article.contact_form', l_contact_form_radio, l_session_data.canuse_popover) || 
                 '<details>
                     <summary>CODEPEN FEATURES</summary>' ||
                     pck_core.buildPushableButton('edit-codepen','&#9917;') ||
@@ -552,6 +575,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     UPDATE website SET max_scale=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website_article.navigation_label' THEN
                     UPDATE website_article SET navigation_label=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
+                WHEN 'website_article.collection_type' THEN
+                    UPDATE website_article SET collection_type=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'website_article.page_title' THEN
                     UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'website_article.page_description' THEN
