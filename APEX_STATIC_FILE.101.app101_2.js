@@ -203,6 +203,22 @@ const deploy_website = (e) => {
     });
 };
 
+/* 
+ ** CANCEL DEPLOYMENT
+ */
+const cancel_deploy = (e) => { 
+    const site_id = e.target.dataset.site_id;
+    if (!site_id) return;
+    execProcess("deploy-status/"+websiteid+","+siteid,"DELETE").then( (data) => {
+        if (data.content) {
+            logContent.querySelector("ol.deploy").insertAdjacentHTML('beforeend',data.content);
+        }
+        if (data.completed) {
+            clearInterval(gIntervalId);
+        }
+    });
+};
+
 getDeploymentStatus = (websiteid, siteid) => {
     execProcess("deploy-status/"+websiteid+","+siteid,"GET").then( (data) => {
         if (data.content) {
@@ -534,6 +550,8 @@ const clickHandler = (e) => {
         copy_url(e);                                 
     } else if (e.target.matches(".deploy-website")) {
         deploy_website(e);
+    } else if (e.target.matches(".cancel-deploy")) {
+        cancel_deploy(e);
     } else if (e.target.matches(".saveBtn")) {
         console.log("saveBtn clicked - do nothing!");
     }
@@ -1165,7 +1183,7 @@ const website_options = () => {
 /* 
  ** GET PAGE OPTIONS
  */
-const page_options = () => {
+const page_options = (e) => {
     execProcess( "page-options/"+gWebsiteId+","+gArticleId,"GET").then( (data) => {
         pageContent.replaceChildren();
         pageContent.insertAdjacentHTML('afterbegin',data.content);
@@ -1249,6 +1267,8 @@ const new_subpage = (e) => {
  ** SHOW SUB PAGES. RETURNED AS AN ORDERED SERIES OF ITEMS TO BE INSERTED IN DROPDOWN LIST
  */
 const show_subpages = (e) => {
+    console.log(pageNav.getBoundingClientRect())
+    console.log(e.target.getBoundingClientRect())
     const id = e.target.closest("[data-id]").dataset.id;
     execProcess( "articles/"+id,"GET").then( (data) => {
         const ul = e.target.nextElementSibling;
