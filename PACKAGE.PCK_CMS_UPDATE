@@ -416,13 +416,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     <summary>DELETE PAGE</summary>' ||
                     pck_core.buildPushableButton('delete-page', '&#128686;') ||
                 '</details>
-            </form>';      
-
-            apex_json.open_object;
-            apex_json.write('content', l_content);
-            apex_json.write('success', TRUE);
-            apex_json.close_object;        
+            </form>';            
         END LOOP;
+
+        IF (l_content IS NULL) THEN  --must ve sub-article - offer fewer options
+            l_content:=l_content || 
+            '<form>
+                <details>
+                    <summary>DELETE PAGE</summary>' ||
+                    pck_core.buildPushableButton('delete-page', '&#128686;') ||
+                '</details>
+            </form>';
+        END IF;   
+
+        apex_json.open_object;
+        apex_json.write('content', l_content);
+        apex_json.write('success', TRUE);
+        apex_json.close_object;  
 
         EXCEPTION
             WHEN OTHERS THEN
