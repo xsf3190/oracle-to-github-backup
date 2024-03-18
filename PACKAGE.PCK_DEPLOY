@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as 
     --
+    PROCEDURE cancelDeployment(pId IN VARCHAR2);
+    --
     PROCEDURE deleteDirectory(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
     PROCEDURE deployInfrastructure;
@@ -93,6 +95,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
+        -- <button type="button" class="cancel-deploy">CANCEL DEPLOY</button>
         apex_json.write('content', '<ol class="deploy"><li><span>' || TO_CHAR(current_timestamp,'hh24:mi:ss') || '</span><span>Starting deployment of ' || l_url || '</span></li></ol>');
         apex_json.close_object;
 
@@ -113,27 +116,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_css CLOB;
         l_metric_js CLOB;
         l_domain_name website.domain_name%type;
-        l_file_name website_article.navigation_label%type;
+        l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
         TYPE tt_files IS RECORD (
             lastmod article.updated_date%type,
             url VARCHAR2(200),
-            file_name website_article.navigation_label%type,
+            file_name VARCHAR2(200),
             file_content CLOB
         );
         TYPE t_files IS TABLE OF tt_files INDEX BY VARCHAR2(40);
         l_deploy_files t_files;
 
         TYPE tt_labels IS RECORD (
+            parent_article_id website_article.article_id%type,
             article_id website_article.article_id%type,
-            navigation_label website_article.navigation_label%type,
-            path_name website_article.navigation_label%type,
+            navigation_label article.title%type,  -- largest that can fit here
+            path_name VARCHAR2(200),
             collection_type website_article.collection_type%type,
             page_title website_article.page_title%type,
             page_description website_article.page_description%type,
             contact_form website_article.contact_form%type,
-            body_html article.body_html%type,
-            nb_in_collection PLS_INTEGER
+            lastmod article.updated_date%type,
+            word_count article.word_count%type, 
+            body_html article.body_html%type
         );
         TYPE t_labels IS TABLE OF tt_labels INDEX BY PLS_INTEGER;
         l_labels t_labels;
@@ -151,11 +156,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         FUNCTION buildNavLabels(pArticleId IN website_article.article_id%type) RETURN VARCHAR2 IS
             l_nav LONG;
         BEGIN
-            FOR i IN 1..l_labels.COUNT
-            LOOP
-                l_nav:=l_nav || 
-                '<a href="/' || CASE WHEN i>1 THEN l_labels(i).path_name  END || '" class="nav-label' || 
-                CASE WHEN l_labels(i).article_id=pArticleId THEN ' selected' END || '" data-id="' || l_labels(i).article_id || '">' || l_labels(i).navigation_label || '</a>';
+            FOR i IN 1..l_labels.COUNT LOOP
+                IF (l_labels(i).article_id=l_labels(i).parent_article_id) THEN
+                    l_nav:=l_nav || 
+                    '<a href="/' || CASE WHEN i>1 THEN l_labels(i).path_name  END || '" class="nav-label' || 
+                    CASE WHEN l_labels(i).article_id=pArticleId THEN ' selected' END || '" data-id="' || l_labels(i).article_id || '">' || l_labels(i).navigation_label || '</a>';
+                END IF;
             END LOOP;
             RETURN (l_nav);
         END;
@@ -186,7 +192,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         AND file_name='app' || pApplicationId || '_deploy.min.css';
 
         /* 
-        ** Build page head common to all website pages
+        ** Build page head which is common to all website pages
         */ 
         FOR C IN (SELECT domain_name, font, max_width, color_text, color_background, color_primary, css, javascript, 
                          min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale
@@ -226,21 +232,38 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             '</head>' || chr(10);
         END LOOP;
 
-        SELECT wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label), wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, a.body_html, (SELECT COUNT(*) FROM article a WHERE a.parent_id=wa.article_id)
+        /*
+        ** Get all website content into collection
+        */
+        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count, body_html
           BULK COLLECT INTO l_labels
+          FROM
+          (
+        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.display_order, COALESCE(a.updated_date,a.created_date) lastmod, a.word_count, a.body_html
           FROM website_article wa, article a
          WHERE wa.website_id=pWebsiteId 
            AND wa.article_id=a.id
-         ORDER BY wa.display_order;
+         UNION ALL
+        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order, COALESCE(a.updated_date,a.created_date) lastmod, a.word_count, a.body_html
+          FROM website_article wa, article a 
+         WHERE wa.website_id=pWebsiteId 
+           AND a.parent_id=wa.article_id 
+          )
+         ORDER BY display_order, lastmod DESC;
+         
 
         /*
-        ** Append links to any blog entries in the parent page
+        ** 1. Remove any empty <h1> element.
+        ** 2. Append to parent page links to blog entries 
         */
         FOR i IN 1..l_labels.COUNT LOOP
-            l_total_pages:=l_total_pages+l_labels(i).nb_in_collection;
-            IF (l_labels(i).collection_type='BLOG' AND l_labels(i).nb_in_collection>0) THEN
-                FOR C IN (SELECT title, excerpt FROM article WHERE parent_id=l_labels(i).article_id ORDER BY COALESCE(updated_date,created_date) DESC) LOOP
-                    l_labels(i).body_html:=l_labels(i).body_html || '<br><a href="' || 'https://www.' || l_domain_name || l_labels(i).path_name || '/' || C.title || '">' || C.title || '</a>';
+           l_labels(i).body_html:=REPLACE(l_labels(i).body_html ,'<h1>&nbsp;</h1>',null);
+            IF (l_labels(i).collection_type='BLOG') THEN
+                FOR j IN 1..l_labels.COUNT LOOP
+                    IF (l_labels(j).parent_article_id=l_labels(i).parent_article_id AND l_labels(j).parent_article_id<>l_labels(j).article_id) THEN
+                        l_labels(i).body_html:=l_labels(i).body_html || 
+                        '<br><a href="/' || l_labels(j).path_name || '">' || l_labels(j).navigation_label || '</a><span>' || l_labels(j).word_count || ' words</span>';
+                    END IF;
                 END LOOP;
             END IF;
         END LOOP;
@@ -255,64 +278,42 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         FOR i IN 1..l_labels.COUNT
         LOOP
-            FOR C IN (
-                SELECT 0 page, title, body_html, COALESCE(updated_date,created_date) lastmod 
-                  FROM article 
-                 WHERE id=l_labels(i).article_id 
-                 UNION ALL
-                SELECT 1 page, title, body_html, COALESCE(updated_date,created_date) lastmod 
-                  FROM article 
-                 WHERE parent_id=l_labels(i).article_id 
-                )
-            LOOP
-                n:=n+1;
-                logDeployment(pWebsiteId, pSiteId, 'Building page ' || n || ' of ' || l_total_pages);
-                dbms_session.sleep(1);
+            logDeployment(pWebsiteId, pSiteId, 'Building page ' || i || ' of ' || l_labels.COUNT);
+            dbms_session.sleep(1);
 
-                l_page:=REPLACE(REPLACE(l_head,'#PAGE_TITLE#',l_labels(i).page_title),'#PAGE_DESCRIPTION#',l_labels(i).page_description) || 
-                    '<body>' || CASE WHEN l_labels.COUNT>1 THEN '<nav aria-label="Main Navigation">' || buildNavLabels(l_labels(i).article_id) || '</nav>' END || chr(10) || 
-                    REPLACE(C.body_html,'<h1>&nbsp;</h1>',null) || chr(10) || 
-                    CASE WHEN l_labels(i).contact_form='YES' THEN pck_core.buildContactForm(contactEmail()) END ||
-                    '<script type="module">
-                        import {onCLS, onLCP, onINP} from ''https://unpkg.com/web-vitals?module'';
-                        onCLS(addToVitalsQueue);
-                        onLCP(addToVitalsQueue);
-                        onINP(addToVitalsQueue);
-                    </script>
-                    <script>
-                        gMetricWebsiteId = "' || pWebsiteId || '";' || chr(10) || 
-                        'gMetricArticleId = "' || l_labels(i).article_id || '";' || chr(10) || 
-                        'gMetricVisitUrl = "' || pRestUrl || 'page-visit";' || chr(10) ||
-                        l_metric_js || 
-                    '</script>' || chr(10) || '
-                    </body>' || chr(10) || 
-                '</html>';
+            l_page:=REPLACE(REPLACE(l_head,'#PAGE_TITLE#',l_labels(i).page_title),'#PAGE_DESCRIPTION#',l_labels(i).page_description) || 
+                '<body>' || 
+                CASE WHEN l_labels.COUNT>1 THEN '<nav aria-label="Main Navigation">' || buildNavLabels(l_labels(i).parent_article_id) || '</nav>' END || chr(10) || 
+                l_labels(i).body_html || chr(10) || 
+                CASE WHEN l_labels(i).contact_form='YES' THEN pck_core.buildContactForm(contactEmail()) END ||
+                '<script type="module">
+                    import {onCLS, onLCP, onINP} from ''https://unpkg.com/web-vitals?module'';
+                    onCLS(addToVitalsQueue);
+                    onLCP(addToVitalsQueue);
+                    onINP(addToVitalsQueue);
+                </script>
+                <script>
+                    gMetricWebsiteId = "' || pWebsiteId || '";' || chr(10) || 
+                    'gMetricArticleId = "' || CASE WHEN l_labels(i).parent_article_id=l_labels(i).article_id THEN l_labels(i).parent_article_id ELSE l_labels(i).article_id END || '";' || chr(10) || 
+                    'gMetricVisitUrl = "' || pRestUrl || 'page-visit";' || chr(10) ||
+                    l_metric_js || 
+                '</script>' || chr(10) || '
+                </body>' || chr(10) || 
+            '</html>';
 
-                l_sha1:=LOWER(dbms_crypto.hash(src => l_page, typ => dbms_crypto.hash_sh1));
+            l_sha1:=LOWER(dbms_crypto.hash(src => l_page, typ => dbms_crypto.hash_sh1));
 
-                IF (i=1) THEN
-                    l_file_name:='index';
-                ELSIF (C.page=0) THEN
-                    l_file_name:=l_labels(i).path_name;
-                ELSIF (C.page=1) THEN
-                    l_file_name:=C.title;
-                END IF;
-                l_file_name:=l_file_name || '.html';
+            IF (i=1) THEN
+                l_file_name:='index.html';
+            ELSE
+                l_file_name:=l_labels(i).path_name || '.html';
+            END IF;
 
-                l_url:='https://www.' || l_domain_name;
-                IF (i>1) THEN
-                    l_url:=l_url || '/' || l_labels(i).path_name;
-                    IF (C.page=1) THEN
-                        l_url:=l_url || '/' || C.title;
-                    END IF;
-                END IF;
-
-                l_deploy_files(l_sha1).url:=l_url;
-                l_deploy_files(l_sha1).lastmod:=C.lastmod;
-                l_deploy_files(l_sha1).file_name:=l_file_name;
-                l_deploy_files(l_sha1).file_content:=l_page;
-                l_files.put(l_file_name, l_sha1);
-            END LOOP;
+            l_deploy_files(l_sha1).url:=l_ssl_url || CASE WHEN i>1 THEN '/' || l_labels(i).path_name END;
+            l_deploy_files(l_sha1).lastmod:=l_labels(i).lastmod;
+            l_deploy_files(l_sha1).file_name:=l_file_name;
+            l_deploy_files(l_sha1).file_content:=l_page;
+            l_files.put(l_file_name, l_sha1);
         END LOOP;
 
         /* Build sitemap.xml */
@@ -372,6 +373,35 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 logDeployment(pWebsiteId, pSiteId, SUBSTR(SQLERRM,1,100),'NOK');
                 pck_core.log_error;
     END;   
+
+    /*
+     **  CANCEL active deployment - HAVE TO STOP JOB FIRST PERHAPS?
+     */
+    PROCEDURE cancelDeployment(pId IN VARCHAR2) IS 
+        l_website_id website_deploy.website_id%type;
+        l_site_id website_deploy.site_id%type;
+        l_netlify_deploy_id website.netlify_deploy_id%type;
+        l_clob CLOB;
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
+        l_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
+
+        SELECT netlify_deploy_id INTO l_netlify_deploy_id FROM website WHERE id=l_website_id AND user_id=l_session_data.user_id;
+
+        /* Get latest deployment status if started */
+        IF (l_netlify_deploy_id IS NOT NULL) THEN
+            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'deploys/' || l_netlify_deploy_id || '/cancel', pMethod=>'POST', pData=>l_clob);
+            pck_core.log(l_clob);
+            apex_json.open_object; 
+            apex_json.write('success', TRUE);
+            apex_json.write('completed', TRUE);
+            apex_json.write('content', '<li><span></span><span>DEPLOYMENT CANCELLED</span>');
+            apex_json.close_object;
+        END IF;
+    END;
 
     /*
      **  Get deployment status from website_deploy logging table - called from Javascript every 3 seconds
