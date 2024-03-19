@@ -346,7 +346,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     END;
 
     /*
-    ** GET PAGE OPTIONS TO EDIT IN DIALOG
+    ** GET PAGE OPTIONS TO EDIT IN DIALOG. "pId" IS EITHER WEBsiTE PAGE OR SUBPAGE
     */
     PROCEDURE getPageOptions(pId IN VARCHAR2) IS
         l_session_data pck_core.session_data_rt;
