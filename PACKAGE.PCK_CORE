@@ -644,7 +644,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <div>
                     <div class="button-container">' ||
                     buildPushableButton('new-page','&plus;') ||
-                    buildPushableButton('new-subpage','&plus;') ||
                     '</div>
                     <nav class="page-nav">' || 
                         buildPageNav(l_selected_website_id, l_selected_article_id) ||
