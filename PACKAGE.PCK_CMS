@@ -459,6 +459,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
+        FOR C IN (SELECT collection_type FROM website_article WHERE article_id=pArticleId) LOOP
+            l_content:='<li><button type="button" class="with-icon new-subpage"><span>&plus;&nbsp;NEW ' || C.collection_type || '</span></li><li><hr></li>';
+        END LOOP;
+
         FOR C IN (
             SELECT art.id, art.title, apex_util.get_since(COALESCE(art.updated_date, art.created_date)) updated_date
               FROM article art
@@ -466,7 +470,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                AND art.author_user_id=l_session_data.user_id
              ORDER BY updated_date)
         LOOP
-            l_content:=l_content || '<li data-id="' || C.id || '"><button type="button" class="with-icon nav-label"><svg><use href="#pencil"></use></svg>' || C.title || '</li>';
+            l_content:=l_content || '<li data-id="' || C.id || '"><button type="button" class="with-icon nav-label"><span>&#9656;&nbsp;' || C.title || '</span></li>';
         END LOOP;
         pck_core.log(l_content);
         apex_json.open_object;
