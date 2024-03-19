@@ -619,6 +619,13 @@ dialog.log tr {
     list-style-type: none;
     border-radius: 1ch;
     z-index: 1;
+    & span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    & .new-subpage {
+        font-weight: 900;
+    }
 }
 
 .dropdown .dropdown-items.visible {
