@@ -494,7 +494,7 @@ const clickHandler = (e) => {
         const id = e.target.parentElement.dataset.id,
               nav = e.target.closest("nav");
         
-        if (e.target.tagName==="A") {
+        if (e.target.tagName==="A") {  /* Page nav items are anchor elements, Sibpages are buttons.*/
             selected_nav(nav,id);
         }
 
@@ -1267,9 +1267,20 @@ const new_subpage = (e) => {
  ** SHOW SUB PAGES. RETURNED AS AN ORDERED SERIES OF ITEMS TO BE INSERTED IN DROPDOWN LIST
  */
 const show_subpages = (e) => {
-    console.log(pageNav.getBoundingClientRect())
-    console.log(e.target.getBoundingClientRect())
-    const id = e.target.closest("[data-id]").dataset.id;
+    const nav = pageNav.getBoundingClientRect(),
+          button = e.target.getBoundingClientRect(),
+          id = e.target.closest("[data-id]").dataset.id;
+
+    if (button.x - nav.x < (nav.x + nav.width - button.x)) {
+        e.target.nextElementSibling.style.left = "0";
+        e.target.nextElementSibling.style.right = "auto";
+        e.target.nextElementSibling.style.maxWidth = `${nav.x + nav.width - button.x}px`;
+    } else {
+        e.target.nextElementSibling.style.right = "0";
+        e.target.nextElementSibling.style.left = "auto";
+        e.target.nextElementSibling.style.maxWidth = `${button.x - nav.x}px`;
+        e.target.nextElementSibling.style.top = "3.5ch";
+    }
     execProcess( "articles/"+id,"GET").then( (data) => {
         const ul = e.target.nextElementSibling;
         ul.replaceChildren();
