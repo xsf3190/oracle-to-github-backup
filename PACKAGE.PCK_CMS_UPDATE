@@ -237,7 +237,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_content CLOB;
         l_website_id website.id%type;
         l_eyedropper VARCHAR2(3);
-        l_select_options LONG;
+        l_select_options CLOB;
         l_fluid_types pck_core.fluid_type_t;
 
         FUNCTION buildScaleOptions(pScale IN NUMBER) RETURN VARCHAR2 IS
@@ -267,7 +267,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                      AND w.user_id=l_session_data.user_id) 
         LOOP
             /* Build select options for Google Fonts */
-            FOR C1 IN (SELECT family FROM google_font WHERE seq<=50 ORDER BY seq) LOOP
+            FOR C1 IN (SELECT family FROM google_font ORDER BY family) LOOP
                 l_select_options:=l_select_options || '<option' || CASE WHEN C1.family=C.font THEN ' selected' END || '>' || C1.family || '</option>';
             END LOOP;
 
