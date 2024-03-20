@@ -514,13 +514,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        INSERT INTO website (id, domain_name, user_id, created_date) VALUES (seq_website.nextval, '[New Website]', l_session_data.user_id, current_timestamp);
+        INSERT INTO website (id, domain_name, user_id, created_date) VALUES (seq_website.nextval, '[New Website ' || seq_website.currval || ']', l_session_data.user_id, current_timestamp);
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
         APEX_JSON.write('website_id', seq_website.currval);
         APEX_JSON.write('nav_label', pck_core.buildNavLabel(seq_website.currval, 1, '[New Website]', 'website-options'));
-
         APEX_JSON.close_object;
 
         EXCEPTION
