@@ -296,7 +296,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
 
         DELETE google_font;
         INSERT INTO google_font (seq, family, url_regular)
-        SELECT seq, family, url_regular FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(seq for ordinality, family, url_regular PATH '$.files.regular'));
+        SELECT ROWNUM, family, url_regular FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, url_regular PATH '$.files.regular'));
 
 
         EXCEPTION
