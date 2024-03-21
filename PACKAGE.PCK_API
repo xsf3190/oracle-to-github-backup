@@ -477,7 +477,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         apex_web_service.g_request_headers(1).name := 'Content-Type';
         apex_web_service.g_request_headers(1).value := 'application/json';
 
-        l_google_url:=l_google_url || pEndpoint || '?key=' || l_google_api_key||'&capability=WOFF2';
+        l_google_url:=l_google_url || pEndpoint || '?key=' || l_google_api_key||'&capability=WOFF2&sort=alpha';
 
         pData := apex_web_service.make_rest_request(p_url=>l_google_url, p_http_method=>pMethod);
 
