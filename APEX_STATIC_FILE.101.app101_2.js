@@ -1319,6 +1319,9 @@ const selected_nav = (nav, id) => {
  */
 const edit_text = () => {
     execProcess( "article/"+gArticleId,"GET").then( (data) => {
+        if (editor.isReadOnly) {
+            editor.disableReadOnlyMode( 'lock-id' );
+        }
         editor_status = "init";
         editor_status_text.textContent = data.updated_date;
         if (data.html) {
@@ -1412,24 +1415,12 @@ delete_asset = (e) => {
 delete_page = () => {
     execProcess("dml","DELETE",{table_name: "website_article", website_id: gWebsiteId, article_id: gArticleId}).then( () => {
         let selected = pageNav.querySelector("[data-id='"+gArticleId+"']");
-        /* selected points to page we just removed from database. Need to get next article in navigation  */
-        if (selected.previousElementSibling) {
-            gArticleId = selected.previousElementSibling.dataset.id;
-        } else if (selected.nextElementSibling) {
-            gArticleId = selected.nextElementSibling.dataset.id;
-        } else {
-            gArticleId = 0;
-        }
+        gArticleId = 0;
         selected.remove();
-        selected = pageNav.querySelector("[data-id='"+gArticleId+"']");
-        if (selected) {
-            selected.querySelector("a").classList.add("selected");
-            edit_text();
-        } else {
-            editor_status = "init";
-            editor_status_text.textContent = "";
-            editor.setData("");
-        }
+        editor_status = "init";
+        editor_status_text.textContent = "PAGE DELETED";
+        editor.setData("");
+        editor.enableReadOnlyMode( 'lock-id' );
         galleryList.replaceChildren();
         pageDialog.close();
     });
