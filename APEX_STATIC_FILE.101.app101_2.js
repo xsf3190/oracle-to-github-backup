@@ -1,5 +1,5 @@
-let gWebsiteId,
-    gArticleId,
+let gWebsiteId = null,
+    gArticleId = null,
     gWebsiteDemo,
     gBrowser,
     gFullImage,
@@ -159,28 +159,16 @@ const edit_website = () => {
         deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
 
         pageNav.replaceChildren();
-        
-        editor_status = "init";
-        editor_status_text.textContent = "";
-
         if (data.nav_labels) {
             pageNav.insertAdjacentHTML('afterbegin',data.nav_labels);
-            gArticleId = data.selected; 
-            if (data.html) {
-                editor.setData(data.html);
-                editor_status_text.textContent = data.updated_date;
-            } else {
-                editor.setData("");
-            }
-            galleryList.replaceChildren();
-            if (data.thumbnails) {
-                galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
-                lazyload();
-            }
-        } else {
-            gArticleId = 0;
-            editor.setData("");
-            galleryList.replaceChildren();
+        }
+        galleryList.replaceChildren();
+
+        editor_status = "init";
+        editor_status_text.textContent = "";
+        editor.setData("");
+        if (!editor.isReadOnly) {
+            editor.enableReadOnlyMode( 'lock-id' );
         }
     });
 };
@@ -303,6 +291,7 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     /* display last updated website and article */
+    /*
     gWebsiteId = websiteNav.querySelector("a.selected") ?  websiteNav.querySelector("a.selected").closest("div").dataset.id : 0;
     gArticleId = pageNav.querySelector("a.selected") ? pageNav.querySelector("a.selected").closest("div").dataset.id : 0;
     console.log("gWebsiteId,gArticleId",gWebsiteId,gArticleId);
@@ -311,6 +300,7 @@ window.addEventListener("DOMContentLoaded", () => {
         edit_text();
         lazyload();
     }
+    */
 });
 
 const lazyload = () => {
@@ -1080,6 +1070,7 @@ ClassicEditor.create(document.querySelector("#editor"), {
         toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
         editor_status = "init";
         editor_status_text = wrapper.querySelector("#editor-status");
+        editor.enableReadOnlyMode( 'lock-id' );
     })
     .catch(error => {
         console.error(error);
@@ -1230,6 +1221,10 @@ const new_website = () => {
  ** CREATE NEW WEBSIITE PAGE. INSERTED AFTER SELECTED PAGE
  */
 const new_page = (e) => {
+    if (!gWebsiteId) {
+        popupOpen("CANNOT DO THAT YET","Have to select a Website first");
+        return;
+    };
     execProcess( "article/"+gWebsiteId+","+gArticleId,"POST").then( (data) => {
         /* gArticleId points to currently selected page */
         const selected = pageNav.querySelector("[data-id='"+gArticleId+"']");
@@ -1292,8 +1287,8 @@ const show_subpages = (e) => {
  ** UPLOAD MEDIA TO CLOUDINARY
  */
 const upload_media = () => {
-    if (gArticleId===0) {
-        popupOpen("CANT DO THAT YET","Click NEW PAGE first");
+    if (!gArticleId) {
+        popupOpen("CANNOT DO THAT YET","Select a PAGE then upload media");
         return;
     }
     execProcess( "cld-details","GET").then( (data) => {
