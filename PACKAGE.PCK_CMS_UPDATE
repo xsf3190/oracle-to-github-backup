@@ -635,6 +635,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'website_article.contact_form' THEN
                     UPDATE website_article SET contact_form=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
+                ELSE
+                    pck_core.log(C.table_column);
             END CASE;
             n:=sql%rowcount;
             IF (l_getFontUrl AND n=1) THEN
