@@ -25,7 +25,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildNavLabel(pId IN INTEGER, pSelected IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pSubPages IN INTEGER DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildPageNav(pWebsiteId IN website.id%type, pSelectedArticleId IN OUT website_article.article_id%type) RETURN CLOB;
+    FUNCTION buildPageNav(pWebsiteId IN website.id%type) RETURN CLOB;
     --
     FUNCTION buildPushableButton(pClassName IN VARCHAR2, pHTMLSymbol IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
@@ -461,7 +461,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <svg><use href="#pencil"></use></svg>
             </button>
             <a href="#" class="nav-label' || CASE WHEN pSelected=1 THEN ' selected' END || '">' || pLabel || '</a>' ||
-            CASE WHEN pSubPages>0 THEN
+            CASE WHEN pClassName='website-options' THEN
+            '<button type="button" class="deploy-website" style="opacity:0">
+                <svg><use href="#cloud-arrow-up"></use></svg>
+            </button>'
+                 WHEN pSubPages>0 THEN
             '<div class="dropdown">
                 <button type="button" class="show-dropdown show-subpages">&blacktriangledown;</button>
                 <ol class="dropdown-items">
@@ -486,7 +490,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    WHERE user_id=pUserId
                    ORDER BY domain_name)
         LOOP
-            l_html:=l_html || buildNavLabel(C.id, C.rn, C.domain_name, 'website-options');
+            l_html:=l_html || buildNavLabel(C.id, 0, C.domain_name, 'website-options');
             IF (C.rn=1) THEN
                 pSelectedWebsiteId:=C.id;
                 pNetlifySiteId:=C.netlify_site_id;
@@ -499,20 +503,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_html);
     END;
 
-    FUNCTION buildPageNav(pWebsiteId IN website.id%type, pSelectedArticleId IN OUT website_article.article_id%type) RETURN CLOB IS
+    FUNCTION buildPageNav(pWebsiteId IN website.id%type) RETURN CLOB IS
         l_html CLOB;
         n PLS_INTEGER;
     BEGIN
-        FOR C IN (SELECT navigation_label, article_id, ROW_NUMBER() OVER(ORDER BY COALESCE(updated_date, created_date) DESC) rn,
-                            (SELECT COUNT(*) FROM article WHERE parent_id=article_id) childpages
+        FOR C IN (SELECT navigation_label, article_id, (SELECT COUNT(*) FROM article WHERE parent_id=article_id) childpages
                     FROM website_article
                    WHERE website_id=pWebsiteId
                    ORDER BY display_order) 
         LOOP
-            l_html:=l_html || TO_CLOB(buildNavLabel(C.article_id, C.rn, C.navigation_label, 'page-options',C.childpages));
-            IF (C.rn=1) THEN 
-                pSelectedArticleId:=C.article_id;
-            END IF;
+            l_html:=l_html || TO_CLOB(buildNavLabel(C.article_id, 0, C.navigation_label, 'page-options',C.childpages));
         END LOOP;
         RETURN(l_html);
     END;
@@ -645,9 +645,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <div class="button-container">' ||
                     buildPushableButton('new-page','&plus;') ||
                     '</div>
-                    <nav class="page-nav">' || 
-                        buildPageNav(l_selected_website_id, l_selected_article_id) ||
-                    '</nav>
+                    <nav class="page-nav">
+                    </nav>
                     <div id="editor"></div>
                     <div>
                         <span id="word-count"></span>
