@@ -162,7 +162,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_website_id website.id%type;
         l_nav_labels LONG;
         l_thumbnails LONG;
-        l_selected_articleid article.id%type;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -177,16 +176,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('deploy_buttons', pck_core.buildDeployButtons(C.domain_name, C.netlify_site_id, C.netlify_site_id_custom));
         END LOOP;
         
-        apex_json.write('nav_labels', pck_core.buildPageNav(pWebsiteId, l_selected_articleid));
-        apex_json.write('selected', l_selected_articleid);
-        
-        pck_media.getThumbnails(l_selected_articleid, l_thumbnails);
-        apex_json.write('thumbnails', l_thumbnails);
-
-        FOR C IN (SELECT body_html FROM article WHERE id=l_selected_articleid) LOOp
-            apex_json.write('html', C.body_html);
-        END LOOP;
-        
+        apex_json.write('nav_labels', pck_core.buildPageNav(pWebsiteId));
         apex_json.write('success', TRUE);
         apex_json.close_object;
 
@@ -540,6 +530,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_session_data:=pck_core.getSessionData();
 
         IF (INSTR(pId,',')=0) THEN
+            /* Inserting a subpage */
             INSERT INTO article (id, parent_id, author_user_id, created_date) VALUES (seq_article.nextval, pId, l_session_data.user_id, current_timestamp);
             APEX_JSON.open_object; 
             APEX_JSON.write('success', TRUE);
@@ -548,6 +539,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             RETURN;
         END IF;
 
+        /* Insert new page in website */
         l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
 
         l_next_article_id:=seq_article.nextval;
