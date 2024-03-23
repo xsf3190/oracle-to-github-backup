@@ -51,9 +51,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             '</label>
             <input  class="' || pClassName || '"' ||
             ' placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
-                '" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '" data-id="' || pId || '">
-            <button type="button" class="clear-input" title="clear input" aria-label="clear input">&times;</button>
-            <div class="button-container">
+                '" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '" data-id="' || pId || '">' ||
+            CASE WHEN pValue IS NOT NULL THEN
+            '<button type="button" class="clear-input" title="clear input" aria-label="clear input">&times;</button>'
+            END ||
+            '<div class="button-container">
                 <span class="result">&nbsp;</span>' ||
                 CASE WHEN pUseCharcounter THEN
                 '<span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</span>'
@@ -272,7 +274,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     END;
 
     /*
-    ** GET WEBSITE OPTIONS TO DISPLAY IN DIALOG
+    ** GET WEBSITE OPTIONS TO DISPLAY IN DIALOG. IF pWebsiteId = null THIS IS REQUEST TO CREATE NEW WEBSITE
     */
     PROCEDURE getWebsiteoptions(pWebsiteId IN website.id%type) IS
         l_session_data pck_core.session_data_rt;
@@ -299,6 +301,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
 
     BEGIN
         l_session_data:=pck_core.getSessionData();
+
+        IF (pWebsiteId=0) THEN
+            l_content:=
+                buildInputWrapper(pWebsiteId, 'website.domain_name', NULL, l_session_data.canuse_popover) ||
+                pck_core.buildPushableButton('save');
+            apex_json.open_object;
+            apex_json.write('content', l_content );
+            apex_json.write('success', TRUE);
+            apex_json.close_object;
+            RETURN;
+        END IF;
 
         FOR C IN (SELECT w.id, w.domain_name, w.font, g.url_regular, w.contact_email, w.max_width, 
                          w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, 
@@ -512,12 +525,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             END IF;
         END;
     BEGIN
-
-        SELECT netlify_site_id, netlify_site_id_custom 
-          INTO l_netlify_site_id, l_netlify_site_id_custom 
-          FROM website 
-         WHERE id=pWebsiteId
-           AND user_id=pUserId;
+        IF (pWebsiteId<>0) THEN
+            SELECT netlify_site_id, netlify_site_id_custom 
+              INTO l_netlify_site_id, l_netlify_site_id_custom 
+              FROM website 
+             WHERE id=pWebsiteId
+               AND user_id=pUserId;
+        END IF;
 
         /* Change Netlify site name  at user's request */
         l_json:=new JSON_OBJECT_T;
@@ -551,15 +565,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             END LOOP;
         END IF;
 
-        UPDATE website SET 
-                domain_name=pDomainName, 
-                netlify_site_id=l_netlify_site_id,
-                netlify_site_id_custom=l_netlify_site_id_custom, 
-                updated_date=current_timestamp 
-         WHERE id=pWebsiteId;
-        l_message:='Updated OK';
-
         apex_json.open_object;
+
+        IF (pWebsiteId=0) THEN
+            INSERT INTO website(id, domain_name, created_date,user_id)
+                VALUES (seq_website.nextval, pDomainName, current_timestamp, pUserId);
+            apex_json.write('nav_label', pck_core.buildNavLabel(seq_website.currval,null,pDomainName, 'website-options'));
+            apex_json.write('selected',seq_website.currval);
+            l_message:='Created OK';    
+        ELSE
+            UPDATE website SET 
+                    domain_name=pDomainName, 
+                    netlify_site_id=l_netlify_site_id,
+                    netlify_site_id_custom=l_netlify_site_id_custom, 
+                    updated_date=current_timestamp 
+             WHERE id=pWebsiteId;
+            l_message:='Updated OK';
+        END IF;
+
         apex_json.write('success', TRUE);
         apex_json.write('message', l_message);
         apex_json.write('color', 'green');
