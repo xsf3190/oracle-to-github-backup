@@ -16,8 +16,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE insertArticle(pId IN VARCHAR2);
     --
-    PROCEDURE insertWebsite(pWebsiteId IN website.id%type);
-    --
     PROCEDURE reorderAssets(pBodyText IN CLOB);
     --
     PROCEDURE reorderWebsiteArticles(pWebsiteId IN website_article.website_id%type, pBodyText IN CLOB, pReturnJson IN BOOLEAN DEFAULT TRUE);
@@ -489,27 +487,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
-        APEX_JSON.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-    END;
-
-    /*
-     **  Insert new website.
-     */        
-    PROCEDURE insertWebsite(pWebsiteId IN website.id%type) IS
-        l_session_data pck_core.session_data_rt;
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-
-        INSERT INTO website (id, domain_name, user_id, created_date) VALUES (seq_website.nextval, '[New Website ' || seq_website.currval || ']', l_session_data.user_id, current_timestamp);
-
-        APEX_JSON.open_object; 
-        APEX_JSON.write('success', TRUE);
-        APEX_JSON.write('website_id', seq_website.currval);
-        APEX_JSON.write('nav_label', pck_core.buildNavLabel(seq_website.currval, 1, '[New Website]', 'website-options'));
         APEX_JSON.close_object;
 
         EXCEPTION
