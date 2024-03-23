@@ -1,5 +1,5 @@
-let gWebsiteId = null,
-    gArticleId = null,
+let gWebsiteId = 0,
+    gArticleId = 0,
     gWebsiteDemo,
     gBrowser,
     gFullImage,
@@ -129,6 +129,8 @@ const changeHandler = (e) => {
         result.style.color = data.color;
         result.style.opacity = "1";
 
+        if (data.color==="red") return;
+
         if (data.deploy_buttons) {
             deployButtons.replaceChildren();
             deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
@@ -141,7 +143,20 @@ const changeHandler = (e) => {
                 pageNav.querySelector("[data-id='"+gArticleId+"'] > a").textContent = value;
                 break;
             case 'website.domain_name' :
-                websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").textContent = value;
+                const nav_label = websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a");
+                if (nav_label) {
+                    nav_label.textContent = value;
+                } else {
+                    websiteNav.insertAdjacentHTML('afterbegin',data.nav_label);
+                    console.log("data.selected",data.selected);
+                    selected_nav(websiteNav, data.selected);
+                    pageNav.replaceChildren();
+                    galleryList.replaceChildren();
+                    editor_status = "init";
+                    editor_status_text.textContent = "CLICK NEW PAGE";
+                    editor.setData("");
+                    editor.enableReadOnlyMode( 'lock-id' );
+                }
                 break;
             case 'website.font' :
                 websiteFont(data.font_family, data.font_url);
@@ -1020,7 +1035,7 @@ ClassicEditor.create(document.querySelector("#editor"), {
             }
         },
         title: {
-            placeholder: 'Page title (optional)'
+            placeholder: 'Page title'
         },
         placeholder: 'Page content',
         wordCount: {displayCharacters: true},
@@ -1198,22 +1213,10 @@ const get_visits = (e) => {
  **  NEW WEBSITE
  */
 const new_website = () => {
-    execProcess( "website/"+gWebsiteId,"POST").then( (data) => {
-        const selected = websiteNav.querySelector("[data-id='"+gWebsiteId+"']");
-        
-        if (selected) {
-            selected.querySelector("a.selected").classList.remove("selected");
-            selected.insertAdjacentHTML('afterend',data.nav_label);
-        } else {
-            websiteNav.insertAdjacentHTML('afterbegin',data.nav_label);
-        }
-
-        gWebsiteId = data.website_id;
-        editor_status = "init";
-        editor_status_text.textContent = "";
-        editor.setData("");
-        galleryList.replaceChildren();
-        website_options();
+    execProcess( "website-options/0","GET").then( (data) => {
+        websiteContent.replaceChildren();
+        websiteContent.insertAdjacentHTML('afterbegin',data.content);
+        websiteDialog.showModal();
     });
 };
 
@@ -1302,6 +1305,7 @@ const upload_media = () => {
  */
 const selected_nav = (nav, id) => {
     nav.querySelectorAll("a").forEach((link) => {
+        console.log(link);
         link.classList.remove("selected");
         if (link.parentElement.dataset.id === id) {
             link.classList.add("selected");
@@ -1425,25 +1429,13 @@ delete_page = () => {
  ** EXECUTE DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER
  */
 const delete_website = () => {
-    console.log("before delete",gWebsiteId);
     execProcess("dml","DELETE",{table_name: "website", website_id: gWebsiteId}).then( () => {
-        let selected = websiteNav.querySelector("[data-id='"+gWebsiteId+"']");
-        /* selected points to website we just removed from database. Need to get next article in navigation  */
-        if (selected.previousElementSibling) {
-            gWebsiteId = selected.previousElementSibling.dataset.id;
-        } else if (selected.nextElementSibling) {
-            gWebsiteId = selected.nextElementSibling.dataset.id;
-        } else {
-            gWebsiteId = 0;
-        }
-        selected.remove();
-        if (gWebsiteId === 0) {
-            editor_status = "init";
-            editor_status_text.textContent = "";
-            editor.setData("");
-        } else {
-            websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").click();
-        }
+        let selected = websiteNav.querySelector("[data-id='"+gWebsiteId+"']").remove();
+        pageNav.replaceChildren();
+        editor_status = "init";
+        editor_status_text.textContent = "WEBSITE DELETED";
+        editor.setData("");
+        editor.enableReadOnlyMode( 'lock-id' );
         galleryList.replaceChildren();
         websiteDialog.close();
     });
