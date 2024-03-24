@@ -136,26 +136,20 @@ const changeHandler = (e) => {
             deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
         }
 
-        /* Update UI if domain name or rnavigation label are change */
+        /* Update UI if domain name or navigation label are change */
 
         switch (table_column) {
             case 'website_article.navigation_label' :
                 pageNav.querySelector("[data-id='"+gArticleId+"'] > a").textContent = value;
                 break;
             case 'website.domain_name' :
-                const nav_label = websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a");
-                if (nav_label) {
-                    nav_label.textContent = value;
-                } else {
+                if (data.new_website_id) {
+                    gWebsiteId = data.new_website_id;
                     websiteNav.insertAdjacentHTML('afterbegin',data.nav_label);
-                    console.log("data.selected",data.selected);
-                    selected_nav(websiteNav, data.selected);
-                    pageNav.replaceChildren();
-                    galleryList.replaceChildren();
-                    editor_status = "init";
-                    editor_status_text.textContent = "CLICK NEW PAGE";
-                    editor.setData("");
-                    editor.enableReadOnlyMode( 'lock-id' );
+                    websiteNav.querySelector("[data-id='"+data.new_website_id+"'] > a").click();
+                } else {
+                    console.log("change label to",value)
+                    websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").textContent = value;
                 }
                 break;
             case 'website.font' :
@@ -1305,7 +1299,6 @@ const upload_media = () => {
  */
 const selected_nav = (nav, id) => {
     nav.querySelectorAll("a").forEach((link) => {
-        console.log(link);
         link.classList.remove("selected");
         if (link.parentElement.dataset.id === id) {
             link.classList.add("selected");
