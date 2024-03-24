@@ -568,10 +568,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         apex_json.open_object;
 
         IF (pWebsiteId=0) THEN
-            INSERT INTO website(id, domain_name, created_date,user_id)
-                VALUES (seq_website.nextval, pDomainName, current_timestamp, pUserId);
+            INSERT INTO website(id, domain_name, netlify_site_id, netlify_site_id_custom, created_date, user_id)
+                VALUES (seq_website.nextval, pDomainName, l_netlify_site_id, l_netlify_site_id_custom, current_timestamp, pUserId);
             apex_json.write('nav_label', pck_core.buildNavLabel(seq_website.currval,null,pDomainName, 'website-options'));
-            apex_json.write('selected',seq_website.currval);
+            apex_json.write('new_website_id',seq_website.currval);
             l_message:='Created OK';    
         ELSE
             UPDATE website SET 
