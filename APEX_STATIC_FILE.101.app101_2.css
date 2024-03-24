@@ -150,9 +150,8 @@ dialog .content > * + * {
 .website-nav, .page-nav {
     display: flex;
     flex-wrap: wrap;
-    gap: 1em;
-    justify-content: space-evenly;
-    padding: 1em;
+    gap: var(--space-m);
+    padding: var(--space-m);
 }
 
 button > svg {
@@ -195,11 +194,11 @@ nav [class$="options"]:not(:has(+ a.selected)) {
     opacity:0;
 }
 
-nav a.selected + .dropdown {
+nav a.selected + * {
     opacity:1;
 }
 
-nav a:not(.selected) + .dropdown {
+nav a:not(.selected) + * {
     opacity:0;
 }
 
@@ -281,16 +280,6 @@ button {
 .result {
     padding-left: 0.5ch;
     opacity: 0;
-    transition: opacity 1s ease-in-out;
-}
-
-.deploy-website {
-    opacity: 1;
-    transition: opacity 1s ease-in-out;
-}
-
-.add-website {
-    opacity: 0.2;
     transition: opacity 1s ease-in-out;
 }
 
