@@ -23,7 +23,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildNavLabel(pId IN INTEGER, pSelected IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pSubPages IN INTEGER DEFAULT NULL) RETURN VARCHAR2;
+    FUNCTION buildNavLabel(pId IN INTEGER, pSelected IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pCollectionType IN website_article.collection_type%type DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildPageNav(pWebsiteId IN website.id%type) RETURN CLOB;
     --
@@ -453,7 +453,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </nav>');
     END;
 
-    FUNCTION buildNavLabel(pId IN INTEGER, pSelected IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pSubPages IN INTEGER DEFAULT NULL) RETURN VARCHAR2 IS
+    FUNCTION buildNavLabel(pId IN INTEGER, pSelected IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pCollectionType IN website_article.collection_type%type DEFAULT NULL) RETURN VARCHAR2 IS
     BEGIN
         RETURN(
         '<div data-id="' || pId || '">
@@ -462,10 +462,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </button>
             <a href="#" class="nav-label' || CASE WHEN pSelected=1 THEN ' selected' END || '">' || pLabel || '</a>' ||
             CASE WHEN pClassName='website-options' THEN
-            '<button type="button" class="deploy-website" style="opacity:0">
+            '<button type="button" class="deploy-website">
                 <svg><use href="#cloud-arrow-up"></use></svg>
             </button>'
-                 WHEN pSubPages>0 THEN
+                 WHEN pCollectionType='BLOG' THEN
             '<div class="dropdown">
                 <button type="button" class="show-dropdown show-subpages">&blacktriangledown;</button>
                 <ol class="dropdown-items">
@@ -485,18 +485,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     BEGIN
         l_html:=
         '<nav class="website-nav">';
-        FOR C IN (SELECT id, domain_name, netlify_site_id, netlify_site_id_custom,ROW_NUMBER() OVER(ORDER BY COALESCE(updated_date, created_date) DESC) rn
+        FOR C IN (SELECT id, domain_name, netlify_site_id, netlify_site_id_custom
                     FROM website
                    WHERE user_id=pUserId
                    ORDER BY domain_name)
         LOOP
             l_html:=l_html || buildNavLabel(C.id, 0, C.domain_name, 'website-options');
-            IF (C.rn=1) THEN
-                pSelectedWebsiteId:=C.id;
-                pNetlifySiteId:=C.netlify_site_id;
-                pSelectedWebsiteDomain:=C.domain_name;
-                pNetlifySiteIdCustom:=C.netlify_site_id_custom;
-            END IF;
         END LOOP;
         l_html:=l_html || 
         '</nav>';
@@ -507,12 +501,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_html CLOB;
         n PLS_INTEGER;
     BEGIN
-        FOR C IN (SELECT navigation_label, article_id, (SELECT COUNT(*) FROM article WHERE parent_id=article_id) childpages
+        FOR C IN (SELECT navigation_label, article_id, collection_type
                     FROM website_article
                    WHERE website_id=pWebsiteId
                    ORDER BY display_order) 
         LOOP
-            l_html:=l_html || TO_CLOB(buildNavLabel(C.article_id, 0, C.navigation_label, 'page-options',C.childpages));
+            l_html:=l_html || TO_CLOB(buildNavLabel(C.article_id, 0, C.navigation_label, 'page-options',C.collection_type));
         END LOOP;
         RETURN(l_html);
     END;
