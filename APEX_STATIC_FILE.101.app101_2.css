@@ -179,7 +179,7 @@ a:not(.selected) {
     text-decoration: none;
 }
 
-a.selected{
+a.selected, li.selected {
     text-decoration-color: var(--color-secondary);
     text-decoration-thickness: var(--space-3xs);
     text-underline-offset: var(--space-3xs);
