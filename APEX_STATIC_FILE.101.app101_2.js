@@ -140,7 +140,14 @@ const changeHandler = (e) => {
 
         switch (table_column) {
             case 'website_article.navigation_label' :
-                pageNav.querySelector("[data-id='"+gArticleId+"'] > a").textContent = value;
+                console.log("data",data)
+                if (data.new_article_id) {
+                    gArticleId = data.new_article_id;
+                    pageNav.insertAdjacentHTML('beforeend',data.nav_label);
+                    pageNav.querySelector("[data-id='"+data.new_article_id+"'] > a").click();
+                } else {
+                    pageNav.querySelector("[data-id='"+gArticleId+"'] > a").textContent = value;
+                }
                 break;
             case 'website.domain_name' :
                 if (data.new_website_id) {
@@ -148,7 +155,6 @@ const changeHandler = (e) => {
                     websiteNav.insertAdjacentHTML('afterbegin',data.nav_label);
                     websiteNav.querySelector("[data-id='"+data.new_website_id+"'] > a").click();
                 } else {
-                    console.log("change label to",value)
                     websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").textContent = value;
                 }
                 break;
@@ -298,18 +304,6 @@ window.addEventListener("DOMContentLoaded", () => {
         const observer = new PerformanceObserver(perfObserver);
         observer.observe({ type: "resource", buffered: true });
     }
-
-    /* display last updated website and article */
-    /*
-    gWebsiteId = websiteNav.querySelector("a.selected") ?  websiteNav.querySelector("a.selected").closest("div").dataset.id : 0;
-    gArticleId = pageNav.querySelector("a.selected") ? pageNav.querySelector("a.selected").closest("div").dataset.id : 0;
-    console.log("gWebsiteId,gArticleId",gWebsiteId,gArticleId);
-
-    if (gArticleId > 0) {
-        edit_text();
-        lazyload();
-    }
-    */
 });
 
 const lazyload = () => {
@@ -495,6 +489,8 @@ const clickHandler = (e) => {
         
         if (e.target.tagName==="A") {  /* Page nav items are anchor elements, Sibpages are buttons.*/
             selected_nav(nav,id);
+        } else {
+            selected_subpage(e.target.closest("ol"),id);
         }
 
         if (nav.matches(".website-nav")) {
@@ -1219,26 +1215,13 @@ const new_website = () => {
  */
 const new_page = (e) => {
     if (!gWebsiteId) {
-        popupOpen("CANNOT DO THAT YET","Have to select a Website first");
+        popupOpen("CANNOT DO THAT YET","Select a Website first");
         return;
     };
-    execProcess( "article/"+gWebsiteId+","+gArticleId,"POST").then( (data) => {
-        /* gArticleId points to currently selected page */
-        const selected = pageNav.querySelector("[data-id='"+gArticleId+"']");
-        
-        if (selected) {
-            selected.querySelector("a.selected").classList.remove("selected");
-            selected.insertAdjacentHTML('afterend',data.nav_label);
-        } else {
-            pageNav.insertAdjacentHTML('afterbegin',data.nav_label);
-        }
-
-        gArticleId = data.article_id;
-        editor_status = "init";
-        editor_status_text.textContent = "";
-        editor.setData("");
-        galleryList.replaceChildren();
-        page_options();
+    execProcess( "page-options/"+gWebsiteId+",0","GET").then( (data) => {
+        pageContent.replaceChildren();
+        pageContent.insertAdjacentHTML('beforeend',data.content);
+        pageDialog.showModal();
     });
 }
 
@@ -1302,6 +1285,20 @@ const selected_nav = (nav, id) => {
         link.classList.remove("selected");
         if (link.parentElement.dataset.id === id) {
             link.classList.add("selected");
+        }
+    });
+}
+
+/* 
+ ** ASSIGN "selected" CLASS TO CLICKED SUBPaGE (E.G BLOG)
+ */
+const selected_subpage = (list, id) => {
+    console.log("list",list);
+    list.querySelectorAll("li").forEach((li) => {
+        li.classList.remove("selected");
+        console.log(li.dataset.id, id);
+        if (li.dataset.id === id) {
+            li.classList.add("selected");
         }
     });
 }
