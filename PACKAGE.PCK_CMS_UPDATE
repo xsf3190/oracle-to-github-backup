@@ -401,7 +401,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     END;
 
     /*
-    ** GET PAGE OPTIONS TO EDIT IN DIALOG. "pId" IS EITHER WEBsiTE PAGE OR SUBPAGE
+    ** GET PAGE OPTIONS TO EDIT IN DIALOG. "pId" IS WEBSITE ID PLUS:
+    ** 1) "0" - INCLUDE ONLY NEW NAVIGATION LABEL IN DIALOG
+    ** 2) PAGE ID OF EXISTING WEBSITE PAGE
+    ** 3) SUBPAGE ID
     */
     PROCEDURE getPageOptions(pId IN VARCHAR2) IS
         l_session_data pck_core.session_data_rt;
@@ -415,6 +418,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
 
         l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
         l_article_id:=SUBSTR(pId,INSTR(pId,',')+1);
+
+        IF (l_article_id=0) THEN
+            l_content:=buildInputWrapper(pId, 'website_article.navigation_label', NULL, l_session_data.canuse_popover) || pck_core.buildPushableButton('save');
+            apex_json.open_object;
+            apex_json.write('content', l_content );
+            apex_json.write('success', TRUE);
+            apex_json.close_object;
+            RETURN;
+        END IF;
 
         FOR C IN (SELECT navigation_label, collection_type, contact_form, page_title, page_description
                     FROM website_article 
@@ -473,16 +485,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 '</details>
             </form>';            
         END LOOP;
-
-        IF (l_content IS NULL) THEN  --must ve sub-article - offer fewer options
-            l_content:=l_content || 
-            '<form>
-                <details>
-                    <summary>DELETE PAGE</summary>' ||
-                    pck_core.buildPushableButton('delete-page', '&#128686;') ||
-                '</details>
-            </form>';
-        END IF;   
 
         apex_json.open_object;
         apex_json.write('content', l_content);
@@ -588,7 +590,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         apex_json.write('color', 'green');
         apex_json.write('deploy_buttons', pck_core.buildDeployButtons(pDomainName, l_netlify_site_id, l_netlify_site_id_custom));
         apex_json.close_object;
+    END;
 
+    /*
+    **  USER CREATES NEW WEBSITE PAGE OR CHANGES NAVIGATION LABEL
+    */
+    PROCEDURE processNavigationLabel(pUserId IN website.user_id%type, pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pNavigationLabel IN website_article.navigation_label%type) IS
+        l_next_article_id article.id%type;
+        l_message VARCHAR2(50);
+    BEGIN
+        APEX_JSON.open_object; 
+        IF (pArticleId=0) THEN
+            l_next_article_id:=seq_article.nextval;
+            INSERT INTO article (id, author_user_id, created_date) VALUES (l_next_article_id, pUserId, current_timestamp);
+            INSERT INTO website_article(article_id, website_id, navigation_label, display_order, user_id) VALUES (l_next_article_id, pWebsiteId, pNavigationLabel, 0, pUserId);
+            apex_json.write('nav_label', pck_core.buildNavLabel(l_next_article_id,null,pNavigationLabel, 'page-options'));
+            apex_json.write('new_article_id',l_next_article_id);
+            l_message:='Created OK';    
+        ELSE
+            UPDATE website_article 
+               SET navigation_label=pNavigationLabel, updated_date=current_timestamp 
+             WHERE website_id=pWebsiteId
+               AND article_id=pArticleId;
+            l_message:='Updated OK';
+        END IF;
+
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.close_object;
     END;
 
     /**
@@ -623,6 +651,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 WHEN 'website.domain_name' THEN
                     processDomainName(l_session_data.user_id, C.id, C.value);
                     RETURN;
+                WHEN 'website_article.navigation_label' THEN
+                    processNavigationLabel(l_session_data.user_id, l_id_1, l_id_2, C.value);
+                    RETURN;
                 WHEN 'website.contact_email' THEN
                     UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website.font' THEN
@@ -648,8 +679,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     UPDATE website SET max_width_px=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website.max_scale' THEN
                     UPDATE website SET max_scale=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website_article.navigation_label' THEN
-                    UPDATE website_article SET navigation_label=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'website_article.collection_type' THEN
                     UPDATE website_article SET collection_type=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'website_article.page_title' THEN
