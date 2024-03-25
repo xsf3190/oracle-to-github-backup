@@ -443,14 +443,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      */    
     PROCEDURE getArticles(pArticleId IN article.id%type)  IS
         l_content CLOB;
+        l_collection_type website_article.collection_type%type;
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        FOR C IN (SELECT collection_type FROM website_article WHERE article_id=pArticleId) LOOP
-            l_content:='<li><button type="button" class="with-icon new-subpage"><span>&plus;&nbsp;NEW ' || C.collection_type || '</span></li><li><hr></li>';
-        END LOOP;
+        SELECT collection_type INTO l_collection_type FROM website_article WHERE article_id=pArticleId;
 
+        l_content:='<li><button type="button" class="with-icon new-subpage"><span>&plus;&nbsp;NEW ' || l_collection_type || '</span></li><li><hr></li>';
         FOR C IN (
             SELECT art.id, art.title, apex_util.get_since(COALESCE(art.updated_date, art.created_date)) updated_date
               FROM article art
@@ -458,9 +458,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                AND art.author_user_id=l_session_data.user_id
              ORDER BY updated_date)
         LOOP
-            l_content:=l_content || '<li data-id="' || C.id || '"><button type="button" class="with-icon nav-label"><span>&#9656;&nbsp;' || C.title || '</span></li>';
+            l_content:=l_content || '<li data-id="' || C.id || '"><button type="button" class="with-icon nav-label"><span>' || C.title || '</span></li>';
         END LOOP;
-        pck_core.log(l_content);
+        l_content:=l_content || '<li><hr></li><li><button type="button" class="with-icon delete-subpage"><span>&plus;&nbsp;DELETE SELECTED ' || l_collection_type || '</span>';
+        
         apex_json.open_object;
         apex_json.write('success', TRUE); 
         apex_json.write('content', l_content);
