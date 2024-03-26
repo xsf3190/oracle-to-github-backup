@@ -13,19 +13,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
     /*
      **  Delete website_article. If deleted article not in any other website delete the article and any assets
      */   
-    PROCEDURE deleteArticle(pUserId IN users.id%type, pArticleId IN website_article.article_id%type, pWebsiteId IN website_article.website_id%type, pSendResponse IN BOOLEAN DEFAULT TRUE) IS
+    PROCEDURE deleteArticle(pUserId IN users.id%type, pArticleId IN website_article.article_id%type, pWebsiteId IN website_article.website_id%type DEFAULT NULL, pSendResponse IN BOOLEAN DEFAULT TRUE) IS
         l_clob CLOB;
         l_url VARCHAR2(500);
         l_error_message VARCHAR2(4000);
+        l_message VARCHAR2(50);
         n PLS_INTEGER;
         l_job_name VARCHAR2(30);
     BEGIN
-        DELETE website_article 
-         WHERE user_id=pUserId 
-           AND article_id=pArticleId 
-           AND website_id=pWebsiteId;
+        IF (pWebsiteId IS NOT NULL) THEN
+            DELETE website_article 
+             WHERE user_id=pUserId 
+               AND article_id=pArticleId 
+               AND website_id=pWebsiteId
+               AND NOT EXISTS (SELECT NULL FROM article WHERE parent_id=pArticleId);
+            n:=sql%rowcount;
+            IF (n=0) THEN
+                l_message:='NOT DELETED. HAS SUB-PAGES';
+            END IF;
+        ELSE
+            DELETE article 
+             WHERE author_user_id=pUserId 
+               AND id=pArticleId;
+            n:=sql%rowcount;
+        END IF;        
 
-        n:=sql%rowcount;
+        
         /* Confirms that logged on user owned the deleted website_article */
 
         IF (n=1) THEN 
@@ -66,6 +79,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
         IF (pSendResponse) THEN
             apex_json.open_object;
             apex_json.write('success', TRUE);
+            apex_json.write('message', l_message);
             apex_json.close_object;
         END IF;
 
@@ -268,6 +282,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
                     deleteWebsite(l_session_data.user_id,C.website_id);
                 WHEN 'website_article' THEN
                     deleteArticle(l_session_data.user_id,C.article_id,C.website_id);
+                WHEN 'article' THEN
+                    deleteArticle(l_session_data.user_id,C.article_id);
                 WHEN 'asset' THEN
                     deleteAsset(l_session_data.user_id,C.asset_id);               
             END CASE;
