@@ -198,7 +198,7 @@ nav a.selected + * {
     opacity:1;
 }
 
-nav a:not(.selected) + * {
+nav a:not(.selected) + button {
     opacity:0;
 }
 
@@ -625,7 +625,7 @@ dialog.log tr {
     z-index: 999;
 }
 
-.dropdown-items button {
+.dropdown-items button, .dropdown-items a {
     cursor: pointer;
     inline-size: 100%;
 }
