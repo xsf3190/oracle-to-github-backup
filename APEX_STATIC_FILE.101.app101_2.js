@@ -518,8 +518,10 @@ const clickHandler = (e) => {
         page_options();
     } else if (e.target.matches(".new-page")) {
         new_page(e);   
-    } else if (e.target.matches(".new-subpage")) {
-        new_subpage(e);   
+    } else if (e.target.matches(".new-blog")) {
+        new_blog(e);   
+    }  else if (e.target.matches(".delete-blog")) {
+        delete_blog(e);   
     } else if (e.target.matches(".show-subpages")) {
         show_subpages(e);   
     } else if (e.target.matches(".edit-codepen")) {
@@ -1228,13 +1230,17 @@ const new_page = (e) => {
 /* 
  ** CREATE NEW SUB PAGE
  */
-const new_subpage = (e) => {
-    execProcess( "article/"+gArticleId,"POST").then( (data) => {
+const new_blog = (e) => {
+    const parent = e.target.closest("div").parentElement.dataset.id;
+    execProcess( "article/"+parent,"POST").then( (data) => {
         gArticleId = data.article_id;
         editor_status = "init";
         editor_status_text.textContent = "";
         editor.setData("");
         galleryList.replaceChildren();
+        if (editor.isReadOnly) {
+            editor.disableReadOnlyMode( 'lock-id' );
+        }
     });
 }
 
@@ -1402,7 +1408,12 @@ delete_asset = (e) => {
  ** DELETE PAGE
  */
 delete_page = () => {
-    execProcess("dml","DELETE",{table_name: "website_article", website_id: gWebsiteId, article_id: gArticleId}).then( () => {
+    execProcess("dml","DELETE",{table_name: "website_article", website_id: gWebsiteId, article_id: gArticleId}).then( (data) => {
+        if (data.message) {
+            editor_status_text.textContent = data.message;
+            pageDialog.close();
+            return;
+        }
         let selected = pageNav.querySelector("[data-id='"+gArticleId+"']");
         gArticleId = 0;
         selected.remove();
@@ -1412,6 +1423,20 @@ delete_page = () => {
         editor.enableReadOnlyMode( 'lock-id' );
         galleryList.replaceChildren();
         pageDialog.close();
+    });
+}
+
+/*
+ ** DELETE BLOG
+ */
+delete_blog = () => {
+    execProcess("dml","DELETE",{table_name: "article", article_id: gArticleId}).then( () => {
+        gArticleId = 0;
+        editor_status = "init";
+        editor_status_text.textContent = "BLOG DELETED";
+        editor.setData("");
+        editor.enableReadOnlyMode( 'lock-id' );
+        galleryList.replaceChildren();
     });
 }
 
