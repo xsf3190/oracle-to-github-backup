@@ -479,18 +479,17 @@ const clickHandler = (e) => {
 
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
-        if (e.target.matches(".selected")) return;
+        /*if (e.target.matches(".selected")) return;*/
         if (!wrapper.querySelector(".ck-source-editing-button").matches(".ck-off")) {
             popupOpen("Click Source button",".. cannot switch pages when in Source editing mode");
             return;
         }
+        
         const id = e.target.parentElement.dataset.id,
               nav = e.target.closest("nav");
         
-        if (e.target.tagName==="A") {  /* Page nav items are anchor elements, Sibpages are buttons.*/
+        if (e.target.tagName==="A") {
             selected_nav(nav,id);
-        } else {
-            selected_subpage(e.target.closest("ol"),id);
         }
 
         if (nav.matches(".website-nav")) {
@@ -1248,6 +1247,10 @@ const new_blog = (e) => {
  ** SHOW SUB PAGES. RETURNED AS AN ORDERED SERIES OF ITEMS TO BE INSERTED IN DROPDOWN LIST
  */
 const show_subpages = (e) => {
+    const a = e.target.closest("div").previousElementSibling;
+    a.classList.add("selected");
+
+
     const nav = pageNav.getBoundingClientRect(),
           button = e.target.getBoundingClientRect(),
           id = e.target.closest("[data-id]").dataset.id;
@@ -1262,7 +1265,7 @@ const show_subpages = (e) => {
         e.target.nextElementSibling.style.maxWidth = `${button.x - nav.x}px`;
         e.target.nextElementSibling.style.top = "3.5ch";
     }
-    execProcess( "articles/"+id,"GET").then( (data) => {
+    execProcess( "articles/"+id+","+gArticleId,"GET").then( (data) => {
         const ul = e.target.nextElementSibling;
         ul.replaceChildren();
         ul.insertAdjacentHTML('afterbegin',data.content);
@@ -1296,23 +1299,10 @@ const selected_nav = (nav, id) => {
 }
 
 /* 
- ** ASSIGN "selected" CLASS TO CLICKED SUBPaGE (E.G BLOG)
- */
-const selected_subpage = (list, id) => {
-    console.log("list",list);
-    list.querySelectorAll("li").forEach((li) => {
-        li.classList.remove("selected");
-        console.log(li.dataset.id, id);
-        if (li.dataset.id === id) {
-            li.classList.add("selected");
-        }
-    });
-}
-
-/* 
  ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR. REPLACE GALLERY. REMOVE ANY SUB-PAGES
  */
 const edit_text = () => {
+    console.log("edit_text",gArticleId);
     execProcess( "article/"+gArticleId,"GET").then( (data) => {
         if (editor.isReadOnly) {
             editor.disableReadOnlyMode( 'lock-id' );
