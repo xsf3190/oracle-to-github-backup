@@ -460,17 +460,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <button type="button" class="' || pClassName || '">
                 <svg><use href="#pencil"></use></svg>
             </button>
-            <a href="#" class="nav-label' || CASE WHEN pSelected=1 THEN ' selected' END || '">' || pLabel || '</a>' ||
-            CASE WHEN pClassName='website-options' THEN
-            '<button type="button" class="deploy-website">
-                <svg><use href="#cloud-arrow-up"></use></svg>
-            </button>'
-                 WHEN pCollectionType='BLOG' THEN
-            '<div class="dropdown">
-                <button type="button" class="show-dropdown show-subpages">&blacktriangledown;</button>
-                <ol class="dropdown-items">
-                </ol>
-            </div>'
+            <a href="" class="nav-label' || CASE WHEN pSelected=1 THEN ' selected' END || '">' || pLabel || '</a>' ||
+            CASE 
+                WHEN pClassName='website-options' THEN
+                '<button type="button">DEPLOY<hr>TEST</button><button type="button">DEPLOY<hr>LIVE</button><button type="button">WEBSITE<hr>VISITS</button>'
+                 WHEN pCollectionType<>'N/A' THEN
+                '<div class="dropdown">
+                    <button type="button" class="show-dropdown show-subpages">&blacktriangledown;</button>
+                    <ol class="dropdown-items">
+                    </ol>
+                </div>'
             END ||
         '</div>');
     END;
