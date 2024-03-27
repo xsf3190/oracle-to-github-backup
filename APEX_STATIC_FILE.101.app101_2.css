@@ -179,11 +179,25 @@ a:not(.selected) {
     text-decoration: none;
 }
 
-a.selected, li.selected {
+a.selected {
     text-decoration-color: var(--color-secondary);
     text-decoration-thickness: var(--space-3xs);
     text-underline-offset: var(--space-3xs);
     text-decoration-skip-ink: none;
+}
+
+nav:not(.top-nav) div {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    align-items: center;
+    & button:not(:first-child) {
+        font-size: 50%;
+        font-weight: 900;
+        border: 1px solid crimson;
+        border-radius: var(--space-2xs);
+        padding: var(--space-xs);
+    }
 }
 
 nav [class$="options"]:has(+ a.selected) {
@@ -195,11 +209,12 @@ nav [class$="options"]:not(:has(+ a.selected)) {
 }
 
 nav a.selected + * {
-    opacity:1;
+    display: inline-block;
+    cursor: pointer;
 }
 
-nav a:not(.selected) + button {
-    opacity:0;
+nav a:not(.selected) ~ button {
+    display: none;
 }
 
 label {
@@ -608,9 +623,11 @@ dialog.log tr {
     list-style-type: none;
     border-radius: 1ch;
     z-index: 1;
-    & span {
+    & a {
         overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
+        display: inline-block;
     }
     & .new-subpage {
         font-weight: 900;
@@ -661,6 +678,7 @@ dialog.log tr {
   margin-inline-end: 1rem;
 }
 
+a > img,
 button svg,
 button use,
 button span {
