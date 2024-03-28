@@ -454,21 +454,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     END;
 
     FUNCTION buildNavLabel(pId IN INTEGER, pSelected IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pCollectionType IN website_article.collection_type%type DEFAULT NULL) RETURN VARCHAR2 IS
+        n PLS_INTEGER;
     BEGIN
+        IF (pCollectionType<>'N/A') THEN
+            SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT NULL FROM article WHERE parent_id=pId);
+        END IF;
+
         RETURN(
         '<div data-id="' || pId || '">
             <button type="button" class="' || pClassName || '">
                 <svg><use href="#pencil"></use></svg>
             </button>
-            <a href="" class="nav-label' || CASE WHEN pSelected=1 THEN ' selected' END || '">' || pLabel || '</a>' ||
+            <a href="" class="nav-label">' || pLabel || '</a>' ||
             CASE 
                 WHEN pClassName='website-options' THEN
                 '<button type="button">DEPLOY<hr>TEST</button><button type="button">DEPLOY<hr>LIVE</button><button type="button">WEBSITE<hr>VISITS</button>'
-                 WHEN pCollectionType<>'N/A' THEN
-                '<div class="dropdown">
-                    <button type="button" class="show-dropdown show-subpages">&blacktriangledown;</button>
-                    <ol class="dropdown-items">
-                    </ol>
+                WHEN pCollectionType<>'N/A' THEN
+                '<div class="dropdown"' || CASE WHEN n=0 THEN ' style="opacity:0; visibility:hidden;' END || '>
+                    <button type="button" class="show-dropdown show-subpages" data-collection="' || pCollectionType || '">&blacktriangledown;</button>
+                    <ol class="dropdown-items"></ol>
                 </div>'
             END ||
         '</div>');
@@ -635,8 +639,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     buildMediaCard(l_selected_article_id) ||
                 '</div>
                 <div>
-                    <div class="button-container">' ||
+                    <div>' ||
                     buildPushableButton('new-page','&plus;') ||
+                    buildPushableButton('new-collection','&plus;') ||
                     '</div>
                     <nav class="page-nav">
                     </nav>
