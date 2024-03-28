@@ -17,6 +17,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       pageDialog = document.querySelector("dialog.page-options"),
       pageContent = pageDialog.querySelector(".content"),
       deployButtons = wrapper.querySelector(".deploy-buttons > div"),
+      newCollection = wrapper.querySelector(".new-collection"),
       websiteNav = wrapper.querySelector(".website-nav"),
       pageNav = wrapper.querySelector(".page-nav"),
       cards = wrapper.querySelector(".cards"),
@@ -1026,10 +1027,12 @@ ClassicEditor.create(document.querySelector("#editor"), {
             }
         },
         title: {
-            placeholder: 'Page title'
+            placeholder: 'New title'
         },
-        placeholder: 'Page content',
-        wordCount: {displayCharacters: true},
+        placeholder: 'Enter content',
+        wordCount: {
+                displayCharacters: true
+        },
         list: {
             properties: {
                 styles: true,
@@ -1250,25 +1253,37 @@ const show_subpages = (e) => {
     const a = e.target.closest("div").previousElementSibling;
     a.classList.add("selected");
 
-
     const nav = pageNav.getBoundingClientRect(),
           button = e.target.getBoundingClientRect(),
-          id = e.target.closest("[data-id]").dataset.id;
+          id = e.target.closest("[data-id]").dataset.id,
+          collection = e.target.dataset.collection,
+          list = e.target.nextElementSibling;
 
-    if (button.x - nav.x < (nav.x + nav.width - button.x)) {
-        e.target.nextElementSibling.style.left = "0";
-        e.target.nextElementSibling.style.right = "auto";
-        e.target.nextElementSibling.style.maxWidth = `${nav.x + nav.width - button.x}px`;
-    } else {
-        e.target.nextElementSibling.style.right = "0";
-        e.target.nextElementSibling.style.left = "auto";
-        e.target.nextElementSibling.style.maxWidth = `${button.x - nav.x}px`;
-        e.target.nextElementSibling.style.top = "3.5ch";
+    switch (collection) {
+        case 'BLOG' :
+            if (button.x - nav.x < (nav.x + nav.width - button.x)) {
+                list.style.left = "0";
+                list.style.right = "auto";
+                list.style.maxWidth = `${nav.x + nav.width - button.x}px`;
+            } else {
+                list.style.right = "0";
+                list.style.left = "auto";
+                list.style.maxWidth = `${button.x - nav.x}px`;
+                list.style.top = "3.5ch";
+            }
+            break;
+        case 'MEDIA' :
+            list.style.left = `-${button.x - nav.x}px`;
+            list.style.right = "auto";
+            list.style.top = "3.5ch";
+            list.style.maxWidth = `${nav.width}px`;
+            list.classList.add("gallery-list");
+            break;
     }
+
     execProcess( "articles/"+id+","+gArticleId,"GET").then( (data) => {
-        const ul = e.target.nextElementSibling;
-        ul.replaceChildren();
-        ul.insertAdjacentHTML('afterbegin',data.content);
+        list.replaceChildren();
+        list.insertAdjacentHTML('afterbegin',data.content);
     });
 }
 
@@ -1294,6 +1309,11 @@ const selected_nav = (nav, id) => {
         link.classList.remove("selected");
         if (link.parentElement.dataset.id === id) {
             link.classList.add("selected");
+            if (link.nextElementSibling) {
+                const collection = link.nextElementSibling.dataset.collection;
+                newCollection.textContent = collection;
+                newCollection.style.opacity = "1";
+            }
         }
     });
 }
@@ -1302,7 +1322,6 @@ const selected_nav = (nav, id) => {
  ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR. REPLACE GALLERY. REMOVE ANY SUB-PAGES
  */
 const edit_text = () => {
-    console.log("edit_text",gArticleId);
     execProcess( "article/"+gArticleId,"GET").then( (data) => {
         if (editor.isReadOnly) {
             editor.disableReadOnlyMode( 'lock-id' );
