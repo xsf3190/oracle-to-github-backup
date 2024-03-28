@@ -629,9 +629,6 @@ dialog.log tr {
         white-space: nowrap;
         display: inline-block;
     }
-    & .new-subpage {
-        font-weight: 900;
-    }
 }
 
 .dropdown .dropdown-items.visible {
@@ -727,6 +724,13 @@ nav button {
     min-inline-size: 50%;
     margin-inline-end: 1rem;
     overflow-y: scroll;
+}
+
+.new-collection {
+    margin-inline-start: 1em;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 1s ease-in-out;
 }
 
 
