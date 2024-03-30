@@ -17,7 +17,8 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       pageDialog = document.querySelector("dialog.page-options"),
       pageContent = pageDialog.querySelector(".content"),
       deployButtons = wrapper.querySelector(".deploy-buttons > div"),
-      newCollection = wrapper.querySelector(".new-collection"),
+      newBlog = wrapper.querySelector(".new-blog"),
+      newMedia = wrapper.querySelector(".new-media"),
       websiteNav = wrapper.querySelector(".website-nav"),
       pageNav = wrapper.querySelector(".page-nav"),
       cards = wrapper.querySelector(".cards"),
@@ -480,7 +481,7 @@ const clickHandler = (e) => {
 
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
-        /*if (e.target.matches(".selected")) return;*/
+
         if (!wrapper.querySelector(".ck-source-editing-button").matches(".ck-off")) {
             popupOpen("Click Source button",".. cannot switch pages when in Source editing mode");
             return;
@@ -489,7 +490,7 @@ const clickHandler = (e) => {
         const id = e.target.parentElement.dataset.id,
               nav = e.target.closest("nav");
         
-        if (e.target.tagName==="A") {
+        if (!e.target.classList.contains("subpage")) {
             selected_nav(nav,id);
         }
 
@@ -498,7 +499,7 @@ const clickHandler = (e) => {
             edit_website();
         } else if (nav.matches(".page-nav")) {
             gArticleId = id;
-            edit_text();
+            edit_text(e);
         }
     } else if (e.target.matches(".visits")) {
         get_visits(e); 
@@ -519,8 +520,10 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".new-page")) {
         new_page(e);   
     } else if (e.target.matches(".new-blog")) {
-        new_blog(e);   
-    }  else if (e.target.matches(".delete-blog")) {
+        new_collection();   
+    } else if (e.target.matches(".new-media")) {
+        new_collection();   
+    } else if (e.target.matches(".delete-blog")) {
         delete_blog(e);   
     } else if (e.target.matches(".show-subpages")) {
         show_subpages(e);   
@@ -1232,8 +1235,8 @@ const new_page = (e) => {
 /* 
  ** CREATE NEW SUB PAGE
  */
-const new_blog = (e) => {
-    const parent = e.target.closest("div").parentElement.dataset.id;
+const new_collection = () => {
+    const parent = pageNav.querySelector(".selected").closest("div").dataset.id;
     execProcess( "article/"+parent,"POST").then( (data) => {
         gArticleId = data.article_id;
         editor_status = "init";
@@ -1247,41 +1250,60 @@ const new_blog = (e) => {
 }
 
 /* 
- ** SHOW SUB PAGES. RETURNED AS AN ORDERED SERIES OF ITEMS TO BE INSERTED IN DROPDOWN LIST
+ ** SHOW SUB PAGES. RETURNED AS AN ORDERED LIST OF ITEMS TO BE INSERTED IN DROPDOWN COMPONENT
  */
 const show_subpages = (e) => {
-    const a = e.target.closest("div").previousElementSibling;
-    a.classList.add("selected");
 
     const nav = pageNav.getBoundingClientRect(),
           button = e.target.getBoundingClientRect(),
-          id = e.target.closest("[data-id]").dataset.id,
+          parent_id = e.target.closest("[data-id]").dataset.id,
           collection = e.target.dataset.collection,
           list = e.target.nextElementSibling;
 
-    switch (collection) {
-        case 'BLOG' :
-            if (button.x - nav.x < (nav.x + nav.width - button.x)) {
-                list.style.left = "0";
-                list.style.right = "auto";
-                list.style.maxWidth = `${nav.x + nav.width - button.x}px`;
-            } else {
-                list.style.right = "0";
-                list.style.left = "auto";
-                list.style.maxWidth = `${button.x - nav.x}px`;
-                list.style.top = "3.5ch";
-            }
-            break;
-        case 'MEDIA' :
-            list.style.left = `-${button.x - nav.x}px`;
-            list.style.right = "auto";
-            list.style.top = "3.5ch";
-            list.style.maxWidth = `${nav.width}px`;
-            list.classList.add("gallery-list");
-            break;
-    }
+    selected_nav(pageNav, parent_id);
 
-    execProcess( "articles/"+id+","+gArticleId,"GET").then( (data) => {
+    execProcess( "articles/"+parent_id+","+gArticleId,"GET").then( (data) => {
+        if (data.html) {
+            gArticleId = parent_id;
+            editor_status = "init";
+            editor_status_text.textContent = data.updated_date;
+            editor.setData(data.html);
+            if (editor.isReadOnly) {
+                editor.disableReadOnlyMode( 'lock-id' );
+            }
+        }
+        galleryList.replaceChildren();
+        if (data.thumbnails) {
+            galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
+            lazyload();
+        }
+
+        if (!data.content) {
+            popupOpen("NO "+collection+" PAGES","Click NEW " + collection + " to create");
+            return;
+        }
+
+        switch (collection) {
+            case 'BLOG' :
+                if (button.x - nav.x < (nav.x + nav.width - button.x)) {
+                    list.style.left = "0";
+                    list.style.right = "auto";
+                    list.style.maxWidth = `${nav.x + nav.width - button.x}px`;
+                } else {
+                    list.style.right = "0";
+                    list.style.left = "auto";
+                    list.style.maxWidth = `${button.x - nav.x}px`;
+                    list.style.top = "3.5ch";
+                }
+                break;
+            case 'MEDIA' :
+                list.style.left = `-${button.x - nav.x}px`;
+                list.style.right = "auto";
+                list.style.top = "3.5ch";
+                list.style.maxWidth = `${nav.width}px`;
+                list.classList.add("gallery-list");
+                break;
+        }
         list.replaceChildren();
         list.insertAdjacentHTML('afterbegin',data.content);
     });
@@ -1309,19 +1331,14 @@ const selected_nav = (nav, id) => {
         link.classList.remove("selected");
         if (link.parentElement.dataset.id === id) {
             link.classList.add("selected");
-            if (link.nextElementSibling) {
-                const collection = link.nextElementSibling.dataset.collection;
-                newCollection.textContent = collection;
-                newCollection.style.opacity = "1";
-            }
         }
     });
 }
 
 /* 
- ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR. REPLACE GALLERY. REMOVE ANY SUB-PAGES
+ ** GET SELECTED ARTICLE CONTENT FOR RICH TEXT EDITOR. REPLACE GALLERY. 
  */
-const edit_text = () => {
+const edit_text = (e) => {
     execProcess( "article/"+gArticleId,"GET").then( (data) => {
         if (editor.isReadOnly) {
             editor.disableReadOnlyMode( 'lock-id' );
@@ -1338,6 +1355,23 @@ const edit_text = () => {
             galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
             lazyload();
         }
+
+        /* If Page is a collection then show relevant "NEW" collection button */
+        if (e.target.nextElementSibling) {
+            const collection = e.target.nextElementSibling.querySelector(".show-subpages").dataset.collection.toLowerCase();
+            
+            switch (collection) {
+                case 'blog' :
+                    newBlog.classList.add("visible");
+                    newMedia.classList.remove("visible");
+                    break;
+                case 'media' :
+                    newMedia.classList.add("visible");
+                    newBlog.classList.remove("visible");
+                    break;
+            }
+        }
+        
     });
 }
 
