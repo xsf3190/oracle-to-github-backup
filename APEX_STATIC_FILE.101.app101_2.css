@@ -189,7 +189,7 @@ a.selected {
 nav:not(.top-nav) div {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: var(--space-xs);
+    gap: var(--space-3xs);
     align-items: center;
     & button:not(:first-child) {
         font-size: 50%;
@@ -208,10 +208,12 @@ nav [class$="options"]:not(:has(+ a.selected)) {
     opacity:0;
 }
 
+
 nav a.selected + * {
     display: inline-block;
     cursor: pointer;
 }
+
 
 nav a:not(.selected) ~ button {
     display: none;
@@ -726,13 +728,16 @@ nav button {
     overflow-y: scroll;
 }
 
-.new-collection {
-    margin-inline-start: 1em;
+.new-blog, .new-media {
     visibility: hidden;
     opacity: 0;
     transition: opacity 1s ease-in-out;
 }
 
+.new-blog.visible, .new-media.visible {
+    visibility: visible;
+    opacity: 1;
+}
 
 .fade-out {
   animation: fade-out 1s forwards;
