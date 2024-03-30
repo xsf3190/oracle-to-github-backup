@@ -490,6 +490,7 @@ const clickHandler = (e) => {
         const id = e.target.parentElement.dataset.id,
               nav = e.target.closest("nav");
         
+        /* Don't set "selected" class on Blog and Media drowdown items */
         if (!e.target.classList.contains("subpage")) {
             selected_nav(nav,id);
         }
@@ -891,7 +892,7 @@ const widget=cloudinary.createUploadWidget(
                 }
             });
             execProcess("cld-upload","POST",metadata).then( (data) => {
-                console.log("uloaded media to cloudinry");
+                galleryList.replaceChildren();
                 galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
                 lazyload();
             });
@@ -1254,13 +1255,14 @@ const new_collection = () => {
  */
 const show_subpages = (e) => {
 
-    const nav = pageNav.getBoundingClientRect(),
-          button = e.target.getBoundingClientRect(),
-          parent_id = e.target.closest("[data-id]").dataset.id,
-          collection = e.target.dataset.collection,
-          list = e.target.nextElementSibling;
+    const parent = e.target.closest("[data-id]"),
+          parent_id = parent.dataset.id,
+          collection = e.target.dataset.collection;
 
-    selected_nav(pageNav, parent_id);
+    /* Set "selected" class on corresponding nav-label if not already selected */
+    if (!parent.querySelector("a.selected")) {
+        selected_nav(pageNav, parent_id);
+    }
 
     execProcess( "articles/"+parent_id+","+gArticleId,"GET").then( (data) => {
         if (data.html) {
@@ -1278,11 +1280,17 @@ const show_subpages = (e) => {
             lazyload();
         }
 
+        const list = e.target.nextElementSibling;
+
         if (!data.content) {
-            popupOpen("NO "+collection+" PAGES","Click NEW " + collection + " to create");
+            popupOpen("NO "+collection+" PAGES YET","Click NEW " + collection + " to create");
+            list.classList.toggle("visible", false);
             return;
         }
 
+        const nav = pageNav.getBoundingClientRect(),
+              button = e.target.getBoundingClientRect();
+          
         switch (collection) {
             case 'BLOG' :
                 if (button.x - nav.x < (nav.x + nav.width - button.x)) {
@@ -1324,13 +1332,32 @@ const upload_media = () => {
 }
 
 /* 
- ** ASSIGN "selected" CLASS TO CLICKED NAV ITEM
+ ** ASSIGN "selected" CLASS TO CLICKED NAV ITEM. UPDATE UI ACCORDINGLY
  */
 const selected_nav = (nav, id) => {
     nav.querySelectorAll("a").forEach((link) => {
         link.classList.remove("selected");
         if (link.parentElement.dataset.id === id) {
             link.classList.add("selected");
+            if (nav===websiteNav || !link.nextElementSibling) {
+                newBlog.classList.remove("visible");
+                newMedia.classList.remove("visible");
+            } else {
+                /* If Page is a collection then show relevant "NEW" collection button */
+                if (link.nextElementSibling) {
+                    const collection = link.nextElementSibling.querySelector(".show-subpages").dataset.collection;
+                    switch (collection) {
+                        case 'BLOG' :
+                            newBlog.classList.add("visible");
+                            newMedia.classList.remove("visible");
+                            break;
+                        case 'MEDIA' :
+                            newMedia.classList.add("visible");
+                            newBlog.classList.remove("visible");
+                            break;
+                    }
+                }
+            }
         }
     });
 }
@@ -1355,23 +1382,6 @@ const edit_text = (e) => {
             galleryList.insertAdjacentHTML('afterbegin',data.thumbnails);
             lazyload();
         }
-
-        /* If Page is a collection then show relevant "NEW" collection button */
-        if (e.target.nextElementSibling) {
-            const collection = e.target.nextElementSibling.querySelector(".show-subpages").dataset.collection.toLowerCase();
-            
-            switch (collection) {
-                case 'blog' :
-                    newBlog.classList.add("visible");
-                    newMedia.classList.remove("visible");
-                    break;
-                case 'media' :
-                    newMedia.classList.add("visible");
-                    newBlog.classList.remove("visible");
-                    break;
-            }
-        }
-        
     });
 }
 
