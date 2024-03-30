@@ -195,12 +195,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT article_id INTO l_article_id FROM users, JSON_TABLE(l_bodytext,'$.images[*]' COLUMNS (article_id))  WHERE ROWNuM=1 AND users.id=l_session_data.user_id;
+        SELECT article_id INTO l_article_id FROM users, JSON_TABLE(l_bodytext,'$.images[*]' COLUMNS (article_id))  WHERE ROWNUM=1 AND users.id=l_session_data.user_id;
 
         INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, display_order, created_date, user_id)
         SELECT seq_asset.nextval, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, seq_asset.currval, current_timestamp, l_session_data.user_id
           FROM JSON_TABLE(l_bodytext, '$.images[*]' COLUMNS (article_id, public_id, width, height, bytes, resource_type, format, cld_cloud_name));
 
+        UPDATE article SET (cover_asset_id, nb_assets) = (SELECT  MIN(id), COUNT(*) FROM asset WHERE article_id=l_article_id)
+         WHERE id=l_article_id;
 
         pck_media.getThumbnails(l_article_id,l_thumbnails);
 
@@ -439,7 +441,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END; 
 
     /*
-     **  Return list of articles owned by requested article (i.e. subpages)
+     **  Return list of articles owned by parent article id (i.e. subpages)
+     **  parameter is constructed as "parent_id, article_id" where parent_id is the selected Page id
+     **  article_id will be "0" if no Page selected - i.e. user clicked on caret button before clicking on a Page
+     **  article_id will be the last selected subpage article id if user had selected one - in which case we highlight it in the returned list
+     **  article_id may be unrelated to the parent_id if user clicked on caret button having previously clicked on some unrelated Page or subpage
      */    
     PROCEDURE getArticles(pId IN VARCHAR2)  IS
         l_content CLOB;
@@ -449,7 +455,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_item VARCHAR2(500);
         l_url VARCHAR2(500);
         l_session_data pck_core.session_data_rt;
-        l_can_delete BOOLEAN:=FALSE;
+        l_subarticle_selected BOOLEAN:=FALSE;
+        l_thumbnails CLOB;
         n PLS_INTEGER:=0;
     BEGIN
         l_session_data:=pck_core.getSessionData();
@@ -470,27 +477,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         LOOP
             CASE l_collection_type
                 WHEN 'BLOG' THEN
-                    l_item:='<li data-id="' || C.id || '"><a class="with-icon nav-label">';
+                    l_item:='<li data-id="' || C.id || '"><a class="with-icon nav-label subpage">';
                     IF (C.id=l_subarticle_id) THEN 
                         l_item:=l_item || '&#9656;&nbsp;';
-                        l_can_delete:=TRUE;
+                        l_subarticle_selected:=TRUE;
                     END IF;
                     l_item:=l_item || C.title || '</a></li>';
                 WHEN 'MEDIA' THEN
                     l_item:='<li data-id="' || C.id || '" title="' || C.title || '">';
                     IF (C.cld_cloud_name IS NOT NULL) THEN
-                        l_item:=l_item || '<a class="nav-label"><img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '"></a>';
+                        l_item:=l_item || '<a class="nav-label subpage"><img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '"></a>';
                     END IF;
                     IF (C.id=l_subarticle_id) THEN
-                        l_can_delete:=TRUE;
+                        l_subarticle_selected:=TRUE;
                     END IF;
                     l_item:=l_item || '</li>';
             END CASE;
             l_content:=l_content || TO_CLOB(l_item);
-        END LOOP;
+        END LOOP;        
         
         apex_json.open_object;
         apex_json.write('success', TRUE); 
+        /* Check subarticle exists within parent article - if not then return html and thumbnails of the parent */
+        IF  (NOT l_subarticle_selected) AND (l_parent_id<>l_subarticle_id) THEN
+            FOR C IN (SELECT body_html, apex_util.get_since(COALESCE(updated_date, created_date)) updated_date FROM article WHERE id=l_parent_id) LOOP
+                apex_json.write('html', C.body_html);
+                apex_json.write('updated_date', C.updated_date);
+                pck_media.getThumbnails(l_parent_id, l_thumbnails);
+                apex_json.write('thumbnails', l_thumbnails);
+            END LOOP;
+        END IF;
         apex_json.write('content', l_content);
         apex_json.close_object;
 
