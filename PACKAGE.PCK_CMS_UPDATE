@@ -597,23 +597,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     */
     PROCEDURE processNavigationLabel(pUserId IN website.user_id%type, pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pNavigationLabel IN website_article.navigation_label%type) IS
         l_next_article_id article.id%type;
-        l_message VARCHAR2(50);
     BEGIN
         APEX_JSON.open_object; 
-        IF (pArticleId=0) THEN
-            l_next_article_id:=seq_article.nextval;
-            INSERT INTO article (id, author_user_id, created_date) VALUES (l_next_article_id, pUserId, current_timestamp);
-            INSERT INTO website_article(article_id, website_id, navigation_label, display_order, user_id) VALUES (l_next_article_id, pWebsiteId, pNavigationLabel, 0, pUserId);
-            apex_json.write('nav_label', pck_core.buildNavLabel(l_next_article_id,null,pNavigationLabel, 'page-options'));
-            apex_json.write('new_article_id',l_next_article_id);
-            l_message:='Created OK';    
-        ELSE
-            UPDATE website_article 
-               SET navigation_label=pNavigationLabel, updated_date=current_timestamp 
-             WHERE website_id=pWebsiteId
-               AND article_id=pArticleId;
-            l_message:='Updated OK';
-        END IF;
+        BEGIN
+            IF (pArticleId=0) THEN
+                l_next_article_id:=seq_article.nextval;
+                INSERT INTO article (id, author_user_id, created_date) VALUES (l_next_article_id, pUserId, current_timestamp);
+                INSERT INTO website_article(article_id, website_id, navigation_label, display_order, user_id) VALUES (l_next_article_id, pWebsiteId, pNavigationLabel, 0, pUserId);
+                apex_json.write('nav_label', pck_core.buildNavLabel(l_next_article_id,null,pNavigationLabel, 'page-options'));
+                apex_json.write('new_article_id',l_next_article_id);
+                apex_json.write('message', 'Created OK');
+                apex_json.write('color', 'green');
+            ELSE
+                UPDATE website_article 
+                   SET navigation_label=pNavigationLabel, updated_date=current_timestamp 
+                 WHERE website_id=pWebsiteId
+                   AND article_id=pArticleId;
+                apex_json.write('message', 'Updated OK');
+                apex_json.write('color', 'green');
+            END IF;
+            EXCEPTION WHEN DUP_VAL_ON_INDEX THEN 
+                apex_json.write('message', 'Label must be unique');
+                apex_json.write('color', 'red');
+        END;
 
         APEX_JSON.write('success', TRUE);
         APEX_JSON.close_object;
