@@ -105,6 +105,8 @@ const focusHandler = (e) => {
 **  HANDLE FORM FIELD CHANGE. UPDATE DATABASE IF PASSES ANY VALIDATION CHECK
 */
 const changeHandler = (e) => {
+    if (e.target.matches(".page-nav") || e.target.matches(".dropdown-items")) return; /* Ignore custom events raised by sorted.js */
+
     if (e.target.matches(".color")) {
         websiteColors(e.target.id, e.target.value);
         return;
@@ -910,8 +912,8 @@ new Sortable(galleryList, {
     //multiDrag: true,
     store: {
         set: async function (sortable) {
-            execProcess("thumbnails","PUT", {dbid_string: sortable.toArray().join(":")} ).then( (data) => {
-                console.log("sorted!");
+            execProcess("reorder/" + gArticleId, "PUT", {table_name: "asset", dbid_string: sortable.toArray().join(":")} ).then( (data) => {
+                console.log("article assets sorted!");
             });
         }
     }
@@ -926,12 +928,14 @@ new Sortable(pageNav, {
     ghostClass: 'drag-in-progress',
     store: {
         set: async function (sortable) {
-            execProcess("reorder-articles/" + gWebsiteId, "PUT", {dbid_string: sortable.toArray().join(":")} ).then( () => {
-                console.log("pages reordered");
+            execProcess("reorder/" + gWebsiteId, "PUT", {table_name: "website_article", dbid_string: sortable.toArray().join(":")} ).then( () => {
+                console.log("website pages reordered");
             });
         }
     }
 });
+
+
 
 /* 
  ** SIGN OUT
@@ -1238,7 +1242,7 @@ const new_page = (e) => {
  */
 const new_collection = () => {
     const parent = pageNav.querySelector(".selected").closest("div").dataset.id;
-    execProcess( "article/"+parent,"POST").then( (data) => {
+    execProcess( "collection/"+parent,"POST").then( (data) => {
         gArticleId = data.article_id;
         editor_status = "init";
         editor_status_text.textContent = "";
@@ -1314,6 +1318,21 @@ const show_subpages = (e) => {
         }
         list.replaceChildren();
         list.insertAdjacentHTML('afterbegin',data.content);
+        /* 
+        **  ENABLE DRAG AND DROP 
+        */
+        new Sortable(list, {
+            sort: true,
+            animation: 150,
+            ghostClass: 'drag-in-progress',
+            store: {
+                set: async function (sortable) {
+                    execProcess("reorder/" + gArticleId, "PUT", {table_name: "article", dbid_string: sortable.toArray().join(":")} ).then( () => {
+                        console.log("sub pages reordered");
+                    });
+                }
+            }
+        });
     });
 }
 
