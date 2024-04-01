@@ -14,11 +14,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
     PROCEDURE getWebsite(pWebsiteId IN website.id%type);
     --
-    PROCEDURE insertArticle(pId IN VARCHAR2);
+    PROCEDURE insertCollection(pParentId IN article.id%type);
     --
-    PROCEDURE reorderAssets(pBodyText IN CLOB);
-    --
-    PROCEDURE reorderWebsiteArticles(pWebsiteId IN website_article.website_id%type, pBodyText IN CLOB, pReturnJson IN BOOLEAN DEFAULT TRUE);
+    PROCEDURE reorder(pId IN NUMBER, pBodyText IN CLOB);
     --
     PROCEDURE restoreArticle(pArticleId IN article.id%type);
     --
@@ -516,6 +514,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END; 
 
     /*
+     **  Insert new sub page 
+     */        
+    PROCEDURE insertCollection(pParentId IN article.id%type) IS
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        FOR C IN (SELECT id FROM article WHERE id=pParentId AND author_user_id=l_session_data.user_id) LOOP
+            INSERT INTO article (id, parent_id, author_user_id, created_date) VALUES (seq_article.nextval, pParentId, l_session_data.user_id, current_timestamp);
+        END LOOP;
+        
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.write('article_id', seq_article.currval);
+        APEX_JSON.close_object;
+    END;
+
+    /*
      **  Restore article content to prior to last login
      */        
     PROCEDURE restoreArticle(pArticleId IN article.id%type) IS
@@ -531,57 +547,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
-        APEX_JSON.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-    END;
-
-    /*
-     **  Insert new page in website or a new subpage in existing article 
-     */        
-    PROCEDURE insertArticle(pId IN VARCHAR2) IS
-        l_session_data pck_core.session_data_rt;
-        l_website_id website.id%type;
-        l_selected_id article.id%type;
-        l_dbid_string apex_t_varchar2;
-        l_next_article_id article.id%type;
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-
-        IF (INSTR(pId,',')=0) THEN
-            /* Inserting a subpage */
-            INSERT INTO article (id, parent_id, author_user_id, created_date) VALUES (seq_article.nextval, pId, l_session_data.user_id, current_timestamp);
-            APEX_JSON.open_object; 
-            APEX_JSON.write('success', TRUE);
-            APEX_JSON.write('article_id', seq_article.currval);
-            APEX_JSON.close_object;
-            RETURN;
-        END IF;
-
-        /* Insert new page in website */
-        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
-
-        l_next_article_id:=seq_article.nextval;
-        INSERT INTO article (id, author_user_id, created_date) VALUES (l_next_article_id, l_session_data.user_id, current_timestamp);
-        INSERT INTO website_article(article_id, website_id, navigation_label, display_order, user_id) VALUES (l_next_article_id, l_website_id, '[New Page]', 0, l_session_data.user_id);
-
-        IF (SUBSTR(pId,INSTR(pId,',')+1)<>'0') THEN /* this will be character string "0" if pageNav is empty else reorder pages */
-            l_selected_id:=SUBSTR(pId,INSTR(pId,',')+1);  
-            FOR C IN (SELECT article_id FROM website_article WHERE website_id=l_website_id ORDER BY display_order) LOOP
-                apex_string.push(l_dbid_string, C.article_id);
-                IF (C.article_id=l_selected_id) THEN
-                    apex_string.push(l_dbid_string, l_next_article_id);
-                END IF;
-            END LOOP;
-            reorderWebsiteArticles(l_website_id,'{"dbid_string":"'|| apex_string.join(l_dbid_string,':') ||'"}',pReturnJson=>FALSE);
-        END IF;
-
-        APEX_JSON.open_object; 
-        APEX_JSON.write('success', TRUE);
-        APEX_JSON.write('article_id', seq_article.currval);
-        APEX_JSON.write('nav_label', pck_core.buildNavLabel(seq_article.currval, 1, '[New Page]', 'page-options'));
         APEX_JSON.close_object;
 
         EXCEPTION
@@ -751,103 +716,54 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-     **  Reorder website articles
+     **  Reorder rows in specified table - i.e. update column DISPLAY_ORDER
      */
-    PROCEDURE reorderWebsiteArticles(pWebsiteId IN website_article.website_id%type, pBodyText IN CLOB, pReturnJson IN BOOLEAN DEFAULT TRUE) IS
+    PROCEDURE reorder(pId IN NUMBER, pBodyText IN CLOB) IS
+        l_table_name VARCHAR2(30);
         l_dbid_string LONG;
 
-        TYPE t_website_article IS RECORD(
-            article_id website_article.article_id%type,
-            display_order website_article.display_order%type);
-        TYPE tt_website_article IS TABLE OF t_website_article;
-        l_website_articles tt_website_article; 
+        TYPE t_table_id IS RECORD(
+            id NUMBER,
+            display_order NUMBER);
+        TYPE tt_table_id IS TABLE OF t_table_id;
+        l_table_ids tt_table_id; 
 
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT dbid_string INTO l_dbid_string 
-          FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (dbid_string));
+        SELECT table_name, dbid_string 
+          INTO l_table_name, l_dbid_string 
+          FROM users, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (table_name, dbid_string))
+         WHERE users.id=l_session_data.user_id;
 
         SELECT column_value, rownum 
-          BULK COLLECT INTO l_website_articles
+          BULK COLLECT INTO l_table_ids
           FROM TABLE(apex_string.split(l_dbid_string,':'));
 
-        FORALL i IN l_website_articles.first .. l_website_articles.last
-        UPDATE website_article 
-           SET display_order=l_website_articles(i).display_order 
-         WHERE website_id = pWebsiteId
-           AND article_id=l_website_articles(i).article_id
-           AND user_id=l_session_data.user_id;
+        CASE l_table_name
+            WHEN 'website_article' THEN
+                FORALL i IN l_table_ids.first .. l_table_ids.last
+                UPDATE website_article 
+                   SET display_order=l_table_ids(i).display_order 
+                 WHERE website_id = pId
+                   AND article_id=l_table_ids(i).id;
 
-        IF (pReturnJson) THEN
-            apex_json.open_object; 
-            apex_json.write('success', TRUE);
-            apex_json.close_object;
-        END IF;
+            WHEN 'article' THEN
+                FORALL i IN l_table_ids.first .. l_table_ids.last
+                UPDATE article 
+                   SET display_order=l_table_ids(i).display_order 
+                 WHERE parent_id = pId
+                   AND id=l_table_ids(i).id;
 
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-    END;
-
-    /*
-     **  Reorder assets
-     */
-    PROCEDURE reorderAssets(pBodyText IN CLOB) IS
-        l_article_id article.id%type;
-        l_dbid_string LONG;
-        l_first_dbid asset.id%type;
-
-        TYPE t_asset IS RECORD(
-            id asset.id%type,
-            display_order asset.display_order%type);
-        TYPE tt_asset IS TABLE OF t_asset;
-        l_assets tt_asset; 
-        l_cld_cloud_name asset.cld_cloud_name%type;
-        l_resource_type asset.resource_type%type; 
-        l_public_id asset.public_id%type; 
-        l_format asset.format%type; 
-        l_width asset.width%type;
-
-        l_url VARCHAR2(500);
-        l_na_number NUMBER;
-        l_na_varchar VARCHAR2(500);
-        l_session_data pck_core.session_data_rt;
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-
-        SELECT dbid_string INTO l_dbid_string 
-          FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (dbid_string));
-
-        SELECT column_value, rownum 
-          BULK COLLECT INTO l_assets
-          FROM TABLE(apex_string.split(l_dbid_string,':'));
-
-        /* get the article id from first asset */
-        SELECT article_id INTO l_article_id
-          FROM asset 
-         WHERE id=l_assets(1).id
-           AND user_id=l_session_data.user_id;
-
-        /* ... and get id of first asset as this may have been replaced */
-        SELECT cover_asset_id 
-          INTO l_first_dbid 
-          FROM article 
-         WHERE id=l_article_id
-           AND author_user_id=l_session_data.user_id;
-
-        FORALL i IN l_assets.first .. l_assets.last
-        UPDATE asset SET display_order=l_assets(i).display_order WHERE id  = l_assets(i).id;
-
-        IF (l_assets(1).id<>l_first_dbid) THEN
-            SELECT cld_cloud_name, resource_type, public_id, format, width
-              INTO l_cld_cloud_name, l_resource_type, l_public_id, l_format, l_width
-              FROM asset 
-              WHERE id=l_assets(1).id
-                AND user_id=l_session_data.user_id;
-            UPDATE article SET updated_date=current_date, cover_asset_id=l_assets(1).id WHERE id=l_article_id;
-        END IF;
+            WHEN 'asset' THEN
+                FORALL i IN l_table_ids.first .. l_table_ids.last
+                UPDATE asset 
+                   SET display_order=l_table_ids(i).display_order 
+                 WHERE id=l_table_ids(i).id;
+                --
+                UPDATE article SET cover_asset_id=l_table_ids(1).id WHERE id=pId;
+        END CASE;
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
