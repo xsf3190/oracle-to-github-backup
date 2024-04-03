@@ -516,6 +516,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
               FROM apex_workspace_apex_users w, users u 
              WHERE w.email=u.email
                AND w.is_admin='Yes'
+               AND u.ipdata_api_key IS NOT NULL
                FETCH FIRST ROW ONLY;
         END IF;
 
@@ -524,6 +525,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         apex_web_service.g_request_headers(1).value := 'application/json';
 
         l_ipdata_url:=l_ipdata_url || pEndpoint || '?api-key=' || l_ipdata_api_key;
+        pck_core.log(l_ipdata_url);
 
         pData := apex_web_service.make_rest_request(p_url=>l_ipdata_url, p_http_method=>pMethod);
 
