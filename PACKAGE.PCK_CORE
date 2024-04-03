@@ -468,7 +468,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <a href="" class="nav-label">' || pLabel || '</a>' ||
             CASE 
                 WHEN pClassName='website-options' THEN
-                '<button type="button">DEPLOY<hr>TEST</button><button type="button">DEPLOY<hr>LIVE</button><button type="button">WEBSITE<hr>VISITS</button>'
+                '<button type="button">DEPLOY</button><button type="button">HITS</button>'
                 WHEN pCollectionType<>'N/A' THEN
                 '<div class="dropdown">
                     <button type="button" class="show-dropdown show-subpages" data-collection="' || pCollectionType || '">&blacktriangledown;</button>
@@ -488,12 +488,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     BEGIN
         l_html:=
         '<nav class="website-nav">';
-        FOR C IN (SELECT id, domain_name, netlify_site_id, netlify_site_id_custom
+        FOR C IN (SELECT id, domain_name, netlify_site_id, netlify_site_id_custom, ROW_NUMBER() OVER (ORDER BY domain_name) rn, COUNT(*) OVER () nb
                     FROM website
                    WHERE user_id=pUserId
                    ORDER BY domain_name)
         LOOP
             l_html:=l_html || buildNavLabel(C.id, 0, C.domain_name, 'website-options');
+            IF (C.rn<C.nb) THEN
+                l_html:=l_html || '<span></span>';
+            END IF;
         END LOOP;
         l_html:=l_html || 
         '</nav>';
