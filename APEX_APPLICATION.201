@@ -33,7 +33,7 @@ prompt APPLICATION 201 - OCI TEST
 -- Application Export:
 --   Application:     201
 --   Name:            OCI TEST
---   Date and Time:   20:01 Tuesday April 2, 2024
+--   Date and Time:   20:01 Wednesday April 3, 2024
 --   Exported By:     EXAMPLE
 --   Flashback:       0
 --   Export Type:     Application Export
@@ -154,7 +154,8 @@ wwv_imp_workspace.create_credential(
  p_id=>wwv_flow_imp.id(31982295346370820)
 ,p_name=>'OCI'
 ,p_static_id=>'OCI'
-,p_authentication_type=>'BASIC'
+,p_authentication_type=>'OAUTH2_CLIENT_CREDENTIALS'
+,p_scope=>'urn:opc:idm:__myscopes__'
 ,p_prompt_on_install=>true
 );
 end;
