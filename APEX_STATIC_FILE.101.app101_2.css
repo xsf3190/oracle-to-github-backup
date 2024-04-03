@@ -200,6 +200,12 @@ nav:not(.top-nav) div {
     }
 }
 
+.website-nav span {
+    display: inline-block;
+    border-inline-start: 3px solid red;
+    /*margin: 0 10px;*/
+}
+
 nav [class$="options"]:has(+ a.selected) {
     opacity:1;
 }
@@ -214,10 +220,11 @@ nav a.selected + * {
     cursor: pointer;
 }
 
-
+/*
 nav a:not(.selected) ~ button {
     display: none;
 }
+*/
 
 label {
     font-weight: 600;
