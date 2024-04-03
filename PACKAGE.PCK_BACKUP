@@ -291,12 +291,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
 
         /*
         **   6. Load google Fonts (apparently, the url can change which would bugger up my demo section in website options
-        */
+        
         pck_api.callGoogleApi(pUserId=>l_user_id, pData=>l_clob);
 
         DELETE google_font;
         INSERT INTO google_font (seq, family, url_regular)
         SELECT ROWNUM, family, url_regular FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, url_regular PATH '$.files.regular'));
+        */
 
 
         EXCEPTION
