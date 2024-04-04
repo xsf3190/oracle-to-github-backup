@@ -572,7 +572,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         IF (pWebsiteId=0) THEN
             INSERT INTO website(id, domain_name, netlify_site_id, netlify_site_id_custom, created_date, user_id)
                 VALUES (seq_website.nextval, pDomainName, l_netlify_site_id, l_netlify_site_id_custom, current_timestamp, pUserId);
-            apex_json.write('nav_label', pck_core.buildNavLabel(seq_website.currval,null,pDomainName, 'website-options'));
+            apex_json.write('nav_label', pck_core.buildNavLabel(seq_website.currval,pDomainName, 'website-options','site-id',l_netlify_site_id));
             apex_json.write('new_website_id',seq_website.currval);
             l_message:='Created OK';    
         ELSE
@@ -604,7 +604,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 l_next_article_id:=seq_article.nextval;
                 INSERT INTO article (id, author_user_id, created_date) VALUES (l_next_article_id, pUserId, current_timestamp);
                 INSERT INTO website_article(article_id, website_id, navigation_label, display_order, user_id) VALUES (l_next_article_id, pWebsiteId, pNavigationLabel, 0, pUserId);
-                apex_json.write('nav_label', pck_core.buildNavLabel(l_next_article_id,null,pNavigationLabel, 'page-options'));
+                apex_json.write('nav_label', pck_core.buildNavLabel(l_next_article_id,pNavigationLabel, 'page-options'));
                 apex_json.write('new_article_id',l_next_article_id);
                 apex_json.write('message', 'Created OK');
                 apex_json.write('color', 'green');
