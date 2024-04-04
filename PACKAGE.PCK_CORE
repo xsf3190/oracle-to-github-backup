@@ -23,7 +23,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildNavLabel(pId IN INTEGER, pSelected IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pCollectionType IN website_article.collection_type%type DEFAULT NULL) RETURN VARCHAR2;
+    FUNCTION buildNavLabel(pId IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pAttrName IN VARCHAR2 DEFAULT NULL, pAttrValue IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildPageNav(pWebsiteId IN website.id%type) RETURN CLOB;
     --
@@ -453,29 +453,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </nav>');
     END;
 
-    FUNCTION buildNavLabel(pId IN INTEGER, pSelected IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pCollectionType IN website_article.collection_type%type DEFAULT NULL) RETURN VARCHAR2 IS
-        n PLS_INTEGER;
+    FUNCTION buildNavLabel(pId IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pAttrName IN VARCHAR2 DEFAULT NULL, pAttrValue IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
+        l_html LONG;
     BEGIN
-        --IF (pCollectionType<>'N/A') THEN
-        --    SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT NULL FROM article WHERE parent_id=pId);
-        --END IF;
-
-        RETURN(
+        l_html:=
         '<div data-id="' || pId || '">
             <button type="button" class="' || pClassName || '">
                 <svg><use href="#pencil"></use></svg>
             </button>
-            <a href="" class="nav-label">' || pLabel || '</a>' ||
-            CASE 
-                WHEN pClassName='website-options' THEN
-                '<button type="button">DEPLOY</button><button type="button">HITS</button>'
-                WHEN pCollectionType<>'N/A' THEN
-                '<div class="dropdown">
-                    <button type="button" class="show-dropdown show-subpages" data-collection="' || pCollectionType || '">&blacktriangledown;</button>
-                    <ol class="dropdown-items"></ol>
-                </div>'
-            END ||
-        '</div>');
+            <a href="" class="nav-label">' || pLabel || '</a>';
+
+        IF (pClassName='website-options') THEN
+            l_html:=l_html || 
+            '<button type="button" class="deploy-website" data-'|| pAttrName || '="' || pAttrValue || '">DEPLOY</button>
+             <button type="button">HITS</button>';
+        END IF;
+        IF (pClassName='page-options' AND pAttrName IS NOT NULL) THEN
+            l_html:=l_html || 
+            '<div class="dropdown">
+                <button type="button" class="show-dropdown show-subpages" data-'|| pAttrName || '="' || pAttrValue || '">&blacktriangledown;</button>
+                <ol class="dropdown-items"></ol>
+            </div>';
+        END IF;
+        l_html:=l_html || '</div>';
+
+        RETURN(l_html);
     END;
 
     FUNCTION buildWebsiteNav(
@@ -493,7 +495,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    WHERE user_id=pUserId
                    ORDER BY domain_name)
         LOOP
-            l_html:=l_html || buildNavLabel(C.id, 0, C.domain_name, 'website-options');
+            l_html:=l_html || buildNavLabel(C.id, C.domain_name, 'website-options','site_id',C.netlify_site_id);
             IF (C.rn<C.nb) THEN
                 l_html:=l_html || '<span></span>';
             END IF;
@@ -512,7 +514,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    WHERE website_id=pWebsiteId
                    ORDER BY display_order) 
         LOOP
-            l_html:=l_html || TO_CLOB(buildNavLabel(C.article_id, 0, C.navigation_label, 'page-options',C.collection_type));
+            IF (C.collection_type='N/A') THEN
+                l_html:=l_html || TO_CLOB(buildNavLabel(C.article_id, C.navigation_label, 'page-options'));
+            ELSE
+                l_html:=l_html || TO_CLOB(buildNavLabel(C.article_id, C.navigation_label, 'page-options','collection',C.collection_type));
+            END IF;
         END LOOP;
         RETURN(l_html);
     END;
