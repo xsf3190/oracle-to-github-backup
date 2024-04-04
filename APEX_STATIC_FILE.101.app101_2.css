@@ -189,14 +189,16 @@ a.selected {
 nav:not(.top-nav) div {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: var(--space-3xs);
+    gap: var(--space-s);
     align-items: center;
     & button:not(:first-child) {
-        font-size: 50%;
+        font-size: 80%;
         font-weight: 900;
         border: 1px solid crimson;
-        border-radius: var(--space-2xs);
-        padding: var(--space-xs);
+        border-radius: var(--space-3xs);
+        padding: var(--space-3xs);
+        color: white;
+        background-color: var(--color-solid);
     }
 }
 
