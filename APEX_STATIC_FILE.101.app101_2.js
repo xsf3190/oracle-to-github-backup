@@ -144,7 +144,6 @@ const changeHandler = (e) => {
 
         switch (table_column) {
             case 'website_article.navigation_label' :
-                console.log("data",data)
                 if (data.new_article_id) {
                     gArticleId = data.new_article_id;
                     pageNav.insertAdjacentHTML('beforeend',data.nav_label);
@@ -196,9 +195,9 @@ const edit_website = () => {
  ** DEPLOY WEBSITE
  */
 const deploy_website = (e) => { 
-    const site_id = e.target.dataset.site_id;
-    if (!site_id) return;
-    execProcess("deploy","POST",{"websiteid":gWebsiteId,"siteid":site_id,"url":e.target.textContent}).then( (data) => {
+    const site_id = e.target.dataset.site_id,
+          website_id = e.target.closest("div").dataset.id;
+    execProcess("deploy","POST",{"websiteid":website_id,"siteid":site_id}).then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
@@ -206,7 +205,7 @@ const deploy_website = (e) => {
         if (gIntervalId) {
             clearInterval(gIntervalId);
         }
-        gIntervalId = setInterval(getDeploymentStatus,2000,gWebsiteId, site_id);
+        gIntervalId = setInterval(getDeploymentStatus,2000,website_id, site_id);
     });
 };
 
@@ -1093,7 +1092,6 @@ ClassicEditor.create(document.querySelector("#editor"), {
         console.error(error);
     });
 
-
 /*
  ** SET FONT FOR WEBSIITE DEMO
  */
@@ -1104,7 +1102,7 @@ const websiteFont = (font_family, font_url) => {
     document.fonts.ready.then(()=>{
         console.log("font " + font_family + " loaded");
         gWebsiteDemo.style.setProperty("--font-family",font_family);
-        gWebsiteDemo.querySelector("h1").textContent = websiteNav.querySelector("[data-id='"+gWebsiteId+"']").textContent.toUpperCase();
+        gWebsiteDemo.querySelector("h1").textContent = websiteNav.querySelector("[data-id='"+gWebsiteId+"'] a").textContent.toUpperCase();
         gWebsiteDemo.querySelector("p").textContent = `"${font_family}" text with background color`;
     });
 }
