@@ -37,12 +37,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_body_text CLOB:=pBodyText;
         l_website_id website.id%type;
         l_site_id website.netlify_site_id%type;
-        l_url VARCHAR2(250);
+        l_url VARCHAR2(100);
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT websiteid, siteid, url INTO l_website_id, l_site_id, l_url FROM users, JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid, url)) WHERE users.id=l_session_data.user_id;
+        SELECT websiteid, siteid INTO l_website_id, l_site_id FROM users, JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid)) WHERE users.id=l_session_data.user_id;
 
         /* Check no other session currently deploying - simultaneous deployments not allowed on Netlify free plan */
 
@@ -92,6 +92,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             argument_value => l_session_data.app_id
         );
         dbms_scheduler.enable(l_job_name);
+
+        SELECT CASE 
+                WHEN netlify_site_id=l_site_id THEN REPLACE(domain_name,'.','-') || '.netlify.app'  
+                WHEN netlify_site_id_custom=l_site_id THEN domain_name
+               END
+        INTO l_url 
+        FROM website 
+        WHERE id=l_website_id;
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
