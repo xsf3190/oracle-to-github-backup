@@ -1201,7 +1201,7 @@ const page_options = (e) => {
  ** GET WEBSIITE VISITS
  */
 const get_visits = (e) => {
-    const websiteid = e.target.dataset.id ? e.target.dataset.id : gWebsiteId;
+    const websiteid = e.target.closest("div").dataset.id;
     execProcess( "visits/"+websiteid + "," + e.target.dataset.domain,"GET").then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
