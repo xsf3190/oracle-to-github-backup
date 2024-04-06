@@ -187,21 +187,24 @@ nav:not(.top-nav) div {
     flex-wrap: wrap;
     gap: var(--space-s);
     align-items: center;
+    font-weight: 900;
     & button:not(:first-child) {
         font-size: 80%;
-        font-weight: 900;
-        border: 1px solid crimson;
         border-radius: var(--space-3xs);
-        padding: var(--space-3xs);
+        padding: var(--space-3xs) var(--space-2xs);
         color: white;
         background-color: var(--color-solid);
+        & span {
+            display: inline-block;
+            border-radius: var(--space-3xs);
+            margin-left: var(--space-s);
+            font-family: monospace;
+            background-color: #ddd;
+            color: black;
+            padding: var(--space-3xs) var(--space-2xs);
+            letter-spacing: 2px;
+        }
     }
-}
-
-.website-nav span {
-    display: inline-block;
-    border-inline-start: 3px solid red;
-    /*margin: 0 10px;*/
 }
 
 nav [class$="options"]:has(+ a.selected) {
