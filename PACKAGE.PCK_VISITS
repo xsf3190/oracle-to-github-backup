@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
+    PROCEDURE email_visits;
+    --
     PROCEDURE getVisits(pId IN VARCHAR2);
     --
     PROCEDURE uploadIpLookup;
@@ -117,6 +119,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         uploadIpLookup;
     END;
 
+    FUNCTION cwvRating(pLCP IN VARCHAR2 DEFAULT NULL, pCLS IN VARCHAR2 DEFAULT NULL, pINP IN VARCHAR2 DEFAULT NULL, pFID IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
+        l_cwv VARCHAR2(200);
+    BEGIN
+        IF (pLCP IS NOT NULL) THEN
+            l_cwv:=l_cwv || '<mark class="' || pLCP || '">LCP</mark>';
+        ELSE
+            l_cwv:=l_cwv || '<mark></mark>';
+        END IF;
+        IF (pCLS IS NOT NULL) THEN
+            l_cwv:=l_cwv || '<mark class="' || pCLS || '">CLS</mark>';
+        ELSE
+            l_cwv:=l_cwv || '<mark></mark>';
+        END IF;
+        IF (pINP IS NOT NULL) THEN
+            l_cwv:=l_cwv || '<mark class="' || pINP || '">INP</mark>';
+        ELSIF (pFID IS NOT NULL) THEN
+            l_cwv:=l_cwv || '<mark class="' || pFID || '">FID</mark>';
+        ELSE
+            l_cwv:=l_cwv || '<mark></mark>';
+        END IF;
+        RETURN(l_cwv);
+    END;
+
+    FUNCTION cwvRatingOverall(pLCP IN VARCHAR2 DEFAULT NULL, pCLS IN VARCHAR2 DEFAULT NULL, pINP IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
+        l_cwv VARCHAR2(200);
+    BEGIN
+        IF ((pLCP='good' OR pLCP IS NULL) AND (pCLS='good' OR pCLS IS NULL) AND (pINP='good' OR pINP IS NULL)) THEN
+            RETURN('<span class="good">GOOD</span>');
+        ELSIF ((pLCP='poor' OR pLCP IS NULL) OR (pCLS='poor' OR pCLS IS NULL) OR (pINP='poor' OR pINP IS NULL)) THEN
+            RETURN('<span class="poor">POOR</span>');
+        ELSE
+            RETURN('<span class="needs-improvement">NEEDS<br>IMPROVEMENT</span>');
+        END IF;
+    END;
+
     /*
     **  Return log of all visits to website
     */
@@ -124,7 +161,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_website_id website.id%type;
         l_domain_name VARCHAR2(200);
         l_content CLOB;
-        l_cwv VARCHAR2(200);
         l_visit_date VARCHAR2(22);
         l_session_data pck_core.session_data_rt;
         n PLS_INTEGER;
@@ -162,25 +198,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 ORDER BY wh.visit_date desc
         ) 
         LOOP
-            l_cwv:='';
-            IF (C.lcp_rating IS NOT NULL) THEN
-                l_cwv:=l_cwv || '<mark class="' || C.lcp_rating || '">LCP</mark>';
-            ELSE
-                l_cwv:=l_cwv || '<mark></mark>';
-            END IF;
-            IF (C.cls_rating IS NOT NULL) THEN
-                l_cwv:=l_cwv || '<mark class="' || C.cls_rating || '">CLS</mark>';
-            ELSE
-                l_cwv:=l_cwv || '<mark></mark>';
-            END IF;
-            IF (C.inp_rating IS NOT NULL) THEN
-                l_cwv:=l_cwv || '<mark class="' || C.inp_rating || '">INP</mark>';
-            ELSIF (C.fid_rating IS NOT NULL) THEN
-                l_cwv:=l_cwv || '<mark class="' || C.fid_rating || '">FID</mark>';
-            ELSE
-                l_cwv:=l_cwv || '<mark></mark>';
-            END IF;
-
             l_content:=l_content || '
                 <li>
                     <span>' || TO_CHAR(C.visit_date AT TIME ZONE l_session_data.timezone, 'dd Mon yyyy fmhh24:fmmi')  || '</span>
@@ -189,7 +206,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     <span>' || C.browser || '</span>
                     <span>' || C.connection || CASE WHEN C.mobile='true' THEN ' (Mob)' END || '</span>
                     <span>' || CASE WHEN C.duration_visible IS NOT NULL THEN TO_CHAR(C.duration_visible) || ' seconds' END || '</span>
-                    <span class="cwv">' || l_cwv || '</span>
+                    <span class="cwv">' || cwvRating(C.lcp_rating, C.cls_rating, C.inp_rating, C.fid_rating) || '</span>
                 </li>';
         END LOOP;
         l_content:=l_content || '</ol>';
@@ -202,5 +219,169 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         EXCEPTION WHEN OTHERS THEN pck_core.log_error;
     END;
 
+    /*
+    **  EMAIL VISIT DETAILS FOR ALL WEBSISTES WITH CUSTOM DOMAIN
+    */
+    PROCEDURE email_visits IS
+        l_body CLOB:='To view the content of this message, please use an HTML enabled mail client.'||utl_tcp.crlf;
+        l_body_html CLOB:=
+        '<!DOCTYPE html>
+         <html>
+            <head>
+                <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta name="format-detection" content="telephone=no">
+                <meta name="format-detection" content="date=no">
+                <meta name="format-detection" content="address=no">
+                <meta name="format-detection" content="email=no">
+                <style type="text/css">
+                    body {
+                        font-family:Georgia,sans-serif;
+                        font-size:1rem;
+                    }
+                    td,
+                    th {
+                        border: 1px solid rgb(190, 190, 190);
+                        padding: 0.8rem;
+                    }
+                    td {
+                        text-align: center;
+                    }
+                    tr:nth-child(even) {
+                        background-color: #eee;
+                    }
+                    th[scope="col"] {
+                        background-color: #696969;
+                        color: #fff;
+                    }
+                    th[scope="row"] {
+                        background-color: #d7d9f2;
+                    }
+                    caption {
+                        padding: 10px;
+                        caption-side: top;
+                    }
+                    table {
+                        border-collapse: collapse;
+                        border: 2px solid rgb(200, 200, 200);
+                        letter-spacing: 1px;
+                        font-family: sans-serif;
+                    }
+                    span {
+                        padding: 4px 8px;
+                        letter-spacing: 1px;
+                        font-weight: bold;
+                    }
+                    .good {
+                        color: #000;
+                        background-color: #0cce6b;
+                    }
+                    .needs-improvement {
+                        color: #000;
+                        background-color: #ffa401;
+                    }
+                    .poor {
+                        color: #000;
+                        background-color: #ff4e41;
+                    }
+                </style>
+            </head>
+        <body>';
+        l_bgcolor VARCHAR2(7);
+        n PLS_iNTEGER:=0;
+    BEGIN
+        FOR C IN (SELECT id, domain_name, contact_email FROM website WHERE netlify_site_id_custom IS  NOT NULL and id=1608) LOOP
+            pck_visits.uploadPageHits(C.id);
+            FOR C1 IN (
+                WITH website_hits AS 
+                (
+                    SELECT website_id, ip_address, visit_date, 
+                            MAX(referrer) referrer, 
+                            MAX(lcp_rating) lcp_rating, MAX(cls_rating) cls_rating, MAX(inp_rating) inp_rating, MAX(fid_rating) fid_rating, 
+                            SUM(duration_visible) duration_visible, MAX(browser) browser, MAX(connection) connection, MAX(mobile) mobile
+                      FROM page_hit
+                     WHERE  website_id=C.id
+                       AND  url=C.domain_name 
+                     GROUP BY website_id, ip_address, visit_date
+                ),
+                summary AS
+                (
+                    SELECT COUNT(*) nb_hit, COUNT(DISTINCT ip_address) nb_ip, SUM(duration_visible)/COUNT(*) avg_time FROM website_hits 
+                )
+                SELECT  
+                        wh.visit_date, wh.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
+                        wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating, 
+                        nb_hit, nb_ip, avg_time
+                  FROM website_hits wh, ip_lookup ip, summary
+                 WHERE ip.ip=wh.ip_address
+                 ORDER BY wh.visit_date DESC
+            ) LOOP
+                n:=n+1;
+                IF (n=1) THEN
+                    l_body_html:=l_body_html ||
+                    '<table role="presentation">
+                        <caption>PAGE HITS: <strong>' || C1.nb_hit || '</strong> DISTINCT VISITORS: <strong>' || C1.nb_ip || '</strong> AVERAGE VIEWING TIME: <strong>' || CEIL(C1.avg_time) || ' seconds</strong></caption>
+                        <thead>
+                            <tr bgcolor="#d7d9f2">
+                                <th scope="col">Date</th>
+                                <th scope="col">Referrer /<br>Location</th>
+                                <th scope="col">Viewing Time</th>
+                                <th scope="col">Performance Rating</th>
+                            </tr>
+                        </thead>
+                        <tbody>';
+                END IF;
+
+                IF (MOD(n,2)=0) THEN
+                    l_bgcolor:='#eeeeee';
+                ELSE
+                    l_bgcolor:=NULL;
+                END IF;
+                l_body_html:=l_body_html || to_clob(
+                '<tr  bgcolor="' || l_bgcolor || '">
+                    <td scope="row">' || TO_CHAR(C1.visit_date,'dd.mon.yyyy hh24:mi') || '</td>
+                    <td>' || C1.referrer || '<br>' || C1.location || '</td>
+                    <td>' || C1.duration_visible || '</td>
+                    <td style="text-align:center">' || cwvRatingOverall(C1.lcp_rating, C1.cls_rating, C1.inp_rating) || '</td>
+                </tr>');
+            END LOOP;
+            l_body_html:=l_body_html || to_clob('</tbody></table>');
+
+            n:=0;
+            FOR C1 IN (
+                SELECT wa.navigation_label, ph.ip_address, ph.visit_date, SUM(ph.duration_visible) duration_visible
+                  FROM page_hit ph, website_article wa
+                 WHERE ph.website_id=C.id
+                   AND ph.url=C.domain_name 
+                   AND wa.website_id=ph.website_id
+                   AND wa.article_id=ph.article_id
+                 GROUP BY wa.navigation_label, ph.ip_address, ph.visit_date
+                 ORDER BY ph.visit_date DESC
+            ) LOOP
+                n:=n+1;
+                IF (n=1) THEN
+                    l_body_html:=l_body_html ||
+                    '<table role="presentation">
+                        <caption>PAGE VIEWING TIME ANALYSISE/caption>
+                        <thead>
+                            <tr bgcolor="#d7d9f2">
+                                <th scope="col">Date</th>
+                                <th scope="col">Referrer /<br>Location</th>
+                                <th scope="col">Viewing Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>';
+                END IF;
+            END LOOP;
+            IF (n>1) THEN
+                l_body_html:=l_body_html || to_clob('</tbody></table>');
+            END IF;
+            
+            l_body_html:=l_body_html || to_clob('</body></html>');
+
+            apex_mail.send(p_to=>C.contact_email, p_from=>'visits@'||C.domain_name, p_body=>l_body, p_body_html=>l_body_html, p_subj=>'Visits - ' || C.domain_name);
+            apex_mail.push_queue(); 
+        END LOOP;
+    END;
 END;
 /
