@@ -455,6 +455,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
     FUNCTION buildNavLabel(pId IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pAttrName IN VARCHAR2 DEFAULT NULL, pAttrValue IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
         l_html LONG;
+        l_value_1 VARCHAR2(50);
+        l_value_2 VARCHAR2(50);
     BEGIN
         l_html:=
         '<div data-id="' || pId || '">
@@ -464,10 +466,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <a href="" class="nav-label">' || pLabel || '</a>';
 
         IF (pClassName='website-options') THEN
+            IF (INSTR(pAttrValue,',')>0) THEN
+                l_value_1:=SUBSTR(pAttrValue,1,INSTR(pAttrValue,',')-1);
+                l_value_2:=SUBSTR(pAttrValue,INSTR(pAttrValue,',')+1);
+            ELSE
+                l_value_1:=pAttrValue;
+            END IF;
+
+            /* DEPLOY BUTTONS */
             l_html:=l_html || 
-            '<button type="button" class="deploy-website" data-'|| pAttrName || '="' || pAttrValue || '">DEPLOY</button>
-             <button type="button">HITS</button>';
+            '<button type="button" class="deploy-website" data-'|| pAttrName || '="' || l_value_1 || '">DEPLOY<span>TEST</span></button>';
+            IF (l_value_2 IS NOT NULL) THEN
+                l_html:=l_html || 
+                '<button type="button" class="deploy-website" data-'|| pAttrName || '="' || l_value_2 || '">DEPLOY<span>LIVE</span></button>';
+            END IF;
+
+            /* HITS BUTTON */
+            IF (l_value_2 IS NOT NULL) THEN
+                l_html:=l_html || 
+                '<button type="button" class="visits" data-domain="'|| pLabel || '">HITS<span>LIVE</span></button>';
+            ELSE
+                l_html:=l_html || 
+                '<button type="button" class="visits" data-domain="'|| REPLACE(pLabel,'.','-') || '.netlify.app">HITS<span>TEST</span></button>';
+            END IF;
         END IF;
+
         IF (pClassName='page-options' AND pAttrName IS NOT NULL) THEN
             l_html:=l_html || 
             '<div class="dropdown">
@@ -490,15 +513,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     BEGIN
         l_html:=
         '<nav class="website-nav">';
-        FOR C IN (SELECT id, domain_name, netlify_site_id, netlify_site_id_custom, ROW_NUMBER() OVER (ORDER BY domain_name) rn, COUNT(*) OVER () nb
+        FOR C IN (SELECT id, domain_name, netlify_site_id||','||netlify_site_id_custom site_id
                     FROM website
                    WHERE user_id=pUserId
                    ORDER BY domain_name)
         LOOP
-            l_html:=l_html || buildNavLabel(C.id, C.domain_name, 'website-options','site_id',C.netlify_site_id);
-            IF (C.rn<C.nb) THEN
-                l_html:=l_html || '<span></span>';
-            END IF;
+            l_html:=l_html || buildNavLabel(C.id, C.domain_name, 'website-options','site_id',C.site_id);
         END LOOP;
         l_html:=l_html || 
         '</nav>';
