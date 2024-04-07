@@ -154,6 +154,61 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         END IF;
     END;
 
+    
+    PROCEDURE printCsr (pCsr IN OUT SYS_REFCURSOR, pHtml IN OUT NOCOPY CLOB)
+    IS
+        l_curid      NUMBER;
+        l_col_cnt    INTEGER;
+        rec_tab      DBMS_SQL.DESC_TAB;
+        l_text       VARCHAR2 (4000);
+        l_flag       NUMBER;
+        l_varchar2   VARCHAR2 (4000);
+        l_date       DATE;
+        l_number     NUMBER;
+    BEGIN
+        l_curid := DBMS_SQL.TO_CURSOR_NUMBER(pCsr);
+
+        -- define columns
+        
+        DBMS_SQL.DESCRIBE_COLUMNS (l_curid, l_col_cnt, rec_tab);
+        DBMS_SQL.DEFINE_COLUMN (l_curid, 1, l_varchar2, 2000);
+        FOR i IN 2 .. l_col_cnt
+        LOOP
+            DBMS_SQL.DEFINE_COLUMN (l_curid, i, l_number);
+        END LOOP;
+
+       -- Print column names of dynamic sql
+       FOR i IN 1 .. l_col_cnt
+       LOOP
+          pHtml := LTRIM (l_text || ',' || LOWER (rec_tab (i).col_name), ',');
+       END LOOP;
+
+       -- Print data fetched by query
+       LOOP
+          l_flag := DBMS_SQL.FETCH_ROWS (l_curid);
+          EXIT WHEN l_flag = 0;
+          l_text := NULL;
+
+          FOR i IN 1 .. l_col_cnt
+          LOOP
+             CASE rec_tab(i).col_type
+                WHEN 1 THEN
+                   DBMS_SQL.COLUMN_VALUE (l_curid, i, l_varchar2);
+                   l_text := LTRIM (l_text || ',"' || l_varchar2 || '"', ',');
+                WHEN 2 THEN
+                   DBMS_SQL.COLUMN_VALUE (l_curid, i, l_number);
+                   l_text := LTRIM (l_text || ',' || l_number, ',');
+                WHEN 12 THEN
+                   DBMS_SQL.COLUMN_VALUE (l_curid, i, l_date);
+                   l_text := LTRIM (l_text|| ','|| TO_CHAR (l_date, 'DD/MM/YYYY HH24:MI:SS'),',');
+                ELSE
+                   l_text := LTRIM (l_text || ',"' || l_varchar2 || '"', ',');
+             END CASE;
+          END LOOP;
+       END LOOP;
+
+       DBMS_SQL.CLOSE_CURSOR (l_curid);
+    END;
     /*
     **  Return log of all visits to website
     */
@@ -289,6 +344,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         <body>';
         l_bgcolor VARCHAR2(7);
         n PLS_iNTEGER:=0;
+        -- Variables for Page level analysis report
+        l_csr SYS_REFCURSOR;
+        l_pages_sql LONG;
+        l_sql CLOB:=
+        'SELECT visit_date, #PAGES#
+         FROM 
+            (
+            SELECT ph.visit_date, ph.ip_address, wa.navigation_label, SUM(ph.duration_visible) duration_visible
+            FROM page_hit ph, website_article wa
+            WHERE ph.website_id=:B1
+            AND ph.url=:B2
+            AND ph.article_id=wa.article_id
+            GROUP BY ph.visit_date, ph.ip_address, wa.navigation_label
+            )
+         GROUP  BY visit_date
+         ORDER BY visit_date DESC';
+
     BEGIN
         FOR C IN (SELECT id, domain_name, contact_email FROM website WHERE netlify_site_id_custom IS  NOT NULL and id=1608) LOOP
             pck_visits.uploadPageHits(C.id);
@@ -347,35 +419,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             END LOOP;
             l_body_html:=l_body_html || to_clob('</tbody></table>');
 
-            n:=0;
-            FOR C1 IN (
-                SELECT wa.navigation_label, ph.ip_address, ph.visit_date, SUM(ph.duration_visible) duration_visible
-                  FROM page_hit ph, website_article wa
-                 WHERE ph.website_id=C.id
-                   AND ph.url=C.domain_name 
-                   AND wa.website_id=ph.website_id
-                   AND wa.article_id=ph.article_id
-                 GROUP BY wa.navigation_label, ph.ip_address, ph.visit_date
-                 ORDER BY ph.visit_date DESC
-            ) LOOP
-                n:=n+1;
-                IF (n=1) THEN
-                    l_body_html:=l_body_html ||
-                    '<table role="presentation">
-                        <caption>PAGE VIEWING TIME ANALYSISE/caption>
-                        <thead>
-                            <tr bgcolor="#d7d9f2">
-                                <th scope="col">Date</th>
-                                <th scope="col">Referrer /<br>Location</th>
-                                <th scope="col">Viewing Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>';
-                END IF;
+            FOR C1 IN (SELECT navigation_label FROM website_article WHERE website_id=C.id) LOOP
+                l_pages_sql:=l_pages_sql || 'MAX(DECODE(navigation_label,''' || C1.navigation_label || ''',duration_visible)) "' || C1.navigation_label || '",';
             END LOOP;
-            IF (n>1) THEN
-                l_body_html:=l_body_html || to_clob('</tbody></table>');
-            END IF;
+            l_sql:=REPLACE(l_sql,'#PAGES',RTRIM(l_pages_sql,','));
+            OPEN l_csr FOR l_sql;
             
             l_body_html:=l_body_html || to_clob('</body></html>');
 
