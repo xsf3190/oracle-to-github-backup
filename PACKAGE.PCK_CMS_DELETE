@@ -36,7 +36,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
              WHERE author_user_id=pUserId 
                AND id=pArticleId;
             n:=sql%rowcount;
-        END IF;        
+        END IF;  
 
         
         /* Confirms that logged on user owned the deleted website_article */
@@ -72,6 +72,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
 
                 /* Delete the article. Referential integrity constraint cascades to linked asset rows */
                 DELETE article WHERE id=pArticleId;
+
+                /* Delete any page_hit rows referencing deleted article */
+                DELETE page_hit WHERE article_id=pArticleId;
 
             END IF;
         END IF;
