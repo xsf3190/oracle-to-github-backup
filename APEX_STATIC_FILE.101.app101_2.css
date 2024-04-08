@@ -585,29 +585,50 @@ dialog button.close {
 }
 
 dialog.log {
-    padding: 0;
     & div:first-of-type {
         display: grid;
         grid-template-columns: 1fr 44px;
+        margin-inline-start: 1rem;
     }
     & table {
-        table-layout: fixed;
         width: 100%;
-        white-space: nowrap;
-        overflow-x: auto;
         border-collapse: collapse;
-        font-family: monospace;
-        font-size: 1ch;
+        font-size: var(--step--1);
     }
-}
-
-
-dialog.log td {
-    vertical-align: top;
-}
-
-dialog.log tr {
-    border-bottom: 1px solid var(--color-pale);
+    & th, td {
+        border: 1px solid var(--color-solid);
+        padding: var(--space-3xs);
+    }
+    & th {
+        background: var(--color-pale);
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+    }
+    & .cwv {
+        display: flex;
+        gap: 0.5em;
+        justify-content: space-evenly;
+    }
+    & mark {
+        padding: 0.2em;
+        font-family: monospace;
+        font-weight: 600;
+        min-inline-size: 3.5ch;
+    }
+    & mark:not([class]) {
+        background: none;
+    }
+    .good {
+        background: chartreuse;
+    }
+    .needs-improvement {
+        background: orange;
+    }
+    .poor {
+        background: red;
+        color: white;
+    }
 }
 
 /* *************** */
