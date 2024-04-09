@@ -402,9 +402,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
 
     /*
     ** GET PAGE OPTIONS TO EDIT IN DIALOG. "pId" IS WEBSITE ID PLUS:
-    ** 1) "0" - INCLUDE ONLY NEW NAVIGATION LABEL IN DIALOG
+    ** 1) "0" - INCLUDE ONLY NEW NAVIGATION LABEL IN DIALOG TO CREATE NEW PAGE
     ** 2) PAGE ID OF EXISTING WEBSITE PAGE
-    ** 3) SUBPAGE ID
+    ** 3) SUBPAGE ID - ONLY ALLOW DELETE OPTION
     */
     PROCEDURE getPageOptions(pId IN VARCHAR2) IS
         l_session_data pck_core.session_data_rt;
@@ -485,6 +485,30 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 '</details>
             </form>';            
         END LOOP;
+
+        /* No content means it  must be a sub-article */
+        IF (l_content IS NULL) THEN 
+            FOR C IN (SELECT wa.navigation_label
+                        FROM article a, website_article wa
+                       WHERE a.id=l_article_id
+                         AND wa.website_id=l_website_id
+                         AND wa.article_id=a.parent_id
+                         AND user_id=l_session_data.user_id) 
+            LOOP
+                l_content:=
+                '<form>
+                    <details>
+                        <summary>CODEPEN FEATURES</summary>' ||
+                        pck_core.buildPushableButton('edit-codepen','&#9917;') ||
+                        pck_core.buildPushableButton('upload-codepen','&#9917;') ||
+                    '</details>
+                    <details>
+                        <summary>DELETE ' || UPPER(C.navigation_label) || ' ITEM</summary>' ||
+                        pck_core.buildPushableButton('delete-article', '&#128686;') ||
+                    '</details>
+                </form>';
+            END LOOP;
+        END IF;
 
         apex_json.open_object;
         apex_json.write('content', l_content);
@@ -588,7 +612,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         apex_json.write('success', TRUE);
         apex_json.write('message', l_message);
         apex_json.write('color', 'green');
-        apex_json.write('deploy_buttons', pck_core.buildDeployButtons(pDomainName, l_netlify_site_id, l_netlify_site_id_custom));
         apex_json.close_object;
     END;
 
