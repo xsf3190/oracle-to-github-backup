@@ -73,8 +73,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
                 /* Delete the article. Referential integrity constraint cascades to linked asset rows */
                 DELETE article WHERE id=pArticleId;
 
-                /* Delete any page_hit rows referencing deleted article */
+                /* Delete any page_hit rows and CWV entries referencing deleted article */
                 DELETE page_hit WHERE article_id=pArticleId;
+                DELETE website_article_cwv WHERE article_id=pArticleId;
 
             END IF;
         END IF;
