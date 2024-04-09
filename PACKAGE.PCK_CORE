@@ -21,8 +21,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildContactForm(pContactEmail IN website.contact_email%type DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2;
-    --
     FUNCTION buildNavLabel(pId IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pAttrName IN VARCHAR2 DEFAULT NULL, pAttrValue IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildPageNav(pWebsiteId IN website.id%type) RETURN CLOB;
@@ -315,41 +313,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 </svg>';
 
         RETURN (l_form);
-    END;
-
-    /*
-     **  Build deploy and visit buttons
-     */
-    FUNCTION buildDeployButtons(pDomainName IN website.domain_name%type, pNetlifySiteId IN website.netlify_site_id%type, pNetlifySiteIdCustom IN website.netlify_site_id_custom%type DEFAULT NULL) RETURN VARCHAR2 IS
-        l_netlify_url VARCHAR2(50);
-    BEGIN
-        l_netlify_url:=REPLACE(pDomainName,'.','-') || '.netlify.app';
-
-        RETURN('
-            <div>
-                <button type="button" class="deploy-website pushable" data-site_id="' || pNetlifySiteId || '">
-                    <span class="shadow"></span>
-                    <span class="edge"></span>
-                    <span class="front">' || l_netlify_url || '</span>
-                </button>
-                <button type="button" class="visits pushable" data-domain="' || l_netlify_url || '">
-                    <span class="shadow"></span>
-                    <span class="edge"></span>
-                    <span class="front">VISITS</span>
-                </button>
-            </div>
-            <div' || CASE WHEN pNetlifySiteIdCustom IS NULL THEN ' style="opacity:0"' END || '>
-                <button type="button" class="deploy-website pushable" data-site_id="'|| pNetlifySiteIdCustom || '">
-                    <span class="shadow"></span>
-                    <span class="edge"></span>
-                    <span class="front">' || pDomainName || '</span>
-                </button>
-                <button type="button" class="visits pushable" data-domain="' || pDomainName || '">
-                    <span class="shadow"></span>
-                    <span class="edge"></span>
-                    <span class="front">VISITS</span>
-                </button>
-            </div>');
     END;
 
     /*
@@ -647,22 +610,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_clob:= 
         '<div class="wrapper">' ||
             buildTopNav(l_is_admin) ||
-            '<div class="auto-fit-cards">
-                <div>
-                    <div>' ||
-                        buildPushableButton('new-website', '&plus;') ||
-                    '</div>' ||
-                    buildWebsiteNav(l_session_data.user_id, l_selected_website_id, l_selected_website_domain, l_netlify_site_id, l_netlify_site_id_custom) ||
-                '</div>
-                <div class="align-self-center">
-                    <fieldset class="deploy-buttons">
-                        <legend>Publish Website</legend>
-                        <div>' ||
-                            buildDeployButtons(l_selected_website_domain, l_netlify_site_id, l_netlify_site_id_custom) ||
-                        '</div>
-                    </fieldset>
-                </div>
-            </div><!-- END auto-fit-cards-->
+            '<div>
+                <div>' ||
+                    buildPushableButton('new-website', '&plus;') ||
+                '</div>' ||
+                buildWebsiteNav(l_session_data.user_id, l_selected_website_id, l_selected_website_domain, l_netlify_site_id, l_netlify_site_id_custom) ||
+            '</div>
             <div class="page-content">
                 <div>' ||
                     buildMediaCard(l_selected_article_id) ||
