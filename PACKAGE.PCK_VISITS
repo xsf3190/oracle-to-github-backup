@@ -2,7 +2,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE email_visits;
     --
-    PROCEDURE getVisits(pId IN VARCHAR2);
+    PROCEDURE getVisits(pWebsiteId IN website.id%type);
     --
     PROCEDURE uploadIpLookup;
     --
@@ -21,11 +21,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     PROCEDURE uploadPageVisit(pBodyText IN CLOB) IS
         l_bodytext CLOB:=pBodyText;
         l_ip_address website_article_cwv.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
+        l_this_referrer VARCHAR2(50):=LOWER(sys_context('userenv','db_name'));
     BEGIN
         INSERT INTO website_article_cwv (
             website_id, article_id, seq, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
             browser, mobile, connection, url, website_loaded, duration_visible)
-        SELECT website_id, article_id, seq, referrer, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
+        SELECT website_id, article_id, seq, CASE WHEN referrer LIKE '%' || l_this_referrer || '%' THEN l_this_referrer ELSE referrer END, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
                 browser, mobile, connection, url, website_loaded, duration_visible
           FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' 
             COLUMNS (website_id, article_id, seq, referrer, LCP, LCP_rating, CLS, CLS_rating, INP, INP_rating, FID, FID_rating, 
@@ -90,7 +91,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     MAX(lcp) lcp, MAX(lcp_rating) lcp_rating, MAX(cls) cls, MAX(cls_rating) cls_rating, MAX(inp) inp, MAX(inp_rating) inp_rating, MAX(fid) fid, MAX(fid_rating) fid_rating, 
                     SUM(duration_visible) duration_visible, MAX(browser) browser, MAX(connection) connection, MAX(url) url, MAX(mobile) mobile
                 FROM website_article_cwv 
-                WHERE website_id=NVL(pWebsiteId,website_id)
+                WHERE website_id=pWebsiteId
                 GROUP BY website_id, article_id, ip_address, website_loaded
             )
         ) s
@@ -123,7 +124,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         uploadIpLookup;
     END;
 
-    FUNCTION cwvRating(pLCP IN VARCHAR2 DEFAULT NULL, pCLS IN VARCHAR2 DEFAULT NULL, pINP IN VARCHAR2 DEFAULT NULL, pFID IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
+    FUNCTION cwvRating(pLCP IN VARCHAR2 DEFAULT NULL, pCLS IN VARCHAR2 DEFAULT NULL, pINP IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
         l_cwv VARCHAR2(200);
     BEGIN
         IF (pLCP IS NOT NULL) THEN
@@ -138,8 +139,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         END IF;
         IF (pINP IS NOT NULL) THEN
             l_cwv:=l_cwv || '<mark class="' || pINP || '">INP</mark>';
-        ELSIF (pFID IS NOT NULL) THEN
-            l_cwv:=l_cwv || '<mark class="' || pFID || '">FID</mark>';
         ELSE
             l_cwv:=l_cwv || '<mark></mark>';
         END IF;
@@ -159,7 +158,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     END;
 
     
-    FUNCTION sql2Html (pSql IN VARCHAR2, pBindVar1 IN NUMBER, pBindVar2 IN VARCHAR2) RETURN CLOB
+    FUNCTION sql2Html (pSql IN VARCHAR2, pBindVar IN NUMBER) RETURN CLOB
     IS
         l_cur       NUMBER:=dbms_sql.open_cursor;
         l_execute   NUMBER;
@@ -173,8 +172,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     BEGIN
         dbms_sql.parse(l_cur,pSql,dbms_sql.native);
 
-        dbms_sql.bind_variable(l_cur,':B1',pBindVar1);
-        dbms_sql.bind_variable(l_cur,':B2',pBindVar2);
+        dbms_sql.bind_variable(l_cur,':B1',pBindVar);
 
         -- define columns
         
@@ -220,7 +218,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                    l_html:=l_html || '<td>' || l_varchar2 || '</td>';
                 WHEN 2 THEN
                    dbms_sql.column_value (l_cur, i, l_number);
-                   l_html:=l_html || '<td>' || l_number || '</th>';
+                   l_html:=l_html || '<td>' || l_number || '</td>';
                 WHEN 12 THEN
                    dbms_sql.column_value (l_cur, i, l_date);
                    l_html:=l_html || '<td>' || TO_CHAR (l_date, 'DD/MM/YYYY HH24:MI:SS') || '</td>';
@@ -236,72 +234,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
        RETURN (l_html);
     END;
+
     /*
     **  Return log of all visits to website
     */
-    PROCEDURE getVisits(pId IN VARCHAR2) IS
+    PROCEDURE getVisits(pWebsiteId IN website.id%type) IS
         l_website_id website.id%type;
         l_domain_name VARCHAR2(200);
         l_content CLOB;
         l_visit_date VARCHAR2(22);
+        l_sql LONG;
         l_session_data pck_core.session_data_rt;
         n PLS_INTEGER;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
-        l_domain_name:=SUBSTR(pId,INSTR(pId,',')+1);
-
         pck_visits.uploadPageHits(l_website_id);
 
-        l_content:='
-        <ol class="visits">
-            <li>
-                <span>Visit Date</span><span>Location</span><span>Referrer</span><span>Browser</span><span>Connection</span><span>Viewing time</span><span style="text-align:center">Performance</span>
-            </li>';
-
-        FOR C IN (
-            WITH website_hits as 
-            (
-                SELECT website_id, ip_address, visit_date, 
-                        MAX(referrer) referrer, 
-                        MAX(lcp_rating) lcp_rating, MAX(cls_rating) cls_rating, MAX(inp_rating) inp_rating, MAX(fid_rating) fid_rating, 
-                        SUM(duration_visible) duration_visible, MAX(browser) browser, MAX(connection) connection, MAX(mobile) mobile
-                  FROM page_hit
-                 WHERE  website_id=l_website_id
-                   AND  url=l_domain_name 
-                 GROUP BY website_id, ip_address, visit_date
-            )
-            SELECT  
-                    wh.visit_date, wh.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
-                    wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating, wh.fid_rating
-                FROM website_hits wh, ip_lookup ip
-                WHERE ip.ip=wh.ip_address
-                ORDER BY wh.visit_date desc
-        ) 
-        LOOP
-            l_content:=l_content || '
-                <li>
-                    <span>' || TO_CHAR(C.visit_date AT TIME ZONE l_session_data.timezone, 'dd Mon yyyy fmhh24:fmmi')  || '</span>
-                    <span>' || LTRIM(RTRIM(C.location,','),',') || '</span>
-                    <span>' || C.referrer || '</span>
-                    <span>' || C.browser || '</span>
-                    <span>' || C.connection || CASE WHEN C.mobile='true' THEN ' (Mob)' END || '</span>
-                    <span>' || CASE WHEN C.duration_visible IS NOT NULL THEN TO_CHAR(C.duration_visible) || ' seconds' END || '</span>
-                    <span class="cwv">' || cwvRating(C.lcp_rating, C.cls_rating, C.inp_rating, C.fid_rating) || '</span>
-                </li>';
-        END LOOP;
-        l_content:=l_content || '</ol>';
-
-        /* 
-        ** USING TABLE 
-        */
         l_content:=l_content ||
-        '<br><table role="presentation">
-            <caption>Here is a caption</caption>
+        '<table role="presentation">
             <thead>
                 <tr>
-                    <th rowspan="2">Visit Date</th>
+                    <th rowspan="2">Website Visit</th>
                     <th>Location</th>
                     <th rowspan="2">Viewing time</th>
                     <th>Browser</th>
@@ -317,38 +271,71 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         FOR C IN (
             WITH website_hits as 
             (
-                SELECT website_id, ip_address, visit_date, 
-                        MAX(referrer) referrer, 
-                        MAX(lcp_rating) lcp_rating, MAX(cls_rating) cls_rating, MAX(inp_rating) inp_rating, MAX(fid_rating) fid_rating, 
-                        SUM(duration_visible) duration_visible, MAX(browser) browser, MAX(connection) connection, MAX(mobile) mobile
-                  FROM page_hit
-                 WHERE  website_id=l_website_id
-                   AND  url=l_domain_name 
-                 GROUP BY website_id, ip_address, visit_date
+                SELECT p.website_id, p.ip_address, p.visit_date, 
+                        MAX(p.referrer) referrer, 
+                        MAX(p.lcp_rating) lcp_rating, MAX(p.cls_rating) cls_rating, MAX(p.inp_rating) inp_rating, 
+                        SUM(p.duration_visible) duration_visible, MAX(p.browser) browser, MAX(p.connection) connection, MAX(p.mobile) mobile
+                  FROM website w, page_hit p
+                 WHERE w.id=pWebsiteId
+                   AND p.website_id=w.id
+                   AND p.url=CASE WHEN w.netlify_site_id_custom IS NULL THEN REPLACE(w.domain_name,'.','-') || '.netlify.app' ELSE w.domain_name END
+                 GROUP BY p.website_id, p.ip_address, p.visit_date
             )
             SELECT  
                     wh.visit_date, wh.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
-                    wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating, wh.fid_rating
-                FROM website_hits wh, ip_lookup ip
-                WHERE ip.ip=wh.ip_address
-                ORDER BY wh.visit_date desc
+                    wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating
+            FROM website_hits wh, ip_lookup ip
+            WHERE ip.ip=wh.ip_address
+            ORDER BY wh.visit_date DESC
         ) 
         LOOP
-            l_content:=l_content || '
-                <tr>
+            l_content:=l_content ||
+                '<tr>
                     <td rowspan="2">' || TO_CHAR(C.visit_date, 'dd Mon yyyy fmhh24:fmmi')  || '</td>
                     <td>' || LTRIM(RTRIM(C.location,','),',') || '</td>
                     <td rowspan="2">' || CASE WHEN C.duration_visible IS NOT NULL THEN TO_CHAR(C.duration_visible) || ' seconds' END || '</td>
                     <td>' || C.browser || '</td>
-                    <td  rowspan="2"><div class="cwv">' || cwvRating(C.lcp_rating, C.cls_rating, C.inp_rating, C.fid_rating) || '</div></td>
+                    <td  rowspan="2"><div class="cwv">' || cwvRating(C.lcp_rating, C.cls_rating, C.inp_rating) || '</div></td>
                 </tr>
                 <tr>
-                    <td>' || NVL(C.referrer,'N/A') || '</td>
+                    <td>' || NVL(C.referrer,'-') || '</td>
                     <td>' || C.connection || CASE WHEN C.mobile='true' THEN ' (Mob)' END || '</td>
                 </tr>';
 
         END LOOP;
         l_content:=l_content || '</tbody></table>';
+
+        /* 
+        ** Create page analysis report if multi-page website
+        */
+        n:=0;
+        l_sql:='SELECT TO_CHAR(visit_date,''dd Mon yyyy fmhh24:fmmi'') "Pages Viewed",';
+        FOR C1 IN (SELECT navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
+            n:=n+1;
+            l_sql:=l_sql || 'MAX(DECODE(navigation_label,''' || C1.navigation_label || ''',duration_visible)) "' || C1.navigation_label || '",';
+        END LOOP;
+        IF (n>1) THEN
+            l_sql:=RTRIM(l_sql,',') ||
+            'FROM 
+                (
+                SELECT ph.visit_date, ph.ip_address, wa.navigation_label, SUM(ph.duration_visible) duration_visible
+                  FROM website w, page_hit ph, website_article wa
+                 WHERE w.id=:B1
+                   AND ph.website_id=w.id
+                   AND ph.url=CASE WHEN w.netlify_site_id_custom IS NULL THEN REPLACE(w.domain_name,''.'',''-'') || ''.netlify.app'' ELSE w.domain_name END
+                   AND ph.article_id=wa.article_id
+                 GROUP BY ph.visit_date, ph.ip_address, wa.navigation_label
+                )
+             GROUP  BY visit_date
+             ORDER BY visit_date DESC';
+
+            l_content:=l_content || sql2Html(l_sql, pWebsiteId);
+        END IF;
+        
+        l_content:=l_content || '</body></html>';
+
+        --apex_mail.send(p_to=>C.contact_email, p_from=>'visits@'||C.domain_name, p_body=>l_body, p_body_html=>l_body_html, p_subj=>'Visits - ' || C.domain_name);
+        --apex_mail.push_queue(); 
 
 
         apex_json.open_object; 
@@ -488,36 +475,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             END LOOP;
             l_body_html:=l_body_html || to_clob('</tbody></table>');
 
-            /* Create page analysis report for multi-page websites */
-            
-            n:=0;
-            l_sql:='SELECT visit_date,';
-            FOR C1 IN (SELECT navigation_label FROM website_article WHERE website_id=C.id ORDER BY display_order) LOOP
-                n:=n+1;
-                l_sql:=l_sql || 'MAX(DECODE(navigation_label,''' || C1.navigation_label || ''',duration_visible)) "' || C1.navigation_label || '",';
-            END LOOP;
-            IF (n>1) THEN
-                l_sql:=RTRIM(l_sql,',') ||
-                'FROM 
-                    (
-                    SELECT ph.visit_date, ph.ip_address, wa.navigation_label, SUM(ph.duration_visible) duration_visible
-                    FROM page_hit ph, website_article wa
-                    WHERE ph.website_id=:B1
-                    AND ph.url=:B2
-                    AND ph.article_id=wa.article_id
-                    GROUP BY ph.visit_date, ph.ip_address, wa.navigation_label
-                    )
-                 GROUP  BY visit_date
-                 ORDER BY visit_date DESC';
-
-                l_body_html:=l_body_html || sql2Html(l_sql, C.id, C.domain_name);
-            END IF;
-            
-            
-            l_body_html:=l_body_html || to_clob('</body></html>');
-
-            apex_mail.send(p_to=>C.contact_email, p_from=>'visits@'||C.domain_name, p_body=>l_body, p_body_html=>l_body_html, p_subj=>'Visits - ' || C.domain_name);
-            apex_mail.push_queue(); 
         END LOOP;
 
         EXCEPTION WHEN OTHERS THEN pck_core.log_error;
