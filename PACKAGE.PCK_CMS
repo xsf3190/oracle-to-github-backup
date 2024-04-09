@@ -163,13 +163,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         apex_json.open_object;
         FOR C IN (
-            SELECT w.domain_name, w.css, w.javascript, w.netlify_site_id, w.netlify_site_id_custom
+            SELECT w.domain_name
               FROM website w
              WHERE w.id=pWebsiteId
                AND w.user_id=l_session_data.user_id) 
         LOOP
             apex_json.write('domain_name', C.domain_name);
-            apex_json.write('deploy_buttons', pck_core.buildDeployButtons(C.domain_name, C.netlify_site_id, C.netlify_site_id_custom));
         END LOOP;
         
         apex_json.write('nav_labels', pck_core.buildPageNav(pWebsiteId));
