@@ -209,10 +209,12 @@ nav:not(.top-nav) div {
 
 nav [class$="options"]:has(+ a.selected) {
     opacity:1;
+    visibility: visible;
 }
 
 nav [class$="options"]:not(:has(+ a.selected)) {
     opacity:0;
+    visibility: hidden;
 }
 
 
@@ -585,7 +587,7 @@ dialog button.close {
 }
 
 dialog.log {
-    & div:first-of-type {
+    & > div:first-of-type {
         display: grid;
         grid-template-columns: 1fr 44px;
         margin-inline-start: 1rem;
