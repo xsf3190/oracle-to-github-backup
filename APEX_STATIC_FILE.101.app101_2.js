@@ -173,9 +173,6 @@ const changeHandler = (e) => {
  */
 const edit_website = () => {
     execProcess( "website/"+gWebsiteId,"GET").then( (data) => {
-        deployButtons.replaceChildren();
-        deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
-
         pageNav.replaceChildren();
         if (data.nav_labels) {
             pageNav.insertAdjacentHTML('afterbegin',data.nav_labels);
@@ -524,9 +521,7 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".new-blog")) {
         new_collection();   
     } else if (e.target.matches(".new-media")) {
-        new_collection();   
-    } else if (e.target.matches(".delete-blog")) {
-        delete_blog(e);   
+        new_collection();     
     } else if (e.target.matches(".show-subpages")) {
         show_subpages(e);   
     } else if (e.target.matches(".edit-codepen")) {
@@ -540,6 +535,8 @@ const clickHandler = (e) => {
         upload_media();                            
     } else if (e.target.matches(".delete-page")) {
         delete_page();
+    } else if (e.target.matches(".delete-article")) {
+        delete_article(e); 
     } else if (e.target.matches(".delete-website")) {
         delete_website();
     } else if (e.target.matches(".delete-asset")) {
@@ -1190,6 +1187,7 @@ const website_options = () => {
  ** GET PAGE OPTIONS
  */
 const page_options = (e) => {
+    console.log(gWebsiteId+","+gArticleId);
     execProcess( "page-options/"+gWebsiteId+","+gArticleId,"GET").then( (data) => {
         pageContent.replaceChildren();
         pageContent.insertAdjacentHTML('afterbegin',data.content);
@@ -1202,7 +1200,7 @@ const page_options = (e) => {
  */
 const get_visits = (e) => {
     const websiteid = e.target.closest("div").dataset.id;
-    execProcess( "visits/"+websiteid + "," + e.target.dataset.domain,"GET").then( (data) => {
+    execProcess( "visits/"+websiteid,"GET").then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
@@ -1497,16 +1495,17 @@ delete_page = () => {
 }
 
 /*
- ** DELETE BLOG
+ ** DELETE ARTICLE - I.E SUBPAGE LIKE BLOG  OR MEDiA ITEM
  */
-delete_blog = () => {
+delete_article = () => {
     execProcess("dml","DELETE",{table_name: "article", article_id: gArticleId}).then( () => {
-        gArticleId = 0;
+        gArticleId = pageNav.querySelector(".selected").closest("div").dataset.id;
         editor_status = "init";
-        editor_status_text.textContent = "BLOG DELETED";
+        editor_status_text.textContent = "PAGE DELETED";
         editor.setData("");
         editor.enableReadOnlyMode( 'lock-id' );
         galleryList.replaceChildren();
+        pageDialog.close();
     });
 }
 
