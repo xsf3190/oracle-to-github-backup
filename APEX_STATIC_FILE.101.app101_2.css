@@ -395,27 +395,8 @@ input[type="radio"]:checked {
     border: 1ch solid var(--color-solid);
 }
 
-.cluster {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    justify-content: flex-start;
-    align-items: center;
-}
-
-.cluster label {
-    display: initial;
-    font-weight: initial;
-}
-
 legend {
     font-weight: 600;
-}
-
-.deploy-buttons > div {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
 }
 
 .delete-website {
@@ -439,53 +420,6 @@ ol.deploy {
     }
     & li.ready {
         line-height: 2.5;
-    }
-}
-
-ol.visits {
-    font-size: var(--step--1);
-    & li {
-        list-style: none;
-        display: grid;
-        grid-template-columns: 1.5fr 2fr 3fr 1fr 1.5fr 1fr 2fr;
-    }
-    & li:first-child {
-        background: var(--color-pale);
-        font-weight: 600;
-        position: sticky;
-        top: 0;
-    }
-    & span {
-        border-right: solid 1px var(--color-solid);
-        border-bottom: solid 1px var(--color-solid);
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
-        padding: 0.2em;
-    }
-    & span.cwv {
-        display: flex;
-        gap: 0.5em;
-        justify-content: space-evenly;
-    }
-    & mark {
-        padding: 0.2em;
-        font-family: monospace;
-        font-weight: 600;
-        min-inline-size: 3.5ch;
-    }
-    & mark:not([class]) {
-        background: none;
-    }
-    .good {
-        background: chartreuse;
-    }
-    .needs-improvement {
-        background: orange;
-    }
-    .poor {
-        background: red;
-        color: white;
     }
 }
 
@@ -597,29 +531,21 @@ dialog.log {
         border-collapse: collapse;
         font-size: var(--step--1);
     }
+    & thead {
+        background: var(--color-pale);
+        font-weight: 600;
+    }
     & th, td {
         border: 1px solid var(--color-solid);
         padding: var(--space-3xs);
     }
-    & th {
-        background: var(--color-pale);
-        font-weight: 600;
-        position: sticky;
-        top: 0;
-    }
-    & .cwv {
-        display: flex;
-        gap: 0.5em;
-        justify-content: space-evenly;
-    }
-    & mark {
-        padding: 0.2em;
-        font-family: monospace;
-        font-weight: 600;
-        min-inline-size: 3.5ch;
-    }
-    & mark:not([class]) {
-        background: none;
+    td.centered {
+        text-align: center;
+        font-weight: 900;
+        & span {
+            display; inline-block;
+            padding: 0.5ch;
+        }
     }
     .good {
         background: chartreuse;
