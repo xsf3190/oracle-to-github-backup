@@ -299,6 +299,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         SELECT ROWNUM, family, url_regular FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, url_regular PATH '$.files.regular'));
         */
 
+        /*
+        **   7. Email Visit reports for custom domains
+        */
+        FOR C IN (SELECT id FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
+            pck_visits.getVisits(C.id, TRUE);
+        END LOOP;
 
         EXCEPTION
             WHEN OTHERS THEN
