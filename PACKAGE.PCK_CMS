@@ -311,6 +311,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_max_width_px website.max_width_px%type;
         l_max_scale website.max_scale%type;
         l_contact_form website_article.contact_form%type;
+        l_is_subarticle BOOLEAN:=FALSE;
         l_html CLOB;
         l_css CLOB;
         l_javascript CLOB;
@@ -320,7 +321,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT website_id INTO l_website_id FROM website_article WHERE article_id=pArticleId AND user_id=l_session_data.user_id;
+        /* Get website owning the article - either a webpage or a subpage, e.g. blog or media collection */
+
+        FOR C IN (SELECT website_id FROM website_article WHERE article_id=pArticleId AND user_id=l_session_data.user_id) LOOP
+            l_website_id:=C.website_id;
+        END LOOP;
+
+        IF (l_website_id IS NULL) THEN
+            SELECT wa.website_id INTO l_website_id FROM website_article wa, article a 
+             WHERE a.id=pArticleId
+               AND wa.article_id=a.parent_id
+               AND author_user_id=l_session_data.user_id;
+            l_is_subarticle:=TRUE;
+        END IF;
 
         FOR C IN (
             SELECT wa.navigation_label, wa.article_id, COUNT(*) OVER () nb_pages
@@ -342,18 +355,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END IF;
 
         /* Build page resources */
-        SELECT w.domain_name,  w.font, w.max_width,  w.color_background, w.color_text, w.color_primary, 
-                w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale,
-                a.body_html, w.css, w.javascript, wa.contact_form
-          INTO l_domain_name,  l_font, l_max_width, l_color_background, l_color_text, l_color_primary,
-                l_min_font_size, l_min_width_px, l_min_scale, l_max_font_size, l_max_width_px, l_max_scale,
-                l_html, l_css, l_javascript, l_contact_form
-          FROM website w, website_article wa, article a
-         WHERE w.id=l_website_id
-           AND w.user_id=l_session_data.user_id
-           AND wa.website_id=w.id
-           AND wa.article_id=a.id
-           AND a.id=pArticleId;
+        IF (l_is_subarticle) THEN
+            SELECT w.domain_name,  w.font, w.max_width,  w.color_background, w.color_text, w.color_primary, 
+                    w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale,
+                    a.body_html, w.css, w.javascript, 'NO'
+              INTO l_domain_name,  l_font, l_max_width, l_color_background, l_color_text, l_color_primary,
+                    l_min_font_size, l_min_width_px, l_min_scale, l_max_font_size, l_max_width_px, l_max_scale,
+                    l_html, l_css, l_javascript, l_contact_form
+              FROM website w, article a
+             WHERE w.id=l_website_id
+               AND a.id=pArticleId;
+        ELSE
+            SELECT w.domain_name,  w.font, w.max_width,  w.color_background, w.color_text, w.color_primary, 
+                    w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale,
+                    a.body_html, w.css, w.javascript, wa.contact_form
+              INTO l_domain_name,  l_font, l_max_width, l_color_background, l_color_text, l_color_primary,
+                    l_min_font_size, l_min_width_px, l_min_scale, l_max_font_size, l_max_width_px, l_max_scale,
+                    l_html, l_css, l_javascript, l_contact_form
+              FROM website w, website_article wa, article a
+             WHERE w.id=l_website_id
+               AND wa.website_id=w.id
+               AND wa.article_id=a.id
+               AND a.id=pArticleId;
+        END IF;
 
         /* build html */
         l_html:=l_nav_labels || chr(10) || g_html_start || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10) || g_html_end || chr(10);
@@ -406,6 +430,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('css', l_css);
         apex_json.write('js', l_javascript);
         apex_json.close_object;
+
+        EXCEPTION WHEN OTHERS THEN pck_core.log_error;
     END;
 
     /*
@@ -432,9 +458,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.close_object;
         END LOOP;
 
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
+        EXCEPTION WHEN OTHERS THEN pck_core.log_error;
     END; 
 
     /*
