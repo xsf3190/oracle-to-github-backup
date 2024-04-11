@@ -323,9 +323,14 @@ form {
     flex-direction: column;
     gap: var(--space-l);
     padding: var(--space-s);
-    & div.input-wrapper, div.textarea-wrapper {
+    & .input-wrapper, .textarea-wrapper {
         position: relative;
         display: inline-block;
+    }
+    & .radio-options {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
     }
     & label {
         margin-block-end: var(--space-3xs);
@@ -365,6 +370,9 @@ form {
         flex-direction: column;
         gap: var(--space-m);
         padding: var(--space-s);
+    }
+    & legend > button {
+        margin-inline-start: 0.5ch;
     }
     & .cards-50-50 {
         display: grid;
@@ -526,6 +534,9 @@ dialog.log {
         grid-template-columns: 1fr 44px;
         margin-inline-start: 1rem;
     }
+    & details {
+        font-size: 70%;
+    }
     & table {
         width: 100%;
         border-collapse: collapse;
@@ -545,6 +556,7 @@ dialog.log {
         & span {
             display; inline-block;
             padding: 0.5ch;
+            border-radius: 0.5ch;
         }
     }
     .good {
