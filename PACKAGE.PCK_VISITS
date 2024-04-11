@@ -289,9 +289,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                         text-align: center;
                         font-weight: 900;
                     }
-                    .td.centered > span {
+                    td.centered > span {
                         display: inline-block;
-                        padding: 0.5ch;
+                        padding: 4px;
                     }
                     .good {
                         color: #000;
@@ -346,7 +346,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
              WHERE website_id=pWebsiteId
         ) LOOP
             l_content:=
-            '<p><strong>' || C.nb_hit || '</strong> visits from <strong>' || C.nb_distinct_ip || '</strong> distinct IP addresses since <strong>' || TO_CHAR(C.first_hit,'dd Mon yyyy') || '</strong></p>';
+            '<p><strong>' || C.nb_hit || '</strong> visits from <strong>' || C.nb_distinct_ip || '</strong> distinct IP since <strong>' || TO_CHAR(C.first_hit,'dd Mon yyyy') || '</strong></p>
+            <details><summary>Performance Explained</summary>
+            <p>Performance measurements are based on the
+            <a href="https://developers.google.com/search/docs/appearance/core-web-vitals" target="_blank">Google Core Web Vital</a>
+            metrics used in its ranking algorithm.</p>
+            <p>Each time someone visits your website the metrics are automatically captured and sent here.</p>
+            </details>';
         END LOOP;
 
         l_content:=l_content ||
@@ -396,7 +402,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     <td  rowspan="2" class="centered">' || l_rating || '</td>
                 </tr>
                 <tr>
-                    <td>' || NVL(REPLACE(C.referrer,'.',' . '),'-') || '</td>
+                    <td>' || NVL(REPLACE(C.referrer,'.','&#173;.'),'-') || '</td>
                     <td>' || C.connection || CASE WHEN C.mobile='true' THEN ' (Mob)' END || '</td>
                 </tr>';
         END LOOP;
