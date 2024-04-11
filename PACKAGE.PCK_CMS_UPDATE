@@ -90,8 +90,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         <div class="input-wrapper">
             <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
             CASE WHEN pCanUsePopover AND l_comments IS NOT NULL THEN
-                '<button type="button" popovertarget="' || l_column_name || '_popover">&#9432;
-                </button>
+                '<button type="button" popovertarget="' || l_column_name || '_popover">&#9432;</button>
                 <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' 
             END ||
             '</label>
@@ -107,33 +106,62 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     /*
      **  Create wrapper html for radio elements
      */
-    FUNCTION buildRadioWrapper(pColumn IN VARCHAR2, pRadioButtons IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2 IS
+    FUNCTION buildRadioWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2 IS
         l_table_name user_tab_columns.table_name%type;
         l_column_name user_tab_columns.column_name%type;
+        l_data_type user_tab_columns.data_type%type;
         l_comments user_col_comments.comments%type;
+        l_radio_options user_constraints.search_condition_vc%type;
+        l_html LONG;
+        pos_1 PLS_INTEGER;
+        pos_2 PLS_INTEGER;
     BEGIN
         l_table_name:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
         l_column_name:=UPPER(SUBSTR(pColumn,INSTR(pColumn,'.')+1));
 
-        SELECT NVL(i.comments,'Info not defined yet') 
-          INTO l_comments
+        SELECT NVL(i.comments,'Info not defined yet'), c.data_type 
+          INTO l_comments, l_data_type
           FROM user_tab_columns c, user_col_comments i
          WHERE c.table_name=l_table_name
            AND c.column_name=l_column_name
            AND i.table_name=c.table_name
            AND i.column_name=c.column_name;
 
+        SELECT con.search_condition_vc
+          INTO l_radio_options
+          FROM user_cons_columns col, user_constraints con 
+         WHERE col.table_name=l_table_name
+           AND col.column_name=l_column_name
+           AND col.owner=con.owner
+           AND col.table_name=con.table_name
+           AND col.constraint_name=con.constraint_name
+           AND con.constraint_type='C';
+
+        pos_1:=INSTR(l_radio_options,'(');
+        pos_2:=INSTR(l_radio_options,')');
+        l_radio_options:=REPLACE(SUBSTR(l_radio_options,pos_1+1,pos_2-pos_1-1), '''',NULL);
+
         l_column_name:=LOWER(l_column_name);
 
-        RETURN('
-        <div class="radio-wrapper">
+        FOR C IN (SELECT column_value FROM TABLE(apex_string.split(l_radio_options,','))) LOOP
+            l_html:=l_html || 
+            '<div>
+                <label for="' || l_column_name || '-' || LOWER(C.column_value) || '">' || C.column_value|| '</label>
+                <input class="cms" type="radio" data-column="' || pColumn || '" data-id="' || pId || '" id="' || l_column_name || '-' || LOWER(C.column_value) || '" name="' || l_column_name || '" value="' || C.column_value || '"' ||
+                CASE WHEN pValue=C.column_value THEN ' checked' END || '>
+                </input> 
+            </div>';
+        END LOOP;
+
+        RETURN
+        ('<div class="radio-wrapper">
                 <fieldset>
-                    <legend>' || INITCAP(l_column_name) || 
+                    <legend>' || INITCAP(REPLACE(l_column_name,'_',' ')) || 
                     CASE WHEN pCanUsePopover 
-                        THEN '<button type="button" popovertarget="' || l_column_name || '_popover"><svg><use href="#info"></use></svg></button>
+                        THEN '<button type="button" popovertarget="' || l_column_name || '_popover">&#9432;</button>
                               <div id="' || l_column_name || '_popover" popover>' || l_comments || '</div>' END || '
                     </legend>
-                    <div class="cluster">' || pRadioButtons || '
+                    <div class="radio-options">' || l_html || '
                     </div>
                 </fieldset>
                 <div class="button-container">
@@ -411,8 +439,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_content CLOB;
         l_website_id website_article.website_id%type;
         l_article_id website_article.article_id%type;
-        l_collection_type_radio LONG;
-        l_contact_form_radio LONG;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -434,46 +460,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                      AND article_id=l_article_id
                      AND user_id=l_session_data.user_id) 
         LOOP
-            l_collection_type_radio:=
-            '<div>
-                <input class="cms" type="radio" data-column="website_article.collection_type" data-id="' || pId || '" id="collection_type-blog" name="collection-type" value="BLOG"' ||
-                CASE WHEN C.collection_type='BLOG' THEN ' checked' END || '>
-                </input>
-                <label for="collection_type-blog">BLOG</label>
-            </div>
-            <div>
-                <input class="cms" type="radio" data-column="website_article.collection_type" data-id="' || pId || '" id="collection_type-media" name="collection-type" value="MEDIA"' ||
-                CASE WHEN C.collection_type='MEDIA' THEN ' checked' END || '>
-                </input>
-                <label for="collection_type-media">MEDIA</label>
-            </div>
-            <div>
-                <input class="cms" type="radio" data-column="website_article.collection_type" data-id="' || pId || '" id="collection_type-na" name="collection-type" value="N/A"' ||
-                CASE WHEN C.collection_type='N/A' THEN ' checked' END || '>
-                </input>
-                <label for="collection_type-na">N/A</label>
-            </div>';
-            
-            l_contact_form_radio:=
-            '<div>
-                <input class="cms" type="radio" data-column="website_article.contact_form" data-id="' || pId || '" id="contact_form-yes" name="template" value="YES"' ||
-                CASE WHEN C.contact_form='YES' THEN ' checked' END || '>
-                </input>
-                <label for="contact_form-yes">YES</label>
-            </div>
-            <div>
-                <input type="radio" class="cms" data-column="website_article.contact_form" data-id="' || pId || '" id="contact_form-no" name="template" value="NO"' ||
-                CASE WHEN C.contact_form='NO' THEN ' checked' END || '>
-                </input> <label for="contact_form-no">NO</label>
-            </div>';
-
             l_content:=l_content || 
             '<form>' ||
                 buildInputWrapper(pId, 'website_article.navigation_label', C.navigation_label, l_session_data.canuse_popover) ||
-                buildRadioWrapper('website_article.collection_type', l_collection_type_radio, l_session_data.canuse_popover) || 
+                buildRadioWrapper(pId, 'website_article.collection_type', C.collection_type, l_session_data.canuse_popover) || 
                 buildTextareaWrapper(pId, 'website_article.page_title', C.page_title, l_session_data.canuse_popover) ||
                 buildTextareaWrapper(pId, 'website_article.page_description', C.page_description, l_session_data.canuse_popover) ||
-                buildRadioWrapper('website_article.contact_form', l_contact_form_radio, l_session_data.canuse_popover) || 
+                buildRadioWrapper(pId, 'website_article.contact_form', C.contact_form, l_session_data.canuse_popover) || 
                 '<details>
                     <summary>CODEPEN FEATURES</summary>' ||
                     pck_core.buildPushableButton('edit-codepen','&#9917;') ||
