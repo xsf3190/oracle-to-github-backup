@@ -140,7 +140,7 @@ const changeHandler = (e) => {
             deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
         }
 
-        /* Update UI if domain name or navigation label are change */
+        /* Update UI if domain name or navigation label are changed */
 
         switch (table_column) {
             case 'website_article.navigation_label' :
@@ -150,6 +150,22 @@ const changeHandler = (e) => {
                     pageNav.querySelector("[data-id='"+data.new_article_id+"'] > a").click();
                 } else {
                     pageNav.querySelector("[data-id='"+gArticleId+"'] > a").textContent = value;
+                }
+                break;
+            case 'website_article.collection_type' :
+                switch (value) {
+                    case 'BLOG' :
+                        newBlog.classList.add("visible");
+                        newMedia.classList.remove("visible");
+                        break;
+                    case 'MEDIA' :
+                        newMedia.classList.add("visible");
+                        newBlog.classList.remove("visible");
+                        break;
+                    case 'N/A' :
+                        newMedia.classList.remove("visible");
+                        newBlog.classList.remove("visible");
+                        break;
                 }
                 break;
             case 'website.domain_name' :
@@ -446,20 +462,6 @@ const popupOpen = (heading, text) => {
     popup.querySelector("h2").textContent = heading;
     popup.querySelector("p").textContent = parser.parseFromString('<!doctype html><body>' + text,"text/html").body.textContent;
     popup.showModal();
-}
-
-/* 
- ** GET CONTENT FOR PREVIEW DIALOG 
- */
-const preview_article = (articleId,button) => {
-    execProcess( "article/"+articleId,"GET").then( (data) => {
-        const content = preview.querySelector(".content");
-        content.innerHTML = data.content;
-        const ele = content.firstElementChild;
-        ele.insertAdjacentHTML("afterend", data.details);
-
-        preview.showModal();
-    });
 }
 
 /*
@@ -1490,6 +1492,14 @@ delete_page = () => {
         editor.setData("");
         editor.enableReadOnlyMode( 'lock-id' );
         galleryList.replaceChildren();
+        switch (data.collection_type) {
+            case 'blog' :
+                newBlog.classList.toggle("visible");
+                break;
+            case 'media' :
+                newMedia.classList.toggle("visible");
+                break;
+        }
         pageDialog.close();
     });
 }
