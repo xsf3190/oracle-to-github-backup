@@ -18,15 +18,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
         l_url VARCHAR2(500);
         l_error_message VARCHAR2(4000);
         l_message VARCHAR2(50);
-        n PLS_INTEGER;
+        l_collection_type website_article.collection_type%type;
         l_job_name VARCHAR2(30);
+        n PLS_INTEGER;
     BEGIN
         IF (pWebsiteId IS NOT NULL) THEN
             DELETE website_article 
              WHERE user_id=pUserId 
                AND article_id=pArticleId 
                AND website_id=pWebsiteId
-               AND NOT EXISTS (SELECT NULL FROM article WHERE parent_id=pArticleId);
+               AND NOT EXISTS (SELECT NULL FROM article WHERE parent_id=pArticleId)
+               RETURNING collection_type INTO l_collection_type;
             n:=sql%rowcount;
             IF (n=0) THEN
                 l_message:='NOT DELETED. HAS SUB-PAGES';
@@ -84,6 +86,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
             apex_json.open_object;
             apex_json.write('success', TRUE);
             apex_json.write('message', l_message);
+            IF (l_collection_type<>'N/A') THEN
+                apex_json.write('collection_type', LOWER(l_collection_type));
+            END IF;
             apex_json.close_object;
         END IF;
 
