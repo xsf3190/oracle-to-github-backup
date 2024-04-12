@@ -534,8 +534,24 @@ dialog.log {
         grid-template-columns: 1fr 44px;
         margin-inline-start: 1rem;
     }
-    & details {
-        font-size: 70%;
+    .cwv {
+        font-size: 80%;
+        margin: auto;
+    }
+    .lcp {
+        display: grid;
+        grid-template-columns: 2.5fr 1.5fr 2.5fr;
+        row-gap: 0.5ch;
+        & span[class] {
+            display: inline-block;
+            padding: 1ch;
+            text-align: center;
+        }
+    }
+    .score {
+        margin-block-start: 1ch;
+        font-size: 100%;
+        font-weight: 600;
     }
     & table {
         width: 100%;
