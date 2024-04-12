@@ -324,6 +324,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         EXCEPTION WHEN OTHERS THEN pck_core.log_error;
     END;
 
+    FUNCTION cwv(pLcp IN NUMBER) RETURN VARCHAR2 IS 
+        l_html LONG;
+        l_margin NUMBER;
+        l_score VARCHAR2(10);
+    BEGIN
+    /* LCP reported in milliseconds - make appropriate calculation for % within 0 -> 6.5 seconds*/ 
+        l_margin:=LEAST(ROUND(pLcp/6500*100,1),100);
+        l_score:='(' || TO_CHAR(ROUND(pLcp/1000,1),'9.0') || ' sec)';
+
+        l_html:=
+        '<div class="cwv">
+            <div class="lcp">
+              <span></span>
+              <span>2.5 sec</span>
+              <span>4 sec</span>
+              <span class="good">GOOD</span>
+              <span class="needs-improvement">NEEDS<br>IMPROVEMENT</span>
+              <span class="poor">POOR</span>
+            </div>
+            <div>
+                <span class="score" style="margin-inline-start:' || l_margin || '%;">' 
+                || CASE WHEN l_margin<50 THEN '&#8593; your score ' || l_score  ELSE 'your score ' || l_score || ' &#8593;' END || 
+                '</span>
+            </div>
+        </div>';
+        RETuRN (l_html);
+    END;
+
     /*
     **  Return log of all visits to website
     */
@@ -346,13 +374,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
              WHERE website_id=pWebsiteId
         ) LOOP
             l_content:=
-            '<p><strong>' || C.nb_hit || '</strong> visits from <strong>' || C.nb_distinct_ip || '</strong> distinct IP since <strong>' || TO_CHAR(C.first_hit,'dd Mon yyyy') || '</strong></p>
-            <details><summary>Performance Explained</summary>
-            <p>Performance measurements are based on the
-            <a href="https://developers.google.com/search/docs/appearance/core-web-vitals" target="_blank">Google Core Web Vital</a>
-            metrics used in its ranking algorithm.</p>
-            <p>Each time someone visits your website the metrics are automatically captured and sent here.</p>
-            </details>';
+            '<p><strong>' || C.nb_hit || '</strong> visits from <strong>' || 
+                             C.nb_distinct_ip || '</strong> distinct IP since <strong>' || 
+                             TO_CHAR(C.first_hit,'dd Mon yyyy') || 
+            '</strong></p>';
+            IF (NOT pEmail) THEN
+                l_content:=l_content ||
+                '<details><summary>Performance Explained</summary>
+                <p>Performance ratings are the
+                <a href="https://developers.google.com/search/docs/appearance/core-web-vitals" target="_blank">Core Web Vital</a>
+                metrics used by Google in its ranking algorithm.</p>
+                <p>Metrics are automatically captured on each page visit.</p>' || cwv(6000) || 
+                '</details>';
+            END IF;
         END LOOP;
 
         l_content:=l_content ||
