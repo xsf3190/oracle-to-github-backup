@@ -629,9 +629,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     <nav class="page-nav">
                     </nav>
                     <div id="editor"></div>
-                    <div>
-                        <span id="word-count"></span>
-                    </div>
                 </div>
             </div><!-- END page-content-->
             <form action="https://codepen.io/pen/define" method="POST" target="_blank">
@@ -685,34 +682,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         <script>
             const gRestUrl = "' || getRestUrl() || '";' || 
             CASE WHEN apex_application.g_flow_step_id=2 THEN '
-            const gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home";' 
-            END || '
-            const gMetricWebsiteId = "' || apex_application.g_flow_id || '";
-            const gMetricArticleId = "' || apex_application.g_flow_step_id || '";
-            const gMetricVisitUrl = "' || getRestUrl() || 'page-visit";
-        </script>');
+            const gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home";' END || 
+        '</script>');
 
         l_page_js:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.js';
-        l_metric_js:='app' || apex_application.g_flow_id || '_metric.min.js';
 
         IF (INSTR(l_javascript_file_urls,l_page_js)=0) THEN
             FOR C IN (SELECT file_content 
                         FROM APEX_APPLICATION_STATIC_FILES 
                        WHERE application_id=apex_application.g_flow_id 
-                         AND (file_name=REPLACE(l_page_js,'.min') OR file_name=l_metric_js))
+                         AND file_name=REPLACE(l_page_js,'.min') )
             LOOP
                 l_clob:=l_clob || chr(10) || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
             END LOOP;
         END IF;
-
-        l_clob:=l_clob || TO_CLOB('
-            <script type="module">
-              import {onCLS, onFID, onINP, onLCP} from ''https://unpkg.com/web-vitals?module'';
-              onCLS(addToVitalsQueue);
-              onINP(addToVitalsQueue);
-              onFID(addToVitalsQueue);
-              onLCP(addToVitalsQueue);
-            </script>');
 
         RETURN (l_clob);
 
