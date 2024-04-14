@@ -592,8 +592,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         */
         l_session_data pck_core.session_data_rt;
         l_word_count article.word_count%type;
-        TYPE t_website_id IS TABLE OF website.id%type;
-        l_website_id t_website_id;
+        l_parent_id article.parent_id%type;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -604,13 +603,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             )
         WHERE t.id=pArticleId
           AND t.author_user_id=l_session_data.user_id
-        RETURNING t.word_count INTO l_word_count;
+        RETURNING t.parent_id, t.word_count INTO l_parent_id, l_word_count;
 
-        UPDATE website_article SET updated_date=current_timestamp WHERE article_id=pArticleId AND user_id=l_session_data.user_id
-        RETURNING website_id BULK COLLECT INTO l_website_id;
-
-        FORALL i IN l_website_id.FIRST..l_website_id.LAST
-            UPDATE website SET updated_date=current_timestamp WHERE id=l_website_id(i) AND user_id=l_session_data.user_id;
+        UPDATE website SET updated_date=current_timestamp 
+         WHERE user_id=l_session_data.user_id
+           AND id IN (SELECT website_id FROM website_article WHERE article_id=COALESCE(l_parent_id,pArticleId));
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
