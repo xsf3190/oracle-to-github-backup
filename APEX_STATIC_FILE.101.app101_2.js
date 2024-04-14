@@ -1039,22 +1039,17 @@ ClassicEditor.create(document.querySelector("#editor"), {
         editor_status_text = wrapper.querySelector("#editor-status");
         editor.enableReadOnlyMode( 'lock-id' );
 
-        const editor_content = wrapper.querySelector(".ck-editor__editable_inline").getBoundingClientRect();
-        console.log("editor_content",editor_content)
+        const editor_content = wrapper.querySelector(".ck-editor__editable_inline").getBoundingClientRect(),
+              word_count = wrapper.querySelector(".ck-word-count").getBoundingClientRect();
 
-        const word_count = wrapper.querySelector(".ck-word-count").getBoundingClientRect();
-        console.log("word_count",word_count)
-
-        const wrapper_rect = wrapper.getBoundingClientRect();
-        console.log("wrapper",wrapper_rect);
-
-        const editor_height = window.innerHeight - editor_content.y - word_count.height;
-        console.log("editor_height",editor_height)
+        const editor_height = window.innerHeight - editor_content.y - word_count.height - 18; /* 18 is margin and border of word_count div */
         
         /*wrapper.querySelector(".ck-editor__editable_inline").style.height = editor_height+"px";*/
         editor.editing.view.change( writer => {
             writer.setStyle( 'height',editor_height+"px" , editor.editing.view.document.getRoot() );
         } );
+
+        wrapper.querySelector("[aria-label='gallery']").style.height = editor_height +"px";
     })
     .catch(error => {
         console.error(error);
