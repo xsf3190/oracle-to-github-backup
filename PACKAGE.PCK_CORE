@@ -369,39 +369,30 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <ul class="dropdown-items">                    
                     <li class="api-keys">
                         <button type="button" class="with-icon">
-                            <svg class="icon">
-                                <use href="#keys"></use>
-                            </svg>
+                            &#128273;
                             API Keys
                         </button>
                     </li>
                     <li class="session-log">
                         <button type="button" class="with-icon session-log">
-                            <svg class="icon">
-                                <use href="#list"></use>
-                            </svg>
+                            &#9776;
                             Technical Log
                         </button>
                     </li>' || 
                     CASE WHEN pIsAdmin<>1 THEN
                     '<li class="delete-user">
                         <button type="button" class="with-icon delete-user">
-                            <svg class="icon">
-                                <use href="#delete"></use>
-                            </svg>
+                            &#128686;
                             Delete My Data
                         </button>
                     </li>'
                     END ||
                     '<li class="signout">
                         <button type="button" class="with-icon">
-                            <svg class="icon">
-                                <use href="#signout"></use>
-                            </svg>
+                            &#x21e6;
                             Log Out
                         </button>
                     </li>  
-
                 </ul>
             </div>
         </nav>');
@@ -415,7 +406,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_html:=
         '<div data-id="' || pId || '">
             <button type="button" class="' || pClassName || '">
-                <svg><use href="#pencil"></use></svg>
+                &#128397;
             </button>
             <a href="" class="nav-label">' || pLabel || '</a>';
 
@@ -464,20 +455,45 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         pNetlifySiteId IN OUT website.netlify_site_id%type, 
         pNetlifySiteIdCustom IN OUT website.netlify_site_id%type) RETURN VARCHAR2 IS
         l_html LONG;
+        l_dropdown LONG;
     BEGIN
+        l_dropdown:=
+        '<section class="dropdown">
+            <button type="button" class="show-dropdown">&blacktriangledown;</button>
+            <ul class="dropdown-items">';
         l_html:=
         '<nav class="website-nav">';
-        FOR C IN (SELECT w.id, w.domain_name, w.netlify_site_id||','||w.netlify_site_id_custom site_id, ROW_NUMBER() OVER (ORDER BY COALESCE(w.updated_date,w.created_date) DESC) rn
+        FOR C IN (SELECT w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom, ROW_NUMBER() OVER (ORDER BY COALESCE(w.updated_date,w.created_date) DESC) rn
                     FROM website w
-                   WHERE w.user_id=pUserId)
+                   WHERE w.user_id=pUserId
+                   ORDER BY w.domain_name)
         LOOP
             IF (C.rn=1) THEN
-                l_html:=l_html || buildNavLabel(C.id, C.domain_name, 'website-options','site_id',C.site_id);
+                l_html:=l_html || --buildNavLabel(C.id, C.domain_name, 'website-options','site_id',C.netlify_site_id);
+                '<div data-id="' || C.id || '">
+                    <button type="button" class="website-options">
+                        &#128397;
+                    </button>
+                    <a href="" class="nav-label selected">' || C.domain_name || '</a>
+                    <button type="button" class="deploy-website" data-site_id="' || C.netlify_site_id || '">DEPLOY<span class="env">TEST</span></button>
+                    <button type="button" class="visits" data-domain="'|| REPLACE(C.domain_name,'.','-') || '.netlify.app">HITS<span class="env">TEST</span></button>';
             END IF;
-
+            l_dropdown:=l_dropdown ||
+            '<li>
+                <button type="button" class="edit-website with-icon" data-id="' || C.id || '" data-site_id="' || C.netlify_site_id || '" data-domain="' || C.domain_name || '">' || C.domain_name || '<span class="env">TEST</span></button>
+            </li>';
+            IF (C.netlify_site_id_custom IS NOT NULL) THEN
+                l_dropdown:=l_dropdown ||
+                '<li>
+                     <button type="button" class="edit-website with-icon" data-id="' || C.id || '" data-site_id="' || C.netlify_site_id_custom || '" data-domain="' || C.domain_name || '">' || C.domain_name || '<span class="env">LIVE</span></button>
+                </li>';
+            END IF;
+            l_dropdown:=l_dropdown || '<hr>';
         END LOOP;
-        l_html:=l_html || 
-        '</nav>';
+        l_dropdown:=l_dropdown || '</section>';
+        l_html:=l_html || l_dropdown ||
+        '</ul></nav>';
+
         RETURN (l_html);
     END;
 
@@ -614,7 +630,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <input type="hidden" name="data" value="">
             </form>' ||
             buildDialogs() ||
-            pck_icons.g_icons_svg ||
         '</div><!-- END wrapper-->';
 
         RETURN l_clob;
