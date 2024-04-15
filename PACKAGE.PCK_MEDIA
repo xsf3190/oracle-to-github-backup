@@ -146,11 +146,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
                 ELSE NULL;
             END CASE;
 
-            pHTML:=pHTML || TO_CLOB(
-            '<div class="actions">
-                <button type="button" class="copy"><svg><use href="#copy"></use></svg></button>
-                <button type="button" class="expand"><svg><use href="#expand"></use></svg></button>
-            </div>');
+            IF (l_media_type='image') THEN
+                pHTML:=pHTML || TO_CLOB(
+                '<div class="actions">
+                    <button type="button" class="copy" title="Copy URL">&#x2398;</button>
+                    <button type="button" class="expand" title="Fullscreen">&#9974;</button>
+                </div>');
+            END IF;
 
             pHTML:=pHTML || TO_CLOB('</li>');
         END LOOP;
