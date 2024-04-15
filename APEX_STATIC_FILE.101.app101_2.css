@@ -198,17 +198,19 @@ nav:not(.top-nav) div {
         padding: var(--space-3xs) var(--space-2xs);
         color: white;
         background-color: var(--color-solid);
-        & span {
-            display: inline-block;
-            border-radius: var(--space-3xs);
-            margin-left: var(--space-s);
-            font-family: monospace;
-            background-color: #ddd;
-            color: black;
-            padding: var(--space-3xs) var(--space-2xs);
-            letter-spacing: 2px;
-        }
+        
     }
+}
+
+span.env {
+    display: inline-block;
+    border-radius: var(--space-3xs);
+    margin-left: var(--space-s);
+    font-family: monospace;
+    background-color: #ddd;
+    color: black;
+    padding: var(--space-3xs) var(--space-2xs);
+    letter-spacing: 2px;
 }
 
 nav [class$="options"]:has(+ a.selected) {
@@ -778,11 +780,10 @@ nav button {
 
 .gallery-list .actions > button {
     display: inline-flex;
-    inline-size: 1.25em;
-    block-size: 1.25em;
     border-radius: 50%;
-    padding: 0.25em;
     background-color: darkgrey;
+    color: white;
+    font-weight: 900;
 }
 
 .gallery-list .actions > button > svg {
