@@ -1,5 +1,6 @@
 let gWebsiteId = 0,
     gArticleId = 0,
+    gNetlifySiteId,
     gWebsiteDemo,
     gBrowser,
     gFullImage,
@@ -187,7 +188,16 @@ const changeHandler = (e) => {
 /*
  **  EDIT WEBSITE
  */
-const edit_website = () => {
+const edit_website = (e) => {
+    gWebsiteId = e.target.dataset.id;
+    gNetlifySiteId = e.target.dataset.site_id;
+
+    const env = e.target.querySelector("span").textContent;
+
+    websiteNav.querySelector(".selected").textContent = e.target.dataset.domain;
+    websiteNav.querySelector(".deploy-website > span").textContent = env;
+    websiteNav.querySelector(".visits > span").textContent = env;
+
     execProcess( "website/"+gWebsiteId,"GET").then( (data) => {
         pageNav.replaceChildren();
         if (data.nav_labels) {
@@ -208,9 +218,8 @@ const edit_website = () => {
  ** DEPLOY WEBSITE
  */
 const deploy_website = (e) => { 
-    const site_id = e.target.dataset.site_id,
-          website_id = e.target.closest("div").dataset.id;
-    execProcess("deploy","POST",{"websiteid":website_id,"siteid":site_id}).then( (data) => {
+
+    execProcess("deploy","POST",{"websiteid":gWebsiteId,"siteid":gNetlifySiteId}).then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
@@ -218,7 +227,7 @@ const deploy_website = (e) => {
         if (gIntervalId) {
             clearInterval(gIntervalId);
         }
-        gIntervalId = setInterval(getDeploymentStatus,2000,website_id, site_id);
+        gIntervalId = setInterval(getDeploymentStatus,2000,gWebsiteId, gNetlifySiteId);
     });
 };
 
@@ -315,6 +324,8 @@ window.addEventListener("DOMContentLoaded", () => {
     wrapper.addEventListener("focusin",focusHandler);
     wrapper.addEventListener("change",changeHandler);
     
+    gWebsiteId = websiteNav.querySelector("div").dataset.id;
+    gNetlifySiteId = websiteNav.querySelector(".deploy-website").dataset.site_id;
     /*
     if (checkPerformance()) {
         const observer = new PerformanceObserver(perfObserver);
@@ -452,6 +463,8 @@ const clickHandler = (e) => {
             gArticleId = id;
             edit_text(e);
         }
+    } else if (e.target.matches(".edit-website")) {
+        edit_website(e); 
     } else if (e.target.matches(".visits")) {
         get_visits(e); 
     } else if (e.target.matches(".clear-input")) {
