@@ -529,6 +529,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_endpoint VARCHAR2(100);
         l_method VARCHAR2(6);
         l_message VARCHAR2(50);
+        l_dropdown_html LONG;
 
         FUNCTION name_taken RETURN BOOLEAN IS
         BEGIN
@@ -591,6 +592,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 VALUES (seq_website.nextval, pDomainName, l_netlify_site_id, l_netlify_site_id_custom, current_timestamp, pUserId);
             apex_json.write('nav_label', pck_core.buildNavLabel(seq_website.currval,pDomainName, 'website-options','site-id',l_netlify_site_id));
             apex_json.write('new_website_id',seq_website.currval);
+            apex_json.write('new_netlify_site_id',l_netlify_site_id);
+            l_dropdown_html:=
+            '<li><button type="button" class="edit-website with-icon" data-id="' || seq_website.currval || '" data-site_id="' || l_netlify_site_id || '">' || pDomainName || '<span class="env">TEST</span></button></li>';
+            IF (l_netlify_site_id_custom IS NOT NULL) THEN
+                l_dropdown_html:=l_dropdown_html ||
+                '<li><button type="button" class="edit-website with-icon" data-id="' || seq_website.currval || '" data-site_id="' || l_netlify_site_id_custom || '">' || pDomainName || '<span class="env">LIVE</span></button></li>';                
+            END IF;
+            l_dropdown_html:=l_dropdown_html || '<hr>';
+            apex_json.write('new_dropdown_item',l_dropdown_html);
             l_message:='Created OK';    
         ELSE
             UPDATE website SET 
