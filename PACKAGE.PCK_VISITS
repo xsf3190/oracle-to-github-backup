@@ -1,6 +1,6 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
-    PROCEDURE getVisits(pWebsiteId IN website.id%type, pEmail IN BOOLEAN DEFAULT FALSE);
+    PROCEDURE getVisits(pId IN VARCHAR2, pEmail IN BOOLEAN DEFAULT FALSE);
     --
     PROCEDURE uploadIpLookup;
     --
@@ -352,14 +352,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     /*
     **  Return log of all visits to website
     */
-    PROCEDURE getVisits(pWebsiteId IN website.id%type, pEmail IN BOOLEAN DEFAULT FALSE) IS
+    PROCEDURE getVisits(pId IN VARCHAR2, pEmail IN BOOLEAN DEFAULT FALSE) IS
+        l_website_id website.id%type;
+        l_netlify_site_id website.netlify_site_id%type;
+        l_url page_hit.url%type;
         l_content CLOB;
         l_rating VARCHAR2(100);
         l_sql LONG;
         l_session_data pck_core.session_data_rt;
         n PLS_INTEGER;
     BEGIN
-        pck_visits.uploadPageHits(pWebsiteId);
+        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
+        l_netlify_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
+
+        SELECT CASE WHEN netlify_site_id=l_netlify_site_id THEN REPLACE(domain_name,'.','-') || '.netlify.app' ELSE domain_name END
+          INTO l_url
+          FROM website
+         WHERE id=l_website_id;
+
+        pck_visits.uploadPageHits(l_website_id);
 
         FOR C IN (
             SELECT COUNT(*) nb_hit, COUNT(DISTINCT ip_address) nb_distinct_ip, MIN(visit_date) first_hit, MAX(visit_date) last_hit,
@@ -368,7 +379,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     APPROX_PERCENTILE(0.95 DETERMINISTIC) WITHIN GROUP (ORDER BY inp) inp,
                     ROUND(AVG(duration_visible)) avg_viewing_time
               FROM page_hit
-             WHERE website_id=pWebsiteId
+             WHERE website_id=l_website_id
+               AND url=l_url
         ) LOOP
             l_content:=
             '<p><strong>' || C.nb_hit || '</strong> visits from <strong>' || 
@@ -411,9 +423,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                         MAX(p.lcp_rating) lcp_rating, MAX(p.cls_rating) cls_rating, MAX(p.inp_rating) inp_rating, 
                         SUM(p.duration_visible) duration_visible, MAX(p.browser) browser, MAX(p.connection) connection, MAX(p.mobile) mobile
                   FROM website w, page_hit p
-                 WHERE w.id=pWebsiteId
+                 WHERE w.id=l_website_id
                    AND p.website_id=w.id
-                   AND p.url=CASE WHEN w.netlify_site_id_custom IS NULL THEN REPLACE(w.domain_name,'.','-') || '.netlify.app' ELSE w.domain_name END
+                   AND p.url=l_url
                  GROUP BY p.website_id, p.ip_address, p.visit_date
             )
             SELECT wh.visit_date, wh.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
@@ -444,7 +456,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         */
         n:=0;
         l_sql:='SELECT TO_CHAR(visit_date,''dd Mon yyyy fmhh24:fmmi'') "Page Views",';
-        FOR C1 IN (SELECT navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
+        FOR C1 IN (SELECT navigation_label FROM website_article WHERE website_id=l_website_id ORDER BY display_order) LOOP
             n:=n+1;
             l_sql:=l_sql || 'MAX(DECODE(navigation_label,''' || C1.navigation_label || ''',duration_visible)) "' || C1.navigation_label || '",';
         END LOOP;
@@ -463,11 +475,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
              GROUP  BY visit_date
              ORDER BY visit_date DESC';
 
-            l_content:=l_content || sql2Html(l_sql, pWebsiteId);
+            l_content:=l_content || sql2Html(l_sql, l_website_id);
         END IF;
 
         IF (pEmail) THEN
-            sendmail(pWebsiteId, l_content);
+            sendmail(l_website_id, l_content);
         ELSE
             apex_json.open_object; 
             apex_json.write('success', TRUE);
