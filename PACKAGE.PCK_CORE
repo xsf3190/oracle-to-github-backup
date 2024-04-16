@@ -398,10 +398,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </nav>');
     END;
 
+    /*
+    **  Vuild Website Page navigation label with supporting elements
+    */
     FUNCTION buildNavLabel(pId IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pAttrName IN VARCHAR2 DEFAULT NULL, pAttrValue IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
         l_html LONG;
-        l_value_1 VARCHAR2(50);
-        l_value_2 VARCHAR2(50);
     BEGIN
         l_html:=
         '<div data-id="' || pId || '">
@@ -409,32 +410,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 &#128397;
             </button>
             <a href="" class="nav-label">' || pLabel || '</a>';
-
-        IF (pClassName='website-options') THEN
-            IF (INSTR(pAttrValue,',')>0) THEN
-                l_value_1:=SUBSTR(pAttrValue,1,INSTR(pAttrValue,',')-1);
-                l_value_2:=SUBSTR(pAttrValue,INSTR(pAttrValue,',')+1);
-            ELSE
-                l_value_1:=pAttrValue;
-            END IF;
-
-            /* DEPLOY BUTTONS */
-            l_html:=l_html || 
-            '<button type="button" class="deploy-website" data-'|| pAttrName || '="' || l_value_1 || '">DEPLOY<span>TEST</span></button>';
-            IF (l_value_2 IS NOT NULL) THEN
-                l_html:=l_html || 
-                '<button type="button" class="deploy-website" data-'|| pAttrName || '="' || l_value_2 || '">DEPLOY<span>LIVE</span></button>';
-            END IF;
-
-            /* HITS BUTTON */
-            IF (l_value_2 IS NOT NULL) THEN
-                l_html:=l_html || 
-                '<button type="button" class="visits" data-domain="'|| pLabel || '">HITS<span>LIVE</span></button>';
-            ELSE
-                l_html:=l_html || 
-                '<button type="button" class="visits" data-domain="'|| REPLACE(pLabel,'.','-') || '.netlify.app">HITS<span>TEST</span></button>';
-            END IF;
-        END IF;
 
         IF (pClassName='page-options' AND pAttrName IS NOT NULL) THEN
             l_html:=l_html || 
@@ -448,14 +423,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN(l_html);
     END;
 
-    FUNCTION buildWebsiteNav(
-        pUserId IN users.id%type, 
-        pSelectedWebsiteId IN OUT website.id%type, 
-        pSelectedWebsiteDomain IN OUT website.domain_name%type, 
-        pNetlifySiteId IN OUT website.netlify_site_id%type, 
-        pNetlifySiteIdCustom IN OUT website.netlify_site_id%type) RETURN VARCHAR2 IS
+    FUNCTION buildWebsiteNav(pUserId IN users.id%type, pSelectedWebsiteId IN OUT website.id%type) RETURN VARCHAR2 IS
         l_html LONG;
         l_dropdown LONG;
+        n PLS_INTEGER:=0;
     BEGIN
         l_dropdown:=
         '<section class="dropdown">
@@ -463,13 +434,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             <ul class="dropdown-items">';
         l_html:=
         '<nav class="website-nav">';
-        FOR C IN (SELECT w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom, ROW_NUMBER() OVER (ORDER BY COALESCE(w.updated_date,w.created_date) DESC) rn
+        FOR C IN (SELECT w.id, w.domain_name, w.netlify_site_id, w.netlify_site_id_custom, ROW_NUMBER() OVER (ORDER BY COALESCE(w.updated_date,w.created_date) DESC) rn, COUNT(*) OVER() nb
                     FROM website w
                    WHERE w.user_id=pUserId
                    ORDER BY w.domain_name)
         LOOP
+            n:=n+1;
             IF (C.rn=1) THEN
-                l_html:=l_html || --buildNavLabel(C.id, C.domain_name, 'website-options','site_id',C.netlify_site_id);
+                pSelectedWebsiteId:=C.id;
+                l_html:=l_html ||
                 '<div data-id="' || C.id || '">
                     <button type="button" class="website-options">
                         &#128397;
@@ -488,7 +461,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                      <button type="button" class="edit-website with-icon" data-id="' || C.id || '" data-site_id="' || C.netlify_site_id_custom || '" data-domain="' || C.domain_name || '">' || C.domain_name || '<span class="env">LIVE</span></button>
                 </li>';
             END IF;
-            l_dropdown:=l_dropdown || '<hr>';
+            IF (n<C.nb) THEN
+                l_dropdown:=l_dropdown || '<hr>';
+            END IF;
         END LOOP;
         l_dropdown:=l_dropdown || '</section>';
         l_html:=l_html || l_dropdown ||
@@ -531,14 +506,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         </button>');
     END;
 
-    FUNCTION buildMediaCard(pArticleId IN website.id%type) RETURN CLOB IS
-        l_thumbnails CLOB;
+    FUNCTION buildMediaCard RETURN CLOB IS
     BEGIN
-        pck_media.getThumbnails(pArticleId, l_thumbnails);
         RETURN(
         buildPushableButton('upload-media') ||
         '<div role="region" aria-label="gallery">
-            <ul class="gallery-list">' || l_thumbnails || '</ul>
+            <ul class="gallery-list"></ul>
         </div>
         <div class="gallery-overlay">
             <img src="">
@@ -587,10 +560,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_is_admin PLS_INTEGER;
         l_clob CLOB;
         l_selected_website_id website.id%type;
-        l_selected_website_domain website.domain_name%type;
-        l_netlify_site_id website.netlify_site_id%type;
-        l_netlify_site_id_custom website.netlify_site_id%type;
-        l_selected_article_id website_article.article_id%type;
     BEGIN
         l_session_data:=getSessionData();
 
@@ -609,11 +578,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 <div>' ||
                     buildPushableButton('new-website', '&plus;') ||
                 '</div>' ||
-                buildWebsiteNav(l_session_data.user_id, l_selected_website_id, l_selected_website_domain, l_netlify_site_id, l_netlify_site_id_custom) ||
+                buildWebsiteNav(l_session_data.user_id, l_selected_website_id) ||
             '</div>
             <div class="page-content">
                 <div>' ||
-                    buildMediaCard(l_selected_article_id) ||
+                    buildMediaCard() ||
                 '</div>
                 <div>
                     <div class="button-container">' ||
@@ -621,8 +590,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     buildPushableButton('new-blog','&plus;') ||
                     buildPushableButton('new-media','&plus;') ||
                     '</div>
-                    <nav class="page-nav">
-                    </nav>
+                    <nav class="page-nav">' ||
+                    buildPageNav(l_selected_website_id) ||
+                    '</nav>
                     <div id="editor"></div>
                 </div>
             </div><!-- END page-content-->
