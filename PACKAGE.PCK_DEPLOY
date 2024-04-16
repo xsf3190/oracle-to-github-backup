@@ -31,21 +31,38 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     ** Build and deploy website to Netlify by submitting Github action
     */    
     PROCEDURE deployWebsite(pBodyText IN CLOB) IS
+        TYPE t_table_id IS RECORD(
+            id NUMBER,
+            display_order NUMBER);
+        TYPE tt_table_id IS TABLE OF t_table_id;
+        l_table_ids tt_table_id; 
+
         l_clob CLOB;
         l_job_name VARCHAR2(30);
         n PLS_INTEGER;
         l_body_text CLOB:=pBodyText;
         l_website_id website.id%type;
         l_site_id website.netlify_site_id%type;
+        l_list LONG;
         l_url VARCHAR2(100);
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT websiteid, siteid INTO l_website_id, l_site_id FROM users, JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid)) WHERE users.id=l_session_data.user_id;
+        SELECT websiteid, siteid, list INTO l_website_id, l_site_id, l_list FROM users, JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid, list)) WHERE users.id=l_session_data.user_id;
+
+        /* Reorder pages */
+        SELECT column_value, rownum 
+          BULK COLLECT INTO l_table_ids
+          FROM TABLE(apex_string.split(l_list,':'));
+
+        FORALL i IN l_table_ids.first .. l_table_ids.last
+                UPDATE website_article 
+                   SET display_order=l_table_ids(i).display_order 
+                 WHERE website_id = l_website_id
+                   AND article_id=l_table_ids(i).id;
 
         /* Check no other session currently deploying - simultaneous deployments not allowed on Netlify free plan */
-
         FOR C IN (SELECT job_name FROM user_scheduler_running_jobs WHERE job_name LIKE 'DEPLOY_%') LOOP
             apex_json.open_object;
             apex_json.write('content', '<h2>Someone else is deploying ... try again later</h2>');
