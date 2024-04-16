@@ -17,12 +17,10 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       websiteContent = websiteDialog.querySelector(".content"),
       pageDialog = document.querySelector("dialog.page-options"),
       pageContent = pageDialog.querySelector(".content"),
-      deployButtons = wrapper.querySelector(".deploy-buttons > div"),
       newBlog = wrapper.querySelector(".new-blog"),
       newMedia = wrapper.querySelector(".new-media"),
       websiteNav = wrapper.querySelector(".website-nav"),
       pageNav = wrapper.querySelector(".page-nav"),
-      cards = wrapper.querySelector(".cards"),
       popup = document.querySelector("dialog.popup"),
       popupClose = popup.querySelector("button.close"),
       galleryList = wrapper.querySelector(".gallery-list"),
@@ -136,11 +134,6 @@ const changeHandler = (e) => {
 
         if (data.color==="red") return;
 
-        if (data.deploy_buttons) {
-            deployButtons.replaceChildren();
-            deployButtons.insertAdjacentHTML('afterbegin',data.deploy_buttons);
-        }
-
         /* Update UI if domain name or navigation label are changed */
 
         switch (table_column) {
@@ -172,11 +165,18 @@ const changeHandler = (e) => {
             case 'website.domain_name' :
                 if (data.new_website_id) {
                     gWebsiteId = data.new_website_id;
-                    websiteNav.insertAdjacentHTML('afterbegin',data.nav_label);
-                    websiteNav.querySelector("[data-id='"+data.new_website_id+"'] > a").click();
-                } else {
-                    websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").textContent = value;
+                    websiteNav.querySelector("div[data-id]").dataset.id = data.new_website_id;
+                    pageNav.replaceChildren();
+                    galleryList.replaceChildren();
                 }
+                if (data.new_netlify_site_id) {
+                    gNetlifySiteId = data.new_netlify_site_id;
+                    websiteNav.querySelector(".deploy-website").dataset.site_id = data.new_netlify_site_id;
+                }
+                if (data.new_dropdown_item) {
+                    websiteNav.querySelector(".dropdown-items").insertAdjacentHTML('afterbegin',data.new_dropdown_item);
+                }
+                websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").textContent = value;
                 break;
             case 'website.font' :
                 websiteFont(data.font_family, data.font_url);
@@ -198,6 +198,11 @@ const edit_website = (e) => {
     websiteNav.querySelector(".deploy-website > span").textContent = env;
     websiteNav.querySelector(".visits > span").textContent = env;
 
+    newBlog.classList.remove("visible");
+    newMedia.classList.remove("visible");
+
+    websiteNav.querySelector("a").style.textDecorationLine = "revert";
+
     execProcess( "website/"+gWebsiteId,"GET").then( (data) => {
         pageNav.replaceChildren();
         if (data.nav_labels) {
@@ -218,8 +223,10 @@ const edit_website = (e) => {
  ** DEPLOY WEBSITE
  */
 const deploy_website = (e) => { 
+    const pages = pageNav.querySelectorAll("div[data-id]"),
+          list = Array.from(pages, (page) => page.dataset.id);
 
-    execProcess("deploy","POST",{"websiteid":gWebsiteId,"siteid":gNetlifySiteId}).then( (data) => {
+    execProcess("deploy","POST",{"websiteid":gWebsiteId,"siteid":gNetlifySiteId,"list":list.join(":")}).then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
@@ -456,10 +463,7 @@ const clickHandler = (e) => {
             selected_nav(nav,id);
         }
 
-        if (nav.matches(".website-nav")) {
-            gWebsiteId = id;
-            edit_website();
-        } else if (nav.matches(".page-nav")) {
+        if (nav.matches(".page-nav")) {
             gArticleId = id;
             edit_text(e);
         }
@@ -1078,7 +1082,7 @@ const websiteFont = (font_family, font_url) => {
     document.fonts.ready.then(()=>{
         console.log("font " + font_family + " loaded");
         gWebsiteDemo.style.setProperty("--font-family",font_family);
-        gWebsiteDemo.querySelector("h1").textContent = websiteNav.querySelector("[data-id='"+gWebsiteId+"'] a").textContent.toUpperCase();
+        gWebsiteDemo.querySelector("h1").textContent = websiteNav.querySelector("a").textContent.toUpperCase();
         gWebsiteDemo.querySelector("p").textContent = `"${font_family}" text with background color`;
     });
 }
@@ -1166,7 +1170,6 @@ const website_options = () => {
  ** GET PAGE OPTIONS
  */
 const page_options = (e) => {
-    console.log(gWebsiteId+","+gArticleId);
     execProcess( "page-options/"+gWebsiteId+","+gArticleId,"GET").then( (data) => {
         pageContent.replaceChildren();
         pageContent.insertAdjacentHTML('afterbegin',data.content);
@@ -1178,8 +1181,7 @@ const page_options = (e) => {
  ** GET WEBSIITE VISITS
  */
 const get_visits = (e) => {
-    const websiteid = e.target.closest("div").dataset.id;
-    execProcess( "visits/"+websiteid,"GET").then( (data) => {
+    execProcess( "visits/"+gWebsiteId+","+gNetlifySiteId,"GET").then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
@@ -1501,7 +1503,17 @@ delete_article = () => {
  */
 const delete_website = () => {
     execProcess("dml","DELETE",{table_name: "website", website_id: gWebsiteId}).then( () => {
-        let selected = websiteNav.querySelector("[data-id='"+gWebsiteId+"']").remove();
+        websiteNav.querySelector("a").style.textDecorationLine = "line-through";
+        websiteNav.querySelectorAll(".edit-website[data-id='"+gWebsiteId+"']").forEach ((item) => {
+            item.parentElement.remove();
+        })
+        if (websiteNav.querySelector("hr + hr")) {
+            websiteNav.querySelector("hr + hr").remove();
+        }
+        websiteNav.querySelector(".website-options").disabled = true;
+        gWebsiteId = 0;
+        gNetlifySiteId = null;
+
         pageNav.replaceChildren();
         editor_status = "init";
         editor_status_text.textContent = "WEBSITE DELETED";
