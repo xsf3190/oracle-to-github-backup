@@ -135,8 +135,8 @@ details > button {
     display: block;
 }
 
-dialog .content > * + * {
-    margin-block-start: var(--space-m);
+dialog .content {
+    min-inline-size: 35ch;
 }
 
 /***********************/
@@ -518,11 +518,9 @@ dialog a:hover {
 
 dialog button.close {
     place-self: start end;
-    min-height: 44px;
-    min-width: 44px;
     background-color: transparent;
-    font-size: var(--step-4);
-    color: var(--color-button);
+    font-size: 200%;
+    padding: 0;
     outline: 0;
     position: sticky;
     top: 0;
@@ -531,8 +529,7 @@ dialog button.close {
 dialog.log {
     & > div:first-of-type {
         display: grid;
-        grid-template-columns: 1fr 44px;
-        margin-inline-start: 1rem;
+        grid-template-columns: 1fr 2rem;
     }
     .cwv {
         inline-size: fit-content;
