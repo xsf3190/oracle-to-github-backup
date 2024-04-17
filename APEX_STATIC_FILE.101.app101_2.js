@@ -13,10 +13,6 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       wrapper = document.querySelector(".wrapper"),
       logDialog = document.querySelector("dialog.log"),
       logContent = logDialog.querySelector(".content"),
-      websiteDialog = document.querySelector("dialog.website-options"),
-      websiteContent = websiteDialog.querySelector(".content"),
-      pageDialog = document.querySelector("dialog.page-options"),
-      pageContent = pageDialog.querySelector(".content"),
       newBlog = wrapper.querySelector(".new-blog"),
       newMedia = wrapper.querySelector(".new-media"),
       websiteNav = wrapper.querySelector(".website-nav"),
@@ -1149,10 +1145,10 @@ const resize = () => {
  */
 const website_options = () => {
     execProcess( "website-options/"+gWebsiteId,"GET").then( (data) => {
-        websiteContent.replaceChildren();
-        websiteContent.insertAdjacentHTML('afterbegin',data.content);
-        websiteDialog.showModal();
-        gWebsiteDemo = websiteContent.querySelector(".demo-container");
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('afterbegin',data.content);
+        logDialog.showModal();
+        gWebsiteDemo = logContent.querySelector(".demo-container");
         websiteFont(data.font_family, data.font_url);
         data.fluid_types.forEach((obj) => {
             gWebsiteDemo.style.setProperty(obj.property,obj.value);
@@ -1171,9 +1167,9 @@ const website_options = () => {
  */
 const page_options = (e) => {
     execProcess( "page-options/"+gWebsiteId+","+gArticleId,"GET").then( (data) => {
-        pageContent.replaceChildren();
-        pageContent.insertAdjacentHTML('afterbegin',data.content);
-        pageDialog.showModal();
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('afterbegin',data.content);
+        logDialog.showModal();
     });
 }
 
