@@ -57,10 +57,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
           FROM TABLE(apex_string.split(l_list,':'));
 
         FORALL i IN l_table_ids.first .. l_table_ids.last
-                UPDATE website_article 
-                   SET display_order=l_table_ids(i).display_order 
-                 WHERE website_id = l_website_id
-                   AND article_id=l_table_ids(i).id;
+            UPDATE website_article 
+               SET display_order=l_table_ids(i).display_order 
+             WHERE website_id = l_website_id
+               AND article_id=l_table_ids(i).id;
 
         /* Check no other session currently deploying - simultaneous deployments not allowed on Netlify free plan */
         FOR C IN (SELECT job_name FROM user_scheduler_running_jobs WHERE job_name LIKE 'DEPLOY_%') LOOP
@@ -239,6 +239,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 '<title>#PAGE_TITLE#</title>' || chr(10) ||
                 '<meta name="description" content=">#PAGE_DESCRIPTION#">' || chr(10) ||
                 '<meta name="author" content=">www.adfreesites.com">' || chr(10) ||
+                '<meta name="view-transition" content="same-origin">' || chr(10) ||
                 '<script src="https://cdn.jsdelivr.net/npm/bowser@latest/es5.js" defer></script>' || chr(10) ||
                 '<link rel="icon" href="https://res.cloudinary.com/mrbapex/believeintalking_favicon_q57es4.svg" type="image/svg+xml">'  || chr(10) ||
                 '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
