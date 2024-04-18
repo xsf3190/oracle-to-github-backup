@@ -1189,9 +1189,9 @@ const get_visits = (e) => {
  */
 const new_website = () => {
     execProcess( "website-options/0","GET").then( (data) => {
-        websiteContent.replaceChildren();
-        websiteContent.insertAdjacentHTML('afterbegin',data.content);
-        websiteDialog.showModal();
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('afterbegin',data.content);
+        logDialog.showModal();
     });
 };
 
@@ -1204,9 +1204,9 @@ const new_page = (e) => {
         return;
     };
     execProcess( "page-options/"+gWebsiteId+",0","GET").then( (data) => {
-        pageContent.replaceChildren();
-        pageContent.insertAdjacentHTML('beforeend',data.content);
-        pageDialog.showModal();
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('beforeend',data.content);
+        logDialog.showModal();
     });
 }
 
@@ -1456,7 +1456,7 @@ delete_page = () => {
     execProcess("dml","DELETE",{table_name: "website_article", website_id: gWebsiteId, article_id: gArticleId}).then( (data) => {
         if (data.message) {
             editor_status_text.textContent = data.message;
-            pageDialog.close();
+            logDialog.close();
             return;
         }
         let selected = pageNav.querySelector("[data-id='"+gArticleId+"']");
@@ -1475,7 +1475,7 @@ delete_page = () => {
                 newMedia.classList.toggle("visible");
                 break;
         }
-        pageDialog.close();
+        logDialog.close();
     });
 }
 
@@ -1516,7 +1516,7 @@ const delete_website = () => {
         editor.setData("");
         editor.enableReadOnlyMode( 'lock-id' );
         galleryList.replaceChildren();
-        websiteDialog.close();
+        logDialog.close();
     });
 }
 
