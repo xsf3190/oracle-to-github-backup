@@ -1,9 +1,11 @@
 *,*::before,*::after {
     box-sizing: border-box;
 }
+
 body,h1,h2,h3,h4,p,figure,blockquote,dl,dd {
   margin-block-end: 0;
 }
+
 body {
     background-color: var(--color-background);
     color: var(--color-text);
@@ -100,6 +102,38 @@ div.logo {
 
 div.logo svg {
     inline-size: 5em;
+}
+
+/*
+** BLOCKQUOTE
+*/
+blockquote {
+    padding-inline: var(--space-m);
+    margin-inline: var(--space-m);
+    border-inline-start: solid var(--space-3xs) #ccc;
+    font-style: italic;
+}
+
+/*
+** CODE BLOCKS
+*/
+pre {
+    background: hsla(0, 0%, 78%, .3);
+    border: 1px solid #c4c4c4;
+    border-radius: 2px;
+    color: #353535;
+    direction: ltr;
+    font-style: normal;
+    font-size: 70%;
+    padding: 1em;
+    tab-size: 4;
+    text-align: left;
+    overflow-x: auto;
+}
+
+code[data-language]::before {
+  content: attr(data-lang);
+  display: block;
 }
 
 /* ANCHOR (WITH SVG) STYLES */
