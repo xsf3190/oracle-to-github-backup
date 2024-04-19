@@ -30,6 +30,12 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       galleryFullLegend = galleryFull.querySelector("legend > span"),
       galleryFullDimensions = galleryFull.querySelectorAll("fieldset button.dimensions");
 
+/*
+**  TRY TO PREVENT "LEAVE SITE - SAVE CHANGES" MESSAGE ON AUTOMATIC LOGOUT
+*/
+window.addEventListener('beforeunload', function (event) {
+    event.stopImmediatePropagation();
+});
 
 /*
 **  ENABLE USER TO CLEAR TEXT CONTENT
@@ -1024,6 +1030,16 @@ ClassicEditor.create(document.querySelector("#editor"), {
                 type: 'auto',
                 integrations: ['url']
             }
+        },
+        codeBlock: {
+            languages: [
+                { language: 'css', label: 'CSS' },
+                { language: 'html', label: 'HTML' },
+                { language: 'javascript', label: 'Javascript' },
+                { language: 'sql', label: 'SQL' },
+                { language: 'plsql', label: 'PL/SQL' },
+                { language: 'shell', label: 'shell' }
+            ]
         }
     })
     .then( (newEditor) => {
