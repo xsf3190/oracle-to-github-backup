@@ -131,9 +131,19 @@ pre {
     overflow-x: auto;
 }
 
-code[data-language]::before {
-  content: attr(data-lang);
+/*
+** BLOG POST LISTING
+*/
+ol.blog-list {
+  list-style: none;
+}
+
+.blog-list span {
   display: block;
+}
+
+.blog-list > li + li {
+  margin-block-start: var(--space-m);
 }
 
 /* ANCHOR (WITH SVG) STYLES */
