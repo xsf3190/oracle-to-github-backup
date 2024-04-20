@@ -311,6 +311,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_max_width_px website.max_width_px%type;
         l_max_scale website.max_scale%type;
         l_contact_form website_article.contact_form%type;
+        l_collection_type website_article.collection_type%type;
         l_is_subarticle BOOLEAN:=FALSE;
         l_html CLOB;
         l_css CLOB;
@@ -328,7 +329,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;
 
         IF (l_website_id IS NULL) THEN
-            SELECT wa.website_id INTO l_website_id FROM website_article wa, article a 
+            SELECT wa.website_id INTO l_website_id 
+              FROM website_article wa, article a 
              WHERE a.id=pArticleId
                AND wa.article_id=a.parent_id
                AND author_user_id=l_session_data.user_id;
@@ -337,11 +339,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         FOR C IN (
             SELECT wa.navigation_label, wa.article_id, COUNT(*) OVER () nb_pages
-                FROM website w, website_article wa
-                WHERE w.id=l_website_id
-                AND w.user_id=l_session_data.user_id
-                AND wa.website_id=w.id
-            ORDER BY wa.display_order) 
+              FROM website w, website_article wa
+             WHERE w.id=l_website_id
+               AND w.user_id=l_session_data.user_id
+               AND wa.website_id=w.id
+             ORDER BY wa.display_order) 
         LOOP
             /* Build navigation labels for multi-page websites */
             IF (C.nb_pages>1) THEN
@@ -358,20 +360,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         IF (l_is_subarticle) THEN
             SELECT w.domain_name,  w.font, w.max_width,  w.color_background, w.color_text, w.color_primary, 
                     w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale,
-                    a.body_html, w.css, w.javascript, 'NO'
+                    a.body_html, w.css, w.javascript, 'NO', null
               INTO l_domain_name,  l_font, l_max_width, l_color_background, l_color_text, l_color_primary,
                     l_min_font_size, l_min_width_px, l_min_scale, l_max_font_size, l_max_width_px, l_max_scale,
-                    l_html, l_css, l_javascript, l_contact_form
+                    l_html, l_css, l_javascript, l_contact_form, l_collection_type
               FROM website w, article a
              WHERE w.id=l_website_id
                AND a.id=pArticleId;
         ELSE
             SELECT w.domain_name,  w.font, w.max_width,  w.color_background, w.color_text, w.color_primary, 
                     w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale,
-                    a.body_html, w.css, w.javascript, wa.contact_form
+                    a.body_html, w.css, w.javascript, wa.contact_form, wa.collection_type
               INTO l_domain_name,  l_font, l_max_width, l_color_background, l_color_text, l_color_primary,
                     l_min_font_size, l_min_width_px, l_min_scale, l_max_font_size, l_max_width_px, l_max_scale,
-                    l_html, l_css, l_javascript, l_contact_form
+                    l_html, l_css, l_javascript, l_contact_form, l_collection_type
               FROM website w, website_article wa, article a
              WHERE w.id=l_website_id
                AND wa.website_id=w.id
@@ -381,6 +383,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         /* build html */
         l_html:=l_nav_labels || chr(10) || g_html_start || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10) || g_html_end || chr(10);
+        
+        IF (l_collection_type='BLOG') THEN
+            l_html:=l_html || '<ol class="blog-list">';
+            FOR C IN (SELECT title, updated_date, word_count FROM article WHERE parent_id=pArticleId) LOOP
+                l_html:=l_html || '<li><span>' || TO_CHAR(C.updated_date,'Mon dd, YYYY') || '</span><a href="#">' || C.title || '</a></li>';
+            END LOOP;
+            l_html:=l_html || '</ol>';
+        END IF;
+
         IF (l_contact_form='YES') THEN
             SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
             l_html:=l_html || pck_core.buildContactForm(l_email);
