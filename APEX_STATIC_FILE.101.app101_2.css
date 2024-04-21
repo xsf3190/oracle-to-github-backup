@@ -75,6 +75,12 @@
     gap: 5ch;
 }
 
+.ck-content .auto-fill-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(15rem,100%), 1fr));
+    gap: var(--space-m);
+}
+
 .ck-content section {
     border: 1px solid red;
 }
