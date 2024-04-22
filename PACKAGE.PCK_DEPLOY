@@ -318,6 +318,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     onLCP(addToVitalsQueue);
                     onINP(addToVitalsQueue);
                 </script>
+                <script type="module">
+                    import tgwf from ''https://cdn.skypack.dev/@tgwf/co2'';
+                    const emissions = new tgwf.co2()
+                    const bytesSent = (2.6 * 1024 * 1024) // 2.6MB expressed in bytes
+                    const greenHost = true // Is the data transferred from a green host?
+                    let estimatedCO2 = emissions.perByte(bytesSent, greenHost).toFixed(3)
+                    console.log("estimatedCO2",estimatedCO2) ;
+                </script>
                 <script>
                     gMetricWebsiteId = "' || pWebsiteId || '";' || chr(10) || 
                     'gMetricArticleId = "' || CASE WHEN l_labels(i).parent_article_id=l_labels(i).article_id THEN l_labels(i).parent_article_id ELSE l_labels(i).article_id END || '";' || chr(10) || 
