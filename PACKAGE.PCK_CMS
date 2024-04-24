@@ -384,12 +384,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         /* build html */
         l_html:=l_nav_labels || chr(10) || g_html_start || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10) || g_html_end || chr(10);
         
+        /* Build index of Blog entries */
         IF (l_collection_type='BLOG') THEN
-            l_html:=l_html || '<ol class="blog-list">';
-            FOR C IN (SELECT title, updated_date, word_count FROM article WHERE parent_id=pArticleId) LOOP
-                l_html:=l_html || '<li><span>' || TO_CHAR(C.updated_date,'Mon dd, YYYY') || '</span><a href="#">' || C.title || '</a></li>';
-            END LOOP;
-            l_html:=l_html || '</ol>';
+            l_html:=l_html || pck_core.buildBlogList(pArticleId);
         END IF;
 
         IF (l_contact_form='YES') THEN
