@@ -134,16 +134,54 @@ pre {
 /*
 ** BLOG POST LISTING
 */
-ol.blog-list {
-  list-style: none;
+.card {
+    --border-radius: var(--space-2xs);
+    position: relative;
+    border: solid 1px transparent;
+    border-radius: var(--border-radius);
+    list-style-type: none;
 }
-
-.blog-list span {
-  display: block;
+.card:hover, .card:focus-within {
+    box-shadow: 0 0 0 0.25rem;
 }
-
-.blog-list > li + li {
-  margin-block-start: var(--space-m);
+.card + .card {
+    margin-block-start: var(--space-xl);
+}
+.card a::after {
+    content: " ";
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+.card a {
+    text-decoration: none;
+}
+.card:hover a {
+    text-decoration: underline;
+    text-decoration-thickness: var(--space-3xs);
+    text-decoration-color: var(--color-primary);
+    text-decoration-skip-ink: none;
+}
+.card .text {
+    padding: 0 var(--space-s) var(--space-s);
+}
+.card .text > * {
+    margin-block-start: var(--space-s);
+}
+.card .author {
+    font-style:italic;
+    font-size: var(--step--1);
+    display: flex;
+    justify-content: space-between;
+}
+.card img {
+    width:100%;
+    height: var(--space-3xl);
+    object-fit: cover;
+    border-top-left-radius: var(--border-radius);
+    border-top-right-radius: var(--border-radius);
 }
 
 /* ANCHOR (WITH SVG) STYLES */
