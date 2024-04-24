@@ -302,7 +302,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         /*
         **   7. Email Visit reports for custom domains
         */
-        FOR C IN (SELECT id FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
+        FOR C IN (SELECT id||','||netlify_site_id_custom id FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
             pck_visits.getVisits(C.id, TRUE);
         END LOOP;
 
