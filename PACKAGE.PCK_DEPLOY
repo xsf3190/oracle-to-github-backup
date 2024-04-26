@@ -270,7 +270,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
          WHERE wa.website_id=pWebsiteId 
            AND wa.article_id=a.id
          UNION ALL
-        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order, COALESCE(a.updated_date,a.created_date) lastmod, a.word_count, a.body_html
+        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order, COALESCE(a.deployed_date, a.updated_date) lastmod, a.word_count, a.body_html
           FROM website_article wa, article a 
          WHERE wa.website_id=pWebsiteId 
            AND a.parent_id=wa.article_id 
@@ -285,12 +285,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         FOR i IN 1..l_labels.COUNT LOOP
            l_labels(i).body_html:=REPLACE(l_labels(i).body_html ,'<h1>&nbsp;</h1>',null);
             IF (l_labels(i).collection_type='BLOG') THEN
-                FOR j IN 1..l_labels.COUNT LOOP
-                    IF (l_labels(j).parent_article_id=l_labels(i).parent_article_id AND l_labels(j).parent_article_id<>l_labels(j).article_id) THEN
-                        l_labels(i).body_html:=l_labels(i).body_html || 
-                        '<br><a href="/' || l_labels(j).path_name || '">' || l_labels(j).navigation_label || '</a><span>' || l_labels(j).word_count || ' words</span>';
-                    END IF;
-                END LOOP;
+                l_labels(i).body_html:=l_labels(i).body_html || pck_core.buildBlogList(pWebsiteId, l_labels(i).parent_article_id);
             END IF;
         END LOOP;
 
@@ -304,8 +299,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         FOR i IN 1..l_labels.COUNT
         LOOP
-            logDeployment(pWebsiteId, pSiteId, 'Building page ' || i || ' of ' || l_labels.COUNT);
-            dbms_session.sleep(1);
+            IF (i=1) THEN
+                logDeployment(pWebsiteId, pSiteId, 'Building ' || l_labels.COUNT || ' page' || CASE WHEN l_labels.COUNT>1 THEN 's' END);
+            END IF;
+            --dbms_session.sleep(1);
 
             l_page:=REPLACE(REPLACE(l_head,'#PAGE_TITLE#',l_labels(i).page_title),'#PAGE_DESCRIPTION#',l_labels(i).page_description) || 
                 '<body>' || 
@@ -401,6 +398,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         ELSE
             logDeployment(pWebsiteId, pSiteId, 'All files unchanged since last deployment');
         END IF;
+
+        /*
+        ** Update deployed_date for article belnging to collection pages
+        */
+        UPDATE article SET deployed_date = current_timestamp
+         WHERE parent_id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteId AND collection_type<>'N/A')
+           AND deployed_date IS NULL;
 
         EXCEPTION
             WHEN OTHERS THEN
