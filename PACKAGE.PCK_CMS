@@ -386,7 +386,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         
         /* Build index of Blog entries */
         IF (l_collection_type='BLOG') THEN
-            l_html:=l_html || pck_core.buildBlogList(pArticleId);
+            l_html:=l_html || pck_core.buildBlogList(l_website_id, pArticleId, pIncludeLinks => FALSE); --, pIncludeLinks=>FALSE);
         END IF;
 
         IF (l_contact_form='YES') THEN
