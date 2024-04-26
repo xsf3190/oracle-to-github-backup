@@ -17,7 +17,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     );
     TYPE fluid_type_t IS TABLE OF fluid_type_rt;
     --
-    FUNCTION buildBlogList(pArticleId IN article.id%type) RETURN CLOB;
+    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks IN BOOLEAN DEFAULT TRUE) RETURN CLOB;
     --
     FUNCTION getFluidTypes(pMinFontSize IN NUMBER, pMinWidthPx IN NUMBER, pMinScale IN NUMBER, pMaxFontSize IN NUMBER, pMaxWidthPx IN NUMBER, pMaxScale IN NUMBER) RETURN fluid_type_t;
     --
@@ -317,6 +317,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_form);
     END;
 
+    /*
+    ** Create excerpt of complete words from the text up to approx. 160 characters.
+    */
     FUNCTION getExcerpt(pText IN VARCHAR2) RETURN VARCHAR2 IS
         l_words apex_t_varchar2;
         l_excerpt VARCHAR2(200);
@@ -341,16 +344,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_excerpt);
     END;
 
-    FUNCTION buildBlogList(pArticleId IN article.id%type) RETURN CLOB IS
+    /*
+    ** Construct index of Blog entries
+    */
+    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks  IN BOOLEAN) RETURN CLOB IS
         l_html CLOB;
+        l_path website_article.navigation_label%type;
+        l_href VARCHAR2(200);
     BEGIN
+        SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
+
         apex_escape.set_html_escaping_mode('E');
         l_html:=l_html || '<ol class="blog">';
-        FOR C IN (SELECT NVL(usr.name,usr.email) author, art.body_html, art.title, art.excerpt, art.updated_date, art.word_count, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
+        FOR C IN (SELECT NVL(usr.name,usr.email) author, art.body_html, art.title, art.excerpt, NVL(art.deployed_date,art.updated_date) deployed_date, art.word_count, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
                     FROM article art, asset ass, users usr
                    WHERE art.parent_id=pArticleId
                      AND art.author_user_id=usr.id
-                     AND ass.id(+)=art.cover_asset_id) 
+                     AND ass.id(+)=art.cover_asset_id
+                     ORDER BY NVL(art.deployed_date,art.updated_date) DESC ) 
         LOOP
             l_html:=l_html || 
             '<li class="card">';
@@ -358,13 +369,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 l_html:=l_html || 
                 '<img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">';
             END IF;
+            IF (pIncludeLinks) THEN
+                l_href:='/' || l_path || '/' || apex_string_util.get_slug(C.title);
+            ELSE
+                l_href:='#';
+            END IF;
             l_html:=l_html || 
                 '<div class="text">
                     <h4>
-                        <a href="#">' || C.title || '</a>
+                        <a href="' || l_href || '">' || C.title || '</a>
                     </h4>
                     <p>' || getExcerpt(dbms_lob.substr(utl_i18n.unescape_reference(apex_escape.striphtml(C.body_html)),200,NVL(LENGTHB(C.title),0)+1))  || '</p>
-                    <p class="author"><span>By ' || C.author || ' | ' || TO_CHAR(C.updated_date,'Mon dd, YYYY') || '</span><span>' || TO_CHAR(C.word_count) || ' words</span></p>
+                    <p class="author"><span>By ' || C.author || ' | ' || TO_CHAR(C.deployed_date,'Mon dd, YYYY') || '</span><span>' || TO_CHAR(C.word_count) || ' words</span></p>
                 </div>
             </li>';
         END LOOP;
