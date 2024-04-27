@@ -320,7 +320,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     /*
     ** Create excerpt of complete words from the text up to approx. 160 characters.
     */
-    FUNCTION getExcerpt(pText IN VARCHAR2) RETURN VARCHAR2 IS
+    FUNCTION getExcerpt(pLength IN INTEGER, pText IN VARCHAR2) RETURN VARCHAR2 IS
         l_words apex_t_varchar2;
         l_excerpt VARCHAR2(200);
         l_rem PLS_INTEGER;
@@ -333,7 +333,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             IF (LENGTHB(l_words(i))>25) THEN
                 l_words(i):=SUBSTR(l_words(i),1,25);
             END IF;
-            l_rem:=160 - NVL(LENGTHB(l_excerpt),0);
+            l_rem:=pLength - NVL(LENGTHB(l_excerpt),0);
             IF (LENGTHB(l_words(i)) <= l_rem) THEN
                 l_excerpt:=l_excerpt || l_words(i) || ' ';
             ELSE
@@ -351,18 +351,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_html CLOB;
         l_path website_article.navigation_label%type;
         l_href VARCHAR2(200);
+        l_excerpt_length INTEGER;
+        n PLS_INTEGER:=0;
     BEGIN
         SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
 
         apex_escape.set_html_escaping_mode('E');
         l_html:=l_html || '<ol class="blog">';
-        FOR C IN (SELECT NVL(usr.name,usr.email) author, art.body_html, art.title, art.excerpt, NVL(art.deployed_date,art.updated_date) deployed_date, art.word_count, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
-                    FROM article art, asset ass, users usr
+        FOR C IN (SELECT art.body_html, art.title, art.excerpt, NVL(art.deployed_date,art.updated_date) deployed_date, art.word_count, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
+                    FROM article art, asset ass
                    WHERE art.parent_id=pArticleId
-                     AND art.author_user_id=usr.id
                      AND ass.id(+)=art.cover_asset_id
                      ORDER BY NVL(art.deployed_date,art.updated_date) DESC ) 
         LOOP
+            
             l_html:=l_html || 
             '<li class="card">';
             IF (C.cld_cloud_name IS NOT NULL) THEN
@@ -374,13 +376,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             ELSE
                 l_href:='#';
             END IF;
+            n:=n+1;
+            IF (n=1) THEN
+                l_excerpt_length:=160;
+            ELSE
+                l_excerpt_length:=100;
+            END IF;
             l_html:=l_html || 
                 '<div class="text">
                     <h4>
                         <a href="' || l_href || '">' || C.title || '</a>
                     </h4>
-                    <p>' || getExcerpt(dbms_lob.substr(utl_i18n.unescape_reference(apex_escape.striphtml(C.body_html)),200,NVL(LENGTHB(C.title),0)+1))  || '</p>
-                    <p class="author"><span>By ' || C.author || ' | ' || TO_CHAR(C.deployed_date,'Mon dd, YYYY') || '</span><span>' || TO_CHAR(C.word_count) || ' words</span></p>
+                    <span class="date">' || TO_CHAR(C.deployed_date,'dd Month YYYY') || '</span>
+                    <p>' || getExcerpt(l_excerpt_length,dbms_lob.substr(utl_i18n.unescape_reference(apex_escape.striphtml(C.body_html)),200,NVL(LENGTHB(C.title),0)+1))  || '</p>
+                    <span class="words">' || TO_CHAR(C.word_count) || ' words</span>
                 </div>
             </li>';
         END LOOP;
