@@ -2,8 +2,9 @@
     box-sizing: border-box;
 }
 
-body,h1,h2,h3,h4,p,figure,blockquote,dl,dd {
-  margin-block-end: 0;
+body,h1,h2,h3,h4,p,figure,blockquote,dl,dd,ol,ul {
+  margin: 0;
+  padding: 0;
 }
 
 body {
@@ -134,19 +135,58 @@ pre {
 /*
 ** BLOG POST LISTING
 */
+.blog {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(22rem,100%), 1fr));
+    gap: var(--space-m);
+}
+
+.card:nth-child(1) {
+    grid-column: span 2;
+}
+
+@media (max-width: 680px) {
+  .blog {
+    display: flex;
+    flex-direction: column;
+  }
+  .card {
+    margin-bottom: 2em;
+  }
+}
+
 .card {
     --border-radius: var(--space-2xs);
     position: relative;
-    border: solid 1px transparent var(--color-text);
+    border: solid 1px var(--color-primary);
     border-radius: var(--border-radius);
     list-style-type: none;
 }
+
 .card:hover, .card:focus-within {
-    box-shadow: 0 0 0 0.25rem;
+    box-shadow: 4.0px 8.0px 8.0px hsl(0deg 0% 0% / 0.38);
 }
-.card + .card {
-    margin-block-start: var(--space-xl);
+
+.card h4 {
+    text-transform: uppercase;
 }
+
+.card .date {
+  font-family: monospace;
+  letter-spacing: 2px;
+  background-color: #e6e6e6;
+  inline-size: fit-content;
+  padding: var(--space-3xs);
+}
+
+.card .words {
+  margin-inline-start: auto;
+}
+
+.card:not(:first-child) .text > * {
+    font-size: 80%;
+}
+
 .card a::after {
     content: " ";
     position: absolute;
@@ -155,27 +195,43 @@ pre {
     right: 0;
     bottom: 0;
 }
+
 .card a {
     text-decoration: none;
+    color: var(--color-text);
 }
+
 .card:hover a {
+    color: var(--color-primary);
     text-decoration: underline;
-    text-decoration-thickness: var(--space-3xs);
     text-decoration-color: var(--color-primary);
+    /*text-underline-offset: 0.5ch;*/
     text-decoration-skip-ink: none;
 }
+
+.card, .card .text {
+    display:flex;
+    flex-direction: column;
+}
+
 .card .text {
-    padding: 0 var(--space-s) var(--space-s);
+    flex-grow: 1;
+    padding: var(--space-s);
 }
-.card .text > * {
-    margin-block-start: var(--space-s);
+
+.card .text > * + * {
+    margin-top: 0.75rem;
 }
-.card .author {
-    font-style:italic;
-    font-size: var(--step--1);
-    display: flex;
-    justify-content: space-between;
+
+.card .text :nth-last-child(2) {
+    margin-bottom: 0.75rem;
 }
+
+.card .text > :last-child {
+    margin-top: auto;
+    font-style: italic;
+}
+
 .card img {
     width:100%;
     height: var(--space-3xl);
