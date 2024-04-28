@@ -380,13 +380,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             IF (n=1) THEN
                 l_excerpt_length:=160;
             ELSE
-                l_excerpt_length:=100;
+                l_excerpt_length:=160;
             END IF;
             l_html:=l_html || 
                 '<div class="text">
-                    <h4>
+                    <h2>
                         <a href="' || l_href || '">' || C.title || '</a>
-                    </h4>
+                    </h2>
                     <span class="date">' || TO_CHAR(C.deployed_date,'dd Month YYYY') || '</span>
                     <p>' || getExcerpt(l_excerpt_length,dbms_lob.substr(utl_i18n.unescape_reference(apex_escape.striphtml(C.body_html)),200,NVL(LENGTHB(C.title),0)+1))  || '</p>
                     <span class="words">' || TO_CHAR(C.word_count) || ' words</span>
