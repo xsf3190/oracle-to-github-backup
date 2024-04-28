@@ -139,6 +139,7 @@ pre {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(22rem,100%), 1fr));
     gap: var(--space-m);
+    
 }
 
 .card:nth-child(1) {
@@ -161,30 +162,37 @@ pre {
     border: solid 1px var(--color-primary);
     border-radius: var(--border-radius);
     list-style-type: none;
+    container-type: inline-size;
+    & .text > h2 {
+        @container (width >= 0) {
+            font-size: var(--step-3);
+        }
+    }
+    & .text > span {
+        @container (width >= 0) {
+            font-size: var(--step--1);
+        }
+    }
+    & .text > p {
+        @container (width >= 0) {
+            font-size: var(--step-0);
+        }
+    }
 }
 
 .card:hover, .card:focus-within {
     box-shadow: 4.0px 8.0px 8.0px hsl(0deg 0% 0% / 0.38);
 }
 
-.card h4 {
-    text-transform: uppercase;
-}
 
 .card .date {
   font-family: monospace;
-  letter-spacing: 2px;
-  background-color: #e6e6e6;
-  inline-size: fit-content;
-  padding: var(--space-3xs);
+  color: cornflowerblue;
+  margin-top: calc(-0.8 * var(--space-s));
 }
 
 .card .words {
   margin-inline-start: auto;
-}
-
-.card:not(:first-child) .text > * {
-    font-size: 80%;
 }
 
 .card a::after {
@@ -215,16 +223,13 @@ pre {
 }
 
 .card .text {
+    gap: var(--space-s);
     flex-grow: 1;
     padding: var(--space-s);
 }
 
-.card .text > * + * {
-    margin-top: 0.75rem;
-}
-
 .card .text :nth-last-child(2) {
-    margin-bottom: 0.75rem;
+    margin-bottom: var(--space-l);
 }
 
 .card .text > :last-child {
@@ -233,8 +238,9 @@ pre {
 }
 
 .card img {
-    width:100%;
-    height: var(--space-3xl);
+    inline-size: 98%;
+    block-size: 25vh;
+    margin-inline: auto;
     object-fit: cover;
     border-top-left-radius: var(--border-radius);
     border-top-right-radius: var(--border-radius);
