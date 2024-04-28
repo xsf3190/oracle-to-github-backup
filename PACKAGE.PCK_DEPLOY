@@ -214,7 +214,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         INTO l_deploy_css
         FROM APEX_APPLICATION_STATIC_FILES 
         WHERE application_id=pApplicationId
-        AND file_name='app' || pApplicationId || '_deploy.min.css';
+        AND file_name='app' || pApplicationId || '_deploy.css';
 
         /* 
         ** Build page head which is common to all website pages
