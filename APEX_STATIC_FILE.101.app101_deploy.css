@@ -132,6 +132,37 @@ pre {
     overflow-x: auto;
 }
 
+pre:has(code) {
+    position: relative;
+    &::after {
+        background: #000;
+        color: #fff;
+        position: absolute;
+        font-size: 75%;
+        padding: var(--space-3xs);
+        right: var(--space-3xs);
+        top: 0;
+    }
+}
+
+pre:has(.language-html) {
+    &::after {
+        content: "HTML";
+    }
+}
+
+pre:has(.language-css) {
+    &::after {
+        content: "CSS";
+    }
+}
+
+pre:has(.language-javascript) {
+    &::after {
+        content: "Javascript";
+    }
+}
+
 /*
 ** BLOG POST LISTING
 */
@@ -139,13 +170,13 @@ pre {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(22rem,100%), 1fr));
     gap: var(--space-m);
-    
 }
 
-.card:nth-child(1) {
+& :nth-child(1) {
     grid-column: span 2;
 }
 
+/* Unfortunately need this for component to remain responsive when first card spans 2 columns */
 @media (max-width: 680px) {
   .blog {
     display: flex;
@@ -158,14 +189,31 @@ pre {
 
 .card {
     --border-radius: var(--space-2xs);
+    display: flex;
+    flex-direction: column;
     position: relative;
     border: solid 1px var(--color-primary);
     border-radius: var(--border-radius);
     list-style-type: none;
     container-type: inline-size;
+    & .text {
+        display:flex;
+        flex-direction: column;
+        gap: var(--space-s);
+        flex-grow: 1;
+        padding: var(--space-s);
+        & :nth-last-child(2) {
+            margin-bottom: var(--space-l);
+        }
+        & > :last-child {
+            margin-top: auto;
+            font-style: italic;
+        }
+    }
     & .text > h2 {
         @container (width >= 0) {
             font-size: var(--step-3);
+            text-transform: uppercase;
         }
     }
     & .text > span {
@@ -178,72 +226,43 @@ pre {
             font-size: var(--step-0);
         }
     }
-}
-
-.card:hover, .card:focus-within {
-    box-shadow: 4.0px 8.0px 8.0px hsl(0deg 0% 0% / 0.38);
-}
-
-
-.card .date {
-  font-family: monospace;
-  color: cornflowerblue;
-  margin-top: calc(-0.8 * var(--space-s));
-}
-
-.card .words {
-  margin-inline-start: auto;
-}
-
-.card a::after {
-    content: " ";
-    position: absolute;
-    left: 0;
-    top: 0;
-    right: 0;
-    bottom: 0;
-}
-
-.card a {
-    text-decoration: none;
-    color: var(--color-text);
-}
-
-.card:hover a {
-    color: var(--color-primary);
-    text-decoration: underline;
-    text-decoration-color: var(--color-primary);
-    /*text-underline-offset: 0.5ch;*/
-    text-decoration-skip-ink: none;
-}
-
-.card, .card .text {
-    display:flex;
-    flex-direction: column;
-}
-
-.card .text {
-    gap: var(--space-s);
-    flex-grow: 1;
-    padding: var(--space-s);
-}
-
-.card .text :nth-last-child(2) {
-    margin-bottom: var(--space-l);
-}
-
-.card .text > :last-child {
-    margin-top: auto;
-    font-style: italic;
-}
-
-.card img {
-    inline-size: 98%;
-    block-size: 25vh;
-    margin-inline: auto;
-    object-fit: cover;
-    border-top-left-radius: var(--border-radius);
-    border-top-right-radius: var(--border-radius);
+    & img {
+        inline-size: 98%;
+        block-size: 25vh;
+        margin-inline: auto;
+        object-fit: cover;
+        border-top-left-radius: var(--border-radius);
+        border-top-right-radius: var(--border-radius);
+    }
+    & a {
+        text-decoration: none;
+        color: var(--color-text);
+    }
+    & a::after {
+        content: " ";
+        position: absolute;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+    }
+    & .date {
+        font-family: monospace;
+        color: cornflowerblue;
+        margin-top: calc(-0.8 * var(--space-s));
+    }
+    & .words {
+        margin-inline-start: auto;
+    }
+    &:hover, &:focus-within {
+        box-shadow: 4.0px 8.0px 8.0px hsl(0deg 0% 0% / 0.38);
+    }
+    &:hover a {
+        color: var(--color-primary);
+        text-decoration: underline;
+        text-decoration-color: var(--color-primary);
+        text-decoration-skip-ink: none;
+    }
 }
 
 /* ANCHOR (WITH SVG) STYLES */
