@@ -214,7 +214,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         INTO l_deploy_css
         FROM APEX_APPLICATION_STATIC_FILES 
         WHERE application_id=pApplicationId
-        AND file_name='app' || pApplicationId || '_deploy.css';
+        AND file_name='app' || pApplicationId || '_deploy.css';  /* Can't use min file because stupid Apex editor removes nested css */
 
         /* 
         ** Build page head which is common to all website pages
@@ -244,7 +244,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 '<link rel="icon" href="https://res.cloudinary.com/mrbapex/believeintalking_favicon_q57es4.svg" type="image/svg+xml">'  || chr(10) ||
                 '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
                 '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
-                '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(C.font,' ','+') || '&display=swap">' || chr(10) ||
+                '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(C.font,' ','+') || '&display=swap&text=1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz%20%21%22%23%24%25%26%27">' || chr(10) ||
                 '<style>' || chr(10) ||
                 ':root {' || chr(10) || l_fluid_css || 
                     chr(9) || '--font-family: "' || C.font || '";' || chr(10) ||
@@ -257,6 +257,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 '</style>' || chr(10) || 
             '</head>' || chr(10);
         END LOOP;
+
 
         /*
         ** Get all website content into collection
@@ -306,7 +307,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             l_page:=REPLACE(REPLACE(l_head,'#PAGE_TITLE#',l_labels(i).page_title),'#PAGE_DESCRIPTION#',l_labels(i).page_description) || 
                 '<body>' || 
-                CASE WHEN l_labels.COUNT>1 THEN '<nav aria-label="Main Navigation">' || buildNavLabels(l_labels(i).parent_article_id) || '</nav>' END || chr(10) || 
+                CASE WHEN l_labels.COUNT>1 THEN '<nav aria-label="Main Navigation"' || CASE WHEN l_labels(i).collection_type<>'N/A' THEN 'style="position:static"' END || '>' || buildNavLabels(l_labels(i).parent_article_id) || '</nav>' END || chr(10) || 
                 l_labels(i).body_html || chr(10) || 
                 CASE WHEN l_labels(i).contact_form='YES' THEN pck_core.buildContactForm(contactEmail()) END ||
                 '<script type="module">
