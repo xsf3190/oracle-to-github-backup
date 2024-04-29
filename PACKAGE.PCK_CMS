@@ -401,6 +401,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             FROM apex_application_static_files
             WHERE  application_id=l_session_data.app_id
             AND file_name='app' || l_session_data.app_id || '_deploy.css';
+            l_css:=l_css ||
+            'pre:has(.language-html) {
+              position: relative;
+              &::before {
+                background: #000;
+                color: #fff;
+                content: "HTML code block not shown in Codepen";
+                position: absolute;
+                padding:0.5em;
+                left: 1em;
+                top: 0;
+              }
+            }
+            code.language-html {
+              display:none;
+            }';
         END IF;
 
         /* build fluid types */
