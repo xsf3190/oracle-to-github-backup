@@ -275,14 +275,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         l_form:=
 '<div class="contact">
-    <p>Send your contact details securely to</p>
-    <button class="copy-content">' || pContactEmail || '
-        <svg class="icon">
-            <use href="#copy"></use>
-        </svg>
-        <span class="result"></span>
-    </button>
     <form>
+        <p>Send your contact details securely to</p>
+        <span class="copy-content">' || pContactEmail || '
+            <svg class="icon">
+                <use href="#copy"></use>
+            </svg>
+            <span class="result"></span>
+        </span>
         <div>
             <label for="nameInput">Name</label>
             <input type="text" id="nameInput" name="name" required minlength="1" maxlength="50">
