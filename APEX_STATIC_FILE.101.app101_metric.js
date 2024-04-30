@@ -147,7 +147,7 @@ document.querySelectorAll("dialog button.close").forEach((button) => {
 /*
 ** COPY TEXT CONTENT OF BUTTON TO CLIPBOARD WHEN CLICKED 
 */
-const copy_content = document.querySelector("button.copy-content");
+const copy_content = document.querySelector(".copy-content");
 if (copy_content) {
     copy_content.addEventListener("click", async () => {
         const text = copy_content.innerText;
