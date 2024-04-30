@@ -329,7 +329,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;
 
         IF (l_website_id IS NULL) THEN
-            SELECT wa.website_id INTO l_website_id 
+            SELECT wa.website_id 
+              INTO l_website_id 
               FROM website_article wa, article a 
              WHERE a.id=pArticleId
                AND wa.article_id=a.parent_id
@@ -353,7 +354,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END LOOP;
 
         IF (l_nav_labels IS NOT NULL) THEN
-            l_nav_labels:='<nav aria-label="Main Navigation">' || l_nav_labels || '</nav>';
+            l_nav_labels:='<nav aria-label="Main Navigation"' || CASE WHEN l_is_subarticle THEN ' style="position:static"' END || '>' || l_nav_labels || '</nav>';
         END IF;
 
         /* Build page resources */
@@ -401,6 +402,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             FROM apex_application_static_files
             WHERE  application_id=l_session_data.app_id
             AND file_name='app' || l_session_data.app_id || '_deploy.css';
+            /* Because of way we have to encode HTML for Codepen easiest to simply disable it */
             l_css:=l_css ||
             'pre:has(.language-html) {
               position: relative;
@@ -445,7 +447,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             WHERE  application_id=l_session_data.app_id
             AND file_name='app' || l_session_data.app_id || '_metric.js';
         END IF;
-        l_javascript:=g_css_js_start || chr(10) || l_javascript || chr(10) || g_css_js_end;
+        l_javascript:=g_css_js_start || chr(10) ||
+        'gMetricWebsiteId = "' || l_website_id || '";' || chr(10) || 
+        'gMetricArticleId = "' || pArticleId || '";' || chr(10) || 
+        'gMetricVisitUrl = "' || pck_core.getRestUrl() || 'page-visit";' || chr(10) ||
+        l_javascript || chr(10) || g_css_js_end;
 
         apex_json.open_object;
         apex_json.write('success', TRUE); 
