@@ -353,10 +353,36 @@ figcaption {
     display: grid;
     place-items: center;
     gap: 1em;
-}
-
-.contact > p {
-    text-align:center;
+    & form {
+        display: flex;
+        flex-direction: column;
+        gap: 1em;
+        inline-size: fit-content;
+        border: solid 1px var(--color-primary);
+        padding: 1em;
+        border-radius: 0.5em;
+        & p, & span {
+          place-self: center;
+        }
+        & label {
+          display: block;
+          font-weight: 600;
+        }
+        & input {
+          inline-size: 95%;
+          line-height: 2;
+        }
+        & button[type='submit'] {
+          inline-size: fit-content;
+          position: relative;
+          border: none;
+          background: transparent;
+          padding: 0;
+          cursor: pointer;
+          outline-offset: 4px;
+          transition: filter 250ms;
+        }
+    }
 }
 
 .contact .copy-content {
@@ -374,37 +400,6 @@ figcaption {
     color: green;
     opacity: 0;
     transition: opacity 1ms;
-}
-
-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1em;
-    inline-size: fit-content;
-    border: solid 1px var(--color-primary);
-    padding: 1em;
-    border-radius: 0.5em;
-}
-
-form label {
-    display: block;
-    font-weight: 600;
-}
-
-form input {
-    inline-size: 95%;
-    line-height: 2;
-}
-
-button[type='submit'] {
-    inline-size: fit-content;
-    position: relative;
-    border: none;
-    background: transparent;
-    padding: 0;
-    cursor: pointer;
-    outline-offset: 4px;
-    transition: filter 250ms;
 }
 
 /* PUSHABLE BUTTON STYLES */
