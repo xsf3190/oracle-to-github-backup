@@ -46,19 +46,9 @@ const flushQueues = () => {
         if (connection) {
             json["connection"] = connection.downlink + " Mb/s" + " -" + connection.effectiveType;
         }
-
-        const agent = bowser.getParser(window.navigator.userAgent),
-            browserName = agent.getBrowserName(),
-            browserVersion = agent.getBrowserVersion().split(".");
-        let browser = browserName + " " + browserVersion[0];
-        if (browserVersion[1]!=="0") {
-            browser+="."+browserVersion[1];
-        }
-        json["browser"] = browser;
         if (navigator.userAgentData) {
             json["mobile"] = navigator.userAgentData.mobile;
         }
-
         json["url"] = window.location.hostname;
         json["referrer"] = document.referrer;
     }
