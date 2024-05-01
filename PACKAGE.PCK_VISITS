@@ -19,15 +19,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     PROCEDURE uploadPageVisit(pBodyText IN CLOB) IS
         l_bodytext CLOB:=pBodyText;
         l_ip_address website_article_cwv.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
+        l_user_agent website_article_cwv.user_agent%type:=SUBSTR(OWA_UTIL.get_cgi_env('HTTP_USER_AGENT'),1,255);
         l_this_referrer VARCHAR2(50):=LOWER(sys_context('userenv','db_name'));
     BEGIN
         INSERT INTO website_article_cwv (
-            website_id, article_id, seq, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
-            browser, mobile, connection, url, website_loaded, duration_visible)
-        SELECT website_id, article_id, seq, CASE WHEN referrer LIKE '%' || l_this_referrer || '%' THEN l_this_referrer ELSE referrer END, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, 
-                browser, mobile, connection, url, website_loaded, duration_visible
+            website_id, article_id, seq, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, 
+            user_agent, browser, mobile, connection, url, website_loaded, duration_visible)
+        SELECT website_id, article_id, seq, CASE WHEN referrer LIKE '%' || l_this_referrer || '%' THEN l_this_referrer ELSE referrer END, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, 
+                l_user_agent, browser, mobile, connection, url, website_loaded, duration_visible
           FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' 
-            COLUMNS (website_id, article_id, seq, referrer, LCP, LCP_rating, CLS, CLS_rating, INP, INP_rating, FID, FID_rating, 
+            COLUMNS (website_id, article_id, seq, referrer, LCP, LCP_rating, CLS, CLS_rating, INP, INP_rating, 
                     browser, mobile, connection, url, website_loaded, duration_visible));  
 
         EXCEPTION
@@ -81,15 +82,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         MERGE INTO page_hit t
         USING (
             SElECT 
-                website_id, article_id, website_loaded, ip_address, apex_string_util.get_domain(referrer) referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, NVL(duration_visible,0) duration_visible, browser, connection, url, mobile,
+                website_id, article_id, website_loaded, ip_address, apex_string_util.get_domain(referrer) referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, NVL(duration_visible,0) duration_visible, user_agent, browser, connection, url, mobile,
                 to_timestamp('1970-01-01','yyyy-mm-dd') + numtodsinterval(website_loaded,'second') visit_date
             FROM
             (
                 SELECT 
                     website_id, article_id, ip_address, website_loaded,  
                     MAX(CASE WHEN INSTR(referrer,url)=0 THEN referrer END) referrer, 
-                    MAX(lcp) lcp, MAX(lcp_rating) lcp_rating, MAX(cls) cls, MAX(cls_rating) cls_rating, MAX(inp) inp, MAX(inp_rating) inp_rating, MAX(fid) fid, MAX(fid_rating) fid_rating, 
-                    SUM(duration_visible) duration_visible, MAX(browser) browser, MAX(connection) connection, MAX(url) url, MAX(mobile) mobile
+                    MAX(lcp) lcp, MAX(lcp_rating) lcp_rating, MAX(cls) cls, MAX(cls_rating) cls_rating, MAX(inp) inp, MAX(inp_rating) inp_rating, 
+                    SUM(duration_visible) duration_visible, MAX(user_agent) user_agent, MAX(browser) browser, MAX(connection) connection, MAX(url) url, MAX(mobile) mobile
                 FROM website_article_cwv 
                 WHERE website_id=pWebsiteId
                 GROUP BY website_id, article_id, ip_address, website_loaded
@@ -100,8 +101,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             t.ip_address=s.ip_address AND 
             t.website_loaded=s.website_loaded)
         WHEN NOT MATCHED THEN
-            INSERT (website_id, article_id, ip_address, website_loaded, visit_date, referrer, duration_visible, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fid, fid_rating, browser, connection, url, mobile)    
-            VALUES (s.website_id, s.article_id, s.ip_address, s.website_loaded, s.visit_date, s.referrer, s.duration_visible, s.lcp, s.lcp_rating, s.cls, s.cls_rating, s.inp, s.inp_rating, s.fid, s.fid_rating, s.browser, s.connection, s.url, s.mobile)
+            INSERT (website_id, article_id, ip_address, website_loaded, visit_date, referrer, duration_visible, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, user_agent, browser, connection, url, mobile)    
+            VALUES (s.website_id, s.article_id, s.ip_address, s.website_loaded, s.visit_date, s.referrer, s.duration_visible, s.lcp, s.lcp_rating, s.cls, s.cls_rating, s.inp, s.inp_rating, s.user_agent, s.browser, s.connection, s.url, s.mobile)
         WHEN MATCHED THEN
             UPDATE SET t.updated_date=current_timestamp,
                 t.duration_visible=t.duration_visible+s.duration_visible,
@@ -110,9 +111,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 t.cls=CASE WHEN t.cls IS NOT NULL AND s.cls IS NOT NULL THEN GREATEST(s.cls,t.cls) ELSE COALESCE(s.cls,t.cls) END,
                 t.cls_rating=CASE WHEN t.cls_rating IS NOT NULL AND s.cls_rating IS NOT NULL THEN GREATEST(s.cls_rating,t.cls_rating) ELSE COALESCE(s.cls_rating,t.cls_rating) END,
                 t.inp=CASE WHEN t.inp IS NOT NULL AND s.inp IS NOT NULL THEN GREATEST(s.inp,t.inp) ELSE COALESCE(s.inp,t.inp) END,
-                t.inp_rating=CASE WHEN t.inp_rating IS NOT NULL AND s.inp_rating IS NOT NULL THEN GREATEST(s.inp_rating,t.inp_rating) ELSE COALESCE(s.inp_rating,t.inp_rating) END,
-                t.fid=CASE WHEN t.fid IS NOT NULL AND s.fid IS NOT NULL THEN GREATEST(s.fid,t.fid) ELSE COALESCE(s.fid,t.fid) END,
-                t.fid_rating=CASE WHEN t.fid_rating IS NOT NULL AND s.fid_rating IS NOT NULL THEN GREATEST(s.fid_rating,t.fid_rating) ELSE COALESCE(s.fid_rating,t.fid_rating) END        
+                t.inp_rating=CASE WHEN t.inp_rating IS NOT NULL AND s.inp_rating IS NOT NULL THEN GREATEST(s.inp_rating,t.inp_rating) ELSE COALESCE(s.inp_rating,t.inp_rating) END   
                 ;
         n:=SQL%ROWCOUNT;
         IF (n>0) THEN
