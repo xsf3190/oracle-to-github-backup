@@ -1,22 +1,24 @@
 # oracle-to-github-backup
-Automatic backup of an ORACLE schema plus Apex appplications and ORDS metadata to a designated GITHUB repository.
+This repository contains code and data that has been automatically backed up from an ORACLE OCI database.
 
-Schema export dump files are encrypted with a randomly generated complex password.
+Data is backed up as a schema export dump file encrypted with a randomly generated complex password that is shared by email with Administrator.
+
+Definitions are DDL metadata extracts of Oracle tables and packages.
 
 ## Pre-requisites
 1. Obtain GITHUB Personal access token (classic) - https://github.com/settings/tokens
 2. Configure email for OCI tenancy - https://blogs.oracle.com/apex/post/sending-email-from-your-oracle-apex-app-on-autonomous-database
 
-## Use
-1. Make Oracle data and definitions available for review / sharing through private or public GITHUB repositories.
-2. Provide a secure and reliable off-site backup solution for subscribers to OCI "Always Free". 
-3. Implement an automated backup / restore cycle between 2 ADB instances to enable fine-grained point-in-time recovery.
-4. Deploy environment to test new Oracle / Apex software versions.
+## Ideas for Use
+1. Make current and historical definitions available for easy review / sharing.
+2. Provide a secure and reliable off-site backup solution. 
+3. Implement an automated backup / restore cycle between 2 Oracle OCI ADB instances.
+4. Deploy an environment in order to test new Oracle / Apex software versions.
 5. Run fully scripted migrations between different platforms (caveat: ORDS metadata).
 
-Should be used for modestly sized schemas (<100MB) although this depends on the nature of data stored.
+Supports (i.e. Github supports) maximum file size of 100MB.
 
-Note that dump files are compressed by an order of magnitude.
+Dump files are compressed by an order of magnitude using Oracle Advanced Compression option.
 
 ## Install
 For backup:
