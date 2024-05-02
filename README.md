@@ -1,7 +1,7 @@
 # oracle-to-github-backup
 This repository contains code and data that has been automatically backed up from an ORACLE OCI database which is the central component of the adfreesites web application.
 
-Data is backed up as a schema export dump file encrypted with a randomly generated complex password that is shared by email with Administrator.
+Data is backed up as a schema export dump file encrypted with a randomly generated complex password that is shared by email with the designated Administrator.
 
 Definitions are DDL metadata extracts of Oracle tables and packages.
 
