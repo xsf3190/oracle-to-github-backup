@@ -1,5 +1,5 @@
 # oracle-to-github-backup
-This repository contains code and data that has been automatically backed up from an ORACLE OCI database.
+This repository contains code and data that has been automatically backed up from an ORACLE OCI database which is the central component of the adfreesites web application.
 
 Data is backed up as a schema export dump file encrypted with a randomly generated complex password that is shared by email with Administrator.
 
@@ -18,7 +18,7 @@ Definitions are DDL metadata extracts of Oracle tables and packages.
 
 Supports (i.e. Github supports) maximum file size of 100MB.
 
-Dump files are compressed by an order of magnitude using Oracle Advanced Compression option.
+Dump files are compressed by an order of magnitude using Oracle Advanced Compression option. E.g. 170MB schema compressed to 25MB.
 
 ## Install
 For backup:
@@ -37,18 +37,16 @@ DECLARE
   l_github_token       VARCHAR2(40):='YOUR TOKEN (pre-requisite 1)'; 
   l_github_repos_owner VARCHAR2(40):='YOUR GITHUB ACCOUNT NAME';
   l_github_repos       VARCHAR2(40):='YOUR GITHUB REPOSITORY';
-  l_email              VARCHAR2(40):='YOUR EMAIL ADDRESS';  
-  l_password           VARCHAR2(20):='COMPLEX PASSWORD';
+  l_email              VARCHAR2(40):='EMAIL ADDRESS TO RECEIVE LOG AND PASSWORD';  
+  l_password           VARCHAR2(20):='COMPLEX AUTO-GENERATED PASSWORD';
   l_workspace_name     VARCHAR2(40):='YOUR TARGET ADB WORKSPACE';
-  l_restore_files LONG;                
 BEGIN 
   pck_backup.github_backup(
         p_github_token => l_github_token,
         p_github_repos_owner => l_github_repos_owner,
         p_github_repos => l_github_repos,
         p_email => l_email,
-        p_password => l_password,
-        p_restore_files => l_restore_files
+        p_password => l_password
   );
 END;
 ```
