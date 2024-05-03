@@ -170,10 +170,9 @@ pre:has(.language-javascript) {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(22rem,100%), 1fr));
     gap: var(--space-m);
-}
-
-& :nth-child(1) {
-    grid-column: span 2;
+    & :nth-child(1) {
+        grid-column: span 2;
+    }
 }
 
 /* Unfortunately need this for component to remain responsive when first card spans 2 columns */
