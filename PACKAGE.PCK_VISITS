@@ -21,12 +21,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_ip_address website_article_cwv.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
         l_user_agent website_article_cwv.user_agent%type:=SUBSTR(OWA_UTIL.get_cgi_env('HTTP_USER_AGENT'),1,255);
         l_this_referrer VARCHAR2(50):=LOWER(sys_context('userenv','db_name'));
+        l_browser website_article_cwv.browser%type;
     BEGIN
+        l_browser:=REGEXP_SUBSTR(l_user_agent,'*(Chrome\/\d*)');
+        IF (l_browser IS NULL) THEN
+            l_browser:=REGEXP_SUBSTR(l_user_agent,'*(Version\/\d*.\d* Safari)');
+            IF (l_browser IS NOT NULL) THEN
+                l_browser:='Safari ' || REGEXP_SUBSTR(l_browser,'\d+(\.\d+)?');
+            ELSE
+                l_browser:=REGEXP_SUBSTR(l_user_agent,'*(Firefox\/\d*)');
+            END IF;
+        END IF;
+
         INSERT INTO website_article_cwv (
             website_id, article_id, seq, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, 
             user_agent, browser, mobile, connection, url, website_loaded, duration_visible)
         SELECT website_id, article_id, seq, CASE WHEN referrer LIKE '%' || l_this_referrer || '%' THEN l_this_referrer ELSE referrer END, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, 
-                l_user_agent, browser, mobile, connection, url, website_loaded, duration_visible
+                l_user_agent, l_browser, mobile, connection, url, website_loaded, duration_visible
           FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' 
             COLUMNS (website_id, article_id, seq, referrer, LCP, LCP_rating, CLS, CLS_rating, INP, INP_rating, 
                     browser, mobile, connection, url, website_loaded, duration_visible));  
