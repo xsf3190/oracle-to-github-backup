@@ -357,7 +357,6 @@ figcaption {
         display: flex;
         flex-direction: column;
         gap: 1em;
-        inline-size: fit-content;
         border: solid 1px var(--color-primary);
         padding: 1em;
         border-radius: 0.5em;
@@ -371,6 +370,11 @@ figcaption {
         & input {
           inline-size: 95%;
           line-height: 2;
+        }
+        & textarea {
+            inline-size: 95%;
+            resize: vertical;
+            min-block-size: 5rem;
         }
         & button[type='submit'] {
           inline-size: fit-content;
