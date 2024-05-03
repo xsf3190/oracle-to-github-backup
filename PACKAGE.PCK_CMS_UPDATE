@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS_UPDATE" IS
     --
+    PROCEDURE getApiKeys;
+    --
     PROCEDURE getPageoptions(pId IN VARCHAR2);
     --
     PROCEDURE getWebsiteoptions(pWebsiteId IN website.id%type);
@@ -299,6 +301,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 <span class="charcounter">' || NVL(LENGTH(pValue),0) || CASE WHEN l_data_type<>'CLOB' THEN '/' || l_data_length END || '</span>
             </div>
         </div>');
+    END;
+
+    /*
+    ** GET API KEY DETAILS FOR CURRENT USER
+    */
+    PROCEDURE getApiKeys IS
+        l_content CLOB;
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+        FOR C IN (SELECT id, cld_cloud_name, cld_api_key, cld_api_secret, netlify_token
+                    FROM users
+                   WHERE id=l_session_data.user_id) LOOP
+            l_content:=
+            '<form>
+                <details>
+                    <summary>Netlify Api Token</summary>' ||
+                    buildInputWrapper(C.id, 'users.netlify_token', C.netlify_token, l_session_data.canuse_popover) || 
+                '</details>
+                <details>
+                    <summary>Cloudinary Api Keys</summary>' ||
+                    buildInputWrapper(C.id, 'users.cld_cloud_name', C.cld_cloud_name, l_session_data.canuse_popover) || 
+                    buildInputWrapper(C.id, 'users.cld_api_key', C.cld_api_key, l_session_data.canuse_popover) || 
+                    buildInputWrapper(C.id, 'users.cld_api_secret', C.cld_api_secret, l_session_data.canuse_popover) || 
+                '</details>
+            </form>';
+        END LOOP;
+        
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('content', l_content);
+        apex_json.close_object;
+    EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
     END;
 
     /*
