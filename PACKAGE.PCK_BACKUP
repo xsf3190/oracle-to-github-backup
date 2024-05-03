@@ -370,13 +370,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     BEGIN
         /* Be optimistic about backup status */
         l_subject:=sys_context('userenv','db_name') || ' - EXPORTED SUCCESSFULLY TO GITHUB';
-        FOR i IN 1..p_backup.COUNT LOOP
-            l_total_bytes_base64:=l_total_bytes_base64+p_backup(i).backup_size_base64;
-            l_total_bytes:=l_total_bytes+p_backup(i).backup_size;
-            IF (p_backup(i).message<>'OK') THEN
-                l_subject:=sys_context('userenv','db_name') || ' - EXPORT TO GITHUB FAILED';
-            END IF;
-        END LOOP;
+        IF (p_backup.COUNT>0) THEN
+            FOR i IN 1..p_backup.COUNT LOOP
+                l_total_bytes_base64:=l_total_bytes_base64+p_backup(i).backup_size_base64;
+                l_total_bytes:=l_total_bytes+p_backup(i).backup_size;
+                IF (p_backup(i).message<>'OK') THEN
+                    l_subject:=sys_context('userenv','db_name') || ' - EXPORT TO GITHUB FAILED';
+                END IF;
+            END LOOP;
+        END IF;
 
         l_body:='To view the content of this message, please use an HTML enabled mail client.'||utl_tcp.crlf;
         l_body_html:=to_clob('
@@ -444,24 +446,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 </thead>
                 <tbody>');
 
-        FOR i IN 1..p_backup.COUNT
-        LOOP
-            IF (p_backup(i).message<>'OK') THEN
-                l_bgcolor:='ff0000';
-            ELSIF (MOD(i,2)=0) THEN
-                l_bgcolor:='#eeeeee';
-            ELSE
-                l_bgcolor:=NULL;
-            END IF;
+        IF (p_backup.COUNT>0) THEN
+            FOR i IN 1..p_backup.COUNT
+            LOOP
+                IF (p_backup(i).message<>'OK') THEN
+                    l_bgcolor:='ff0000';
+                ELSIF (MOD(i,2)=0) THEN
+                    l_bgcolor:='#eeeeee';
+                ELSE
+                    l_bgcolor:=NULL;
+                END IF;
 
-            l_body_html:=l_body_html || to_clob(
-                '<tr  bgcolor="' || l_bgcolor || '">
-                    <th scope="row">' || p_backup(i).object_type || '.' || p_backup(i).object_name || '</th>
-                    <td>' || TO_CHAR(p_backup(i).backup_date AT TIME ZONE 'Europe/London','dd Mon yyyy hh24:mi:ss TZR') || '</td>
-                    <td>' || apex_string_util.to_display_filesize(p_backup(i).backup_size) || '</td>
-                    <td>' || p_backup(i).message || CASE WHEN p_backup(i).backup_size>WARNING_FILESIZE THEN ' - GITHUB MAXIMUM IS 50MB' END ||'</td>
-                </tr>');
-        END LOOP;
+                l_body_html:=l_body_html || to_clob(
+                    '<tr  bgcolor="' || l_bgcolor || '">
+                        <th scope="row">' || p_backup(i).object_type || '.' || p_backup(i).object_name || '</th>
+                        <td>' || TO_CHAR(p_backup(i).backup_date AT TIME ZONE 'Europe/London','dd Mon yyyy hh24:mi:ss TZR') || '</td>
+                        <td>' || apex_string_util.to_display_filesize(p_backup(i).backup_size) || '</td>
+                        <td>' || p_backup(i).message || CASE WHEN p_backup(i).backup_size>WARNING_FILESIZE THEN ' - GITHUB MAXIMUM IS 50MB' END ||'</td>
+                    </tr>');
+            END LOOP;
+        END IF;
 
         l_body_html:=l_body_html || to_clob('</tbody></table>');
 
@@ -520,6 +524,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         **  1) encrypted with table rows  
         **  2) unencrypted metadata only
         */
+        
+        /* Delete any files left over from previous operation to avoid ora-39001  */
+        FOR C IN (SELECT object_name FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR')) LOOP
+            DBMS_CLOUD.DELETE_FILE(directory_name=>'DATA_PUMP_DIR',file_name=>C.object_name);
+        END LOOP;
 
         datapump_backup(pIncludeRows => '0'); -- metadata only export
         datapump_backup(pIncludeRows => '1', pPassword => p_password); -- encrypt exports that include table rows
