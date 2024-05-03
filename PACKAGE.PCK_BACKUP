@@ -246,7 +246,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 pEmail=>:B7,
                 pWorkspace=>:B8,
                 pSchema=>:B9); END;}' USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email_sender, l_email, l_workspace_name,sys_context('userenv','current_schema');
-*/
 
         INSERT INTO metrics (id,log_date,nb_assets,bytes,nb_articles,word_count,total_credits,credits_remaining,total_used,max_size)
         WITH metrics AS 
@@ -272,6 +271,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
           FROM metrics met, credits cr, db1, db2;
 
         COMMIT;
+        */
 
         /*
             4. Delete Github Action workflow logs
@@ -334,7 +334,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         dbms_datapump.set_parameter(handle => h1, name => 'LOGTIME', VALUE => 'ALL'); 
 
         dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')');
-        dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'',''PROCOBJ'',''JOB'',''SCHEDULER'')'); 
+        dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''DBTOOLS$EXECUTION_HISTORY'',''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'',''PROCOBJ'',''JOB'',''SCHEDULER'')'); 
+        --dbms_datapump.metadata_filter(handle => h1, name => 'NAME_EXPR', value => 'NOT IN (''DBTOOLS$EXECUTION_HISTORY'')');
 
         IF (pIncludeRows='0') THEN
             dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => 0);
