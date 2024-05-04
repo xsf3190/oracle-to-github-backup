@@ -30,6 +30,7 @@ Logged on to the subject database as ADMIN
 Adapt the packages to suit any specific requirements.
 
 ## Run
+In a session connected to "schema-to-backup"
 ```
 /*
 ** Run a one-off export to GITHUB repository, sending status to specified email address
@@ -50,3 +51,18 @@ BEGIN
   );
 END;
 ```
+To schedule regular backups, e.g. every day at 9PM
+```
+BEGIN
+  DBMS_SCHEDULER.create_job (
+    job_name=> 'DAILY_BACKUP',
+    job_type=> 'PLSQL_BLOCK',
+    job_action=> 'begin pck_backup.daily_job; end;',
+    start_date=> systimestamp,
+    repeat_interval=> 'FREQ=DAILY; Interval=1;BYHOUR=21;ByMinute=0',
+    enabled =>TRUE,
+    auto_drop=>FALSE);
+end;
+/
+```
+Where "pck_backup.daily_job" is a procedure that prepares and calls "pck_backup.github_backup"
