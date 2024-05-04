@@ -611,15 +611,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
      **  Procedure called by the autoSave feature of CKEditor
      */        
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
-        /*l_article_id article.id%type;
-        l_title article.title%type;
-        l_excerpt varchar2(1000);
-        l_word_count article.word_count%type;
-        l_body_html article.body_html%type;
-        l_name users.name%type;
-        l_words apex_t_varchar2;
-        l_rem PLS_INTEGER;
-        */
         l_session_data pck_core.session_data_rt;
         l_word_count article.word_count%type;
         l_parent_id article.parent_id%type;
@@ -643,30 +634,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         APEX_JSON.write('success', TRUE);
         APEX_JSON.write('message', 'Saved ' || l_word_count || ' words');
         APEX_JSON.close_object;
-
-        /*
-        apex_escape.set_html_escaping_mode('E');
-        l_excerpt:=dbms_lob.substr(utl_i18n.unescape_reference(apex_escape.striphtml(l_edit_text)),200,NVL(LENGTHB(l_title),0)+1);
-
-        l_words:=apex_string.split(REPLACE(l_excerpt,CHR(10),' '),' ');
-        l_excerpt:=NULL;
-        FOR i IN 1..l_words.COUNT LOOP
-            IF (l_words(i) IS NULL) THEN
-                CONTINUE;
-            END IF;
-            IF (LENGTHB(l_words(i))>25) THEN
-                l_excerpt:=l_excerpt || SUBSTR(l_words(i),1,25);
-                EXIT;
-            END IF;
-            l_rem:=160 - NVL(LENGTHB(l_excerpt),0);
-            IF (LENGTHB(l_words(i)) <= l_rem) THEN
-                l_excerpt:=l_excerpt || l_words(i) || ' ';
-            ELSE
-                l_excerpt:=RTRIM(l_excerpt);
-                EXIT;
-            END IF;
-        END LOOP;
-        */
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -712,6 +679,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         FOR i in 1 .. l_files.COUNT LOOP
             CASE l_files(i)
                 WHEN l_domain_name||'/src/index.html' THEN
+                    null;
+                    /*
                     l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
                     l_start:=INSTR(l_clob,pck_css_js.g_html_start);
                     l_end:=INSTR(l_clob,pck_css_js.g_html_end);
@@ -727,7 +696,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                             l_message:=l_message || 'HTML - updated successfully | ';
                             l_html_updated:=l_clob;
                         END IF;
-                    END IF;            
+                    END IF;  
+                    */          
                 WHEN l_domain_name||'/src/script.js' THEN
                     l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name   => l_files(i)));
                     IF (dbms_lob.compare(l_javascript, l_clob)=0) THEN
