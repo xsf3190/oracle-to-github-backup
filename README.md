@@ -40,7 +40,6 @@ DECLARE
   l_github_repos       VARCHAR2(40):='YOUR GITHUB REPOSITORY';
   l_email              VARCHAR2(40):='EMAIL ADDRESS TO RECEIVE LOG AND PASSWORD';  
   l_password           VARCHAR2(20):='COMPLEX AUTO-GENERATED PASSWORD';
-  l_workspace_name     VARCHAR2(40):='YOUR TARGET ADB WORKSPACE';
 BEGIN 
   pck_backup.github_backup(
         p_github_token => l_github_token,
