@@ -469,6 +469,8 @@ const clickHandler = (e) => {
             gArticleId = id;
             edit_text(e);
         }
+    } else if (e.target.matches(".api-keys")) {
+        api_keys(e); 
     } else if (e.target.matches(".edit-website")) {
         edit_website(e); 
     } else if (e.target.matches(".visits")) {
@@ -921,6 +923,17 @@ signout.addEventListener('click',  () => {
         window.location.href = gHomeUrl;
     })
 });
+
+/*
+ ** API KEYS AND SECRETS
+ */
+const api_keys = () => {
+    execProcess( "keys","GET").then( (data) => {
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('afterbegin',data.content);
+        logDialog.showModal();
+    });
+};
 
 /*
  ** TECHNICAL LOG
