@@ -50,12 +50,6 @@ h1, h2, h3, h4 {
   text-wrap: balance;
 }
 
-img, picture {
-  max-width: 100%;
-  display: block;
-  object-fit: scale-down;
-}
-
 /* NEED TO REVIEW IMAGE CLASSES - MAYBE DO IT IN CKEDITOR */
 img.float-right {
     float: right;
@@ -333,18 +327,40 @@ svg.icon {
     grid-template-columns: repeat(auto-fill, minmax(min(var(--space-3xl), 100%), 1fr));
 }
 
-img {
+.gallery-list img {
     inline-size: 100%;
     block-size: 100%;
     object-fit: cover;
 }
 
+.image {
+    margin-inline: auto;
+    object-fit: scale-down;
+}
+
+.image img {
+    max-width: 100%;
+    min-width: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+figure.image-style-align-left {
+    float: left;
+    margin: var(--space-m) 0.5em 0.5em 0;
+}
+
+figure.image-style-align-right {
+    float: right;
+    margin: var(--space-m) 0 0.5em 0.5em; 
+}
+
 figcaption {
-  font-size: var(--step--2);
-  background-color: #f7f7f7;
-  padding: var(--space-3xs) var(--space-2xs);
-  text-align: center;
-  word-break: break-all;
+    font-size: 0.75em;
+    background-color: #f7f7f7;
+    padding: 0.5em 0.25em;
+    text-align: center;
+    word-break: break-all;
 }
 
 /* CONTACT FORM STYLES */
