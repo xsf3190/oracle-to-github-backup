@@ -1000,11 +1000,6 @@ let editor;
 
 ClassicEditor.create(document.querySelector("#editor"), {
         toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
-        ui: {
-            viewportOffset: {
-                top: 0
-            }
-        },
         alignment: {
             options: [ 'left', 'right', 'center', 'justify' ]
         },
@@ -1014,19 +1009,15 @@ ClassicEditor.create(document.querySelector("#editor"), {
                 return saveData( editor.getData() );
             }
         },
-        title: {
-            placeholder: 'New title'
-        },
-        placeholder: 'Enter content',
-        wordCount: {
-                displayCharacters: true
-        },
-        list: {
-            properties: {
-                styles: true,
-                startIndex: true,
-                reversed: true
-            }
+        codeBlock: {
+            languages: [
+                { language: 'css', label: 'CSS' },
+                { language: 'html', label: 'HTML' },
+                { language: 'javascript', label: 'Javascript' },
+                { language: 'sql', label: 'SQL' },
+                { language: 'plsql', label: 'PL/SQL' },
+                { language: 'shell', label: 'shell' }
+            ]
         },
         htmlSupport: {
             allow: [
@@ -1042,18 +1033,36 @@ ClassicEditor.create(document.querySelector("#editor"), {
             insert: {
                 type: 'auto',
                 integrations: ['url']
+            },
+            toolbar: [
+                'imageStyle:inline',
+                'imageStyle:block',
+                '|',
+                'imageStyle:wrapText',
+                '|',
+                'toggleImageCaption',
+                'imageTextAlternative',
+            ]
+        },
+        list: {
+            properties: {
+                styles: true,
+                startIndex: true,
+                reversed: true
             }
         },
-        codeBlock: {
-            languages: [
-                { language: 'css', label: 'CSS' },
-                { language: 'html', label: 'HTML' },
-                { language: 'javascript', label: 'Javascript' },
-                { language: 'sql', label: 'SQL' },
-                { language: 'plsql', label: 'PL/SQL' },
-                { language: 'shell', label: 'shell' }
-            ]
-        }
+        placeholder: 'Enter content',
+        title: {
+            placeholder: 'New title'
+        },
+        ui: {
+            viewportOffset: {
+                top: 0
+            }
+        },
+        wordCount: {
+                displayCharacters: true
+        },
     })
     .then( (newEditor) => {
         editor = newEditor;
