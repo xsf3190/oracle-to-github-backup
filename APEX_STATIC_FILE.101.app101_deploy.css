@@ -334,33 +334,28 @@ svg.icon {
 }
 
 .image {
+    display: table;
     margin-inline: auto;
-    object-fit: scale-down;
+    & img {
+        max-width: 100%;
+        inline-size: 100%;
+        height: auto;
+    }
+    & figcaption {
+        font-size: 0.75em;
+        background-color: #f7f7f7;
+        padding: 0.5em 0.25em;
+        text-align: center;
+        word-break: break-all;
+    }
 }
-
-.image img {
-    max-width: 100%;
-    min-width: 100%;
-    display: block;
-    object-fit: cover;
-}
-
-figure.image-style-align-left {
+.image-style-align-left {
     float: left;
-    margin: var(--space-m) 0.5em 0.5em 0;
+    margin-inline-end: 0.5em;
 }
-
-figure.image-style-align-right {
+ .image-style-align-right {
     float: right;
-    margin: var(--space-m) 0 0.5em 0.5em; 
-}
-
-figcaption {
-    font-size: 0.75em;
-    background-color: #f7f7f7;
-    padding: 0.5em 0.25em;
-    text-align: center;
-    word-break: break-all;
+    margin-inline-start: 0.5em; 
 }
 
 /* CONTACT FORM STYLES */
