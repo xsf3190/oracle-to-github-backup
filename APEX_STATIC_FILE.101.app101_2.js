@@ -656,7 +656,9 @@ const copy_url = async (e) => {
           src = li.querySelector("img").src;
     try {
         await navigator.clipboard.writeText(src);
-        popupOpen("Image URL copied to clipboard","... can be inserted into document");
+        /*popupOpen("Image URL copied to clipboard","... can be inserted into document");*/
+        e.target.textContent = "copied";
+        e.target.style.background = "green";
     } catch (err) {
         popupOpen('Failed to copy URL!', err)
     }
