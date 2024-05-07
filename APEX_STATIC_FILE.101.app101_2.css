@@ -774,56 +774,38 @@ nav button {
   margin: 0;
   display: grid;
   gap: 0.25em;
-  grid-template-columns: repeat(auto-fill, minmax(min(7rem, 100%), 1fr));
-}
-
-.gallery-list li {
-    border: 1px solid #ddd;
-    padding: var(--space-3xs);
-    display: grid;
-    grid-template-areas: "overlay";
-}
-
-.gallery-list li:hover  {
-    box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5);
-}
-
-
-.gallery-list img, .gallery-list video, .gallery-list audio {
-  inline-size: 100%;
-  block-size: 100%;
-  object-fit: cover;
-  place-self: center;
-  grid-area: overlay;
-}
-
-.gallery-list .actions {
-  place-self: start center;
-  grid-area: overlay;
-  opacity: 0;
-  padding: 0.25em;
-}
-
-.gallery-list .actions > button {
-    display: inline-flex;
-    border-radius: 50%;
-    background-color: darkgrey;
-    color: white;
-    font-weight: 900;
-}
-
-.gallery-list .actions > button > svg {
-    fill: white;
-    inline-size: 100%;
-    block-size: 100%;
-}
-
-.gallery-list li:hover .actions {
-    opacity: 1;
-}
-
-.landscape {
-    grid-column: span 2;
+  grid-template-columns: repeat(auto-fill, minmax(min(8rem, 100%), 1fr));
+    & li {
+        border: 1px solid #ddd;
+        padding: var(--space-3xs);
+        display: grid;
+        grid-template-areas: "overlay";
+    }
+    & img, & video, & audio {
+        inline-size: 100%;
+        block-size: 100%;
+        object-fit: cover;
+        place-self: center;
+        grid-area: overlay;
+    }
+    & button {
+        outline: none;
+        background-color: black;
+        color: white;
+        grid-area: overlay;
+    }
+    & .landscape {
+        grid-column: span 2;
+    }
+    & .copy {
+        place-self: start start;
+    }
+    & .expand {
+        place-self: start end;
+    }
+    & .delete-asset {
+        place-self: end end;
+    }
 }
 
 /* ************************** */
