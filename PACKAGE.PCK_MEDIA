@@ -148,9 +148,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
 
             IF (l_media_type='image') THEN
                 pHTML:=pHTML || TO_CLOB(
-                '<button type="button" class="copy">url</button>
+                '<button type="button" class="copy" title="Copy URL">URL</button>
                  <button type="button" class="expand" title="Fullscreen">&#x26F6;</button>
-                 <button type="button" class="delete-asset" title="delete">&#128686;</button>');
+                 <button type="button" class="delete-asset" title="delete">&times;</button>');
             END IF;
 
             pHTML:=pHTML || TO_CLOB('</li>');
