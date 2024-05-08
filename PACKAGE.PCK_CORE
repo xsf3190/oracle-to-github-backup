@@ -531,7 +531,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     </button>
                     <a href="" class="nav-label selected">' || C.domain_name || '</a>
                     <button type="button" class="deploy-website" data-site_id="' || C.netlify_site_id || '">DEPLOY<span class="env">TEST</span></button>
-                    <button type="button" class="visits" data-domain="'|| REPLACE(C.domain_name,'.','-') || '.netlify.app">HITS<span class="env">TEST</span></button>';
+                    <button type="button" class="visits" data-domain="'|| REPLACE(C.domain_name,'.','-') || '.netlify.app">VISITS<span class="env">TEST</span></button>
+                    <button type="button" class="performance" data-domain="'|| REPLACE(C.domain_name,'.','-') || '.netlify.app">PERFORMANCE<span class="env">TEST</span></button>';
             END IF;
             l_dropdown:=l_dropdown ||
             '<li>
