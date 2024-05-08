@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
+    PROCEDURE getPerformance(pId IN VARCHAR2);
+    --
     PROCEDURE getVisits(pId IN VARCHAR2, pEmail IN BOOLEAN DEFAULT FALSE);
     --
     PROCEDURE uploadIpLookup;
@@ -354,7 +356,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
               <span class="poor">POOR</span>
             </div>
             <div style="margin-inline-start:' || l_margin || '%;font-size:160%">&#8593;</div>
-            <div class="score">Your overall score at 95 percentile is ' || l_score || '</div>
+            <div class="score">Your overall score at 95 percentile is ' || l_score || ' sec</div>
         </div>';
         RETuRN (l_html);
     END;
@@ -383,11 +385,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         pck_visits.uploadPageHits(l_website_id);
 
         FOR C IN (
-            SELECT COUNT(*) nb_hit, COUNT(DISTINCT ip_address) nb_distinct_ip, MIN(visit_date) first_hit, MAX(visit_date) last_hit,
-                    APPROX_PERCENTILE(0.95 DETERMINISTIC) WITHIN GROUP (ORDER BY lcp) lcp,
-                    APPROX_PERCENTILE(0.95 DETERMINISTIC) WITHIN GROUP (ORDER BY cls) cls,
-                    APPROX_PERCENTILE(0.95 DETERMINISTIC) WITHIN GROUP (ORDER BY inp) inp,
-                    ROUND(AVG(duration_visible)) avg_viewing_time
+            SELECT COUNT(*) nb_hit, COUNT(DISTINCT ip_address) nb_distinct_ip, MIN(visit_date) first_hit, MAX(visit_date) last_hit
               FROM page_hit
              WHERE website_id=l_website_id
                AND url=l_url
@@ -397,15 +395,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                              C.nb_distinct_ip || '</strong> distinct IP since <strong>' || 
                              TO_CHAR(C.first_hit,'dd Mon yyyy') || 
             '</strong></p>';
-            IF (NOT pEmail) THEN
-                l_content:=l_content ||
-                '<details><summary>Performance Overall</summary>
-                <p>Performance ratings are the
-                <a href="https://developers.google.com/search/docs/appearance/core-web-vitals" target="_blank">Core Web Vital</a>
-                metrics used by Google in its ranking algorithm.</p>
-                <p>Metrics are automatically captured for each page visited on your website.</p>' || cwv(C.lcp) || 
-                '</details>';
-            END IF;
         END LOOP;
 
         l_content:=l_content ||
@@ -496,6 +485,122 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             apex_json.write('content', l_content);
             apex_json.close_object;
         END IF;
+
+        EXCEPTION WHEN OTHERS THEN pck_core.log_error;
+    END;
+
+    /*
+    **  Return log of all performance metrics captured for website
+    */
+    PROCEDURE getPerformance(pId IN VARCHAR2) IS
+        l_website_id website.id%type;
+        l_netlify_site_id website.netlify_site_id%type;
+        l_url page_hit.url%type;
+        l_content CLOB;
+        l_session_data pck_core.session_data_rt;
+        n PLS_INTEGER;
+
+        FUNCTION cwv(pMetric IN VARCHAR2, pScore IN NUMBER) RETURN VARCHAR2 IS
+            l_margin NUMBER;
+            l_score VARCHAR2(10);
+        BEGIN
+            CASE pMetric
+                WHEN 'lcp' THEN
+                    /* LCP reported in milliseconds - make appropriate calculation for % within 0 -> 6.5 seconds*/ 
+                    l_margin:=LEAST(ROUND(pScore/6500*100,1),100);
+                    l_score:=TO_CHAR(ROUND(pScore/1000,1),'0.0') || ' sec';
+
+                    RETURN (
+                    '<div class="cwv">
+                        <div class="lcp">
+                          <span></span>
+                          <span>2.5 sec</span>
+                          <span>4 sec</span>
+                          <span class="good">GOOD</span>
+                          <span class="needs-improvement">NEEDS<br>IMPROVEMENT</span>
+                          <span class="poor">POOR</span>
+                        </div>
+                        <div style="margin-inline-start:' || l_margin || '%;font-size:160%">&#8593;</div>
+                        <div class="score">Your overall score at 95 percentile is ' || l_score || '</div>
+                    </div>');
+
+                WHEN 'cls' THEN
+                    /* LCP reported in milliseconds - make appropriate calculation for % within 0 -> 6.5 seconds*/ 
+                    l_margin:=LEAST(ROUND(pScore/0.4*100,1),100);
+                    l_score:=TO_CHAR(pScore);
+
+                    RETURN (
+                    '<div class="cwv">
+                        <div class="lcp">
+                          <span></span>
+                          <span>0.1</span>
+                          <span>0.25</span>
+                          <span class="good">GOOD</span>
+                          <span class="needs-improvement">NEEDS<br>IMPROVEMENT</span>
+                          <span class="poor">POOR</span>
+                        </div>
+                        <div style="margin-inline-start:' || l_margin || '%;font-size:160%">&#8593;</div>
+                        <div class="score">Your overall score at 95 percentile is ' || l_score || '</div>
+                    </div>');
+
+                WHEN 'inp' THEN
+                    /* LCP reported in milliseconds - make appropriate calculation for % within 0 -> 6.5 seconds*/ 
+                    l_margin:=LEAST(ROUND(pScore/700*100,1),100);
+                    l_score:=TO_CHAR(pScore);
+
+                    RETURN (
+                    '<div class="cwv">
+                        <div class="lcp">
+                          <span></span>
+                          <span>200 ms</span>
+                          <span>500 ms</span>
+                          <span class="good">GOOD</span>
+                          <span class="needs-improvement">NEEDS<br>IMPROVEMENT</span>
+                          <span class="poor">POOR</span>
+                        </div>
+                        <div style="margin-inline-start:' || l_margin || '%;font-size:160%">&#8593;</div>
+                        <div class="score">Your overall score at 95 percentile is ' || l_score || ' ms</div>
+                    </div>');
+            END CASE;
+        END;
+
+    BEGIN
+        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
+        l_netlify_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
+
+        SELECT CASE WHEN netlify_site_id=l_netlify_site_id THEN REPLACE(domain_name,'.','-') || '.netlify.app' ELSE domain_name END
+          INTO l_url
+          FROM website
+         WHERE id=l_website_id;
+
+        pck_visits.uploadPageHits(l_website_id);
+
+        FOR C IN (
+            SELECT COUNT(*) nb_hit, COUNT(DISTINCT ip_address) nb_distinct_ip, MIN(visit_date) first_hit, MAX(visit_date) last_hit,
+                    APPROX_PERCENTILE(0.95 DETERMINISTIC) WITHIN GROUP (ORDER BY lcp) lcp,
+                    APPROX_PERCENTILE(0.95 DETERMINISTIC) WITHIN GROUP (ORDER BY cls) cls,
+                    APPROX_PERCENTILE(0.95 DETERMINISTIC) WITHIN GROUP (ORDER BY inp) inp,
+                    ROUND(AVG(duration_visible)) avg_viewing_time
+              FROM page_hit
+             WHERE website_id=l_website_id
+               AND url=l_url
+        ) LOOP
+            l_content:=
+            '<p>Performance ratings are the <a href="https://developers.google.com/search/docs/appearance/core-web-vitals" target="_blank">Core Web Vitals</a>
+                used by Google in its ranking algorithm.</p>
+            <p>Metrics are automatically captured for each page visited on the website.</p>
+            <p>Based on <strong>' || C.nb_hit || '</strong> visits from <strong>' || C.nb_distinct_ip || '</strong> distinct IP since <strong>' || TO_CHAR(C.first_hit,'dd Mon yyyy') || 
+            '</strong></p>';
+            l_content:=l_content || 
+            '<h2>Largest Contentful Paint (LCP)</h2>' || cwv('lcp', C.lcp) ||
+            '<h2>Cumulative Layout Shift (CLS)</h2>' || cwv('cls', C.cls) ||
+            '<h2>Interaction to Next Paint (INP)</h2>' || cwv('inp', C.inp);
+        END LOOP;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('content', l_content);
+        apex_json.close_object;
 
         EXCEPTION WHEN OTHERS THEN pck_core.log_error;
     END;
