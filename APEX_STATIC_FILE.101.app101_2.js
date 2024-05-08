@@ -199,6 +199,7 @@ const edit_website = (e) => {
     websiteNav.querySelector(".selected").textContent = e.target.dataset.domain;
     websiteNav.querySelector(".deploy-website > span").textContent = env;
     websiteNav.querySelector(".visits > span").textContent = env;
+    websiteNav.querySelector(".performance > span").textContent = env;
 
     newBlog.classList.remove("visible");
     newMedia.classList.remove("visible");
@@ -475,6 +476,8 @@ const clickHandler = (e) => {
         edit_website(e); 
     } else if (e.target.matches(".visits")) {
         get_visits(e); 
+    } else if (e.target.matches(".performance")) {
+        get_performance(e); 
     } else if (e.target.matches(".clear-input")) {
         clear_input(e); 
     } else if (e.target.matches(".new-website")) {
@@ -1218,6 +1221,17 @@ const page_options = (e) => {
  */
 const get_visits = (e) => {
     execProcess( "visits/"+gWebsiteId+","+gNetlifySiteId,"GET").then( (data) => {
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('afterbegin',data.content);
+        logDialog.showModal();
+    });
+}
+
+/* 
+ ** GET WEBSIITE PRFORMANCE METRICS
+ */
+const get_performance = (e) => {
+    execProcess( "performance/"+gWebsiteId+","+gNetlifySiteId,"GET").then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
