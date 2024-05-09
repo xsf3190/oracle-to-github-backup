@@ -500,68 +500,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_session_data pck_core.session_data_rt;
         n PLS_INTEGER;
 
-        FUNCTION cwv(pMetric IN VARCHAR2, pScore IN NUMBER) RETURN VARCHAR2 IS
+        FUNCTION cwv(pGood IN NUMBER, pPoor IN NUMBER, pUnits IN VARCHAR2, pScore IN NUMBER) RETURN VARCHAR2 IS
             l_margin NUMBER;
-            l_score VARCHAR2(10);
+            l_grid_template_columns VARCHAR2(30);
         BEGIN
-            CASE pMetric
-                WHEN 'lcp' THEN
-                    /* LCP reported in milliseconds - make appropriate calculation for % within 0 -> 6.5 seconds*/ 
-                    l_margin:=LEAST(ROUND(pScore/6500*100,1),100);
-                    l_score:=TO_CHAR(ROUND(pScore/1000,1),'0.0') || ' sec';
+            -- 2.5 | 4.0  => grid-template-columns: 2.5fr 1.5fr 2.5fr;
+            -- 0.1 | 0.25 => grid-template-columns: 1fr 2.5fr 1fr;
+            -- 200 | 500  => grid-template-columns: 2fr 3fr 2fr;
 
-                    RETURN (
-                    '<div class="cwv">
-                        <div class="lcp">
-                          <span></span>
-                          <span>2.5 sec</span>
-                          <span>4 sec</span>
-                          <span class="good">GOOD</span>
-                          <span class="needs-improvement">NEEDS<br>IMPROVEMENT</span>
-                          <span class="poor">POOR</span>
-                        </div>
-                        <div style="margin-inline-start:' || l_margin || '%;font-size:160%">&#8593;</div>
-                        <div class="score">Your overall score at 95 percentile is ' || l_score || '</div>
-                    </div>');
+            /* Express range as fractional units */
+            l_grid_template_columns:=TO_CHAR(pGood*10) || 'fr ' || TO_CHAR((pPoor-pGood)*10) || 'fr ' || pGood*10 || 'fr';
 
-                WHEN 'cls' THEN
-                    /* LCP reported in milliseconds - make appropriate calculation for % within 0 -> 6.5 seconds*/ 
-                    l_margin:=LEAST(ROUND(pScore/0.4*100,1),100);
-                    l_score:=TO_CHAR(pScore);
+            /* Calculate margin-inline-start as percentage of score */
+            l_margin:=LEAST(ROUND(pScore/(pPoor+pGood)*100,1),100);
 
-                    RETURN (
-                    '<div class="cwv">
-                        <div class="lcp">
-                          <span></span>
-                          <span>0.1</span>
-                          <span>0.25</span>
-                          <span class="good">GOOD</span>
-                          <span class="needs-improvement">NEEDS<br>IMPROVEMENT</span>
-                          <span class="poor">POOR</span>
-                        </div>
-                        <div style="margin-inline-start:' || l_margin || '%;font-size:160%">&#8593;</div>
-                        <div class="score">Your overall score at 95 percentile is ' || l_score || '</div>
-                    </div>');
+            RETURN (
+            '<div>
+                <div class="cwv" style="grid-template-columns:' || l_grid_template_columns || '">
+                  <span></span>
+                  <span>' || pGood || ' ' || pUnits || '</span>
+                  <span>' || pPoor || ' ' || pUnits || '</span>
+                  <span class="good">GOOD</span>
+                  <span class="needs-improvement">NEEDS<br>IMPROVEMENT</span>
+                  <span class="poor">POOR</span>
+                </div>
+                <div style="margin-inline-start:' || l_margin || '%;font-size:160%">&#8593;</div>
+                <div class="score">Your overall score at 95 percentile is ' || pScore || ' ' || pUnits || '</div>
+            </div>');
 
-                WHEN 'inp' THEN
-                    /* LCP reported in milliseconds - make appropriate calculation for % within 0 -> 6.5 seconds*/ 
-                    l_margin:=LEAST(ROUND(pScore/700*100,1),100);
-                    l_score:=TO_CHAR(pScore);
-
-                    RETURN (
-                    '<div class="cwv">
-                        <div class="lcp">
-                          <span></span>
-                          <span>200 ms</span>
-                          <span>500 ms</span>
-                          <span class="good">GOOD</span>
-                          <span class="needs-improvement">NEEDS<br>IMPROVEMENT</span>
-                          <span class="poor">POOR</span>
-                        </div>
-                        <div style="margin-inline-start:' || l_margin || '%;font-size:160%">&#8593;</div>
-                        <div class="score">Your overall score at 95 percentile is ' || l_score || ' ms</div>
-                    </div>');
-            END CASE;
         END;
 
     BEGIN
@@ -592,9 +558,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             <p>Based on <strong>' || C.nb_hit || '</strong> visits from <strong>' || C.nb_distinct_ip || '</strong> distinct IP since <strong>' || TO_CHAR(C.first_hit,'dd Mon yyyy') || 
             '</strong></p>';
             l_content:=l_content || 
-            '<h2>Largest Contentful Paint (LCP)</h2>' || cwv('lcp', C.lcp) ||
-            '<h2>Cumulative Layout Shift (CLS)</h2>' || cwv('cls', C.cls) ||
-            '<h2>Interaction to Next Paint (INP)</h2>' || cwv('inp', C.inp);
+            '<h2>Largest Contentful Paint (LCP)</h2>' || cwv(2.5, 4, 'sec', ROUND(C.lcp/1000,1)) || '<hr>' || /* convert LCP from milliseconds to seconds */
+            '<h2>Cumulative Layout Shift (CLS)</h2>' || cwv(0.1, 0.25, NuLL, C.cls) || '<hr>' ||
+            '<h2>Interaction to Next Paint (INP)</h2>' || cwv(200, 500, 'ms', C.inp);
         END LOOP;
 
         apex_json.open_object; 
