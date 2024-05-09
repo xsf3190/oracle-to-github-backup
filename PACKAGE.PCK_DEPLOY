@@ -270,7 +270,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
          WHERE wa.website_id=pWebsiteId 
            AND wa.article_id=a.id
          UNION ALL
-        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order, COALESCE(a.deployed_date, a.updated_date) lastmod, a.word_count, a.body_html
+        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001), COALESCE(a.deployed_date, a.updated_date) lastmod, a.word_count, a.body_html
           FROM website_article wa, article a 
          WHERE wa.website_id=pWebsiteId 
            AND a.parent_id=wa.article_id 
@@ -286,6 +286,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
            l_labels(i).body_html:=REPLACE(l_labels(i).body_html ,'<h1>&nbsp;</h1>',null);
             IF (l_labels(i).collection_type='BLOG') THEN
                 l_labels(i).body_html:=l_labels(i).body_html || pck_core.buildBlogList(pWebsiteId, l_labels(i).parent_article_id);
+            --ELSIF (l_labels(i).collection_type='MEDIA') THEN
+             --   l_labels(i).body_html:=l_labels(i).body_html || pck_core.buildMediaList(pWebsiteId, l_labels(i).parent_article_id);
             END IF;
         END LOOP;
 
