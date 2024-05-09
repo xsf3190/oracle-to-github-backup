@@ -531,6 +531,7 @@ dialog h2 {
     line-height: 1.2;
     text-decoration: slateblue solid underline;
     text-underline-position: under;
+    text-underline-offset: 0.2ex;
     text-align: center;
 }
 
@@ -561,11 +562,7 @@ dialog.log {
         grid-template-columns: 1fr 2rem;
     }
     .cwv {
-        inline-size: fit-content;
-    }
-    .lcp {
         display: grid;
-        grid-template-columns: 2.5fr 1.5fr 2.5fr;
         row-gap: 0.5ch;
         & span[class] {
             display: inline-block;
