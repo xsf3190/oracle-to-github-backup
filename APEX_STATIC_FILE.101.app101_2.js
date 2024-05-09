@@ -472,6 +472,8 @@ const clickHandler = (e) => {
         }
     } else if (e.target.matches(".api-keys")) {
         api_keys(e); 
+    } else if (e.target.matches(".account-usage")) {
+        account_usage(e); 
     } else if (e.target.matches(".edit-website")) {
         edit_website(e); 
     } else if (e.target.matches(".visits")) {
@@ -934,6 +936,17 @@ signout.addEventListener('click',  () => {
  */
 const api_keys = () => {
     execProcess( "keys","GET").then( (data) => {
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('afterbegin',data.content);
+        logDialog.showModal();
+    });
+};
+
+/*
+ ** ACCOUNT USAAGE
+ */
+const account_usage = () => {
+    execProcess( "usage","GET").then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
@@ -1538,13 +1551,13 @@ delete_page = () => {
  */
 delete_article = () => {
     execProcess("dml","DELETE",{table_name: "article", article_id: gArticleId}).then( () => {
-        gArticleId = pageNav.querySelector(".selected").closest("div").dataset.id;
+        gArticleId = 0;
         editor_status = "init";
-        editor_status_text.textContent = "PAGE DELETED";
+        editor_status_text.textContent = "SUB-PAGE DELETED";
         editor.setData("");
         editor.enableReadOnlyMode( 'lock-id' );
         galleryList.replaceChildren();
-        pageDialog.close();
+        logDialog.close();
     });
 }
 
