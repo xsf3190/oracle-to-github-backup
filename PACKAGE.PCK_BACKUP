@@ -126,27 +126,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         IF (pUsageDate IS NOT NULL) THEN
             l_usage_date_param:='/date='||TO_CHAR(pUsageDate,'DD-MM-YYYY');
         END IF;
-        FOR C IN (SELECT id, 
-                         cld_cloud_name, 
-                         cld_api_key, 
-                         cld_api_secret 
-                    FROM users 
-                   WHERE cld_cloud_name IS NOT NULL
-                     AND id=NVL(pUserId,id)
-                   ) 
-        LOOP
-            l_url:='https://api.cloudinary.com/v1_1/' || C.cld_cloud_name || '/usage' || l_usage_date_param;
-            pck_core.log(l_url);
-            l_clob := apex_web_service.make_rest_request(
-                p_url=>l_url,
-                p_http_method=>'GET',
-                p_username=>C.cld_api_key,
-                p_password=>C.cld_api_secret);
-            SELECT error_message INTO l_error_message FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS error_message VARCHAR2(100) PATH '$.error.message');  
-            IF (l_error_message IS NOT NULL) THEN
-                pck_core.log('Error callling REST API for user ' || C.id || ' - ' || l_error_message);
-                CONTINUE;
-            END IF;
+        FOR C IN (SELECT id, cld_cloud_name FROM users WHERE cld_cloud_name IS NOT NULL AND id=NVL(pUserId,id)) LOOP
+            pck_api.callCloudinaryAPI(
+                pUserId=>C.id,
+                pEndpoint=>C.cld_cloud_name || '/usage', 
+                pMethod =>'GET', 
+                pData=>l_clob
+            );
             DELETE usage WHERE user_id=C.id AND usage_date=NVL(pUsageDate,TRUNC(sysdate));
             INSERT INTO usage (user_id,usage_date,last_updated,plan,transformations_usage,transformations_credit_usage,bandwidth_usage,bandwidth_credit_usage,storage_usage,storage_credit_usage,
                 credits_usage,credits_limit,used_percent,objects_usage,requests,resources,derived_resources,image_max_size,video_max_size,raw_max_size)
