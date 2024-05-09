@@ -237,7 +237,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
-        FOR C IN (SELECT a.is_admin, u.id, u.cld_cloud_name, u.cld_api_key, u.cld_api_secret, u.netlify_token, u.github_token, u.github_repos_owner, u.github_repos, u.google_api_key, u.ipdata_api_key
+        FOR C IN (SELECT a.is_admin, u.id, u.cld_cloud_name, u.cld_api_key, u.cld_api_secret, u.netlify_token, u.netlify_account_slug, u.github_token, u.github_repos_owner, u.github_repos, u.google_api_key, u.ipdata_api_key
                     FROM users u, apex_workspace_apex_users a
                    WHERE u.id=l_session_data.user_id
                      AND a.email(+)=u.email) 
@@ -245,10 +245,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         --is_admin='Yes'
             l_content:=
             '<form>
+                <h2>API keys are stored in an encrypted Oracle tablespace</h2>
                 <details>
                     <summary>NETLIFY</summary>
                     <fieldset>' ||
                     buildInputWrapper(C.id, 'users.netlify_token', C.netlify_token, l_session_data.canuse_popover) || 
+                    buildInputWrapper(C.id, 'users.netlify_account_slug', C.netlify_account_slug, l_session_data.canuse_popover) || 
                     '</fieldset>
                 </details>
                 <details>
@@ -714,6 +716,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     UPDATE website_article SET contact_form=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'users.netlify_token' THEN
                     UPDATE users SET netlify_token=C.value, updated_date=current_timestamp WHERE id=C.id;
+                WHEN 'users.netlify_account_slug' THEN
+                    UPDATE users SET netlify_account_slug=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'users.cld_cloud_name' THEN
                     UPDATE users SET cld_cloud_name=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'users.cld_api_key' THEN
