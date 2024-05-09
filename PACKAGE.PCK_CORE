@@ -362,9 +362,61 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     FROM article art, asset ass
                    WHERE art.parent_id=pArticleId
                      AND ass.id(+)=art.cover_asset_id
-                     ORDER BY NVL(art.deployed_date,art.updated_date) DESC ) 
+                     ORDER BY art.display_order NULLS FIRST, art.updated_date DESC ) 
         LOOP
             
+            l_html:=l_html || 
+            '<li class="card">';
+            IF (C.cld_cloud_name IS NOT NULL) THEN
+                l_html:=l_html || 
+                '<img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">';
+            END IF;
+            IF (pIncludeLinks) THEN
+                l_href:='/' || l_path || '/' || apex_string_util.get_slug(C.title);
+            ELSE
+                l_href:='#';
+            END IF;
+            n:=n+1;
+            IF (n=1) THEN
+                l_excerpt_length:=160;
+            ELSE
+                l_excerpt_length:=160;
+            END IF;
+            l_html:=l_html || 
+                '<div class="text">
+                    <h2>
+                        <a href="' || l_href || '">' || C.title || '</a>
+                    </h2>
+                    <span class="date">' || TO_CHAR(C.deployed_date,'dd Month YYYY') || '</span>
+                    <p>' || getExcerpt(l_excerpt_length,dbms_lob.substr(utl_i18n.unescape_reference(apex_escape.striphtml(C.body_html)),200,NVL(LENGTHB(C.title),0)+1))  || '</p>
+                    <span class="words">' || TO_CHAR(C.word_count) || ' words</span>
+                </div>
+            </li>';
+        END LOOP;
+        l_html:=l_html || '</ol>';
+        RETURN (l_html);
+    END;
+
+    /*
+    ** Construct index of Media entries
+    */
+    FUNCTION buildMediaList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks  IN BOOLEAN) RETURN CLOB IS
+        l_html CLOB;
+        l_path website_article.navigation_label%type;
+        l_href VARCHAR2(200);
+        l_excerpt_length INTEGER;
+        n PLS_INTEGER:=0;
+    BEGIN
+        SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
+
+        apex_escape.set_html_escaping_mode('E');
+        l_html:=l_html || '<ol class="blog">';
+        FOR C IN (SELECT art.body_html, art.title, art.excerpt, NVL(art.deployed_date,art.updated_date) deployed_date, art.word_count, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
+                    FROM article art, asset ass
+                   WHERE art.parent_id=pArticleId
+                     AND ass.id(+)=art.cover_asset_id
+                     ORDER BY art.display_order NULLS FIRST, art.updated_date DESC ) 
+        LOOP
             l_html:=l_html || 
             '<li class="card">';
             IF (C.cld_cloud_name IS NOT NULL) THEN
@@ -453,6 +505,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                         <button type="button" class="with-icon api-keys">
                             &#128273;
                             API Keys
+                        </button>
+                    </li>
+                    <li class="account-usage">
+                        <button type="button" class="with-icon account-usage">
+                           %
+                            Account Usage
                         </button>
                     </li>
                     <li class="session-log">
