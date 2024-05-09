@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
+    PROCEDURE getAccountUsage;
+    --
     PROCEDURE getArticle(pArticleId IN article.id%type);
     --
     PROCEDURE getArticles(pId IN VARCHAR2);
@@ -39,6 +41,39 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     g_html_end CONSTANT VARCHAR2(24):='<!-- YOUR CODE END -->';
     g_css_js_start CONSTANT VARCHAR2(24):='/* YOUR CODE START */';
     g_css_js_end CONSTANT VARCHAR2(24):='/* YOUR CODE END */';
+
+    /*
+    ** GET ACCOUNT USAGE FOR CURRENT USER - CLOUDINARY, NETLIFY
+    */
+    PROCEDURE getAccountUsage IS
+        l_content CLOB;
+        l_clob CLOB;
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'accounts/#SLUG#/bandwidth', pMethod=>'GET', pData=>l_clob);
+
+        FOR C IN (SELECT used, included FROM JSON_TABLE(l_clob FORMAT JSON, '$'  COLUMNS (used, included)) ) LOOP
+            l_content:='<p>Netlify bandwidth usage is ' || apex_string_util.to_display_filesize(C.used) || ' of ' || apex_string_util.to_display_filesize(C.included) || ' (' || TO_CHAR(ROUND(C.used*100/C.included,2)) || '%)</p>';
+        END LOOP;
+
+        FOR C IN (SELECT usage_date,plan,transformations_usage,transformations_credit_usage,bandwidth_usage,bandwidth_credit_usage,storage_usage,storage_credit_usage,objects_usage,credits_usage,credits_limit,used_percent
+                    FROM usage
+                   WHERE user_id=l_session_data.user_id
+                     AND usage_date=(SELECT MAX*usage_date FROM usage WHERE user_id=l_session_data.user_id) )LOOP
+            null;
+        END LOOP;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('content', l_content);
+        apex_json.close_object;
+
+    EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;
 
     PROCEDURE getCldDetails IS
         l_cld_cloud_name users.cld_cloud_name%type;
@@ -524,7 +559,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
              WHERE art.parent_id=l_parent_id
                AND art.author_user_id=l_session_data.user_id
                AND art.cover_asset_id=ass.id(+)
-             ORDER BY art.display_order)
+             ORDER BY art.display_order NULLS FIRST, art.updated_date DESC) 
         LOOP
             CASE l_collection_type
                 WHEN 'BLOG' THEN
