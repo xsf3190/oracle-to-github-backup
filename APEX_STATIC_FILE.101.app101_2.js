@@ -731,8 +731,7 @@ const setImgSrc = (img) => {
     }
     galleryFullImg.src = img.src;
 
-    const dimensions = img.dataset.dimensions.split(':'),
-          widths = dimensions.map(dimension => dimension.substring(dimension,dimension.indexOf("x")));
+    const widths = img.dataset.dimensions.split(':');
 
     const closest = widths.reduce((prev, curr) => {
         return Math.abs(curr - window.innerWidth) < Math.abs(prev - window.innerWidth) ? curr : prev;
