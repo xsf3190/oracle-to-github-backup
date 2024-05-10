@@ -1,7 +1,7 @@
 # oracle-to-github-backup
 This repository contains code and data automatically backed up from an ORACLE OCI database, which is the central component of the adfreesites web application.
 
-Data is backed up as a schema export dump file encrypted with a randomly generated complex password that is shared by email with the designated Administrator.
+Data is backed up as a schema export dump file encrypted with a randomly generated complex password sent by email to a specified address.
 A metadata only version is created at the same time for use in a new deployment for example.
 
 Definitions are DDL metadata extracts of Oracle tables and packages.
@@ -36,11 +36,11 @@ In a session connected to "schema-to-backup"
 ** Run a one-off export to GITHUB repository, sending status to specified email address
 */
 DECLARE
-  l_github_token       VARCHAR2(40):='YOUR TOKEN (pre-requisite 1)'; 
+  l_github_token       VARCHAR2(40):='YOUR GITHUB TOKEN'; 
   l_github_repos_owner VARCHAR2(40):='YOUR GITHUB ACCOUNT NAME';
   l_github_repos       VARCHAR2(40):='YOUR GITHUB REPOSITORY';
-  l_email              VARCHAR2(40):='EMAIL ADDRESS TO RECEIVE LOG AND PASSWORD';  
-  l_password           VARCHAR2(20):='COMPLEX AUTO-GENERATED PASSWORD';
+  l_email              VARCHAR2(40):='EMAIL ADDRESS TO RECEIVE JOB LOG';  
+  l_password           VARCHAR2(20):='PASSWORD';
 BEGIN 
   pck_backup.github_backup(
         p_github_token => l_github_token,
@@ -51,13 +51,13 @@ BEGIN
   );
 END;
 ```
-To schedule regular backups, e.g. every day at 9PM
+To schedule secure regular backups, e.g. every day at 9PM
 ```
 BEGIN
   DBMS_SCHEDULER.create_job (
     job_name=> 'DAILY_BACKUP',
     job_type=> 'PLSQL_BLOCK',
-    job_action=> 'begin pck_backup.daily_job; end;',
+    job_action=> 'begin pck_backup.daily_backup; end;',
     start_date=> systimestamp,
     repeat_interval=> 'FREQ=DAILY; Interval=1;BYHOUR=21;ByMinute=0',
     enabled =>TRUE,
@@ -65,4 +65,4 @@ BEGIN
 end;
 /
 ```
-Where "pck_backup.daily_job" is a procedure that prepares and calls "pck_backup.github_backup"
+Where "pck_backup.daily_backup" is a package procedure that prepares and calls "pck_backup.github_backup" passing an auto-generated complex password
