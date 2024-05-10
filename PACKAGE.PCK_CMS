@@ -52,18 +52,77 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'accounts/#SLUG#/bandwidth', pMethod=>'GET', pData=>l_clob);
+        l_content:=
+        '<table role="presentation">
+            <caption style="caption-side:bottom">1 Cloudinary Credit = 1GB storage | 1GB bandwidth | 1000 transformations</caption>
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Usage</th>
+                    <th>Capacity</th>
+                    <th>% Used</th>
+                </tr>
+            </thead>
+            <tbody>';
 
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'accounts/#SLUG#/bandwidth', pMethod=>'GET', pData=>l_clob);
         FOR C IN (SELECT used, included FROM JSON_TABLE(l_clob FORMAT JSON, '$'  COLUMNS (used, included)) ) LOOP
-            l_content:='<p>Netlify bandwidth usage is ' || apex_string_util.to_display_filesize(C.used) || ' of ' || apex_string_util.to_display_filesize(C.included) || ' (' || TO_CHAR(ROUND(C.used*100/C.included,2)) || '%)</p>';
+            l_content:=l_content || 
+            '<tr>
+                <td><strong>Netlify bandwidth</strong></td>
+                <td>' || apex_string_util.to_display_filesize(C.used) || '</td>
+                <td>' || apex_string_util.to_display_filesize(C.included) || '</td> 
+                <td>' || TO_CHAR(ROUND(C.used*100/C.included,2),'90.00') || '%</td>
+            </tr>';
         END LOOP;
 
-        FOR C IN (SELECT usage_date,plan,transformations_usage,transformations_credit_usage,bandwidth_usage,bandwidth_credit_usage,storage_usage,storage_credit_usage,objects_usage,credits_usage,credits_limit,used_percent
+
+
+        FOR C IN (SELECT usage_date,transformations_usage,transformations_credit_usage,bandwidth_usage,bandwidth_credit_usage,storage_usage,storage_credit_usage,objects_usage,credits_usage,credits_limit,used_percent
                     FROM usage
                    WHERE user_id=l_session_data.user_id
-                     AND usage_date=(SELECT MAX*usage_date FROM usage WHERE user_id=l_session_data.user_id) )LOOP
-            null;
+                     AND usage_date=(SELECT MAX(usage_date) FROM usage WHERE user_id=l_session_data.user_id) )
+        LOOP
+            l_content:=l_content || 
+            '<tr>
+                <td>Cloudinary Transformations - '|| C.transformations_usage || '</td>
+                <td>' || TO_CHAR(C.transformations_credit_usage,'0.00') || ' credits</td>
+                <td></td> 
+                <td></td>
+            </tr>
+            <tr>
+                <td>Cloudinary Bandwidth - ' || apex_string_util.to_display_filesize(C.bandwidth_usage) || '</td>
+                <td>' || TO_CHAR(C.bandwidth_credit_usage,'0.00') || ' credits</td>
+                <td></td> 
+                <td></td>
+            </tr>
+            <tr>
+                <td>Cloudinary Storage - ' || apex_string_util.to_display_filesize(C.storage_usage) || '</td>
+                <td>' || TO_CHAR(C.storage_credit_usage,'0.00') || ' credits</td>
+                <td></td> 
+                <td></td>
+            </tr>
+            <tr>
+                <td><strong>Cloudinary Total Credits</strong></td>
+                <td>' || TO_CHAR(C.credits_usage,'90.00') || ' credits</td>
+                <td>' || C.credits_limit || '</td> 
+                <td>' || C.used_percent || '%</td>
+            </tr>';
         END LOOP;
+
+        FOR C IN (SELECT total_used, max_size FROM (SELECT SUM(bytes) total_used  FROM dba_segments WHERE tablespace_name<>'SAMPLESCHEMA'), (SELECT max_size FROM v$pdbs)) LOOP
+            l_content:=l_content || 
+            '<tr>
+                <td><strong>Oracle storage</strong></td>
+                <td>' || apex_string_util.to_display_filesize(C.total_used) || '</td>
+                <td>' || apex_string_util.to_display_filesize(C.max_size) || '</td> 
+                <td>' || TO_CHAR(ROUND(C.total_used*100/C.max_size,2),'90.00') || '%</td>
+            </tr>';
+        END LOOP;
+
+        l_content:=l_content ||
+        '</tbody>
+        </table>';
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -236,7 +295,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         UPDATE article SET (cover_asset_id, nb_assets) = (SELECT  MIN(id), COUNT(*) FROM asset WHERE article_id=l_article_id)
          WHERE id=l_article_id;
 
-        pck_media.getThumbnails(l_article_id,l_thumbnails);
+        pck_media.getThumbnails(l_article_id,pDeploy=>FALSE,pHtml=>l_thumbnails);
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
@@ -348,6 +407,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_contact_form website_article.contact_form%type;
         l_collection_type website_article.collection_type%type;
         l_is_subarticle BOOLEAN:=FALSE;
+        l_thumbnails CLOB;
         l_html CLOB;
         l_css CLOB;
         l_javascript CLOB;
@@ -418,11 +478,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         END IF;
 
         /* build html */
-        l_html:=l_nav_labels || chr(10) || g_html_start || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10) || g_html_end || chr(10);
+        l_html:=l_nav_labels || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10);
         
         /* Build index of Blog entries */
         IF (l_collection_type='BLOG') THEN
-            l_html:=l_html || pck_core.buildBlogList(l_website_id, pArticleId, pIncludeLinks => FALSE); --, pIncludeLinks=>FALSE);
+            l_html:=l_html || pck_core.buildBlogList(l_website_id, pArticleId, pIncludeLinks => FALSE);
+        ELSIF (l_collection_type='MEDIA') THEN
+            l_html:=l_html || pck_core.buildMediaList(l_website_id, pArticleId, pIncludeLinks => FALSE);
+        ELSIF (l_is_subarticle) THEN
+            pck_media.getThumbnails(pArticleId,pDeploy=>TRUE,pHtml=>l_thumbnails);
+            l_html:=l_html || 
+            '<ol class="gallery-list">' || l_thumbnails || '</ol>
+            <div class="gallery-overlay">
+                <img src="">
+                <span class="counter"></span>
+                <button type="button" class="close-fullscreen">&times;</button>
+                <button type="button" class="prev">&lt;</button>
+                <button type="button" class="next">&gt;</button>
+            </div>';
         END IF;
 
         IF (l_contact_form='YES') THEN
@@ -476,11 +549,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
 
         /* build javascript */
         IF (l_javascript IS NULL) THEN
-            SELECT apex_util.blob_to_clob(file_content)
-            INTO l_javascript
-            FROM apex_application_static_files
-            WHERE  application_id=l_session_data.app_id
-            AND file_name='app' || l_session_data.app_id || '_metric.js';
+            FOR C IN (SELECT apex_util.blob_to_clob(file_content) file_content
+                        FROM apex_application_static_files
+                        WHERE  application_id=l_session_data.app_id
+                        AND file_name IN ('app' || l_session_data.app_id || '_metric.js', 'app' || l_session_data.app_id || '_gallery.js') ) LOOP
+                l_javascript:=l_javascript || C.file_content || chr(10);
+            END LOOP;
         END IF;
         l_javascript:=g_css_js_start || chr(10) ||
         'gMetricWebsiteId = "' || l_website_id || '";' || chr(10) || 
@@ -514,7 +588,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             WHERE id=pArticleId
             AND author_user_id=l_session_data.user_id)
         LOOP
-            pck_media.getThumbnails(pArticleId, l_thumbnails);
+            pck_media.getThumbnails(pArticleId, pDeploy=>FALSE, pHtml=>l_thumbnails);
             apex_json.open_object;
             apex_json.write('success', TRUE); 
             apex_json.write('html', C.body_html);
@@ -589,7 +663,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             FOR C IN (SELECT body_html, apex_util.get_since(COALESCE(updated_date, created_date)) updated_date FROM article WHERE id=l_parent_id) LOOP
                 apex_json.write('html', C.body_html);
                 apex_json.write('updated_date', C.updated_date);
-                pck_media.getThumbnails(l_parent_id, l_thumbnails);
+                pck_media.getThumbnails(l_parent_id, pDeploy=>FALSE, pHtml=>l_thumbnails);
                 apex_json.write('thumbnails', l_thumbnails);
             END LOOP;
         END IF;
