@@ -2,7 +2,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_MEDIA" IS
     --
     FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
     --
-    PROCEDURE getThumbnails(pArticleId IN article.id%type, pHTML IN OUT NOCOPY CLOB);
+    PROCEDURE getThumbnails(pArticleId IN article.id%type, pDeploy IN BOOLEAN DEFAULT FALSE, pHTML IN OUT NOCOPY CLOB);
     --
 END;
 /
@@ -89,7 +89,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
     /*
      **  Build gallery of thumbnail images for a given article
      */
-    PROCEDURE getThumbnails(pArticleId IN article.id%type, pHTML IN OUT NOCOPY CLOB)
+    PROCEDURE getThumbnails(pArticleId IN article.id%type, pDeploy IN BOOLEAN DEFAULT FALSE, pHTML IN OUT NOCOPY CLOB)
     IS
         l_clob CLOB;
         l_user_id users.id%type;
@@ -101,7 +101,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
     BEGIN
         FOR C IN (
             SELECT a.id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
-                   DECODE(a.width,0,gWidthThumbnail,a.width) width, DECODE(a.height,0,gWidthThumbnail,a.height) height, a.bytes, a.format
+                   DECODE(a.width,0,gWidthThumbnail,a.width) width, a.height, a.bytes, a.format
               FROM asset a
              WHERE a.article_id=pArticleId
                AND NVL(a.format,'N/A')<>'clt'
@@ -113,17 +113,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             l_url_image:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
 
             IF (C.width>0 AND C.width*.25>gWidthThumbnail) THEN
-                l_dimensions:=gWidthThumbnail || 'xheight:' ||
-                              ROUND((C.width-gWidthThumbnail)/2) || 'xheight:';
+                l_dimensions:=gWidthThumbnail || ':' || ROUND((C.width-gWidthThumbnail)/2) || ':' || C.width;
             ELSE
-                l_dimensions:=ROUND(C.width*.25) || 'x' || ROUND(C.height*.25) || ':' || 
-                              ROUND(C.width*.625) || 'x' || ROUND(C.height*.625) || ':';
+                l_dimensions:=ROUND(C.width*.25) || ':' || ROUND(C.width*.625) || ':' || C.width;
             END IF;
 
             pHTML:=pHTML || TO_CLOB(
                 '<li' || CASE WHEN c.width>C.height THEN ' class="landscape"' END || ' tabindex="0" data-id="' || C.id || '">
-                    <img class="fullscreen" data-dimensions="'  || l_dimensions || 
-                                C.width || 'x' || C.height || '" data-src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>');
+                    <img class="fullscreen" data-dimensions="'  || l_dimensions || '" data-src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>');
 
             CASE l_media_type
                 WHEN 'video' THEN
@@ -146,7 +143,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
                 ELSE NULL;
             END CASE;
 
-            IF (l_media_type='image') THEN
+            IF (NOT pDeploy AND l_media_type='image') THEN
                 pHTML:=pHTML || TO_CLOB(
                 '<button type="button" class="copy" title="Copy URL">URL</button>
                  <button type="button" class="expand" title="Fullscreen">&#x26F6;</button>
