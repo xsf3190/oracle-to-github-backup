@@ -38,7 +38,12 @@ COMMENT ON COLUMN "USERS"."CLD_API_KEY" IS 'API key of your Cloudinary account u
    COMMENT ON COLUMN "USERS"."CLD_API_SECRET" IS 'API secret used together with the key to sign media uploads';
    COMMENT ON COLUMN "USERS"."CLD_CLOUD_NAME" IS 'The cloud name assigned to your Cloudinary account';
    COMMENT ON COLUMN "USERS"."GITHUB_TOKEN" IS 'Your Github personal access token';
-   COMMENT ON COLUMN "USERS"."NETLIFY_TOKEN" IS 'Personal Access token obtained for your Netlify account';
+   COMMENT ON COLUMN "USERS"."GITHUB_REPOS_OWNER" IS 'Github account name associated with the token';
+   COMMENT ON COLUMN "USERS"."GITHUB_REPOS" IS 'Name of Github repository that holds automatically backed up code and data';
+   COMMENT ON COLUMN "USERS"."NETLIFY_TOKEN" IS '<ol><li>Sign up for free <a href="https://app.netlify.com/user/applications/personal" target="a_blank">Netlify</a> account.</li><li>Get Personal Access token - <a href="https://app.netlify.com/user/applications/personal" target="a_blank">Get Token</a></li></ol>';
+   COMMENT ON COLUMN "USERS"."NETLIFY_ACCOUNT_SLUG" IS 'Logged on to your Netlify account this is listed under Team Settings. Needed in order to report current bandwidth usage.';
+   COMMENT ON COLUMN "USERS"."IPDATA_API_KEY" IS 'API key of IPDATA account used for the rudimentary IP to Location service';
+   COMMENT ON COLUMN "USERS"."GOOGLE_API_KEY" IS 'Google API key used for accessing Web Fonts';
    COMMENT ON TABLE "USERS"  IS 'Log in accounts created through Social Sign-in (Facebook, Google) enabling secure access to user-created content.';
 CREATE UNIQUE INDEX "HOSTING_USER" ON "USERS" ("HOSTING_USER_IND") 
   ;
