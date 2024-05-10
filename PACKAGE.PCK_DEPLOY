@@ -280,14 +280,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         /*
         ** 1. Remove any empty <h1> element.
-        ** 2. Append to parent page links to blog entries 
+        ** 2. Append to parent page links to individual blog/media entries 
         */
         FOR i IN 1..l_labels.COUNT LOOP
            l_labels(i).body_html:=REPLACE(l_labels(i).body_html ,'<h1>&nbsp;</h1>',null);
             IF (l_labels(i).collection_type='BLOG') THEN
                 l_labels(i).body_html:=l_labels(i).body_html || pck_core.buildBlogList(pWebsiteId, l_labels(i).parent_article_id);
-            --ELSIF (l_labels(i).collection_type='MEDIA') THEN
-             --   l_labels(i).body_html:=l_labels(i).body_html || pck_core.buildMediaList(pWebsiteId, l_labels(i).parent_article_id);
+            ELSIF (l_labels(i).collection_type='MEDIA') THEN
+                l_labels(i).body_html:=l_labels(i).body_html || pck_core.buildMediaList(pWebsiteId, l_labels(i).parent_article_id);
             END IF;
         END LOOP;
 
