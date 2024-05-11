@@ -19,7 +19,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks IN BOOLEAN DEFAULT TRUE) RETURN CLOB;
     --
-    FUNCTION buildMediaGallery(pArticleId IN website_article.article_id%type) RETURN CLOB;
+    FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pIncludeFontLink IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2;
     --
     FUNCTION buildMediaList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks  IN BOOLEAN DEFAULT TRUE) RETURN CLOB;
     --
@@ -242,6 +242,75 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_rest_url);
     END;
 
+    /* 
+    ** Build page CSS
+    */ 
+    FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pIncludeFontLink IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2 IS
+        l_fluid_types fluid_type_t;
+        l_deploy_css LONG;
+    BEGIN
+        FOR C IN (SELECT font, max_width, color_text, color_background, color_primary, css,
+                         min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale
+                    FROM website
+                   WHERE id=pWebsiteId)
+        LOOP
+            IF (C.css IS NOT NULL) THEN
+                l_deploy_css:=C.css;
+                CONTINUE;
+            END IF;
+
+            l_fluid_types:=getFluidTypes(C.min_font_size, C.min_width_px, C.min_scale, C.max_font_size, C.max_width_px, C.max_scale);
+            
+            l_deploy_css:=
+            ':root {' || chr(10) || 
+            chr(9) || '/* Custom properties for Fluid typography and spacing */' || chr(10);
+
+            FOR i IN 1..l_fluid_types.COUNT LOOP
+                l_deploy_css:=l_deploy_css || chr(9) || l_fluid_types(i).property || ': ' || l_fluid_types(i).value || ';' || chr(10);
+            END LOOP;
+            l_deploy_css:=l_deploy_css || chr(10) ||
+            chr(9) || '--font-family: "' || C.font || '";' || chr(10) ||
+            chr(9) || '--max-width: ' || C.max_width || ';' || chr(10) ||
+            chr(9) || '--color-text: ' || C.color_text || ';' || chr(10) ||
+            chr(9) || '--color-background: ' || C.color_background || ';' || chr(10) ||
+            chr(9) || '--color-primary: ' || C.color_primary || ';' || chr(10) ||
+            '}';
+
+            IF (pIncludeFontLink) THEN
+                l_deploy_css:=l_deploy_css ||chr(10) ||
+                '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(C.font,' ','+') || '&display=swap">' || chr(10);
+            END IF;
+
+            FOR C1 IN (SELECT apex_util.blob_to_clob(file_content) css
+                         FROM apex_application_static_files 
+                        WHERE application_id=pApplicationId
+                          AND file_name='deploy.css')  /* Can't use min file because stupid Apex editor removes nested css */
+            LOOP
+                l_deploy_css:=l_deploy_css || chr(10) || C1.css;
+                IF (pIncludeFontLink) THEN
+                    l_deploy_css:=l_deploy_css ||chr(10) ||
+'pre:has(.language-html) {
+  position: relative;
+  &::before {
+    background: #000;
+    color: #fff;
+    content: "HTML code block not shown in Codepen";
+    position: absolute;
+    padding:0.5em;
+    left: 1em;
+    top: 0;
+  }
+}
+code.language-html {
+  display:none;
+}';
+                END IF;
+            END LOOP;
+        END LOOP;
+
+        RETURN (l_deploy_css);
+    END;
+
     /*
      **  Build Contact Form
      */
@@ -416,7 +485,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             l_href:='#';
         END IF;
 
-        l_html:=l_html || '<ol class="media">';
+        l_html:=l_html || '<ol class="gallery-list">';
         FOR C IN (SELECT art.title, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
                     FROM article art, asset ass
                    WHERE art.parent_id=pArticleId
@@ -427,30 +496,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 l_href:='/' || l_path || '/' || apex_string_util.get_slug(C.title);
             END IF;
             l_html:=l_html ||
-            '<li class="card">
+            '<li>
                 <a href="' || l_href || '"><img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
-            </li>';
-        END LOOP;
-        l_html:=l_html || '</ol>';
-
-        RETURN (l_html);
-    END;
-
-    /*
-    ** Build Gallery of all media assets for a pArticleId
-    */
-    FUNCTION buildMediaGallery(pArticleId IN website_article.article_id%type) RETURN CLOB IS
-        l_html CLOB;
-    BEGIN
-        l_html:='<ol class="media">';
-        FOR C IN (SELECT ass.id, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
-                    FROM asset ass
-                   WHERE ass.article_id=pArticleId
-                   ORDER BY ass.display_order)
-        LOOP
-            l_html:=l_html ||
-            '<li class="card" data-id="' || C.id || '">
-                <img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
             </li>';
         END LOOP;
         l_html:=l_html || '</ol>';
