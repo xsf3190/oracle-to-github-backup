@@ -25,10 +25,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       galleryFullCounter = galleryFull.querySelector("span.counter"),
       galleryFullClose = galleryFull.querySelector("button.close-fullscreen"),
       galleryFullPrev = galleryFull.querySelector("button.prev"),
-      galleryFullNext = galleryFull.querySelector("button.next"),
-      galleryFullCloseFieldset = galleryFull.querySelector("button.close-fieldset"),
-      galleryFullLegend = galleryFull.querySelector("legend > span"),
-      galleryFullDimensions = galleryFull.querySelectorAll("fieldset button.dimensions");
+      galleryFullNext = galleryFull.querySelector("button.next");
 
 /*
 **  TRY TO PREVENT "LEAVE SITE - SAVE CHANGES" MESSAGE ON AUTOMATIC LOGOUT
@@ -1488,10 +1485,7 @@ const upload_codepen = async () => {
     
     const file = await fileHandle.getFile();
 
-    execProcess( "content/"+gWebsiteId+","+gArticleId,"POST",file).then( (data) => {
-        if (data.html_updated) {
-            editor.setData(data.html_updated);
-        }
+    execProcess( "codepen/"+gWebsiteId+","+gArticleId,"POST",file).then( (data) => {
         popupOpen("CODEPEN UPLOAD COMPLETED",data.message);
     });
 }
