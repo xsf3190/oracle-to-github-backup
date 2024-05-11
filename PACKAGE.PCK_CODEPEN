@@ -1,0 +1,203 @@
+CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
+    --
+    PROCEDURE getCodepen(pArticleId IN article.id%type);
+    --
+    PROCEDURE uploadCodepen(pId IN VARCHAR2, pZipFile IN BLOB);
+    --
+end;
+/
+CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
+/*
+    ** Build resources to open requested article in Codepen
+    */
+    PROCEDURE getCodepen(pArticleId IN article.id%type) IS
+        l_website_id website.id%type;
+        l_nav_labels LONG;
+        l_email users.email%type;
+        l_domain_name website.domain_name%type;
+        l_contact_form website_article.contact_form%type;
+        l_collection_type website_article.collection_type%type;
+        l_is_blog BOOLEAN:=FALSE;
+        l_is_media BOOLEAN:=FALSE;
+        l_thumbnails CLOB;
+        l_html CLOB;
+        l_css CLOB;
+        l_javascript CLOB;
+        l_fluid_types pck_core.fluid_type_t;
+        l_fluid_css LONG;
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        /* Get id of website owning the article because we need to build navigation labels as would appear in deployed site */
+
+        FOR C IN (SELECT website_id FROM website_article WHERE article_id=pArticleId AND user_id=l_session_data.user_id) LOOP
+            l_website_id:=C.website_id;
+        END LOOP;
+
+        IF (l_website_id IS NULL) THEN
+            /* Must be a sub-page article - so get website id from its parent article */
+            FOR C IN (SELECT wa.website_id, wa.collection_type
+                        FROM website_article wa, article a 
+                       WHERE a.id=pArticleId
+                         AND wa.article_id=a.parent_id
+                         AND author_user_id=l_session_data.user_id ) LOOP
+                l_website_id:=C.website_id;
+                l_is_blog:=C.collection_type='BLOG';
+                l_is_media:=C.collection_type='MEDIA';
+            END LOOP;
+        END IF;
+
+        FOR C IN (
+            SELECT wa.navigation_label, wa.article_id, COUNT(*) OVER () nb_pages
+              FROM website w, website_article wa
+             WHERE w.id=l_website_id
+               AND w.user_id=l_session_data.user_id
+               AND wa.website_id=w.id
+             ORDER BY wa.display_order) 
+        LOOP
+            /* Build navigation labels for multi-page websites */
+            IF (C.nb_pages>1) THEN
+                l_nav_labels:=l_nav_labels || 
+                '<a href="#" class="nav-label' || CASE WHEN C.article_id=pArticleId THEN ' selected' END  || '" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
+            END IF;
+        END LOOP;
+
+        /* Build page resources */
+        IF (l_is_blog OR l_is_media) THEN
+            SELECT w.domain_name, a.body_html, 'NO', null
+              INTO l_domain_name, l_html, l_contact_form, l_collection_type
+              FROM website w, article a
+             WHERE w.id=l_website_id
+               AND a.id=pArticleId;
+        ELSE
+            SELECT w.domain_name, a.body_html, wa.contact_form, wa.collection_type
+              INTO l_domain_name, l_html, l_contact_form, l_collection_type
+              FROM website w, website_article wa, article a
+             WHERE w.id=l_website_id
+               AND wa.website_id=w.id
+               AND wa.article_id=a.id
+               AND a.id=pArticleId;
+        END IF;
+
+        IF (l_nav_labels IS NOT NULL) THEN
+            /* Nav labels are sticky by default but blog cards are position:absolue so change to static */
+            l_nav_labels:='<nav aria-label="Main Navigation"' || CASE WHEN l_collection_type='BLOG' THEN ' style="position:static"' END || '>' || l_nav_labels || '</nav>';
+        END IF;
+
+        /* build html */
+        l_html:=l_nav_labels || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10);
+        
+        /* Build index of Blog entries */
+        IF (l_collection_type='BLOG') THEN
+            l_html:=l_html || pck_core.buildBlogList(l_website_id, pArticleId, pIncludeLinks => FALSE);
+        ELSIF (l_collection_type='MEDIA') THEN
+            l_html:=l_html || pck_core.buildMediaList(l_website_id, pArticleId, pIncludeLinks => FALSE);
+        ELSIF (l_is_media) THEN
+            pck_media.getThumbnails(pArticleId,pDeploy=>TRUE,pHtml=>l_thumbnails);
+            l_html:=l_html || 
+            '<ol class="gallery-list">' || l_thumbnails || '</ol>
+            <div class="gallery-overlay">
+                <img src="">
+                <span class="counter"></span>
+                <button type="button" class="close-fullscreen">&times;</button>
+                <button type="button" class="prev">&lt;</button>
+                <button type="button" class="next">&gt;</button>
+            </div>';
+        END IF;
+
+        IF (l_contact_form='YES') THEN
+            SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
+            l_html:=l_html || pck_core.buildContactForm(l_email);
+        END IF;
+
+        /* build javascript (non-minimised) */
+        FOR C IN (SELECT file_name, apex_util.blob_to_clob(file_content) file_content
+                    FROM apex_application_static_files
+                   WHERE application_id=l_session_data.app_id
+                     AND file_name LIKE 'deploy%.js' 
+                     AND INSTR(file_name,'.min.')=0 ) 
+        LOOP
+            IF (C.file_name='deploy_gallery.js' AND NOT l_is_media) THEN
+                CONTINUE;
+            END IF;
+            l_javascript:=l_javascript || C.file_content || chr(10);
+        END LOOP;
+        l_javascript:=
+        '/*' || chr(10) || 
+        '** Page identifiers used to return metrics to the CMS' || chr(10) || 
+        '*/' || chr(10) ||
+        'gMetricWebsiteId = "' || l_website_id || '";' || chr(10) || 
+        'gMetricArticleId = "' || pArticleId || '";' || chr(10) || 
+        'gMetricVisitUrl = "' || pck_core.getRestUrl() || 'page-visit";' || chr(10) ||
+        l_javascript || chr(10);
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE); 
+        apex_json.write('domain_name', l_domain_name);
+        apex_json.write('html', l_html);
+        apex_json.write('css', pck_core.buildCssRoot(l_website_id, l_session_data.app_id, TRUE));
+        apex_json.write('js', l_javascript);
+        apex_json.close_object;
+
+        EXCEPTION WHEN OTHERS THEN pck_core.log_error;
+    END;
+
+    /*
+     **  Update website CSS from the contents of an exported Codepen zip file
+     */        
+    PROCEDURE uploadCodepen(pId IN VARCHAR2, pZipFile IN BLOB) IS
+        l_website_id website.id%type;
+        l_article_id article.id%type;
+        l_domain_name website.domain_name%type;
+        l_css CLOB;
+        l_zip BLOB:=pZipFile;
+        l_files apex_zip.t_files;
+        l_file BLOB;
+        l_clob CLOB;
+        l_message VARCHAR2(500);
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData();
+
+        /* pId contains website_id,article_id */
+        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
+        l_article_id:=SUBSTR(pId,INSTR(pId,',')+1);
+
+        /* Get existing clobs */
+        SELECT REPLACE(w.domain_name,'.','-'), w.css
+          INTO l_domain_name, l_css
+          FROM website w
+         WHERE w.id=l_website_id
+           AND w.user_id=l_session_data.user_id;
+
+        l_files := apex_zip.get_files(p_zipped_blob => l_zip);
+        FOR i in 1 .. l_files.COUNT LOOP
+            IF (l_files(i)=l_domain_name||'/src/style.css') THEN
+                l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name => l_files(i)));
+                IF (dbms_lob.compare(l_css, l_clob)=0) THEN
+                    l_message:=l_message || 'CSS - no change';
+                ELSE
+                    UPDATE website SET css=l_clob, updated_date=current_timestamp WHERE id=l_website_id;
+                    l_message:=l_message || 'CSS - updated successfully';
+                END IF;
+            END IF;
+        END LOOP;
+
+        /* Means no CSS file included in zip - set website.css to NULL*/
+        IF (l_message IS NULL) THEN
+            UPDATE website SET css=NULL, updated_date=current_timestamp WHERE id=l_website_id;
+            l_message:=l_message || 'CSS - reset successfully';
+        END IF; 
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE);
+        apex_json.write('message', l_message);
+        apex_json.close_object;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+    END;    
+end;
+/
