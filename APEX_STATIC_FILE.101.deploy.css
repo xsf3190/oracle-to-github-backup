@@ -224,7 +224,7 @@ pre:has(.language-javascript) {
         }
     }
     & img {
-        inline-size: 98%;
+        inline-size: 100%;
         block-size: 25vh;
         margin-inline: auto;
         object-fit: cover;
@@ -407,7 +407,7 @@ svg.icon {
     display: table;
     margin-inline: auto;
     & img {
-        max-width: 100%;
+        max-inline-size: 100%;
         inline-size: 100%;
         height: auto;
     }
@@ -422,10 +422,12 @@ svg.icon {
 .image-style-align-left {
     float: left;
     margin-inline-end: 0.5em;
+    object-fit: cover;
 }
  .image-style-align-right {
     float: right;
     margin-inline-start: 0.5em; 
+    object-fit: cover;
 }
 
 /* CONTACT FORM STYLES */
