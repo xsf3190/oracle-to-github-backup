@@ -195,6 +195,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_number     NUMBER;
         l_html       CLOB;
     BEGIN
+    pck_core.log(pSql);
         dbms_sql.parse(l_cur,pSql,dbms_sql.native);
 
         dbms_sql.bind_variable(l_cur,':B1',pBindVar);
@@ -373,46 +374,65 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_sql LONG;
         l_session_data pck_core.session_data_rt;
         n PLS_INTEGER;
+        l_offset PLS_INTEGER:=0;
+        l_rows CONSTANT PLS_INTEGER:=10;
+        l_time_zone varchar2(20):='Europe/London';
+        l_id_parts apex_t_varchar2;
     BEGIN
-        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
-        l_netlify_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
+        IF (NOT pEmail) THEN
+            l_session_data:=pck_core.getSessionData();
+            l_time_zone:=l_session_data.timezone;
+        END IF;
+
+        l_id_parts:=apex_string.split(pId,',');
+        FOR i IN l_id_parts.FIRST..l_id_parts.LAST LOOP
+            CASE i
+                WHEN 1 THEN l_website_id:=l_id_parts(i);
+                WHEN 2 THEN l_netlify_site_id:=l_id_parts(i);
+                WHEN 3 THEN l_offset:=l_id_parts(i);
+            END CASE;
+        END LOOP;
+        
+        --l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
+        --l_netlify_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
 
         SELECT CASE WHEN netlify_site_id=l_netlify_site_id THEN REPLACE(domain_name,'.','-') || '.netlify.app' ELSE domain_name END
           INTO l_url
           FROM website
          WHERE id=l_website_id;
 
-        pck_visits.uploadPageHits(l_website_id);
+        IF (l_offset=0) THEN
+            pck_visits.uploadPageHits(l_website_id);
 
-        FOR C IN (
-            SELECT COUNT(*) nb_hit, COUNT(DISTINCT ip_address) nb_distinct_ip, MIN(visit_date) first_hit, MAX(visit_date) last_hit
-              FROM page_hit
-             WHERE website_id=l_website_id
-               AND url=l_url
-        ) LOOP
-            l_content:=
-            '<p><strong>' || C.nb_hit || '</strong> visits from <strong>' || 
-                             C.nb_distinct_ip || '</strong> distinct IP since <strong>' || 
-                             TO_CHAR(C.first_hit,'dd Mon yyyy') || 
-            '</strong></p>';
-        END LOOP;
+            FOR C IN (
+                SELECT COUNT(*) nb_hit, COUNT(DISTINCT ip_address) nb_distinct_ip, MIN(visit_date) first_hit, MAX(visit_date) last_hit
+                  FROM page_hit
+                 WHERE website_id=l_website_id
+                   AND url=l_url
+            ) LOOP
+                l_content:=
+                '<p>Received <strong>' || C.nb_hit || '</strong> visits from <strong>' || 
+                C.nb_distinct_ip || '</strong> distinct IP between <strong>' || 
+                TO_CHAR(C.first_hit,'dd Mon yyyy') || '</strong> and <strong>' || TO_CHAR(C.last_hit,'dd Mon yyyy') || '</strong></p>';
+            END LOOP;
 
-        l_content:=l_content ||
-        '<table role="presentation">
-            <thead>
-                <tr>
-                    <th rowspan="2">Website Visit</th>
-                    <th>Location</th>
-                    <th rowspan="2">Viewing time</th>
-                    <th>Browser</th>
-                    <th rowspan="2">Performance</th>
-                </tr>
-                <tr>
-                    <th>Referrer</th>
-                    <th>Connection</th>
-                </tr>
-            </thead>
-            <tbody>';
+            l_content:=l_content ||
+            '<table role="presentation">
+                <thead>
+                    <tr>
+                        <th rowspan="2">Website Visit</th>
+                        <th>Location</th>
+                        <th rowspan="2">Viewing time</th>
+                        <th>Browser</th>
+                        <th rowspan="2">Performance</th>
+                    </tr>
+                    <tr>
+                        <th>Referrer</th>
+                        <th>Connection</th>
+                    </tr>
+                </thead>
+                <tbody>';
+        END IF;
 
         FOR C IN (
             WITH website_hits as 
@@ -426,18 +446,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                    AND p.website_id=w.id
                    AND p.url=l_url
                  GROUP BY p.website_id, p.ip_address, p.visit_date
+                 ORDER BY p.visit_date DESC
+                 OFFSET l_offset ROWS
+                 FETCH FIRST l_rows ROWS ONLY
             )
             SELECT wh.visit_date, wh.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
                     wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating
               FROM website_hits wh, ip_lookup ip
              WHERE ip.ip=wh.ip_address
-             ORDER BY wh.visit_date DESC
         ) 
         LOOP
             l_rating:=cwvRatingOverall(C.lcp_rating, C.cls_rating, C.inp_rating);
             l_content:=l_content ||
                 '<tr>
-                    <td rowspan="2">' || TO_CHAR(C.visit_date, 'dd Mon yyyy fmhh24:fmmi')  || '</td>
+                    <td rowspan="2">' || TO_CHAR(C.visit_date at time zone l_time_zone, 'dd Mon yyyy fmhh24:fmmi')  || '</td>
                     <td>' || LTRIM(RTRIM(C.location,','),',') || '</td>
                     <td rowspan="2">' || CASE WHEN C.duration_visible IS NOT NULL THEN TO_CHAR(C.duration_visible) || ' seconds' END || '</td>
                     <td>' || C.browser || '</td>
@@ -448,7 +470,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     <td>' || C.connection || CASE WHEN C.mobile='true' THEN ' (Mob)' END || '</td>
                 </tr>';
         END LOOP;
-        l_content:=l_content || '</tbody></table>';
+        IF (l_offset=0) THEN
+            l_content:=l_content || '</tbody></table>';
+            IF (NOT pEmail) THEN
+                l_content:=l_content || '<button type="button" class="more-visits" data-offset="' || l_offset || '" data-rows="' || l_rows || '">Show More</button>';
+            END IF;
+        ELSE
+            apex_json.open_object; 
+            apex_json.write('success', TRUE);
+            apex_json.write('visits', l_content);
+            apex_json.close_object;
+            RETURN;
+        END IF;
 
         /* 
         ** Create page analysis report if multi-page website
@@ -463,13 +496,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             l_sql:=RTRIM(l_sql,',') ||
             'FROM 
                 (
-                SELECT ph.visit_date, ph.ip_address, wa.navigation_label, SUM(ph.duration_visible) duration_visible
-                  FROM website w, page_hit ph, website_article wa
-                 WHERE w.id=:B1
-                   AND ph.website_id=w.id
-                   AND ph.url=CASE WHEN w.netlify_site_id_custom IS NULL THEN REPLACE(w.domain_name,''.'',''-'') || ''.netlify.app'' ELSE w.domain_name END
-                   AND ph.article_id=wa.article_id
-                 GROUP BY ph.visit_date, ph.ip_address, wa.navigation_label
+                WITH articles AS
+                    (
+                    SELECT navigation_label, article_id 
+                    FROM website_article WHERE website_id=:B1
+                    UNION ALL
+                    SELECT wa.navigation_label, a.id 
+                    FROM website_article wa, article a
+                    WHERE a.parent_id=wa.article_id
+                    AND wa.website_id=:B1
+                    )
+                SELECT ph.visit_date, ph.ip_address, a.navigation_label, SUM(ph.duration_visible) duration_visible
+                  FROM articles a, page_hit ph
+                 WHERE ph.website_id=:B1
+                   AND ph.url=''' || l_url || '''
+                   AND ph.article_id=a.article_id
+                 GROUP BY ph.visit_date, ph.ip_address, a.navigation_label
                 )
              GROUP  BY visit_date
              ORDER BY visit_date DESC';
