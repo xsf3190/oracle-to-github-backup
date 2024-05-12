@@ -475,6 +475,8 @@ const clickHandler = (e) => {
         edit_website(e); 
     } else if (e.target.matches(".visits")) {
         get_visits(e); 
+    } else if (e.target.matches(".more-visits")) {
+        more_visits(e); 
     } else if (e.target.matches(".performance")) {
         get_performance(e); 
     } else if (e.target.matches(".clear-input")) {
@@ -1233,6 +1235,19 @@ const get_visits = (e) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
+    });
+}
+
+/* 
+ ** GET MORE WEBSIITE VISITS
+ */
+const more_visits = (e) => {
+    const next = Number(e.target.dataset.offset)+Number(e.target.dataset.rows);
+    const tbody = e.target.previousElementSibling.querySelector("tbody");
+
+    execProcess( "visits/"+gWebsiteId+","+gNetlifySiteId+","+next,"GET").then( (data) => {
+        tbody.insertAdjacentHTML('afterend',data.visits);
+        e.target.dataset.offset=next;
     });
 }
 
