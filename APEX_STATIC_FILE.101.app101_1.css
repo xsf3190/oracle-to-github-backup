@@ -19,7 +19,7 @@ p {
     margin: 0;
 }
 
-li:has(>svg) {
+li:has(>svg), li:has(>a) {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -37,7 +37,6 @@ a.button {
   border-radius: 8px;
   box-shadow: 3px 3px 5px rgba(0, 0, 0, 0.18);
   padding: 0.25em 0.5em;
-  inline-size: 90%;
   min-height: 44px;
 }
 
@@ -47,25 +46,12 @@ a > svg {
     margin-inline-end: 1ch;
 }
 
-.login {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1ch;
-}
-
-.login > button {
-    appearance: none;
-    border: none;
-    font-style: italic;
-}
-
-.login  a.button:hover, .login button:hover {
+.login  a.button:hover {
     text-decoration: underline;
     text-decoration-thickness: 0.1em;
     text-underline-position: under;
 }
+
 
 ul.container {
     block-size: 100dvh;
