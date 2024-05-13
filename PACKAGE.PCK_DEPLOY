@@ -601,20 +601,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json_clob CLOB;
         l_json JSON_OBJECT_T;
         l_action JSON_OBJECT_T;
-        l_session_data pck_core.session_data_rt;
     BEGIN
-        l_session_data:=pck_core.getSessionData();
 
-        FOR C IN (SELECT terraform_token, replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(terraform_public_key))),chr(13)||chr(10),null) terraform_public_key
-                    FROM users
-                   WHERE id=l_session_data.user_id) 
+
+        FOR C IN (SELECT u.id, terraform_token, replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(terraform_public_key))),chr(13)||chr(10),null) terraform_public_key
+                    FROM apex_workspace_apex_users w, users u 
+                   WHERE w.email=u.email
+                     AND w.is_admin='Yes'
+                   FETCH FIRST ROW ONLY) 
         LOOP
             /* trigger the deployment using Githib action */          
             l_json:=new JSON_OBJECT_T;
             l_json.put('event_type', 'trigger_build_infra');
 
             l_action:=new JSON_OBJECT_T;
-            l_action.put('from_email', 'funnyface@markrussellbrown.com');
+            l_action.put('from_email', 'contact.form@adfreesites.com');
             l_action.put('public_key', C.terraform_public_key);
             l_action.put('terraform_token', C.terraform_token);
             l_json.put('client_payload', l_action);
@@ -623,11 +624,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             /* nb; Github API 'dispatches' endpoint does not send a response */
             l_json_clob:=l_json.stringify;
-            pck_api.callGithubAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json_clob, pData=>l_clob);
+            pck_api.callGithubAPI(pUserId=>C.id, pEndpoint=>'dispatches', pMethod=>'POST', pBody=>l_json_clob, pData=>l_clob);
 
-            apex_json.open_object; 
-            apex_json.write('success', TRUE);
-            apex_json.close_object;
         END LOOP;
 
         EXCEPTION
