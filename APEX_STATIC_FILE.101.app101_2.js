@@ -1243,11 +1243,17 @@ const get_visits = (e) => {
  */
 const more_visits = (e) => {
     const next = Number(e.target.dataset.offset)+Number(e.target.dataset.rows);
-    const tbody = e.target.previousElementSibling.querySelector("tbody");
+    const total =  e.target.dataset.total;
+    const tbody = e.target.closest("p").previousElementSibling.querySelector("tbody");
+    const span = e.target.previousElementSibling;
 
     execProcess( "visits/"+gWebsiteId+","+gNetlifySiteId+","+next,"GET").then( (data) => {
-        tbody.insertAdjacentHTML('afterend',data.visits);
+        tbody.insertAdjacentHTML('beforeend',data.visits);
         e.target.dataset.offset=next;
+        span.textContent = data.progress;
+        if (data.progress.includes(total)) {
+            e.target.disabled=true;
+        }     
     });
 }
 
