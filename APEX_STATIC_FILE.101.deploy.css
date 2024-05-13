@@ -166,7 +166,7 @@ pre:has(.language-javascript) {
 */
 .blog {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(22rem,100%), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(15rem,100%), 1fr));
     gap: var(--space-m);
     & :nth-child(1) {
         grid-column: span 2;
@@ -225,8 +225,7 @@ pre:has(.language-javascript) {
     }
     & img {
         inline-size: 100%;
-        block-size: 25vh;
-        margin-inline: auto;
+        min-block-size: 5rem;
         object-fit: cover;
         border-top-left-radius: var(--border-radius);
         border-top-right-radius: var(--border-radius);
@@ -316,6 +315,8 @@ pre:has(.language-javascript) {
         color: white;
         outline: 0;
         border: 0;
+        min-inline-size: 48px;
+        min-block-size: 48px;
     }
     & .close-fullscreen {
         place-self: start end;
