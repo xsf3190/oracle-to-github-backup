@@ -517,6 +517,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             DBMS_CLOUD.DELETE_FILE(directory_name=>'DATA_PUMP_DIR',file_name=>C.object_name);
         END LOOP;
 
+        /* Truncate DBTOOLS$EXECUTION_HISTORY */
+        EXECUTE IMMEDIATE 'TRUNCATE TABLE DBTOOLS$EXECUTION_HISTORY';
+
         datapump_backup(pIncludeRows => '0'); -- metadata only export
         datapump_backup(pIncludeRows => '1', pPassword => p_password); -- encrypt exports that include table rows
 
