@@ -10,6 +10,7 @@ let gWebsiteId = 0,
 const apex_app_id = document.querySelector("#pFlowId").value,
       apex_page_id = document.querySelector("#pFlowStepId").value,
       apex_session = document.querySelector("#pInstance").value,
+      nb_websites = document.querySelector("#nb-websites").value,
       wrapper = document.querySelector(".wrapper"),
       logDialog = document.querySelector("dialog.log"),
       logContent = logDialog.querySelector(".content"),
@@ -192,8 +193,18 @@ const edit_website = (e) => {
     gNetlifySiteId = e.target.dataset.site_id;
 
     const env = e.target.querySelector("span").textContent;
+    const domain = e.target.dataset.domain;
+    const selected = websiteNav.querySelector(".selected");
 
-    websiteNav.querySelector(".selected").textContent = e.target.dataset.domain;
+    let url = "https://" + domain;
+    
+    if (env==="TEST") {
+        url = url.replace(".","-")  +  ".netlify.app";
+    }
+
+    selected.textContent = domain;
+    selected.href = url;
+
     websiteNav.querySelector(".deploy-website > span").textContent = env;
     websiteNav.querySelector(".visits > span").textContent = env;
     websiteNav.querySelector(".performance > span").textContent = env;
@@ -333,6 +344,11 @@ window.addEventListener("DOMContentLoaded", () => {
     
     gWebsiteId = websiteNav.querySelector("div").dataset.id;
     gNetlifySiteId = websiteNav.querySelector(".deploy-website").dataset.site_id;
+
+    if (nb_websites==="0") {
+        console.log("NEW USER");
+        pageNav.querySelector(".nav-label").click();
+    }
     /*
     if (checkPerformance()) {
         const observer = new PerformanceObserver(perfObserver);
