@@ -2,7 +2,7 @@
     box-sizing: border-box;
 }
 
-body,h1,h2,h3,h4,p,figure,blockquote,dl,dd,ol,ul {
+body,h1,h2,h3,h4,figure,blockquote,dl,dd,ol,ul {
   margin: 0;
   padding: 0;
 }
@@ -111,6 +111,15 @@ blockquote {
     margin-inline: var(--space-m);
     border-inline-start: solid var(--space-3xs) #ccc;
     font-style: italic;
+}
+
+/*
+** DETAILS AND SUMMARY
+*/
+details > summary {
+    cursor: pointer;
+    font-weight: 600;
+    margin-block-end: 1em;
 }
 
 /*
