@@ -641,7 +641,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                             );                            
                         IF (n<>0) THEN
                             l_clob:=l_clob || chr(10) || LTRIM(LTRIM(dbms_metadata.get_dependent_ddl('INDEX',l_backup(i).object_name),chr(13)||chr(10)));
-                        END IF;                        
+                        END IF;
+                        FOR C IN (SELECT dbms_metadata.get_ddl('CONSTRAINT', constraint_name, owner) ddl
+                                    FROM user_constraints
+                                   WHERE table_name=l_backup(i).object_name
+                                     AND constraint_type='C')
+                        LOOP
+                            l_clob:=l_clob || chr(10) || C.ddl;
+                        END LOOP;  
                     END IF; 
             END CASE;
 
