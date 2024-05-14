@@ -175,6 +175,7 @@ if (form) {
                 email: formData.get("email"),
                 message: formData.get("message"),
                 contactEmail: formData.get("contactEmail"),
+                url: formData.get("url"),
                 signatureContactEmail: formData.get("signatureContactEmail")
             }),
         }).then((response) => {
