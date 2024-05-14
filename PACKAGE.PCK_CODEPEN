@@ -108,7 +108,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         IF (l_contact_form='YES') THEN
             SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
-            l_html:=l_html || pck_core.buildContactForm(l_email);
+            l_html:=l_html || pck_core.buildContactForm(l_email,'xx');
         END IF;
 
         /* build javascript (non-minimised) */
