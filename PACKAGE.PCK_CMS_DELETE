@@ -252,14 +252,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
 
     /*
      **  Delete User (if no websites)
+     **  Delete website if it's starter website
      */  
     PROCEDURE deleteUser(pUserId IN website.user_id%type) IS
         n PLS_INTEGER;
+        l_website_id website.id%type;
+        l_domain_name website.domain_name%type;
+        l_email users.email%type;
     BEGIN
-        SELECT COUNT(*) INTO n FROM website WHERE user_id=pUserId;
+        SELECT COUNT(*), MAX(w.id), MAX(w.domain_name), MAX(SUBSTR(u.email,1,INSTR(u.email,'@')-1))
+          INTO n, l_website_id, l_domain_name, l_email
+          FROM website w, users u 
+         WHERE u.id=pUserId
+           AND w.user_id=u.id;
 
         IF (n=0) THEN
             DELETE users WHERE id=pUserId;
+        ELSIF (n=1 AND l_domain_name=l_email) THEN
+            deleteWebsite(pUserId,l_website_id);
+            n:=0;
         END IF;
 
         apex_json.open_object;
