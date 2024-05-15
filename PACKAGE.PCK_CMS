@@ -44,9 +44,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE getAccountUsage IS
         l_content CLOB;
         l_clob CLOB;
+        l_netlify_account VARCHAR2(7); 
+        l_cloudinary_account VARCHAR2(7); 
+        l_user_id users.id%type;
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
+
+        SELECT CASE WHEN netlify_token IS NULL THEN 'SHARED' ELSE 'PRIVATE' END, CASE WHEN cld_api_key IS NULL THEN 'SHARED' ELSE 'PRIVATE' END 
+          INTO l_netlify_account, l_cloudinary_account
+          FROM users
+         WHERE id=l_session_data.user_id;
 
         l_content:=
         '<table role="presentation">
@@ -54,6 +62,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             <thead>
                 <tr>
                     <th></th>
+                    <th>Account</th>
                     <th>Usage</th>
                     <th>Capacity</th>
                     <th>% Used</th>
@@ -61,45 +70,61 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             </thead>
             <tbody>';
 
+        /* Get Netlify usage */
         pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'accounts/#SLUG#/bandwidth', pMethod=>'GET', pData=>l_clob);
         FOR C IN (SELECT used, included FROM JSON_TABLE(l_clob FORMAT JSON, '$'  COLUMNS (used, included)) ) LOOP
             l_content:=l_content || 
             '<tr>
                 <td><strong>Netlify bandwidth</strong></td>
+                <td>' || l_netlify_account || '</td>
                 <td>' || apex_string_util.to_display_filesize(C.used) || '</td>
                 <td>' || apex_string_util.to_display_filesize(C.included) || '</td> 
                 <td>' || TO_CHAR(ROUND(C.used*100/C.included,2),'90.00') || '%</td>
             </tr>';
         END LOOP;
 
-
+        /* Get Cloudinary usage */
+        IF (l_cloudinary_account='SHARED') THEN
+            SELECT u.id
+              INTO l_user_id
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        ELSE
+            l_user_id:=l_session_data.user_id;
+        END IF;
 
         FOR C IN (SELECT usage_date,transformations_usage,transformations_credit_usage,bandwidth_usage,bandwidth_credit_usage,storage_usage,storage_credit_usage,objects_usage,credits_usage,credits_limit,used_percent
                     FROM usage
-                   WHERE user_id=l_session_data.user_id
-                     AND usage_date=(SELECT MAX(usage_date) FROM usage WHERE user_id=l_session_data.user_id) )
+                   WHERE user_id=l_user_id
+                     AND usage_date=(SELECT MAX(usage_date) FROM usage WHERE user_id=l_user_id) )
         LOOP
             l_content:=l_content || 
             '<tr>
                 <td>Cloudinary Transformations - '|| C.transformations_usage || '</td>
+                <td></td>
                 <td>' || TO_CHAR(C.transformations_credit_usage,'0.00') || ' credits</td>
                 <td></td> 
                 <td></td>
             </tr>
             <tr>
                 <td>Cloudinary Bandwidth - ' || apex_string_util.to_display_filesize(C.bandwidth_usage) || '</td>
+                <td></td>
                 <td>' || TO_CHAR(C.bandwidth_credit_usage,'0.00') || ' credits</td>
                 <td></td> 
                 <td></td>
             </tr>
             <tr>
                 <td>Cloudinary Storage - ' || apex_string_util.to_display_filesize(C.storage_usage) || '</td>
+                <td></td>
                 <td>' || TO_CHAR(C.storage_credit_usage,'0.00') || ' credits</td>
                 <td></td> 
                 <td></td>
             </tr>
             <tr>
                 <td><strong>Cloudinary Total Credits</strong></td>
+                <td>' || l_cloudinary_account || '</td>
                 <td>' || TO_CHAR(C.credits_usage,'90.00') || ' credits</td>
                 <td>' || C.credits_limit || '</td> 
                 <td>' || C.used_percent || '%</td>
@@ -110,6 +135,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             l_content:=l_content || 
             '<tr>
                 <td><strong>Oracle storage</strong></td>
+                <td>SHARED</td>
                 <td>' || apex_string_util.to_display_filesize(C.total_used) || '</td>
                 <td>' || apex_string_util.to_display_filesize(C.max_size) || '</td> 
                 <td>' || TO_CHAR(ROUND(C.total_used*100/C.max_size,2),'90.00') || '%</td>
