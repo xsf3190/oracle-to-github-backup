@@ -394,10 +394,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         /*
         ** Update deployed_date for article belnging to collection pages
-        */
+       
         UPDATE article SET deployed_date = current_timestamp
          WHERE parent_id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteId AND collection_type<>'N/A')
            AND deployed_date IS NULL;
+        */
+
+        /* test url */
+        
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -457,13 +461,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             status website_deploy.status%type);
         TYPE tt_deploy_log IS TABLE OF t_deploy_log;
         l_deploy_log tt_deploy_log;          
+        l_env VARCHAR2(4);
+        l_is_live BOOLEAN;
+        cert_not_ready exception;
+        pragma exception_init( cert_not_ready, -29273 );
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
         l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
         l_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
 
-        SELECT netlify_deploy_id INTO l_netlify_deploy_id FROM website WHERE id=l_website_id;
+        SELECT netlify_deploy_id, CASE WHEN netlify_site_id_custom=l_site_id THEN 'LIVE' ELSE 'TEST' END  INTO l_netlify_deploy_id, l_env FROM website WHERE id=l_website_id;
+        l_is_live:=l_env='LIVE';
 
         /* Get latest deployment status if started */
         IF (l_netlify_deploy_id IS NOT NULL) THEN
@@ -485,12 +494,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
            AND sent_ind='N'
          ORDER BY id;
 
-        /* Now return list of all deployment status messaages to client */
+        /* Now return list of all deployment status messages to client */
         FOR i IN 1..l_deploy_log.COUNT
         LOOP
             IF (l_deploy_log(i).message='ready') THEN 
                 l_content:=l_content ||'<li><span>' || l_deploy_log(i).log_time || '</span><span>Successful deployment</span></li>'; 
                 l_content:=l_content ||'<li class="ready"><span></span><span><a target="_blank" href="' || l_ssl_url || '">' || l_ssl_url || '</a></span></li>';
+                IF (l_is_live) THEN
+                    BEGIN
+                        l_clob:=apex_web_service.make_rest_request(p_url=>l_ssl_url, p_http_method=>'GET');
+                        EXCEPTION WHEN cert_not_ready THEN
+                            l_content:=l_content ||'<li><span></span><span>Certificate not issued yet. Try again later.</span></li>'; 
+                    END;
+                END If;
                 l_deployment_complete:=TRUE;
                 EXIT;
             END IF;
@@ -513,6 +529,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             UPDATE website_deploy SET sent_ind='Y' WHERE id=l_deploy_log(i).id;
 
         IF (l_deployment_complete) THEN
+            UPDATE website 
+               SET netlify_last_published = CASE WHEN netlify_site_id=l_site_id THEN current_timestamp ELSE netlify_last_published END,
+                   netlify_last_published_custom = CASE WHEN netlify_site_id_custom=l_site_id THEN current_timestamp ELSE netlify_last_published_custom END
+             WHERE id=l_website_id;
+
             l_job_name:=dbms_scheduler.generate_job_name('DELETE_');
             dbms_scheduler.create_job(
                 job_name   => l_job_name,
@@ -547,11 +568,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     PROCEDURE runDelete(pUserId IN users.id%type, pWebsiteId IN website.id%type, pSiteId IN website.netlify_site_id%type) IS
         l_clob CLOB;
     BEGIN
-        UPDATE website 
-           SET netlify_last_published = CASE WHEN netlify_site_id=pSiteId THEN current_timestamp ELSE netlify_last_published END,
-               netlify_last_published_custom = CASE WHEN netlify_site_id_custom=pSiteId THEN current_timestamp ELSE netlify_last_published_custom END
-         WHERE id=pWebsiteId;
-
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/'|| pSiteId || '/deploys', pMethod=>'GET', pData=>l_clob);
         FOR C IN (
             SELECT id, published_at, MAX(published_at) OVER() last_published_at 
