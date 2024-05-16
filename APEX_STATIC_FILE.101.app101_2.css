@@ -175,7 +175,10 @@ dialog .content {
     justify-content: flex-end;
 }
 
-.website-nav, .page-nav {
+.website-nav {
+    padding: var(--space-l);
+}
+.page-nav {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-m);
@@ -214,7 +217,7 @@ a.selected {
     text-decoration-skip-ink: none;
 }
 
-nav:not(.top-nav) div {
+.website-nav {
     display: inline-flex;
     flex-wrap: wrap;
     gap: var(--space-s);
@@ -226,7 +229,6 @@ nav:not(.top-nav) div {
         padding: var(--space-3xs) var(--space-2xs);
         color: white;
         background-color: var(--color-solid);
-        
     }
 }
 
