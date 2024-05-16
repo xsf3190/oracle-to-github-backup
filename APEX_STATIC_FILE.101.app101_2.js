@@ -2,7 +2,6 @@ let gWebsiteId = 0,
     gArticleId = 0,
     gNetlifySiteId,
     gWebsiteDemo,
-    gBrowser,
     gFullImage,
     gIntervalId,
     gExpiredSession = false;
@@ -165,7 +164,7 @@ const changeHandler = (e) => {
             case 'website.domain_name' :
                 if (data.new_website_id) {
                     gWebsiteId = data.new_website_id;
-                    websiteNav.querySelector("div[data-id]").dataset.id = data.new_website_id;
+                    websiteNav.dataset.id = data.new_website_id;
                     pageNav.replaceChildren();
                     galleryList.replaceChildren();
                 }
@@ -176,7 +175,7 @@ const changeHandler = (e) => {
                 if (data.new_dropdown_item) {
                     websiteNav.querySelector(".dropdown-items").insertAdjacentHTML('afterbegin',data.new_dropdown_item);
                 }
-                websiteNav.querySelector("[data-id='"+gWebsiteId+"'] > a").textContent = value;
+                websiteNav.querySelector("a").textContent = value;
                 break;
             case 'website.font' :
                 websiteFont(data.font_family, data.font_url);
@@ -320,18 +319,9 @@ const checkPerformance = () => {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-    console.log("DOMContentLoaded");
-    
     console.log("apex_app_id",apex_app_id);
     console.log("apex_page_id",apex_page_id);
     console.log("apex_session",apex_session);
-
-    let browser = bowser.getParser(window.navigator.userAgent),
-        browserName = browser.getBrowserName(),
-        browserVersion = browser.getBrowserVersion();
-
-    gBrowser = browserName + "," + browserVersion;
-    console.log("gBrowser",gBrowser);
 
     if (navigator.maxTouchPoints > 1) {
         wrapper.addEventListener("touchstart",clickHandler);
@@ -342,7 +332,7 @@ window.addEventListener("DOMContentLoaded", () => {
     wrapper.addEventListener("focusin",focusHandler);
     wrapper.addEventListener("change",changeHandler);
     
-    gWebsiteId = websiteNav.querySelector("div").dataset.id;
+    gWebsiteId = websiteNav.dataset.id;
     gNetlifySiteId = websiteNav.querySelector(".deploy-website").dataset.site_id;
 
     if (nb_websites==="0") {
@@ -1125,14 +1115,14 @@ ClassicEditor.create(document.querySelector("#editor"), {
         const editor_content = wrapper.querySelector(".ck-editor__editable_inline").getBoundingClientRect(),
               word_count = wrapper.querySelector(".ck-word-count").getBoundingClientRect();
 
-        const editor_height = window.innerHeight - editor_content.y - word_count.height - 18; /* 18 is margin and border of word_count div */
+        //const editor_height = window.innerHeight - editor_content.y - word_count.height - 18; /* 18 is margin and border of word_count div */
         
         /*wrapper.querySelector(".ck-editor__editable_inline").style.height = editor_height+"px";*/
-        editor.editing.view.change( writer => {
-            writer.setStyle( 'height',editor_height+"px" , editor.editing.view.document.getRoot() );
-        } );
+        //editor.editing.view.change( writer => {
+        //    writer.setStyle( 'height',editor_height+"px" , editor.editing.view.document.getRoot() );
+        //} );
 
-        wrapper.querySelector("[aria-label='gallery']").style.height = editor_height +"px";
+        //wrapper.querySelector("[aria-label='gallery']").style.height = editor_height +"px";
     })
     .catch(error => {
         console.error(error);
@@ -1214,6 +1204,7 @@ const resize = () => {
  ** GET WEBSIITE OPTIONS
  */
 const website_options = () => {
+    if (gWebsiteId===0) return;
     execProcess( "website-options/"+gWebsiteId,"GET").then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
@@ -1603,7 +1594,6 @@ const delete_website = () => {
         if (websiteNav.querySelector("hr + hr")) {
             websiteNav.querySelector("hr + hr").remove();
         }
-        websiteNav.querySelector(".website-options").disabled = true;
         gWebsiteId = 0;
         gNetlifySiteId = null;
 
