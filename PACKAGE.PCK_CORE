@@ -681,17 +681,15 @@ code.language-html {
         RETURN(l_html);
     END;
 
-    FUNCTION buildWebsiteNav(pUserId IN users.id%type, pSelectedWebsiteId IN OUT website.id%type) RETURN VARCHAR2 IS
+    FUNCTION buildWebsiteNav(pUserId IN users.id%type, pSelectedWebsiteId IN OUT website.id%type, pNbWebsites IN NUMBER) RETURN VARCHAR2 IS
         l_html LONG;
         l_dropdown LONG;
         n PLS_INTEGER:=0;
     BEGIN
         l_dropdown:=
-        '<section class="dropdown">
+        '<section class="dropdown"' || CASE WHEN pNbWebsites=0 THEN ' style="display:none"' END ||'>
             <button type="button" class="show-dropdown">&blacktriangledown;</button>
             <ul class="dropdown-items">';
-        l_html:=
-        '<nav class="website-nav">';
         FOR C IN (SELECT w.id, w.domain_name, REPLACE(w.domain_name,'.','-') || '.netlify.app' url, w.netlify_site_id, w.netlify_site_id_custom, ROW_NUMBER() OVER (ORDER BY COALESCE(w.updated_date,w.created_date) DESC) rn, COUNT(*) OVER() nb
                     FROM website w
                    WHERE w.user_id=pUserId
@@ -701,7 +699,7 @@ code.language-html {
             IF (C.rn=1) THEN
                 pSelectedWebsiteId:=C.id;
                 l_html:=l_html ||
-                '<div data-id="' || C.id || '">
+                '<div class="website-nav" data-id="' || C.id || '">
                     <button type="button" class="website-options">
                         &#128397;
                     </button>
@@ -726,7 +724,7 @@ code.language-html {
         END LOOP;
         l_dropdown:=l_dropdown || '</section>';
         l_html:=l_html || l_dropdown ||
-        '</ul></nav>';
+        '</ul>';
 
         RETURN (l_html);
     END;
@@ -833,7 +831,7 @@ code.language-html {
                 <div>' ||
                     buildPushableButton('new-website', '&plus;') ||
                 '</div>' ||
-                buildWebsiteNav(l_session_data.user_id, l_selected_website_id) ||
+                buildWebsiteNav(l_session_data.user_id, l_selected_website_id, l_nb_websites) ||
             '</div>
             <div class="page-content">
                 <div>' ||
