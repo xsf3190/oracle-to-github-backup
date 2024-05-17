@@ -4,6 +4,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE getVisits(pId IN VARCHAR2, pEmail IN BOOLEAN DEFAULT FALSE);
     --
+    PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB);
+    --
     PROCEDURE uploadIpLookup;
     --
     PROCEDURE uploadPageHits(pWebsiteId IN website.id%type DEFAULT NULL);
@@ -368,7 +370,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     */
     PROCEDURE getVisits(pId IN VARCHAR2, pEmail IN BOOLEAN DEFAULT FALSE) IS
         l_website_id website.id%type;
-        l_netlify_site_id website.netlify_site_id%type;
+        l_env VARCHAR2(4);
         l_url page_hit.url%type;
         l_content CLOB;
         l_rating VARCHAR2(100);
@@ -390,7 +392,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         FOR i IN l_id_parts.FIRST..l_id_parts.LAST LOOP
             CASE i
                 WHEN 1 THEN l_website_id:=l_id_parts(i);
-                WHEN 2 THEN l_netlify_site_id:=l_id_parts(i);
+                WHEN 2 THEN l_env:=l_id_parts(i);
                 WHEN 3 THEN l_offset:=l_id_parts(i);
             END CASE;
         END LOOP;
@@ -398,7 +400,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         --l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
         --l_netlify_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
 
-        SELECT CASE WHEN netlify_site_id=l_netlify_site_id THEN REPLACE(domain_name,'.','-') || '.netlify.app' ELSE domain_name END
+        SELECT CASE WHEN l_env='TEST' THEN REPLACE(domain_name,'.','-') || '.netlify.app' ELSE domain_name END
           INTO l_url
           FROM website
          WHERE id=l_website_id;
@@ -551,7 +553,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     */
     PROCEDURE getPerformance(pId IN VARCHAR2) IS
         l_website_id website.id%type;
-        l_netlify_site_id website.netlify_site_id%type;
+        l_env VARCHAR2(4);
         l_url page_hit.url%type;
         l_content CLOB;
         l_session_data pck_core.session_data_rt;
@@ -589,9 +591,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
     BEGIN
         l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
-        l_netlify_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
+        l_env:=SUBSTR(pId,INSTR(pId,',')+1);
 
-        SELECT CASE WHEN netlify_site_id=l_netlify_site_id THEN REPLACE(domain_name,'.','-') || '.netlify.app' ELSE domain_name END
+        SELECT CASE WHEN l_env='TEST' THEN REPLACE(domain_name,'.','-') || '.netlify.app' ELSE domain_name END
           INTO l_url
           FROM website
          WHERE id=l_website_id;
@@ -626,6 +628,43 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
         EXCEPTION WHEN OTHERS THEN pck_core.log_error;
     END;
+
+    PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB) IS
+        l_url varchar2(100):='https://4dn1mpm5s2.execute-api.eu-central-1.amazonaws.com/send/adfreesites' ;
+        l_api_key varchar2(40):='1JdEDggO9J89SZGIEVJkd2Hr07tZbANY7x8fzkB1';
+        pData CLOB;
+        l_json JSON_OBJECT_T;
+        l_body varchar2(500):=
+'{
+    "contactEmail": "mark.russellbrown@gmail.com",
+    "body": "<span style=\"color:green;\">dog-face</span>",
+    "subject": "Just to test",
+    "sourceEmail": "dogface@adfreesites.com"
+}';
+    BEGIN
+        l_json:= new JSON_OBJECT_T;
+        
+
+        FOR C IN (SELECT contact_email FROM website WHERE id=pWebsiteid) LOOP
+            l_json.put('contactEmail',C.contact_email);
+            l_json.put('body','<span style="color:red;">dog-face</span>');
+            l_json.put('subject','A test subject');
+            l_json.put('sourceEmail','goof@gmail.com');
+            --l_clob:=l_json.stringify;
+
+            apex_web_service.g_request_headers.delete;
+            apex_web_service.g_request_headers(1).name := 'Content-Type';
+            apex_web_service.g_request_headers(1).value := 'application/json';
+            apex_web_service.g_request_headers(2).name := 'x-api-key';
+            apex_web_service.g_request_headers(2).value := l_api_key;
+
+
+            pData := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'POST', p_body=>l_body);--l_json.stringify);
+            pck_core.log(apex_web_service.g_status_code);
+            pck_core.log(pData);
+        END LOOP;
+    END;
+
 
 END;
 /
