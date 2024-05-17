@@ -49,7 +49,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT websiteid, siteid, list INTO l_website_id, l_site_id, l_list FROM users, JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, siteid, list)) WHERE users.id=l_session_data.user_id;
+        WITH payload AS (SELECT websiteid, env, list FROM JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, env, list)))
+        SELECT p.websiteid, CASE WHEN p.env='TEST' THEN w.netlify_site_id ELSE w.netlify_site_id_custom END, p.list 
+          INTO l_website_id, l_site_id, l_list 
+          FROM website w, payload p
+         WHERE w.user_id=l_session_data.user_id
+           AND w.id=p.websiteid;
 
         /* Reorder pages */
         SELECT column_value, rownum 
@@ -469,9 +474,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_session_data:=pck_core.getSessionData();
 
         l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
-        l_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
+        l_env:=SUBSTR(pId,INSTR(pId,',')+1);
 
-        SELECT netlify_deploy_id, CASE WHEN netlify_site_id_custom=l_site_id THEN 'LIVE' ELSE 'TEST' END  INTO l_netlify_deploy_id, l_env FROM website WHERE id=l_website_id;
+        SELECT netlify_deploy_id, CASE WHEN l_env='TEST' THEN netlify_site_id ELSE netlify_site_id_custom END
+          INTO l_netlify_deploy_id, l_site_id
+          FROM website
+         WHERE id=l_website_id;
+
         l_is_live:=l_env='LIVE';
 
         /* Get latest deployment status if started */
