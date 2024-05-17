@@ -1,6 +1,6 @@
 let gWebsiteId = 0,
     gArticleId = 0,
-    gNetlifySiteId,
+    gWebsiteEnv,
     gWebsiteDemo,
     gFullImage,
     gIntervalId,
@@ -162,20 +162,18 @@ const changeHandler = (e) => {
                 }
                 break;
             case 'website.domain_name' :
-                if (data.new_website_id) {
-                    gWebsiteId = data.new_website_id;
-                    websiteNav.dataset.id = data.new_website_id;
+                websiteNav.querySelectorAll(".edit-website[data-id='"+data.websiteid+"']").forEach ((item) => {
+                    item.parentElement.remove();
+                })
+                if (websiteNav.querySelector("hr + hr")) {
+                    websiteNav.querySelector("hr + hr").remove();
+                }
+                if (nb===0) {
                     pageNav.replaceChildren();
                     galleryList.replaceChildren();
                 }
-                if (data.new_netlify_site_id) {
-                    gNetlifySiteId = data.new_netlify_site_id;
-                    websiteNav.querySelector(".deploy-website").dataset.site_id = data.new_netlify_site_id;
-                }
-                if (data.new_dropdown_item) {
-                    websiteNav.querySelector(".dropdown-items").insertAdjacentHTML('afterbegin',data.new_dropdown_item);
-                }
-                websiteNav.querySelector("a").textContent = value;
+                websiteNav.querySelector(".dropdown-items").insertAdjacentHTML('afterbegin',data.listitem);
+                websiteNav.querySelector(".edit-website[data-id='"+data.websiteid+"']").click();
                 break;
             case 'website.font' :
                 websiteFont(data.font_family, data.font_url);
@@ -189,7 +187,7 @@ const changeHandler = (e) => {
  */
 const edit_website = (e) => {
     gWebsiteId = e.target.dataset.id;
-    gNetlifySiteId = e.target.dataset.site_id;
+    gWebsiteEnv = e.target.dataset.env;
 
     const env = e.target.querySelector("span").textContent;
     const domain = e.target.dataset.domain;
@@ -236,7 +234,7 @@ const deploy_website = (e) => {
     const pages = pageNav.querySelectorAll("div[data-id]"),
           list = Array.from(pages, (page) => page.dataset.id);
 
-    execProcess("deploy","POST",{"websiteid":gWebsiteId,"siteid":gNetlifySiteId,"list":list.join(":")}).then( (data) => {
+    execProcess("deploy","POST",{"websiteid":gWebsiteId,"env":gWebsiteEnv,"list":list.join(":")}).then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
@@ -244,7 +242,7 @@ const deploy_website = (e) => {
         if (gIntervalId) {
             clearInterval(gIntervalId);
         }
-        gIntervalId = setInterval(getDeploymentStatus,2000,gWebsiteId, gNetlifySiteId);
+        gIntervalId = setInterval(getDeploymentStatus,2000,gWebsiteId, gWebsiteEnv);
     });
 };
 
@@ -264,8 +262,8 @@ const cancel_deploy = (e) => {
     });
 };
 
-getDeploymentStatus = (websiteid, siteid) => {
-    execProcess("deploy-status/"+websiteid+","+siteid,"GET").then( (data) => {
+getDeploymentStatus = (websiteid, env) => {
+    execProcess("deploy-status/"+websiteid+","+env,"GET").then( (data) => {
         if (data.content) {
             logContent.querySelector("ol.deploy").insertAdjacentHTML('beforeend',data.content);
         }
@@ -333,6 +331,7 @@ window.addEventListener("DOMContentLoaded", () => {
     wrapper.addEventListener("change",changeHandler);
     
     gWebsiteId = websiteNav.dataset.id;
+    gWebsiteEnv = websiteNav.dataset.env;
     gNetlifySiteId = websiteNav.querySelector(".deploy-website").dataset.site_id;
 
     if (nb_websites==="0") {
@@ -1238,7 +1237,7 @@ const page_options = (e) => {
  ** GET WEBSIITE VISITS
  */
 const get_visits = (e) => {
-    execProcess( "visits/"+gWebsiteId+","+gNetlifySiteId,"GET").then( (data) => {
+    execProcess( "visits/"+gWebsiteId+","+gWebsiteEnv,"GET").then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
@@ -1254,7 +1253,7 @@ const more_visits = (e) => {
     const tbody = e.target.closest("p").previousElementSibling.querySelector("tbody");
     const span = e.target.previousElementSibling;
 
-    execProcess( "visits/"+gWebsiteId+","+gNetlifySiteId+","+next,"GET").then( (data) => {
+    execProcess( "visits/"+gWebsiteId+","+gWebsiteEnv+","+next,"GET").then( (data) => {
         tbody.insertAdjacentHTML('beforeend',data.visits);
         e.target.dataset.offset=next;
         span.textContent = data.progress;
@@ -1268,7 +1267,7 @@ const more_visits = (e) => {
  ** GET WEBSIITE PRFORMANCE METRICS
  */
 const get_performance = (e) => {
-    execProcess( "performance/"+gWebsiteId+","+gNetlifySiteId,"GET").then( (data) => {
+    execProcess( "performance/"+gWebsiteId+","+gWebsiteEnv,"GET").then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
