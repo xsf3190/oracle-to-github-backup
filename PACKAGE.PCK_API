@@ -552,7 +552,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
     */
     PROCEDURE callTerraformAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
         l_terraform_token users.terraform_token%type;
-        l_terraform_url VARCHAR2(100):='https://app.terraform.io/';
+        l_terraform_url VARCHAR2(200):='https://app.terraform.io/';
         l_error_message LONG;
     BEGIN
         /* Get Terraform details either from website owner or Administrator */
