@@ -630,39 +630,58 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     END;
 
     PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB) IS
-        l_url varchar2(100):='https://4dn1mpm5s2.execute-api.eu-central-1.amazonaws.com/send/adfreesites' ;
-        l_api_key varchar2(40):='1JdEDggO9J89SZGIEVJkd2Hr07tZbANY7x8fzkB1';
+        l_url varchar2(100):='https://eh17j0pth9.execute-api.eu-central-1.amazonaws.com/send/adfreesites' ;
+        l_api_key varchar2(40):='27svfB8H3c0cKYYWVC4Y3quRSVPo6dH5tNq0wEt4';
+        l_body_text CLOB:=pBodyText;
+
         pData CLOB;
         l_json JSON_OBJECT_T;
-        l_body varchar2(500):=
-'{
-    "contactEmail": "mark.russellbrown@gmail.com",
-    "body": "<span style=\"color:green;\">dog-face</span>",
-    "subject": "Just to test",
-    "sourceEmail": "dogface@adfreesites.com"
-}';
+        l_table_html LONG;
     BEGIN
-        l_json:= new JSON_OBJECT_T;
         
-
-        FOR C IN (SELECT contact_email FROM website WHERE id=pWebsiteid) LOOP
+        FOR C IN (SELECT w.contact_email, j.url form_url, j.email form_email, j.name form_name, j.message form_message FROM website w, JSON_TABLE(l_body_text, '$' COLUMNS (url, email, name, message)) j 
+                   WHERE w.id=pWebsiteid)
+        LOOP
+            l_table_html:=
+            '<html>
+            <head>
+            <style type="text/css">
+            body {
+                font-family:Georgia,sans-serif;
+                font-size:1rem;
+            }
+            </style>
+            </head>
+            <body>
+            <table><caption>Form Details</caption>
+            <tbody>
+                <tr>
+                    <td bgcolor="#d7d9f2">Name</td><td>' || C.form_name || '</td>
+                    <td bgcolor="#d7d9f2">Email</td><td>' || C.form_email || '</td>
+                    <td bgcolor="#d7d9f2">Message</td><td>' || C.form_message || '</td>
+                </tr>
+            <tbody>
+            </table>
+            </body>
+            </html>';
+            l_json:=new JSON_OBJECT_T;
             l_json.put('contactEmail',C.contact_email);
-            l_json.put('body','<span style="color:red;">dog-face</span>');
-            l_json.put('subject','A test subject');
-            l_json.put('sourceEmail','goof@gmail.com');
-            --l_clob:=l_json.stringify;
+            l_json.put('subject','Contact Form submitted from '|| C.form_url);
+            l_json.put('body', l_table_html);
+            l_json.put('sourceEmail','contact.form@adfreesites.com');
 
-            apex_web_service.g_request_headers.delete;
-            apex_web_service.g_request_headers(1).name := 'Content-Type';
-            apex_web_service.g_request_headers(1).value := 'application/json';
-            apex_web_service.g_request_headers(2).name := 'x-api-key';
-            apex_web_service.g_request_headers(2).value := l_api_key;
+            apex_web_service.clear_request_headers;
+            apex_web_service.g_request_headers(1).name := 'x-api-key';
+            apex_web_service.g_request_headers(1).value := l_api_key;
 
-
-            pData := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'POST', p_body=>l_body);--l_json.stringify);
+            pData := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'POST', p_body=>l_json.stringify);
             pck_core.log(apex_web_service.g_status_code);
             pck_core.log(pData);
+            
         END LOOP;
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
     END;
 
 
