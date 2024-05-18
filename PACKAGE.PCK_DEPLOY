@@ -627,8 +627,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json JSON_OBJECT_T;
         l_action JSON_OBJECT_T;
     BEGIN
-
-
         FOR C IN (SELECT u.id, terraform_token, replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(terraform_public_key))),chr(13)||chr(10),null) terraform_public_key
                     FROM apex_workspace_apex_users w, users u 
                    WHERE w.email=u.email
@@ -656,6 +654,39 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error;
-    END;       
+    END;
+
+    PROCEDURE setTerraformApikey IS
+        l_terraform_organization_name users.terraform_organization_name%type;
+        l_terraform_workspace_name users.terraform_workspace_name%type;
+        l_terraform_private_key users.terraform_private_key%type;
+        l_aws_gateway_url VARCHAR2(200);
+        l_api_key varchar2(40);
+        l_api_key_link VARCHAR2(100);
+        l_clob CLOB;
+    BEGIN
+        pck_api.getTerraformData(pUserId=>null, pTerraformOrganizationName=>l_terraform_organization_name, pTerraformWorkspaceName=>l_terraform_workspace_name, pTerraformPrivateKey=>l_terraform_private_key);
+        pck_api.callTerraformAPI(pUserId=>null, pEndpoint=>'api/v2/organizations/' || l_terraform_organization_name || '/workspaces/' || l_terraform_workspace_name, pMethod=>'GET', pData=>l_clob);
+
+        FOR C IN (SELECT related FROM JSON_TABLE(l_clob, '$.data.relationships.outputs.links' COLUMNS (related))) LOOP
+            pck_api.callTerraformAPI(pUserId=>null, pEndpoint=>C.related, pMethod=>'GET', pData=>l_clob);
+            pck_core.log(l_clob);
+            FOR C1 IN (SELECT value FROM JSON_TABLE(l_clob, '$.data[*]' COLUMNS (name PATH '$.attributes.name', value PATH '$.attributes.value')) WHERE name='invoke_url') LOOP
+                l_aws_gateway_url:=C1.value || '/';
+            END LOOP;
+
+            FOR C1 IN (SELECT api_key_link FROM JSON_TABLE(l_clob, '$.data[*]' COLUMNS (api_key_link PATH '$.links.self', name PATH '$.attributes.name', value PATH '$.attributes.value')) WHERE name='api_key') LOOP
+                l_api_key_link:=C1.api_key_link;
+            END LOOP;
+            pck_api.callTerraformAPI(pUserId=>null, pEndpoint=>l_api_key_link, pMethod=>'GET', pData=>l_clob);
+            FOR C1 IN (SELECT value FROM JSON_TABLE(l_clob, '$.data' COLUMNS (value PATH '$.attributes.value'))) LOOP
+                l_api_key:=C1.value;
+            END LOOP;
+        END LOOP;
+
+        dbms_output.put_line('l_aws_gateway_url:'||l_aws_gateway_url);
+        dbms_output.put_line('l_api_key:'||l_api_key);
+    END;
+       
 end;
 /
