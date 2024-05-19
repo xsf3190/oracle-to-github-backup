@@ -630,35 +630,56 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     END;
 
     PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB) IS
-        l_url varchar2(100):='https://eh17j0pth9.execute-api.eu-central-1.amazonaws.com/send/adfreesites' ;
-        l_api_key varchar2(40):='27svfB8H3c0cKYYWVC4Y3quRSVPo6dH5tNq0wEt4';
         l_body_text CLOB:=pBodyText;
-
-        pData CLOB;
+        l_clob CLOB;
         l_json JSON_OBJECT_T;
+        l_payload CLOB;
         l_table_html LONG;
     BEGIN
         
-        FOR C IN (SELECT w.contact_email, j.url form_url, j.email form_email, j.name form_name, j.message form_message FROM website w, JSON_TABLE(l_body_text, '$' COLUMNS (url, email, name, message)) j 
+        FOR C IN (WITH data AS
+                    (
+                        SELECT u.terraform_aws_gateway_url, u.terraform_api_key, w.description domain_name 
+                          FROM users u, apex_workspace_apex_users w
+                         WHERE w.email=u.email
+                           AND w.is_admin='Yes'
+                         ORDER BY date_created
+                         FETCH FIRST ROW ONLY
+                    )
+                    SELECT w.contact_email, j.url form_url, j.email form_email, j.name form_name, j.message form_message, d.terraform_aws_gateway_url, d.terraform_api_key, d.domain_name
+                    FROM website w, data d, JSON_TABLE(l_body_text, '$' COLUMNS (url, email, name, message)) j 
                    WHERE w.id=pWebsiteid)
         LOOP
             l_table_html:=
             '<html>
             <head>
             <style type="text/css">
-            body {
-                font-family:Georgia,sans-serif;
-                font-size:1rem;
+            table {
+                border-collapse: collapse;
+                letter-spacing: 1px;
+                font-family: system-ui;
+                font-size: 1.3rem;
+            }
+            th, td {
+                padding: 1rem;
+                border: 2px solid rgb(190, 190, 190);
             }
             </style>
             </head>
             <body>
-            <table><caption>Form Details</caption>
+            <table>
+            <thead>
+                <tr bgcolor="#d7d9f2">
+                    <th scope="col">Name</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Message</th>
+                </tr>
+            </thead>
             <tbody>
                 <tr>
-                    <td bgcolor="#d7d9f2">Name</td><td>' || C.form_name || '</td>
-                    <td bgcolor="#d7d9f2">Email</td><td>' || C.form_email || '</td>
-                    <td bgcolor="#d7d9f2">Message</td><td>' || C.form_message || '</td>
+                    <td>' || C.form_name || '</td>
+                    <td>' || C.form_email || '</td>
+                    <td style="width:50%">' || C.form_message || '</td>
                 </tr>
             <tbody>
             </table>
@@ -668,15 +689,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             l_json.put('contactEmail',C.contact_email);
             l_json.put('subject','Contact Form submitted from '|| C.form_url);
             l_json.put('body', l_table_html);
-            l_json.put('sourceEmail','contact.form@adfreesites.com');
+            l_json.put('sourceEmail','contact.form@' || C.domain_name);
 
             apex_web_service.clear_request_headers;
             apex_web_service.g_request_headers(1).name := 'x-api-key';
-            apex_web_service.g_request_headers(1).value := l_api_key;
+            apex_web_service.g_request_headers(1).value := C.terraform_api_key;
 
-            pData := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'POST', p_body=>l_json.stringify);
-            pck_core.log(apex_web_service.g_status_code);
-            pck_core.log(pData);
+            l_clob := apex_web_service.make_rest_request(p_url=>C.terraform_aws_gateway_url, p_http_method=>'POST', p_body=>l_json.stringify);
+            pck_core.log(apex_web_service.g_status_code || ' : POST - ' || C.terraform_aws_gateway_url);
+            
+            IF (apex_web_service.g_status_code<>200) THEN
+                pck_core.log(l_clob);
+            END IF;
             
         END LOOP;
         apex_json.open_object; 
