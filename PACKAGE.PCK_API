@@ -30,9 +30,38 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
     --
     PROCEDURE callTerraformAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB);
     --
+    PROCEDURE callAWSemailAPI(pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB);
+    --
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS 
+
+    /*
+    **  AWS SES API
+    */
+    PROCEDURE callAWSemailAPI(pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB) IS
+        l_terraform_aws_gateway_url users.terraform_aws_gateway_url%type;
+        l_terraform_api_key users.terraform_api_key%type;
+    BEGIN
+        /* Get Admin user's terraform aws gateway url and api key */
+        SELECT u.terraform_aws_gateway_url, u.terraform_api_key 
+          INTO l_terraform_aws_gateway_url, l_terraform_api_key
+          FROM users u, apex_workspace_apex_users w
+         WHERE w.email=u.email
+           AND w.is_admin='Yes'
+         ORDER BY date_created
+         FETCH FIRST ROW ONLY;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'x-api-key';
+        apex_web_service.g_request_headers(1).value := l_terraform_api_key;
+
+        pData := apex_web_service.make_rest_request(p_url=>l_terraform_aws_gateway_url, p_http_method=>pMethod, p_body=>pBody);
+
+        pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_terraform_aws_gateway_url);
+    END;
+
+
     FUNCTION getGithubReposOwner(pUserId IN users.id%type) RETURN VARCHAR2 IS
         l_github_repos_owner users.github_repos_owner%type;
     BEGIN
