@@ -55,7 +55,7 @@ const flushQueues = () => {
 
     const body = JSON.stringify(json);
     page_visit++;
-    (navigator.sendBeacon && navigator.sendBeacon(gMetricVisitUrl, body)) || fetch(visit_url, {body, method: 'POST', keepalive: true});
+    (navigator.sendBeacon && navigator.sendBeacon(gRestUrl+"page-visit", body)) || fetch(visit_url, {body, method: 'POST', keepalive: true});
 
 
     /* Send any media performance metrics */
@@ -133,70 +133,3 @@ document.querySelectorAll("dialog button.close").forEach((button) => {
     /* Anomaly in CKEditor that removes button text */
     if (!button.textContent) button.textContent = "X";
 });
-
-/*
-** COPY TEXT CONTENT OF BUTTON TO CLIPBOARD WHEN CLICKED 
-*/
-const copy_content = document.querySelector(".copy-content");
-if (copy_content) {
-    copy_content.addEventListener("click", async () => {
-        const text = copy_content.innerText;
-        const result = copy_content.querySelector("span");
-        try {
-            await navigator.clipboard.writeText(text);
-            result.textContent = "Copied";
-            result.style.opacity = "1";
-        } catch (error) {
-            result.textContent = error.message;
-        }
-    });
-}
-
-/*
-** CONTACT FORM SUBMISSION
-*/
-const form = document.querySelector("div.contact > form");
-if (form) {
-    form.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const formData = new FormData(form);
-        const submit = form.querySelector("button");
-        const aws_gateway_url = submit.dataset.url;
-        fetch(aws_gateway_url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Accept: "application/json",
-            },
-            redirect: "follow",
-            referrerPolicy: "no-referrer",
-            body: JSON.stringify({
-                name: formData.get("name"),
-                email: formData.get("email"),
-                message: formData.get("message"),
-                contactEmail: formData.get("contactEmail"),
-                url: formData.get("url"),
-                signatureContactEmail: formData.get("signatureContactEmail")
-            }),
-        }).then((response) => {
-            if (response.status) {
-                console.log("submitted form");
-                const formBtn = form.querySelector("button");
-                formBtn.disabled = true;
-                formBtn.style.cursor = "none";
-                const front = formBtn.querySelector(".front");
-                front.textContent = "Sent";
-                front.style.background = "green";
-                formBtn.querySelector(".edge").remove();
-                formBtn.querySelector(".shadow").remove();
-                form.querySelector(".result").style.opacity = "1";
-                return;
-            }
-            throw new Error("Could not submit request");
-        }).catch( (error) => {
-            console.error(error);
-            form.querySelector(".result").style.opacity = "1";
-            form.querySelector(".result").textContent(error);
-        });
-    });
-}
