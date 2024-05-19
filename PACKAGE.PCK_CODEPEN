@@ -129,7 +129,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         '*/' || chr(10) ||
         'gMetricWebsiteId = "' || l_website_id || '";' || chr(10) || 
         'gMetricArticleId = "' || pArticleId || '";' || chr(10) || 
-        'gMetricVisitUrl = "' || pck_core.getRestUrl() || 'page-visit";' || chr(10) ||
+        'gRestUrl = "' || pck_core.getRestUrl() || '";' || chr(10) ||
         l_javascript || chr(10);
 
         apex_json.open_object;
