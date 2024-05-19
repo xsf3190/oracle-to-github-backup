@@ -4,7 +4,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE deleteDirectory(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
-    PROCEDURE deployInfrastructure;
+    PROCEDURE deployInfrastructure(pSenderEmail IN VARCHAR2 DEFAULT 'contact.form');
     --
     PROCEDURE deployWebsite(pBodyText IN CLOB);
     --
@@ -13,6 +13,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     PROCEDURE runDelete(pUserId IN users.id%type, pWebsiteId IN website.id%type, pSiteId IN website.netlify_site_id%type);
     --
     PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type, pResturl IN VARCHAR2, pApplicationId IN VARCHAR2) ;
+    --
+    PROCEDURE setTerraformApikey;
     --
 end;
 /
@@ -147,6 +149,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_css CLOB;
         l_metric_js CLOB;
         l_gallery_js CLOB;
+        l_contact_js CLOB;
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
         TYPE tt_files IS RECORD (
@@ -212,13 +215,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         FOR C IN (SELECT file_name, apex_util.blob_to_clob(file_content) file_content
                     FROM apex_application_static_files 
                    WHERE application_id=pApplicationId
-                     AND file_name LIKE 'deploy%.min.js' ) 
+                     AND file_name IN ('deploy_metric.js', 'deploy_gallery.js', 'deploy_contact.js') )
         LOOP
-            IF (INSTR(C.file_name,'metric')>0) THEN
-                l_metric_js:=C.file_content;
-            ELSIF (INSTR(C.file_name,'gallery')>0) THEN
-                l_gallery_js:=C.file_content;
-            END IF;
+            CASE C.file_name
+                WHEN 'deploy_metric.js' THEN l_metric_js:=C.file_content;
+                WHEN 'deploy_gallery.js' THEN l_gallery_js:=C.file_content;
+                WHEN 'deploy_contact.js' THEN l_contact_js:=C.file_content;
+            END CASE;
         END LOOP;
 
         
@@ -296,17 +299,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
 
-        l_is_media:=FALSE;
+        l_is_media:=FALSE;        
         FOR i IN 1..l_labels.COUNT
         LOOP
             IF (i=1) THEN
                 logDeployment(pWebsiteId, pSiteId, 'Building ' || l_labels.COUNT || ' page' || CASE WHEN l_labels.COUNT>1 THEN 's' END);
             END IF;
 
-            IF (l_labels(i).collection_type='BLOG') THEN
-                l_is_media:=FALSE;
-            ELSIF (l_labels(i).collection_type='MEDIA') THEN
+            IF (l_labels(i).collection_type='MEDIA') THEN
                 l_is_media:=TRUE;
+            ELSIF (l_labels(i).parent_article_id=l_labels(i).article_id) THEN
+                l_is_media:=FALSE;
             END IF;
 
             l_page:=REPLACE(REPLACE(l_head,'#PAGE_TITLE#',l_labels(i).page_title),'#PAGE_DESCRIPTION#',l_labels(i).page_description) || 
@@ -323,9 +326,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 <script>
                     gMetricWebsiteId = "' || pWebsiteId || '";' || chr(10) || 
                     'gMetricArticleId = "' || CASE WHEN l_labels(i).parent_article_id=l_labels(i).article_id THEN l_labels(i).parent_article_id ELSE l_labels(i).article_id END || '";' || chr(10) || 
-                    'gMetricVisitUrl = "' || pRestUrl || 'page-visit";' || chr(10) ||
+                    'gRestUrl = "' || pRestUrl || '";' || chr(10) ||
                     l_metric_js || 
-                    CASE WHEN l_is_media THEN l_gallery_js END ||
+                    CASE WHEN l_is_media AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN l_gallery_js END ||
+                    CASE WHEN l_labels(i).contact_form='YES' THEN l_contact_js END ||
                 '</script>' || chr(10) || '
                 </body>' || chr(10) || 
             '</html>';
@@ -618,28 +622,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     END;
 
     /*
-    ** Build and deploy infrastructure through Terraform by submitting Github action. 
-    ** Do this once and each time we recycle the public key that is used to sign a website's contact email
+    ** Build and deploy AWS SES infrastructure through Terraform by submitting Github action. 
+    ** Contact form sending email address must be stored in Apex Administrator description field!
     */
-    PROCEDURE deployInfrastructure IS
+    PROCEDURE deployInfrastructure(pSenderEmail IN VARCHAR2) IS
         l_clob CLOB;
         l_json_clob CLOB;
         l_json JSON_OBJECT_T;
         l_action JSON_OBJECT_T;
     BEGIN
-        FOR C IN (SELECT u.id, terraform_token, replace(utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(terraform_public_key))),chr(13)||chr(10),null) terraform_public_key
+        -- Apex admin user description must hold valid domain name of sending email address
+        FOR C IN (SELECT u.id, u.terraform_token, w.description ses_domain_name
                     FROM apex_workspace_apex_users w, users u 
                    WHERE w.email=u.email
                      AND w.is_admin='Yes'
+                   ORDER BY date_created
                    FETCH FIRST ROW ONLY) 
         LOOP
+            IF (C.ses_domain_name IS NULL) THEN
+                dbms_output.put_line('APEX ADMIN USER MUST HAVE DESCRIPTION SET TO DOMAIN NAME OF SENDING EMAIL ADDRESS');
+                EXIT;
+            END IF;
+
             /* trigger the deployment using Githib action */          
             l_json:=new JSON_OBJECT_T;
             l_json.put('event_type', 'trigger_build_infra');
 
             l_action:=new JSON_OBJECT_T;
-            l_action.put('from_email', 'contact.form@adfreesites.com');
-            l_action.put('public_key', C.terraform_public_key);
+            l_action.put('from_email', pSenderEmail||'@'||C.ses_domain_name); --'contact.form@adfreesites.com'
             l_action.put('terraform_token', C.terraform_token);
             l_json.put('client_payload', l_action);
 
@@ -656,7 +666,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 pck_core.log_error;
     END;
 
+/*
+**  RUN this after deploying infrastructure for AWS enabling Amazon Simple Emal Service
+**  Updates in Admin use row the aws gateway url and the api key in order to use the SES send mail service
+*/
     PROCEDURE setTerraformApikey IS
+        l_domain_name website.domain_name%type; 
+        l_admin_id users.id%type;
         l_terraform_organization_name users.terraform_organization_name%type;
         l_terraform_workspace_name users.terraform_workspace_name%type;
         l_terraform_private_key users.terraform_private_key%type;
@@ -665,16 +681,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_api_key_link VARCHAR2(100);
         l_clob CLOB;
     BEGIN
+        SELECT u.id, SUBSTR(w.description,1,INSTR(w.description,'.')-1)
+          INTO l_admin_id, l_domain_name
+          FROM apex_workspace_apex_users w, users u 
+         WHERE w.email=u.email
+           AND w.is_admin='Yes'
+         ORDER BY date_created
+         FETCH FIRST ROW ONLY;
+
         pck_api.getTerraformData(pUserId=>null, pTerraformOrganizationName=>l_terraform_organization_name, pTerraformWorkspaceName=>l_terraform_workspace_name, pTerraformPrivateKey=>l_terraform_private_key);
         pck_api.callTerraformAPI(pUserId=>null, pEndpoint=>'api/v2/organizations/' || l_terraform_organization_name || '/workspaces/' || l_terraform_workspace_name, pMethod=>'GET', pData=>l_clob);
 
         FOR C IN (SELECT related FROM JSON_TABLE(l_clob, '$.data.relationships.outputs.links' COLUMNS (related))) LOOP
             pck_api.callTerraformAPI(pUserId=>null, pEndpoint=>C.related, pMethod=>'GET', pData=>l_clob);
-            pck_core.log(l_clob);
+
+            /* invoke_url */
             FOR C1 IN (SELECT value FROM JSON_TABLE(l_clob, '$.data[*]' COLUMNS (name PATH '$.attributes.name', value PATH '$.attributes.value')) WHERE name='invoke_url') LOOP
-                l_aws_gateway_url:=C1.value || '/';
+                l_aws_gateway_url:=C1.value || 'send/' || l_domain_name;
             END LOOP;
 
+            /* ses_dkim_tokens */
+            dbms_output.put_line('FETCHING DKIM TOKENS');
+            FOR C1 IN (SELECT dkim FROM JSON_TABLE(l_clob, '$.data[*]' COLUMNS (name PATH '$.attributes.name', NESTED PATH '$.attributes.value[*]' COLUMNS (dkim VARCHAR2(40) PATH '$'))) WHERE name='ses_dkim_tokens') LOOP
+                dbms_output.put_line('ses_dkim_tokens:'||C1.dkim);
+            END LOOP;
+
+            /* api_key */
             FOR C1 IN (SELECT api_key_link FROM JSON_TABLE(l_clob, '$.data[*]' COLUMNS (api_key_link PATH '$.links.self', name PATH '$.attributes.name', value PATH '$.attributes.value')) WHERE name='api_key') LOOP
                 l_api_key_link:=C1.api_key_link;
             END LOOP;
@@ -684,8 +716,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END LOOP;
         END LOOP;
 
-        dbms_output.put_line('l_aws_gateway_url:'||l_aws_gateway_url);
-        dbms_output.put_line('l_api_key:'||l_api_key);
+        IF (l_aws_gateway_url IS NOT NULL AND l_api_key IS NOT NULL) THEN
+            UPDATE users 
+               SET terraform_aws_gateway_url=l_aws_gateway_url, 
+                   terraform_api_key=l_api_key
+             WHERE id=l_admin_id;
+
+            dbms_output.put_line('TERRAFORM API_KEY UPDATED SUCESSFULLY');
+            dbms_output.put_line('TERRAFORM AWS_GATEWAY_URL UPDATED SUCESSFULLY');
+            RETURN;
+        END IF;
+
+        IF (l_api_key IS NULL) THEN
+            dbms_output.put_line('FAILED TO UPDATE TERRAFORM API_KEY');
+        END IF;
+
+        IF (l_aws_gateway_url IS NULL) THEN
+            dbms_output.put_line('FAILED TO UPDATE TERRAFORM AWS_GATEWAY_URL');
+        END IF;
     END;
        
 end;
