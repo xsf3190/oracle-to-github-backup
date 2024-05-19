@@ -377,39 +377,9 @@ code.language-html {
      **  Build Contact Form
      */
     FUNCTION buildContactForm(pContactEmail IN website.contact_email%type, pUrl IN VARCHAR2) RETURN VARCHAR2 IS
-        l_form LONG;
-        l_terraform_organization_name users.terraform_organization_name%type;
-        l_terraform_workspace_name users.terraform_workspace_name%type;
-        l_terraform_private_key users.terraform_private_key%type;
-        l_aws_gateway_url VARCHAR2(200);
-        l_terraform_private_key_raw RAW(4000);
-        l_signed_data RAW(4000);
-        l_signature_contact_email VARCHAR2(500);
-        l_clob CLOB;
+
     BEGIN
-        /* 
-        ** pUserId passed means we have to build form for deployment - use logged on user's email address unless website.contact_email is not null
-        */
-        IF (pContactEmail IS NOT NULL) THEN
-            pck_api.getTerraformData(pUserId=>null, pTerraformOrganizationName=>l_terraform_organization_name, pTerraformWorkspaceName=>l_terraform_workspace_name, pTerraformPrivateKey=>l_terraform_private_key);
-            pck_api.callTerraformAPI(pUserId=>null, pEndpoint=>'api/v2/organizations/' || l_terraform_organization_name || '/workspaces/' || l_terraform_workspace_name, pMethod=>'GET', pData=>l_clob);
-
-            FOR C IN (SELECT related FROM JSON_TABLE(l_clob, '$.data.relationships.outputs.links' COLUMNS (related))) LOOP
-                pck_api.callTerraformAPI(pUserId=>null, pEndpoint=>C.related, pMethod=>'GET', pData=>l_clob);
-                FOR C1 IN (SELECT value FROM JSON_TABLE(l_clob, '$.data[*]' COLUMNS (name PATH '$.attributes.name', value PATH '$.attributes.value')) WHERE name='invoke_url') LOOP
-                    l_aws_gateway_url:=C1.value || '/';
-                END LOOP;
-            END LOOP;
-
-            l_terraform_private_key_raw:=utl_i18n.string_to_raw(regexp_replace(l_terraform_private_key,'(-+((BEGIN|END) (RSA )?(PUBLIC|PRIVATE) KEY)-+\s?|\s)',''));
-
-            l_signed_data:=DBMS_CRYPTO.SIGN(src =>utl_i18n.string_to_raw(pContactEmail||pUrl), prv_key =>l_terraform_private_key_raw, pubkey_alg =>dbms_crypto.KEY_TYPE_RSA,sign_alg =>dbms_crypto.SIGN_SHA256_RSA);
-            --l_signed_data:=DBMS_CRYPTO.SIGN(src =>utl_i18n.string_to_raw(pContactEmail), prv_key =>l_terraform_private_key_raw, pubkey_alg =>dbms_crypto.KEY_TYPE_RSA,sign_alg =>dbms_crypto.SIGN_SHA256_RSA);
-
-            l_signature_contact_email:=utl_i18n.raw_to_char(utl_encode.base64_encode(l_signed_data));
-        END IF;
-
-        l_form:=
+        RETURN(
 '<div class="contact">
     <form>
         <p>Send your contact details securely to</p>
@@ -419,6 +389,7 @@ code.language-html {
             </svg>
             <span class="result"></span>
         </span>
+        <input type="hidden" name="url" value="">
         <div>
             <label for="nameInput">Name</label>
             <input type="text" id="nameInput" name="name" required minlength="1" maxlength="50">
@@ -431,11 +402,8 @@ code.language-html {
             <label for="messageInput">Message</label>
             <textarea id="messageInput" name="message" required minlength="1" maxlength="400" rows="5" cols="40"></textarea>
         </div>
-        <input type="hidden" name="contactEmail" value="' || pContactEmail || '">
-        <input type="hidden" name="signatureContactEmail" value="' || l_signature_contact_email || '">
-        <input type="hidden" name="url" value="' || pUrl || '">
         <div>
-            <button type="submit" class="pushable" data-url="' || l_aws_gateway_url || '">
+            <button type="submit" class="pushable">
                 <span class="shadow"></span>
                 <span class="edge"></span>
                 <span class="front">SEND</span>
@@ -449,9 +417,7 @@ code.language-html {
     <symbol id="copy" viewBox="0 0 448 512">
         <path d="M384 336H192c-8.8 0-16-7.2-16-16V64c0-8.8 7.2-16 16-16l140.1 0L400 115.9V320c0 8.8-7.2 16-16 16zM192 384H384c35.3 0 64-28.7 64-64V115.9c0-12.7-5.1-24.9-14.1-33.9L366.1 14.1c-9-9-21.2-14.1-33.9-14.1H192c-35.3 0-64 28.7-64 64V320c0 35.3 28.7 64 64 64zM64 128c-35.3 0-64 28.7-64 64V448c0 35.3 28.7 64 64 64H256c35.3 0 64-28.7 64-64V416H272v32c0 8.8-7.2 16-16 16H64c-8.8 0-16-7.2-16-16V192c0-8.8 7.2-16 16-16H96V128H64z"></path>
     </symbol>
-</svg>';
-
-        RETURN (l_form);
+</svg>');
     END;
 
     /*
@@ -561,7 +527,7 @@ code.language-html {
             END IF;
             l_html:=l_html ||
             '<li>
-                <a href="' || l_href || '"><img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
+                <a href="' || l_href || '"><img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '"></a>
             </li>';
         END LOOP;
         l_html:=l_html || '</ol>';
