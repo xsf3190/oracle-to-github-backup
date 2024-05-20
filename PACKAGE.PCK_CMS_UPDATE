@@ -531,7 +531,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_endpoint VARCHAR2(100);
         l_method VARCHAR2(6);
         l_message VARCHAR2(50);
-        l_listitem LONG;
+        l_dropdown LONG;
 
         FUNCTION name_taken RETURN BOOLEAN IS
         BEGIN
@@ -603,9 +603,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             l_website_id:=pWebsiteId;
         END IF;
 
-        l_listitem:=pck_core.makeWebsiteListItem(l_website_id, pDomainName, 'TEST');
+        l_dropdown:=pck_core.makeWebsiteListItem(l_website_id, pDomainName, 'TEST');
         IF (l_netlify_site_id_custom IS NOT NULL) THEN
-            l_listitem:=l_listitem || pck_core.makeWebsiteListItem(l_website_id, pDomainName, 'LIVE');
+            l_dropdown:=l_dropdown || pck_core.makeWebsiteListItem(l_website_id, pDomainName, 'LIVE');
         END IF;
 
         apex_json.open_object;
@@ -613,7 +613,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         apex_json.write('message', l_message);
         apex_json.write('color', 'green');
         apex_json.write('websiteid', l_website_id);
-        apex_json.write('listitem', l_listitem);
+        apex_json.write('dropdown', l_dropdown);
         apex_json.close_object;
     END;
 
