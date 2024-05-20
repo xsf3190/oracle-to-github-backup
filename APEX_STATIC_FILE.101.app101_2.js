@@ -168,12 +168,15 @@ const changeHandler = (e) => {
                 if (websiteNav.querySelector("hr + hr")) {
                     websiteNav.querySelector("hr + hr").remove();
                 }
-                if (nb===0) {
+                if (data.message==="Created OK") {
                     pageNav.replaceChildren();
                     galleryList.replaceChildren();
                 }
-                websiteNav.querySelector(".dropdown-items").insertAdjacentHTML('afterbegin',data.listitem);
+                websiteNav.querySelector(".dropdown-items").insertAdjacentHTML('afterbegin',data.dropdown);
                 websiteNav.querySelector(".edit-website[data-id='"+data.websiteid+"']").click();
+                if (websiteNav.querySelector(".dropdown-items").childElementCount>1) {
+                    websiteNav.querySelector(".show-dropdown").style.display = "block";
+                }
                 break;
             case 'website.font' :
                 websiteFont(data.font_family, data.font_url);
@@ -1592,6 +1595,9 @@ const delete_website = () => {
         })
         if (websiteNav.querySelector("hr + hr")) {
             websiteNav.querySelector("hr + hr").remove();
+        }
+        if (websiteNav.querySelector(".dropdown-items").childElementCount===0) {
+            websiteNav.querySelector(".show-dropdown").style.display = "none";
         }
         gWebsiteId = 0;
         gNetlifySiteId = null;
