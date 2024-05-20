@@ -663,8 +663,8 @@ code.language-html {
         n PLS_INTEGER:=0;
     BEGIN
         l_dropdown:=
-        '<section class="dropdown"' || CASE WHEN pNbWebsites=0 THEN ' style="display:none"' END ||'>
-            <button type="button" class="show-dropdown">&blacktriangledown;</button>
+        '<section class="dropdown">
+            <button type="button" class="show-dropdown"' || CASE WHEN pNbWebsites<2 THEN ' style="display:none"' END || '>&blacktriangledown;</button>
             <ul class="dropdown-items">';
         FOR C IN (SELECT w.id, w.domain_name, REPLACE(w.domain_name,'.','-') || '.netlify.app' url, w.netlify_site_id, w.netlify_site_id_custom, ROW_NUMBER() OVER (ORDER BY COALESCE(w.updated_date,w.created_date) DESC) rn, COUNT(*) OVER() nb
                     FROM website w
@@ -676,9 +676,7 @@ code.language-html {
                 pSelectedWebsiteId:=C.id;
                 l_html:=l_html ||
                 '<div class="website-nav" data-id="' || C.id || '" data-env="TEST">
-                    <button type="button" class="website-options">
-                        &#128397;
-                    </button>
+                    <button type="button" class="website-options">&#128397;</button>
                     <a href="https://' || C.url || '" target="a_blank" class="selected">' || C.domain_name || '</a>
                     <button type="button" class="deploy-website">DEPLOY<span class="env">TEST</span></button>
                     <button type="button" class="visits">VISITS<span class="env">TEST</span></button>
