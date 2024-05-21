@@ -517,7 +517,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     BEGIN
                         l_clob:=apex_web_service.make_rest_request(p_url=>l_ssl_url, p_http_method=>'GET');
                         EXCEPTION WHEN cert_not_ready THEN
-                            l_content:=l_content ||'<li><span></span><span>Certificate not issued yet. Try again later.</span></li>'; 
+                            l_content:=l_content ||'<li><span></span><span style="color:red">Certificate in process of being issued</span></li>'; 
                     END;
                 END If;
                 l_deployment_complete:=TRUE;
@@ -542,10 +542,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             UPDATE website_deploy SET sent_ind='Y' WHERE id=l_deploy_log(i).id;
 
         IF (l_deployment_complete) THEN
-            UPDATE website 
-               SET netlify_last_published = CASE WHEN netlify_site_id=l_site_id THEN current_timestamp ELSE netlify_last_published END,
-                   netlify_last_published_custom = CASE WHEN netlify_site_id_custom=l_site_id THEN current_timestamp ELSE netlify_last_published_custom END
-             WHERE id=l_website_id;
+            IF (l_is_live) THEN
+                UPDATE website 
+                   SET netlify_last_published_custom = current_timestamp
+                 WHERE id=l_website_id;
+            ELSE
+                UPDATE website 
+                   SET netlify_last_published = current_timestamp
+                 WHERE id=l_website_id;
+            END IF;
 
             l_job_name:=dbms_scheduler.generate_job_name('DELETE_');
             dbms_scheduler.create_job(
