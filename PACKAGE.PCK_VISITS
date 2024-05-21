@@ -646,9 +646,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                          ORDER BY date_created
                          FETCH FIRST ROW ONLY
                     )
-                    SELECT w.contact_email, j.url form_url, j.email form_email, j.name form_name, j.message form_message, d.terraform_aws_gateway_url, d.terraform_api_key, d.domain_name
-                    FROM website w, data d, JSON_TABLE(l_body_text, '$' COLUMNS (url, email, name, message)) j 
-                   WHERE w.id=pWebsiteid)
+                    SELECT NVL(w.contact_email,u.email) contact_email, j.url form_url, j.email form_email, j.name form_name, j.message form_message, d.terraform_aws_gateway_url, d.terraform_api_key, d.domain_name
+                    FROM website w, data d, users u, JSON_TABLE(l_body_text, '$' COLUMNS (url, email, name, message)) j 
+                   WHERE w.id=pWebsiteid
+                     AND w.user_id=u.id)
         LOOP
             l_table_html:=
             '<html>
