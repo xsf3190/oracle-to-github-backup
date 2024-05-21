@@ -272,6 +272,16 @@ getDeploymentStatus = (websiteid, env) => {
         }
         if (data.completed) {
             clearInterval(gIntervalId);
+            const a = websiteNav.querySelector("a"),
+                  domain = a.textContent;
+                  
+            if (!a.hasAttribute("href")) {
+                if (env==="TEST") {
+                    a.href = "https://" + domain + ".netlify.app";
+                } else {
+                    a.href = "https://" + domain;
+                }
+            }
         }
     });
 }
