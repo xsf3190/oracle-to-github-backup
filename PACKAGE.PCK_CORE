@@ -632,7 +632,7 @@ code.language-html {
     BEGIN
         l_html:=
         '<div data-id="' || pId || '">
-            <button type="button" class="' || pClassName || '">
+            <button type="button" class="' || pClassName || '" title="Page options">
                 &#128397;
             </button>
             <a href="" class="nav-label">' || pLabel || '</a>';
@@ -657,42 +657,51 @@ code.language-html {
         </li>');
     END;
 
-    FUNCTION buildWebsiteNav(pUserId IN users.id%type, pSelectedWebsiteId IN OUT website.id%type, pNbWebsites IN NUMBER) RETURN VARCHAR2 IS
+    FUNCTION buildWebsiteNav(pUserId IN users.id%type, pSelectedWebsiteId IN OUT website.id%type) RETURN VARCHAR2 IS
+        TYPE tt_websites IS RECORD(
+            id website.id%type,
+            domain_name website.domain_name%type,
+            netlify_site_id website.netlify_site_id%type,
+            netlify_site_id_custom website.netlify_site_id_custom%type,
+            url VARCHAR2(60),
+            url_custom VARCHAR2(45));
+        TYPE t_websites IS TABLE OF tt_websites INDEX BY pls_integer;
+        l_websites t_websites;
         l_html LONG;
-        l_dropdown LONG;
-        n PLS_INTEGER:=0;
     BEGIN
-        l_dropdown:=
-        '<section class="dropdown">
-            <button type="button" class="show-dropdown"' || CASE WHEN pNbWebsites<2 THEN ' style="display:none"' END || '>&blacktriangledown;</button>
-            <ul class="dropdown-items">';
-        FOR C IN (SELECT w.id, w.domain_name, REPLACE(w.domain_name,'.','-') || '.netlify.app' url, w.netlify_site_id, w.netlify_site_id_custom, ROW_NUMBER() OVER (ORDER BY COALESCE(w.updated_date,w.created_date) DESC) rn, COUNT(*) OVER() nb
-                    FROM website w
-                   WHERE w.user_id=pUserId
-                   ORDER BY w.domain_name)
+        SELECT id, domain_name, netlify_site_id, netlify_site_id_custom, 
+                CASE WHEN netlify_last_published IS NOT NULL THEN 'href="https://' || REPLACE(domain_name,'.','-') || '.netlify.app"' END,
+                CASE WHEN netlify_last_published_custom IS NOT NULL THEN 'href="https://' || domain_name || '"' END
+          BULK COLLECT INTO l_websites
+          FROM website
+         WHERE user_id=pUserId
+         ORDER BY COALESCE(updated_date,created_date) DESC;
+
+        pSelectedWebsiteId:=l_websites(1).id;
+
+        l_html:=
+        '<div class="website-nav" data-id="' || l_websites(1).id || '" data-env="TEST">
+            <button type="button" class="website-options" title="Website options">&#128397;</button>
+            <a ' || l_websites(1).url || '" target="a_blank" class="selected">' || l_websites(1).domain_name || '</a>
+            <button type="button" class="deploy-website">DEPLOY<span class="env">TEST</span></button>
+            <button type="button" class="visits">VISITS<span class="env">TEST</span></button>
+            <button type="button" class="performance">METRICS<span class="env">TEST</span></button>
+            <section class="dropdown">
+                <button type="button" class="show-dropdown"' || CASE WHEN l_websites.COUNT<2 THEN ' style="display:none"' END || '>&blacktriangledown;</button>
+                <ul class="dropdown-items">';
+        FOR i IN 1..l_websites.COUNT
         LOOP
-            n:=n+1;
-            IF (C.rn=1) THEN
-                pSelectedWebsiteId:=C.id;
-                l_html:=l_html ||
-                '<div class="website-nav" data-id="' || C.id || '" data-env="TEST">
-                    <button type="button" class="website-options">&#128397;</button>
-                    <a href="https://' || C.url || '" target="a_blank" class="selected">' || C.domain_name || '</a>
-                    <button type="button" class="deploy-website">DEPLOY<span class="env">TEST</span></button>
-                    <button type="button" class="visits">VISITS<span class="env">TEST</span></button>
-                    <button type="button" class="performance">METRICS<span class="env">TEST</span></button>';
+            l_html:=l_html || makeWebsiteListItem(l_websites(i).id, l_websites(i).domain_name, 'TEST');
+            IF (l_websites(i).netlify_site_id_custom IS NOT NULL) THEN
+                l_html:=l_html || makeWebsiteListItem(l_websites(i).id, l_websites(i).domain_name, 'LIVE');
             END IF;
-            l_dropdown:=l_dropdown || makeWebsiteListItem(C.id, C.domain_name, 'TEST');
-            IF (C.netlify_site_id_custom IS NOT NULL) THEN
-                l_dropdown:=l_dropdown || makeWebsiteListItem(C.id, C.domain_name, 'LIVE');
-            END IF;
-            IF (n<C.nb) THEN
-                l_dropdown:=l_dropdown || '<hr>';
+            IF (i<l_websites.COUNT) THEN
+                l_html:=l_html || '<hr>';
             END IF;
         END LOOP;
-        l_dropdown:=l_dropdown || '</section>';
-        l_html:=l_html || l_dropdown ||
-        '</ul>';
+        l_html:=l_html || 
+                '</ul>
+            </section>';
 
         RETURN (l_html);
     END;
@@ -799,7 +808,7 @@ code.language-html {
                 <div>' ||
                     buildPushableButton('new-website', '&plus;') ||
                 '</div>' ||
-                buildWebsiteNav(l_session_data.user_id, l_selected_website_id, l_nb_websites) ||
+                buildWebsiteNav(l_session_data.user_id, l_selected_website_id) ||
             '</div>
             <div class="page-content">
                 <div>' ||
