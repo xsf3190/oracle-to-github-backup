@@ -129,7 +129,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
             dbms_scheduler.create_job(
                 job_name   => l_job_name,
                 job_type   =>'STORED_PROCEDURE',
-                job_action =>'pck_cms.runDeleteAsset',
+                job_action =>'pck_cms_delete.runDeleteAsset',
                 number_of_arguments=>5,
                 start_date=>systimestamp
             );
