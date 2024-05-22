@@ -178,6 +178,7 @@ pre:has(.language-javascript) {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(15rem,100%), 1fr));
     gap: var(--space-m);
+    padding: 0;
     & :nth-child(1) {
         grid-column: span 2;
     }
