@@ -217,33 +217,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
     /*
      **  Delete Website and articles from schema and Netlify
      */  
-    PROCEDURE deleteWebsite(pUserId IN website.user_id%type, pWebsiteId IN website.id%type) IS
+    PROCEDURE deleteWebsite(pUserId IN website.user_id%type, pWebsiteId IN website.id%type, pWebsiteEnv IN VARCHAR2, pReturnJson IN BOOLEAN DEFAULT TRUE) IS
         TYPE t_website_article IS TABLE OF website_article%rowtype;
         l_website_articles t_website_article;
         l_netlify_site_id website.netlify_site_id%type;
         l_netlify_site_id_custom website.netlify_site_id%type;
         l_clob CLOB;
     BEGIN
-        SELECT * BULK COLLECT INTO l_website_articles FROM website_article WHERE website_id=pWebsiteId AND user_id=pUserId;
+        SELECT netlify_site_id, netlify_site_id_custom 
+          INTO l_netlify_site_id, l_netlify_site_id_custom
+          FROM website 
+         WHERE user_id=pUserId
+           AND id=pWebsiteId;
 
-        FOR i IN 1..l_website_articles.COUNT LOOP
-            deleteArticle(pUserId, l_website_articles(i).article_id, l_website_articles(i).website_id, pSendResponse=>FALSE);
-        END LOOP;
-
-        DELETE website WHERE id=pWebsiteId AND user_id=pUserId 
-            RETURNING netlify_site_id, netlify_site_id_custom INTO l_netlify_site_id, l_netlify_site_id_custom;
-
-        IF (l_netlify_site_id IS NOT NULL) THEN
-            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
-        END IF;
-
-        IF (l_netlify_site_id_custom IS NOT NULL) THEN
+        /* DELETE  LIVE website if  */
+        IF (pWebsiteEnv='LIVE') THEN
             pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id_custom, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
+            UPDATE website SET netlify_site_id_custom=NULL WHERE id=pWebsiteId;
+        ELSIF (l_netlify_site_id_custom IS NULL) THEN
+                    SELECT * BULK COLLECT INTO l_website_articles FROM website_article WHERE website_id=pWebsiteId AND user_id=pUserId;
+                    FOR i IN 1..l_website_articles.COUNT LOOP
+                        deleteArticle(pUserId, l_website_articles(i).article_id, l_website_articles(i).website_id, pSendResponse=>FALSE);
+                    END LOOP;
+                    DELETE website WHERE id=pWebsiteId AND user_id=pUserId;
+                    pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
         END IF;
 
-        apex_json.open_object;  
-        apex_json.write('success',TRUE);
-        apex_json.close_object;        
+        IF (pReturnJson) THEN
+            apex_json.open_object;  
+            apex_json.write('success',TRUE);
+            apex_json.close_object;
+        END IF;        
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -257,20 +261,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
     PROCEDURE deleteUser(pUserId IN website.user_id%type) IS
         n PLS_INTEGER;
         l_website_id website.id%type;
-        l_domain_name website.domain_name%type;
-        l_email users.email%type;
+        l_starter_website VARCHAR2(1);
     BEGIN
-        SELECT COUNT(*), MAX(w.id), MAX(w.domain_name), MAX(SUBSTR(u.email,1,INSTR(u.email,'@')-1))
-          INTO n, l_website_id, l_domain_name, l_email
+        SELECT COUNT(*), MAX(w.id), CASE WHEN MAX(w.domain_name)=MAX(SUBSTR(u.email,1,INSTR(u.email,'@')-1)) THEN 'Y' ELSE 'N' END
+          INTO n, l_website_id, l_starter_website
           FROM website w, users u 
          WHERE u.id=pUserId
            AND w.user_id=u.id;
 
+        IF (n=1 AND l_starter_website='Y') THEN
+            deleteWebsite(pUserId, l_website_id, 'TEST', pReturnJson=>FALSE);
+            n:=0;
+        END IF;
+
         IF (n=0) THEN
             DELETE users WHERE id=pUserId;
-        ELSIF (n=1 AND l_domain_name=l_email) THEN
-            deleteWebsite(pUserId,l_website_id);
-            n:=0;
         END IF;
 
         apex_json.open_object;
@@ -291,15 +296,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        FOR C IN (SELECT t.asset_id, t.article_id, t.website_id, t.table_name
-                    FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (asset_id, article_id, website_id, table_name)) t
+        FOR C IN (SELECT t.asset_id, t.article_id, t.website_id, t.website_env, t.table_name
+                    FROM users u, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (asset_id, article_id, website_id, website_env, table_name)) t
                    WHERE u.id=l_session_data.user_id)
         LOOP
             CASE C.table_name
                 WHEN 'users' THEN
                     deleteUser(l_session_data.user_id);            
                 WHEN 'website' THEN
-                    deleteWebsite(l_session_data.user_id,C.website_id);
+                    deleteWebsite(l_session_data.user_id,C.website_id, C.website_env);
                 WHEN 'website_article' THEN
                     deleteArticle(l_session_data.user_id,C.article_id,C.website_id);
                 WHEN 'article' THEN
