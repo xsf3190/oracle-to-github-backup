@@ -1598,7 +1598,7 @@ delete_article = () => {
  ** EXECUTE DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER
  */
 const delete_website = () => {
-    execProcess("dml","DELETE",{table_name: "website", website_id: gWebsiteId}).then( () => {
+    execProcess("dml","DELETE",{table_name: "website", website_id: gWebsiteId, website_env: gWebsiteEnv}).then( () => {
         websiteNav.querySelector("a").style.textDecorationLine = "line-through";
         websiteNav.querySelectorAll(".edit-website[data-id='"+gWebsiteId+"']").forEach ((item) => {
             item.parentElement.remove();
@@ -1610,7 +1610,6 @@ const delete_website = () => {
             websiteNav.querySelector(".show-dropdown").style.display = "none";
         }
         gWebsiteId = 0;
-        gNetlifySiteId = null;
 
         pageNav.replaceChildren();
         editor_status = "init";
