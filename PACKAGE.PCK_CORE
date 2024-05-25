@@ -557,8 +557,7 @@ code.language-html {
                 <ul class="container">
                     <li class="red">' || pck_icons.g_oracle_svg || '</li>
                     <li class="grey login">
-                        <!--<a class="button" href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Facebook&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_facebook_svg ||'Login w/ Facebook</a>-->
-                        <a class="button" href="' || apex_util.host_url('SCRIPT') || 'homeauth?request=APEX_AUTHENTICATION=Google&session=' || APEX_CUSTOM_AUTH.GET_SESSION_ID || '">' || pck_icons.g_google_svg ||'Login w/ Google</a>
+                        <a class="button" href="' || apex_util.host_url('SCRIPT') || 'f?p=101:2:' || APEX_CUSTOM_AUTH.GET_SESSION_ID || ':APEX_AUTHENTICATION=Google">' || pck_icons.g_google_svg ||'Login w/ Google</a>
                         <!--<button data-id="' || C.id || '">Priv</button>-->
                     </li>
                     <li class="grey">' || pck_icons.g_netlify_svg || '</li>
@@ -877,7 +876,7 @@ code.language-html {
         <script>
             const gRestUrl = "' || getRestUrl() || '";' || 
             CASE WHEN apex_application.g_flow_step_id=2 THEN '
-            const gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'home";' END || 
+            const gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'f?p=101:1:0";' END || 
         '</script>');
 
         l_page_js:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.js';
