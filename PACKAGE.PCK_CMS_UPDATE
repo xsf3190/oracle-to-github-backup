@@ -248,7 +248,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                    WHERE u.id=l_session_data.user_id
                      AND a.email(+)=u.email) 
         LOOP
-            IF (C.is_admin<>'Yes') THEN
+            IF (C.github_token LIKE '*%') THEN
                 l_readonly:='readonly';
             END IF;
             l_content:=
