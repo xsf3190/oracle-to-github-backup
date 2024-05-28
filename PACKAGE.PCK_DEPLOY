@@ -672,15 +672,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     END;
 
 /*
-**  RUN this after deploying infrastructure for AWS enabling Amazon Simple Emal Service
-**  Updates in Admin use row the aws gateway url and the api key in order to use the SES send mail service
+**  RUN this after deploying infrastructure for AWS enabling Amazon Simple Email Service
+**  Updates the Admin user's "aws gateway url" and "api key" required for SES send mail service
 */
     PROCEDURE setTerraformApikey IS
         l_domain_name website.domain_name%type; 
         l_admin_id users.id%type;
-        l_terraform_organization_name users.terraform_organization_name%type;
-        l_terraform_workspace_name users.terraform_workspace_name%type;
-        l_terraform_private_key users.terraform_private_key%type;
         l_aws_gateway_url VARCHAR2(200);
         l_api_key varchar2(40);
         l_api_key_link VARCHAR2(100);
@@ -694,8 +691,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
          ORDER BY date_created
          FETCH FIRST ROW ONLY;
 
-        pck_api.getTerraformData(pUserId=>null, pTerraformOrganizationName=>l_terraform_organization_name, pTerraformWorkspaceName=>l_terraform_workspace_name, pTerraformPrivateKey=>l_terraform_private_key);
-        pck_api.callTerraformAPI(pUserId=>null, pEndpoint=>'api/v2/organizations/' || l_terraform_organization_name || '/workspaces/' || l_terraform_workspace_name, pMethod=>'GET', pData=>l_clob);
+        pck_api.callTerraformAPI(pUserId=>null, pEndpoint=>'api/v2/organizations/Florent/workspaces/Mark_CMS', pMethod=>'GET', pData=>l_clob);
 
         FOR C IN (SELECT related FROM JSON_TABLE(l_clob, '$.data.relationships.outputs.links' COLUMNS (related))) LOOP
             pck_api.callTerraformAPI(pUserId=>null, pEndpoint=>C.related, pMethod=>'GET', pData=>l_clob);
