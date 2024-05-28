@@ -4,18 +4,23 @@ This repository contains code and data that is backed up daily from the ORACLE d
 Data is backed up as a schema export dump file encrypted with a randomly generated complex password sent by email to the adfreesites administrator.
 A metadata only version is created at the same time that could be used for a new deployment for example.
 
-Definitions are DDL metadata extracts of Oracle tables and packages.
+Includes DDL metadata extracts of tables and packages for quick reference.
+
+Includes any APEX applications and static Javascript / CSS files.
+
+Includes any ORDS REST schema.
 
 ## Pre-requisites
 1. Obtain GITHUB Personal access token (classic) - https://github.com/settings/tokens
 2. Configure email for OCI tenancy - https://blogs.oracle.com/apex/post/sending-email-from-your-oracle-apex-app-on-autonomous-database
 
 ## Ideas for Use
-1. Make current and historical code available for easy review / sharing.
-2. Provide a secure and reliable off-site backup solution. 
-3. Implement an automated backup / restore cycle between 2 Oracle databases.
-4. Deploy an environment in order to test new Oracle software versions.
-5. Run fully scripted migrations between different platforms.
+1. Include in Terraform process triggered by Github Action to create new instance of adfreesites web application.
+2. Make current and historical code available for easy review / sharing.
+3. Provide a secure and reliable off-site backup solution. 
+4. Implement an automated backup / restore cycle between 2 Oracle databases.
+5. Deploy an environment in order to test new Oracle software versions.
+6. Run fully scripted migrations between different platforms.
 
 Github supports maximum file size of 100MB. However, Oracle dump files are compressed by an order of magnitude with the Advanced Compression option. E.g. 170 MB compresses to 25 MB.
 
