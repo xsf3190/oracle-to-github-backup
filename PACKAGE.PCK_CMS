@@ -377,37 +377,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     END;
 
     /*
-    ** Get contact email address signed by Terraform together with AWS gateway url
-    */ 
-    PROCEDURE getTerraformParameters(pUserId IN users.id%type, pContactEmail IN website.contact_email%type, pAwsGatewayUrl IN OUT VARCHAR2, pSignatureContactEmail IN OUT VARCHAR2) IS
-        l_clob CLOB;
-        l_clob2 CLOB;
-        l_terraform_organization_name users.terraform_organization_name%type;
-        l_terraform_workspace_name users.terraform_workspace_name%type;
-        l_terraform_private_key users.terraform_private_key%type;
-        l_terraform_private_key_raw RAW(4000);
-        l_terraform_url VARCHAR2(200);
-        l_signed_data RAW(4000);
-    BEGIN
-        pck_api.getTerraformData(pUserId, l_terraform_organization_name, l_terraform_workspace_name, l_terraform_private_key);
-
-        pck_api.callTerraformAPI(pUserId=>pUserId, pEndpoint=>'api/v2/organizations/' || l_terraform_organization_name || '/workspaces/' || l_terraform_workspace_name, pMethod=>'GET', pData=>l_clob);
-
-        FOR C IN (SELECT related FROM JSON_TABLE(l_clob, '$.data.relationships.outputs.links' COLUMNS (related))) LOOP
-            pck_api.callTerraformAPI(pUserId=>pUserId, pEndpoint=>C.related, pMethod=>'GET', pData=>l_clob2);
-            FOR C1 IN (SELECT value FROM JSON_TABLE(l_clob2, '$.data[*]' COLUMNS (name PATH '$.attributes.name', value PATH '$.attributes.value')) WHERE name='invoke_url') LOOP
-                pAwsGatewayUrl:=C1.value || '/';
-            END LOOP;
-        END LOOP;
-
-        l_terraform_private_key_raw:=utl_i18n.string_to_raw(regexp_replace(l_terraform_private_key,'(-+((BEGIN|END) (RSA )?(PUBLIC|PRIVATE) KEY)-+\s?|\s)',''));
-
-        l_signed_data:=DBMS_CRYPTO.SIGN(src =>utl_i18n.string_to_raw(pContactEmail), prv_key =>l_terraform_private_key_raw, pubkey_alg =>dbms_crypto.KEY_TYPE_RSA,sign_alg =>dbms_crypto.SIGN_SHA256_RSA);
-
-        pSignatureContactEmail:=utl_i18n.raw_to_char(utl_encode.base64_encode(l_signed_data));
-    END;
-
-    /*
      **  Get requested page content (text and media)
      */    
     PROCEDURE getArticle(pArticleId IN article.id%type)  IS
