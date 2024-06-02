@@ -278,6 +278,7 @@ pre:has(.language-javascript) {
 .gallery-list {
   list-style: none;
   margin: 0;
+  padding-inline-start: 0;
   display: grid;
   gap: 0.25em;
   grid-template-columns: repeat(auto-fill, minmax(min(8rem, 100%), 1fr));
