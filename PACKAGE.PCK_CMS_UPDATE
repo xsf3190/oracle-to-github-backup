@@ -238,12 +238,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
-        FOR C IN (SELECT a.is_admin, u.id, u.cld_cloud_name, u.cld_api_key, u.cld_api_secret, u.netlify_token, u.netlify_account_slug, 
+        FOR C IN (SELECT a.is_admin, u.id, u.cld_cloud_name, u.cld_api_key, u.cld_api_secret, u.netlify_token, u.netlify_account_slug, u.stripe_publishable_key_test, u.stripe_secret_key_test,
                          CASE WHEN a.is_admin='Yes' THEN u.github_token ELSE '********' END github_token, 
                          CASE WHEN a.is_admin='Yes' THEN u.github_repos_owner ELSE '********' END github_repos_owner, 
                          CASE WHEN a.is_admin='Yes' THEN u.github_repos ELSE '********' END github_repos,
                          CASE WHEN a.is_admin='Yes' THEN u.google_api_key ELSE '********' END google_api_key, 
-                         CASE WHEN a.is_admin='Yes' THEN u.ipdata_api_key ELSE '********' END ipdata_api_key
+                         CASE WHEN a.is_admin='Yes' THEN u.ipdata_api_key ELSE '********' END ipdata_api_key,
+                         CASE WHEN a.is_admin='Yes' THEN u.terraform_token ELSE '********' END terraform_token
                     FROM users u, apex_workspace_apex_users a
                    WHERE u.id=l_session_data.user_id
                      AND a.email(+)=u.email) 
@@ -269,6 +270,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     buildInputWrapper(C.id, 'users.cld_api_secret', C.cld_api_secret, l_session_data.canuse_popover) || 
                     '</fieldset>
                 </details>
+                <details>
+                    <summary>STRIPE</summary>
+                    <fieldset>' ||
+                    buildInputWrapper(C.id, 'users.stripe_publishable_key_test', C.stripe_publishable_key_test, l_session_data.canuse_popover) || 
+                    buildInputWrapper(C.id, 'users.stripe_secret_key_test', C.stripe_secret_key_test, l_session_data.canuse_popover) || 
+                    '</fieldset>
+                </details>
                 <hr>
                 <h2>Administrator API keys</h2>
                 <details>
@@ -289,6 +297,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     <summary>IPDATA</summary>
                     <fieldset>' ||
                     buildInputWrapper(C.id, 'users.ipdata_api_key', C.ipdata_api_key, l_session_data.canuse_popover,pReadonly=>l_readonly) || 
+                    '</fieldset>
+                </details>
+                <details>
+                    <summary>TERRAFORM</summary>
+                    <fieldset>' ||
+                    buildInputWrapper(C.id, 'users.terraform_token', C.terraform_token, l_session_data.canuse_popover,pReadonly=>l_readonly) || 
                     '</fieldset>
                 </details>
             </form>';
@@ -739,6 +753,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     UPDATE users SET google_api_key=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'users.ipdata_api_key' THEN
                     UPDATE users SET ipdata_api_key=C.value, updated_date=current_timestamp WHERE id=C.id;
+                WHEN 'users.terraform_token' THEN
+                    UPDATE users SET terraform_token=C.value, updated_date=current_timestamp WHERE id=C.id;
+                WHEN 'users.stripe_publishable_key_test' THEN
+                    UPDATE users SET stripe_publishable_key_test=C.value, updated_date=current_timestamp WHERE id=C.id;
+                WHEN 'users.stripe_secret_key_test' THEN
+                    UPDATE users SET stripe_secret_key_test=C.value, updated_date=current_timestamp WHERE id=C.id;
                 ELSE
                     l_error:='id:' || C.id || 'table_column:' || C.table_column;
             END CASE;
