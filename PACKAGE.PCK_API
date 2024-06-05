@@ -12,7 +12,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
     --
     PROCEDURE getCloudinaryData(pUserId IN users.id%type, pCloudName IN OUT users.cld_cloud_name%type, pCldApiKey IN OUT users.cld_api_key%type, pCldImageMaxSize IN OUT INTEGER, pCldVideoMaxSize IN OUT INTEGER);
     --
-    PROCEDURE callIpdataAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB);
+    PROCEDURE callAWSemailAPI(pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB);
+    --
+    PROCEDURE callCloudinaryAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
     --
     PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
     --
@@ -20,19 +22,46 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
     --
     PROCEDURE callGoogleAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2 DEFAULT NULL, pMethod IN VARCHAR2 DEFAULT 'GET', pData IN OUT NOCOPY CLOB);
     --
+    PROCEDURE callIpdataAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB);
+    --
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
     --
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB);
     --
-    PROCEDURE callCloudinaryAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
+    PROCEDURE callStripeAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pParmNames IN apex_application_global.vc_arr2, pParmValues IN apex_application_global.vc_arr2, pData IN OUT NOCOPY CLOB);
     --
     PROCEDURE callTerraformAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pData IN OUT NOCOPY CLOB);
-    --
-    PROCEDURE callAWSemailAPI(pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB);
     --
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS 
+
+    /*
+    **  STRIPE API
+    */
+    PROCEDURE callStripeAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pParmNames IN apex_application_global.vc_arr2, pParmValues IN apex_application_global.vc_arr2, pData IN OUT NOCOPY CLOB) IS
+        l_stripe_secret_key_test users.stripe_secret_key_test%type;
+        l_stripe_url VARCHAR2(100):='https://api.stripe.com/v1/';
+        l_error_message LONG;
+    BEGIN
+        /* Get Admin user's terraform aws gateway url and api key */
+        SELECT stripe_secret_key_test
+          INTO l_stripe_secret_key_test
+          FROM users
+         WHERE id=pUserId;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'Authorization';
+        apex_web_service.g_request_headers(1).value := 'Bearer ' || l_stripe_secret_key_test;
+        apex_web_service.g_request_headers(2).name := 'Content-Type';
+        apex_web_service.g_request_headers(2).value := 'application/x-www-form-urlencoded';
+
+        l_stripe_url:=l_stripe_url || pEndpoint;
+
+        pData := apex_web_service.make_rest_request(p_url=>l_stripe_url, p_http_method=>pMethod, p_parm_name=>pParmNames, p_parm_value=>pParmValues);
+
+        pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_stripe_url);
+    END;
 
     /*
     **  AWS SES API
