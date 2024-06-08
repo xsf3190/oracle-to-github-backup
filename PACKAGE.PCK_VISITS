@@ -26,7 +26,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_user_agent website_article_cwv.user_agent%type:=SUBSTR(OWA_UTIL.get_cgi_env('HTTP_USER_AGENT'),1,255);
         l_this_referrer VARCHAR2(50):=LOWER(sys_context('userenv','db_name'));
         l_browser website_article_cwv.browser%type;
+        l_object JSON_OBJECT_T;
+        l_array JSON_ARRAY_T;
+        l_clob clob;
+        l_clob2 clob;
     BEGIN
+        BEGIN
+            SELECT browser INTO l_browser 
+            FROM browser_lookup 
+            WHERE user_agent=l_user_agent;
+        EXCEPTION WHEN NO_DATA_FOUND THEN
+            l_array:= new JSON_ARRAY_T;
+            l_object:=new JSON_OBJECT_T;
+            l_object.put('name','User-Agent');
+            l_object.put('value',l_user_agent);
+            l_array.append(l_object);
+            l_object:=new JSON_OBJECT_T;
+            l_object.put('headers',l_array);
+            l_clob:=l_object.stringify;
+            pck_api.callBrowserAPI(l_clob,l_clob2);
+
+            SELECT simple_software_string INTO l_browser
+              FROM JSON_TABLE(l_clob2 FORMAT JSON, '$.detection' 
+                COLUMNS (simple_software_string)); 
+        END;
+        
+        /*
         l_browser:=REGEXP_SUBSTR(l_user_agent,'*(Chrome\/\d*)');
         IF (l_browser IS NULL) THEN
             l_browser:=REGEXP_SUBSTR(l_user_agent,'*(Version\/\d*.\d* Safari)');
@@ -36,6 +61,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 l_browser:=REGEXP_SUBSTR(l_user_agent,'*(Firefox\/\d*)');
             END IF;
         END IF;
+        */
 
         INSERT INTO website_article_cwv (
             website_id, article_id, seq, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, 
