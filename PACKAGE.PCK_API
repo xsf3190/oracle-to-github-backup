@@ -14,6 +14,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
     --
     PROCEDURE callAWSemailAPI(pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB);
     --
+    PROCEDURE callBrowserAPI(pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB);
+    --
     PROCEDURE callCloudinaryAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
     --
     PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
@@ -35,6 +37,42 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS 
+
+    /*
+    **  WHATISMYBROWSER API
+    */
+    PROCEDURE callBrowserAPI(pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB) IS
+        l_whatismybrowser_api_key users.whatismybrowser_api_key%type;
+        l_whatismybrowser_url VARCHAR2(100):='https://api.whatismybrowser.com/api/v3/detect';
+        l_error_message LONG;
+    BEGIN
+        /* Get Admin user's terraform aws gateway url and api key */
+        SELECT u.whatismybrowser_api_key
+          INTO l_whatismybrowser_api_key
+          FROM users u, apex_workspace_apex_users w
+         WHERE w.email=u.email
+           AND w.is_admin='Yes'
+         ORDER BY date_created
+         FETCH FIRST ROW ONLY;
+
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'x-api-key';
+        apex_web_service.g_request_headers(1).value := l_whatismybrowser_api_key;
+
+        pData := apex_web_service.make_rest_request(p_url=>l_whatismybrowser_url, p_http_method=>'POST', p_body=>pBody);
+
+        pck_core.log(apex_web_service.g_status_code || ' : POST - ' || l_whatismybrowser_url);
+
+        IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
+            RETURN;
+        END IF;
+
+        FOR C IN (SELECT message FROM JSON_TABLE(pData,'$.result' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
+            l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
+        END LOOP;
+        pck_core.log(l_error_message);
+    END;
 
     /*
     **  STRIPE API
