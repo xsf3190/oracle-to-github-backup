@@ -316,10 +316,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     FROM website
                    WHERE id=pWebsiteId)
         LOOP
-            IF (C.css IS NOT NULL) THEN
-                l_deploy_css:=C.css;
-                CONTINUE;
-            END IF;
+            /* Build design tokens */
 
             l_fluid_types:=getFluidTypes(C.min_font_size, C.min_width_px, C.min_scale, C.max_font_size, C.max_width_px, C.max_scale);
             
@@ -343,14 +340,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(C.font,' ','+') || '&display=swap">' || chr(10);
             END IF;
 
-            FOR C1 IN (SELECT apex_util.blob_to_clob(file_content) css
-                         FROM apex_application_static_files 
-                        WHERE application_id=pApplicationId
-                          AND file_name='deploy.css')  /* Can't use min file because stupid Apex editor removes nested css */
-            LOOP
-                l_deploy_css:=l_deploy_css || chr(10) || C1.css;
-                IF (pIncludeFontLink) THEN
-                    l_deploy_css:=l_deploy_css ||chr(10) ||
+            IF (C.css IS NOT NULL) THEN
+                l_deploy_css:=l_deploy_css || chr(10) || C.css;
+            ELSE
+                FOR C1 IN (SELECT apex_util.blob_to_clob(file_content) css
+                             FROM apex_application_static_files 
+                            WHERE application_id=pApplicationId
+                              AND file_name='deploy.css')  /* Can't use min file because stupid Apex editor removes nested css */
+                LOOP
+                    l_deploy_css:=l_deploy_css || chr(10) || C1.css;
+                    IF (pIncludeFontLink) THEN
+                        l_deploy_css:=l_deploy_css ||chr(10) ||
 'pre:has(.language-html) {
   position: relative;
   &::before {
@@ -366,8 +366,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 code.language-html {
   display:none;
 }';
-                END IF;
-            END LOOP;
+                    END IF;
+                END LOOP;
+            END IF;
         END LOOP;
 
         RETURN (l_deploy_css);
