@@ -12,7 +12,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE runDelete(pUserId IN users.id%type, pWebsiteId IN website.id%type, pSiteId IN website.netlify_site_id%type);
     --
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type, pResturl IN VARCHAR2, pApplicationId IN VARCHAR2) ;
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pResturl IN VARCHAR2, pApplicationId IN VARCHAR2) ;
     --
     PROCEDURE setTerraformApikey;
     --
@@ -44,6 +44,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         n PLS_INTEGER;
         l_body_text CLOB:=pBodyText;
         l_website_id website.id%type;
+        l_env VARCHAR2(4);
         l_site_id website.netlify_site_id%type;
         l_list LONG;
         l_url VARCHAR2(100);
@@ -52,8 +53,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_session_data:=pck_core.getSessionData();
 
         WITH payload AS (SELECT websiteid, env, list FROM JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, env, list)))
-        SELECT p.websiteid, CASE WHEN p.env='TEST' THEN w.netlify_site_id ELSE w.netlify_site_id_custom END, p.list 
-          INTO l_website_id, l_site_id, l_list 
+        SELECT p.websiteid, p.env, CASE WHEN p.env='TEST' THEN w.netlify_site_id ELSE w.netlify_site_id_custom END, p.list 
+          INTO l_website_id, l_env, l_site_id, l_list 
           FROM website w, payload p
          WHERE w.user_id=l_session_data.user_id
            AND w.id=p.websiteid;
@@ -87,7 +88,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             job_name   => l_job_name,
             job_type   =>'STORED_PROCEDURE',
             job_action =>'pck_deploy.runDeployment',
-            number_of_arguments=>5,
+            number_of_arguments=>6,
             start_date=>systimestamp
         );
         dbms_scheduler.set_job_argument_value(
@@ -103,16 +104,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
             argument_position => 3,
-            argument_value => l_site_id
+            argument_value => CASE WHEN l_env='LIVE' THEN '.min.js' ELSE '.js' END
         );
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
             argument_position => 4,
-            argument_value => pck_core.getRestUrl()
+            argument_value => l_site_id
         );
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
             argument_position => 5,
+            argument_value => pck_core.getRestUrl()
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 6,
             argument_value => l_session_data.app_id
         );
         dbms_scheduler.enable(l_job_name);
@@ -139,7 +145,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     /*
     **  DEPLOY BY UPLOADING HTML FILE CONTENT DIRECTLY TO NETLIFY
     */
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pSiteId IN website.netlify_site_id%type, pRestUrl IN VARCHAR2, pApplicationId IN VARCHAR2) IS
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pRestUrl IN VARCHAR2, pApplicationId IN VARCHAR2) IS
         l_clob CLOB;
         l_json JSON_OBJECT_T;
         l_files JSON_OBJECT_T;
@@ -150,6 +156,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_metric_js CLOB;
         l_gallery_js CLOB;
         l_contact_js CLOB;
+        l_cart_js CLOB;
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
         TYPE tt_files IS RECORD (
@@ -210,19 +217,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             RETURN (l_contact_email);
         END;
 
+        FUNCTION getJSCode(pFilename IN VARCHAR2) RETURN CLOB IS
+        BEGIN
+            FOR C IN (SELECT apex_util.blob_to_clob(file_content) file_content
+                        FROM apex_application_static_files 
+                       WHERE application_id=pApplicationId
+                         AND file_name=pFilename || pEnv) 
+            LOOP
+                RETURN (C.file_content);
+            END LOOP;
+        END;
+
     BEGIN
-        /* get javascript files */
+        /* get javascript files 
         FOR C IN (SELECT file_name, apex_util.blob_to_clob(file_content) file_content
                     FROM apex_application_static_files 
                    WHERE application_id=pApplicationId
-                     AND file_name IN ('deploy_metric.js', 'deploy_gallery.js', 'deploy_contact.js') )
+                     AND file_name LIKE 'deploy%.js')
         LOOP
-            CASE C.file_name
-                WHEN 'deploy_metric.js' THEN l_metric_js:=C.file_content;
-                WHEN 'deploy_gallery.js' THEN l_gallery_js:=C.file_content;
-                WHEN 'deploy_contact.js' THEN l_contact_js:=C.file_content;
-            END CASE;
-        END LOOP;
+            IF (pEnv='TEST') THEN
+                CASE C.file_name
+                    WHEN 'deploy_metric.js' THEN l_metric_js:=C.file_content;
+                    WHEN 'deploy_gallery.js' THEN l_gallery_js:=C.file_content;
+                    WHEN 'deploy_contact.js' THEN l_contact_js:=C.file_content;
+                    WHEN 'deploy_cart.js' THEN l_cart_js:=C.file_content;
+                END CASE;
+            END IF;
+            IF (pEnv='LIVE') THEN
+                CASE C.file_name
+                    WHEN 'deploy_metric.min.js' THEN l_metric_js:=C.file_content;
+                    WHEN 'deploy_gallery.min.js' THEN l_gallery_js:=C.file_content;
+                    WHEN 'deploy_contact.min.js' THEN l_contact_js:=C.file_content;
+                    WHEN 'deploy_cart.min.js' THEN l_cart_js:=C.file_content;
+                END CASE;
+            END IF;
+        END LOOP;*/
 
         
         SELECT REPLACE(font,' ','+') INTO l_font FROM website WHERE id=pWebsiteId;
@@ -327,9 +356,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     gMetricWebsiteId = "' || pWebsiteId || '";' || chr(10) || 
                     'gMetricArticleId = "' || CASE WHEN l_labels(i).parent_article_id=l_labels(i).article_id THEN l_labels(i).parent_article_id ELSE l_labels(i).article_id END || '";' || chr(10) || 
                     'gRestUrl = "' || pRestUrl || '";' || chr(10) ||
-                    l_metric_js || 
-                    CASE WHEN l_is_media AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN l_gallery_js END ||
-                    CASE WHEN l_labels(i).contact_form='YES' THEN l_contact_js END ||
+                    getJSCode('deploy_metric') || getJSCode('deploy_cart') ||
+                    CASE WHEN l_is_media AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN getJSCode('deploy_gallery') END ||
+                    CASE WHEN l_labels(i).contact_form='YES' THEN getJSCode('deploy_contact') END ||
                 '</script>' || chr(10) || '
                 </body>' || chr(10) || 
             '</html>';
