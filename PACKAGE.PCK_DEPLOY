@@ -153,10 +153,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_page CLOB;
         l_font website.font%type;
         l_deploy_css CLOB;
-        l_metric_js CLOB;
-        l_gallery_js CLOB;
-        l_contact_js CLOB;
-        l_cart_js CLOB;
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
         TYPE tt_files IS RECORD (
@@ -229,31 +225,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
-        /* get javascript files 
-        FOR C IN (SELECT file_name, apex_util.blob_to_clob(file_content) file_content
-                    FROM apex_application_static_files 
-                   WHERE application_id=pApplicationId
-                     AND file_name LIKE 'deploy%.js')
-        LOOP
-            IF (pEnv='TEST') THEN
-                CASE C.file_name
-                    WHEN 'deploy_metric.js' THEN l_metric_js:=C.file_content;
-                    WHEN 'deploy_gallery.js' THEN l_gallery_js:=C.file_content;
-                    WHEN 'deploy_contact.js' THEN l_contact_js:=C.file_content;
-                    WHEN 'deploy_cart.js' THEN l_cart_js:=C.file_content;
-                END CASE;
-            END IF;
-            IF (pEnv='LIVE') THEN
-                CASE C.file_name
-                    WHEN 'deploy_metric.min.js' THEN l_metric_js:=C.file_content;
-                    WHEN 'deploy_gallery.min.js' THEN l_gallery_js:=C.file_content;
-                    WHEN 'deploy_contact.min.js' THEN l_contact_js:=C.file_content;
-                    WHEN 'deploy_cart.min.js' THEN l_cart_js:=C.file_content;
-                END CASE;
-            END IF;
-        END LOOP;*/
 
-        
         SELECT REPLACE(font,' ','+') INTO l_font FROM website WHERE id=pWebsiteId;
 
         l_head:=
