@@ -26,6 +26,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_fluid_types pck_core.fluid_type_t;
         l_fluid_css LONG;
         l_session_data pck_core.session_data_rt;
+
+        FUNCTION getJSCode(pFilename IN VARCHAR2) RETURN CLOB IS
+        BEGIN
+            FOR C IN (SELECT apex_util.blob_to_clob(file_content) file_content
+                        FROM apex_application_static_files 
+                       WHERE application_id=l_session_data.app_id
+                         AND file_name=pFilename) 
+            LOOP
+                RETURN (C.file_content);
+            END LOOP;
+        END;
+
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -87,6 +99,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         /* build html */
         l_html:=l_nav_labels || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10);
+
+        /*  Start build of Javascript code */
+        l_javascript:=
+        '/*' || chr(10) || 
+        '** Page identifiers used to return metrics to the CMS' || chr(10) || 
+        '*/' || chr(10) ||
+        'gMetricWebsiteId = "' || l_website_id || '";' || chr(10) || 
+        'gMetricArticleId = "' || pArticleId || '";' || chr(10) || 
+        'gRestUrl = "' || pck_core.getRestUrl() || '";' || chr(10);
         
         /* Build index of Blog entries */
         IF (l_collection_type='BLOG') THEN
@@ -104,33 +125,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 <button type="button" class="prev">&lt;</button>
                 <button type="button" class="next">&gt;</button>
             </div>';
+            l_javascript:=l_javascript || getJSCode('deploy_gallery.js');
         END IF;
 
         IF (l_contact_form='YES') THEN
             SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
             l_html:=l_html || pck_core.buildContactForm(l_email,'xx');
+            l_javascript:=l_javascript || getJSCode('deploy_contact.js');
         END IF;
-
-        /* build javascript (non-minimised) */
-        FOR C IN (SELECT file_name, apex_util.blob_to_clob(file_content) file_content
-                    FROM apex_application_static_files
-                   WHERE application_id=l_session_data.app_id
-                     AND file_name LIKE 'deploy%.js' 
-                     AND INSTR(file_name,'.min.')=0 ) 
-        LOOP
-            IF (C.file_name='deploy_gallery.js' AND NOT l_is_media) THEN
-                CONTINUE;
-            END IF;
-            l_javascript:=l_javascript || C.file_content || chr(10);
-        END LOOP;
-        l_javascript:=
-        '/*' || chr(10) || 
-        '** Page identifiers used to return metrics to the CMS' || chr(10) || 
-        '*/' || chr(10) ||
-        'gMetricWebsiteId = "' || l_website_id || '";' || chr(10) || 
-        'gMetricArticleId = "' || pArticleId || '";' || chr(10) || 
-        'gRestUrl = "' || pck_core.getRestUrl() || '";' || chr(10) ||
-        l_javascript || chr(10);
 
         apex_json.open_object;
         apex_json.write('success', TRUE); 
