@@ -15,6 +15,7 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       logContent = logDialog.querySelector(".content"),
       newBlog = wrapper.querySelector(".new-blog"),
       newMedia = wrapper.querySelector(".new-media"),
+      newProduct = wrapper.querySelector(".new-product"),
       websiteNav = wrapper.querySelector(".website-nav"),
       pageNav = wrapper.querySelector(".page-nav"),
       popup = document.querySelector("dialog.popup"),
@@ -150,14 +151,22 @@ const changeHandler = (e) => {
                     case 'BLOG' :
                         newBlog.classList.add("visible");
                         newMedia.classList.remove("visible");
+                        newProduct.classList.remove("visible");
                         break;
                     case 'MEDIA' :
                         newMedia.classList.add("visible");
                         newBlog.classList.remove("visible");
+                        newProduct.classList.remove("visible");
+                        break;
+                    case 'PRODUCT' :
+                        newProduct.classList.add("visible");
+                        newBlog.classList.remove("visible");
+                        newMedia.classList.remove("visible");
                         break;
                     case 'N/A' :
                         newMedia.classList.remove("visible");
                         newBlog.classList.remove("visible");
+                        newProduct.classList.remove("visible");
                         break;
                 }
                 break;
@@ -211,6 +220,7 @@ const edit_website = (e) => {
 
     newBlog.classList.remove("visible");
     newMedia.classList.remove("visible");
+    newProduct.classList.remove("visible");
 
     websiteNav.querySelector("a").style.textDecorationLine = "revert";
 
@@ -514,9 +524,11 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".new-page")) {
         new_page(e);   
     } else if (e.target.matches(".new-blog")) {
-        new_collection();   
+        new_collection('BLOG');   
     } else if (e.target.matches(".new-media")) {
-        new_collection();     
+        new_collection('MEDIA');     
+    }  else if (e.target.matches(".new-product")) {
+        new_collection('PRODUCT');     
     } else if (e.target.matches(".show-subpages")) {
         show_subpages(e);   
     } else if (e.target.matches(".edit-codepen")) {
@@ -1316,13 +1328,15 @@ const new_page = (e) => {
 /* 
  ** CREATE NEW SUB PAGE
  */
-const new_collection = () => {
+const new_collection = (collection) => {
+    const title = document.querySelector(".ck > h1").textContent;
+    if (title==="NEW "+collection) return;
     const parent = pageNav.querySelector(".selected").closest("div").dataset.id;
     execProcess( "collection/"+parent,"POST").then( (data) => {
         gArticleId = data.article_id;
         editor_status = "init";
         editor_status_text.textContent = "";
-        editor.setData("");
+        editor.setData("<h1>NEW "+collection + "</h1>");
         galleryList.replaceChildren();
         if (editor.isReadOnly) {
             editor.disableReadOnlyMode( 'lock-id' );
@@ -1371,26 +1385,23 @@ const show_subpages = (e) => {
         const nav = pageNav.getBoundingClientRect(),
               button = e.target.getBoundingClientRect();
           
-        switch (collection) {
-            case 'BLOG' :
-                if (button.x - nav.x < (nav.x + nav.width - button.x)) {
-                    list.style.left = "0";
-                    list.style.right = "auto";
-                    list.style.maxWidth = `${nav.x + nav.width - button.x}px`;
-                } else {
-                    list.style.right = "0";
-                    list.style.left = "auto";
-                    list.style.maxWidth = `${button.x - nav.x}px`;
-                    list.style.top = "3.5ch";
-                }
-                break;
-            case 'MEDIA' :
-                list.style.left = `-${button.x - nav.x}px`;
+        if (collection==="BLOG" || collection==="PRODUCT") {
+            if (button.x - nav.x < (nav.x + nav.width - button.x)) {
+                list.style.left = "0";
                 list.style.right = "auto";
+                list.style.maxWidth = `${nav.x + nav.width - button.x}px`;
+            } else {
+                list.style.right = "0";
+                list.style.left = "auto";
+                list.style.maxWidth = `${button.x - nav.x}px`;
                 list.style.top = "3.5ch";
-                list.style.maxWidth = `${nav.width}px`;
-                list.classList.add("gallery-list");
-                break;
+            }
+        } else {
+            list.style.left = `-${button.x - nav.x}px`;
+            list.style.right = "auto";
+            list.style.top = "3.5ch";
+            list.style.maxWidth = `${nav.width}px`;
+            list.classList.add("gallery-list");
         }
         list.replaceChildren();
         list.insertAdjacentHTML('afterbegin',data.content);
@@ -1437,6 +1448,8 @@ const selected_nav = (nav, id) => {
             if (nav===websiteNav || !link.nextElementSibling) {
                 newBlog.classList.remove("visible");
                 newMedia.classList.remove("visible");
+                newProduct.classList.remove("visible");
+
             } else {
                 /* If Page is a collection then show relevant "NEW" collection button */
                 if (link.nextElementSibling) {
@@ -1445,9 +1458,16 @@ const selected_nav = (nav, id) => {
                         case 'BLOG' :
                             newBlog.classList.add("visible");
                             newMedia.classList.remove("visible");
+                            newProduct.classList.remove("visible");
                             break;
                         case 'MEDIA' :
                             newMedia.classList.add("visible");
+                            newBlog.classList.remove("visible");
+                            newProduct.classList.remove("visible");
+                            break;
+                        case 'PRODUCT' :
+                            newProduct.classList.add("visible");
+                            newMedia.classList.remove("visible");
                             newBlog.classList.remove("visible");
                             break;
                     }
@@ -1573,6 +1593,9 @@ delete_page = () => {
                 break;
             case 'media' :
                 newMedia.classList.toggle("visible");
+                break;
+            case 'product' :
+                newProduct.classList.toggle("visible");
                 break;
         }
         logDialog.close();
