@@ -72,7 +72,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     /*
      **  Create wrapper html for input number element
      */
-    FUNCTION buildInputNumberWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN NUMBER, pCanUsePopover IN BOOLEAN, pMin IN VARCHAR2, pMax IN VARCHAR2, pStep IN VARCHAR2 DEFAULT NULL, pClassName IN VARCHAR2 DEFAULT 'cms') RETURN VARCHAR2 IS
+    FUNCTION buildInputNumberWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN NUMBER, pCanUsePopover IN BOOLEAN, pMin IN VARCHAR2 DEFAULT NULL, pMax IN VARCHAR2 DEFAULT NULL, pStep IN VARCHAR2 DEFAULT NULL, pClassName IN VARCHAR2 DEFAULT 'cms') RETURN VARCHAR2 IS
         l_column_name user_tab_columns.column_name%type;
         l_data_length user_tab_columns.data_length%type;
         l_comments user_col_comments.comments%type;
@@ -87,8 +87,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             <label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || l_popover ||
             '</label>
             <input  type="number" class="' || pClassName || '"' ||
-            ' id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
-                '" min="' || pMin || '" max="' || pMax || '"' || CASE WHEN pStep IS NOT NULL THEN ' step="' || pStep || '" ' END || 'value="' || TO_CHAR(pValue) || '" data-column="' || pColumn || '" data-id="' || pId || '">
+            ' id="' || l_column_name || '" name="' || LOWER(l_column_name) || '"' ||
+            CASE WHEN pMin IS NOT NULL THEN ' min="' || pMin || '"' END ||
+            CASE WHEN pMax IS NOT NULL THEN ' max="' || pMax || '"' END ||
+            CASE WHEN pStep IS NOT NULL THEN ' step="' || pStep || '"' END || 
+            ' value="' || TO_CHAR(pValue) || '" data-column="' || pColumn || '" data-id="' || pId || '">
             <div class="button-container">
                 <span class="result">&nbsp;</span>' ||
             '</div>
@@ -504,16 +507,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
 
         /* No content means it  must be a sub-article */
         IF (l_content IS NULL) THEN 
-            FOR C IN (SELECT wa.navigation_label
+            FOR C IN (SELECT wa.navigation_label, wa.collection_type, a.product_price, a.price_currency
                         FROM article a, website_article wa
                        WHERE a.id=l_article_id
                          AND wa.website_id=l_website_id
                          AND wa.article_id=a.parent_id
                          AND user_id=l_session_data.user_id) 
             LOOP
-                l_content:=
-                '<form>
-                    <details>
+                l_content:='<form>';
+                IF (C.collection_type='PRODUCT') THEN
+                    l_content:=l_content || 
+                    buildInputNumberWrapper(l_article_id, 'article.product_price', TO_CHAR(C.product_price), l_session_data.canuse_popover) ||
+                    buildRadioWrapper(l_article_id, 'article.price_currency', C.price_currency, l_session_data.canuse_popover);
+                END IF;
+                l_content:=l_content || 
+                    '<details>
                         <summary>CODEPEN FEATURES</summary>' ||
                         pck_core.buildPushableButton('edit-codepen','&#9917;') ||
                         pck_core.buildPushableButton('upload-codepen','&#9917;') ||
@@ -740,6 +748,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'website_article.contact_form' THEN
                     UPDATE website_article SET contact_form=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
+                WHEN 'article.product_price' THEN
+                    UPDATE article SET product_price=C.value, updated_date=current_timestamp WHERE id=C.id;
+                WHEN 'article.price_currency' THEN
+                    UPDATE article SET price_currency=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'users.netlify_token' THEN
                     UPDATE users SET netlify_token=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'users.netlify_account_slug' THEN
