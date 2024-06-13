@@ -23,6 +23,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildMediaList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks  IN BOOLEAN DEFAULT TRUE) RETURN CLOB;
     --
+    FUNCTION buildProductList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type) RETURN CLOB;
+    --
     FUNCTION getFluidTypes(pMinFontSize IN NUMBER, pMinWidthPx IN NUMBER, pMinScale IN NUMBER, pMaxFontSize IN NUMBER, pMaxWidthPx IN NUMBER, pMaxScale IN NUMBER) RETURN fluid_type_t;
     --
     FUNCTION buildContactForm(pContactEmail IN website.contact_email%type DEFAULT NULL, pUrl IN VARCHAR2) RETURN VARCHAR2;
@@ -537,6 +539,30 @@ code.language-html {
     END;
 
     /*
+    ** Construct index of Product entries
+    */
+    FUNCTION buildProductList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type) RETURN CLOB IS
+        l_html CLOB;
+    BEGIN
+        l_html:='<ol>';
+        FOR C IN (SELECT art.body_html, art.title, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, art.product_price, art.price_currency
+                    FROM article art, asset ass
+                   WHERE art.parent_id=pArticleId
+                     AND ass.id=art.cover_asset_id
+                     ORDER BY art.display_order) 
+        LOOP
+            l_html:=l_html || 
+            '<li>
+                <img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
+                <h4>' || C.title || '</h4>
+                <button type="button" class="buy" data-name="' || C.title|| '" data-price="' || C.product_price || '" data-currency="' || C.price_currency|| '">' || TO_CHAR(C.product_price) || ' ' ||  C.price_currency || '</button>
+            </li>';
+        END LOOP;
+        l_html:=l_html || '</ol>';
+        RETURN (l_html);
+    END;
+
+    /*
     ** the miserable privacy policy - Faceook insists that it can be accessed by an application url
     */
     FUNCTION buildPrivacyPage RETURN CLOB IS
@@ -824,6 +850,7 @@ code.language-html {
                     buildPushableButton('new-page','&plus;') ||
                     buildPushableButton('new-blog','&plus;') ||
                     buildPushableButton('new-media','&plus;') ||
+                    buildPushableButton('new-product','&plus;') ||
                     '</div>
                     <nav class="page-nav">' ||
                     buildPageNav(l_selected_website_id) ||
