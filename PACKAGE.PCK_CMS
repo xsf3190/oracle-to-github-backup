@@ -455,6 +455,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                         l_subarticle_selected:=TRUE;
                     END IF;
                     l_item:=l_item || '</li>';
+                WHEN 'PRODUCT' THEN
+                    l_item:='<li data-id="' || C.id || '"><a class="with-icon nav-label subpage">';
+                    IF (C.id=l_subarticle_id) THEN 
+                        l_item:=l_item || '&#9656;&nbsp;';
+                        l_subarticle_selected:=TRUE;
+                    END IF;
+                    l_item:=l_item || C.title || '</a></li>';
             END CASE;
             l_content:=l_content || TO_CLOB(l_item);
         END LOOP;        
