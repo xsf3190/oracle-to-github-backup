@@ -261,6 +261,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
           FROM website_article wa, article a 
          WHERE wa.website_id=pWebsiteId 
            AND a.parent_id=wa.article_id 
+           AND wa.collection_type IN ('BLOG','MEDIA')
           )
          ORDER BY display_order, lastmod DESC;
          
@@ -277,6 +278,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             ELSIF (l_labels(i).collection_type='MEDIA') THEN
                 l_is_media:=TRUE;
                 l_labels(i).body_html:=l_labels(i).body_html || pck_core.buildMediaList(pWebsiteId, l_labels(i).parent_article_id);
+            ELSIF (l_labels(i).collection_type='PRODUCT') THEN
+                l_labels(i).body_html:=l_labels(i).body_html || pck_core.buildProductList(pWebsiteId, l_labels(i).parent_article_id);
             ELSIF (l_labels(i).collection_type IS NULL AND l_is_media) THEN
                 l_thumbnails:=NULL;
                 pck_media.getThumbnails(l_labels(i).article_id,pDeploy=>TRUE,pHtml=>l_thumbnails);
@@ -328,8 +331,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     gMetricWebsiteId = "' || pWebsiteId || '";' || chr(10) || 
                     'gMetricArticleId = "' || CASE WHEN l_labels(i).parent_article_id=l_labels(i).article_id THEN l_labels(i).parent_article_id ELSE l_labels(i).article_id END || '";' || chr(10) || 
                     'gRestUrl = "' || pRestUrl || '";' || chr(10) ||
-                    getJSCode('deploy_metric') || getJSCode('deploy_cart') ||
+                    getJSCode('deploy_metric') || 
                     CASE WHEN l_is_media AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN getJSCode('deploy_gallery') END ||
+                    CASE WHEN l_labels(i).collection_type='PRODUCT' THEN getJSCode('deploy_cart') END ||
                     CASE WHEN l_labels(i).contact_form='YES' THEN getJSCode('deploy_contact') END ||
                 '</script>' || chr(10) || '
                 </body>' || chr(10) || 
