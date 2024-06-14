@@ -24,9 +24,11 @@ CREATE TABLE "WEBSITE"
 	"MAX_FONT_SIZE" NUMBER DEFAULT 2, 
 	"MAX_WIDTH_PX" NUMBER DEFAULT 1140, 
 	"MAX_SCALE" NUMBER DEFAULT 1.25, 
+	"PRICE_CURRENCY" VARCHAR2(3), 
 	 CONSTRAINT "PK_WEBSITE" PRIMARY KEY ("ID")
   USING INDEX  ENABLE, 
-	 CONSTRAINT "CHECK_DOMAIN_NAME" CHECK (domain_name<>'TEMPLATES') ENABLE
+	 CONSTRAINT "CHECK_DOMAIN_NAME" CHECK (domain_name<>'TEMPLATES') ENABLE, 
+	 CONSTRAINT "CURRENCY_CHECK" CHECK (price_currency in ('EUR','USD','GBP','CHF')) ENABLE
    ) ;
 COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'Websites are deployed to "https://{Domain Name}.netlify.app".<p>Domain names purchased on Netlify or transferred from a registrar are published live on the internet.</p><p>The same content can therefore be published independently on separate TEST and LIVE websites to allow previewing changes.';
    COMMENT ON COLUMN "WEBSITE"."CONTACT_EMAIL" IS 'Email address to which contact form details are sent';
@@ -49,6 +51,8 @@ CREATE UNIQUE INDEX "PK_WEBSITE" ON "WEBSITE" ("ID")
   ;
   CREATE UNIQUE INDEX "SYS_IL0000332838C00013$$" ON "WEBSITE" (
   ;
+
+  ALTER TABLE "WEBSITE" ADD CONSTRAINT "CURRENCY_CHECK" CHECK (price_currency in ('EUR','USD','GBP','CHF')) ENABLE;
 
   ALTER TABLE "WEBSITE" MODIFY ("COLOR_TEXT" NOT NULL ENABLE);
 
