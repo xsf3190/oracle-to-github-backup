@@ -116,6 +116,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             l_html:=l_html || pck_core.buildMediaList(l_website_id, pArticleId, pIncludeLinks => FALSE);
         ELSIF (l_collection_type='PRODUCT') THEN
             l_html:=l_html || pck_core.buildProductList(l_website_id, pArticleId);
+            l_javascript:=l_javascript || getJSCode('deploy_cart.js');
         ELSIF (l_is_media) THEN
             pck_media.getThumbnails(pArticleId,pDeploy=>TRUE,pHtml=>l_thumbnails);
             l_html:=l_html || 
