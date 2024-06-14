@@ -369,7 +369,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
 
         FOR C IN (SELECT w.id, w.domain_name, w.font, g.url_regular, w.contact_email, w.max_width, 
                          w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, 
-                         w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom
+                         w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom, w.price_currency
                     FROM website w, google_font g
                    WHERE w.id=pWebsiteId
                      AND w.font=g.family
@@ -388,6 +388,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 buildInputWrapper(C.id, 'website.contact_email', C.contact_email, l_session_data.canuse_popover) ||
                 buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover) ||
                 buildListWrapper(C.id, 'website.font', C.font, l_select_options, l_session_data.canuse_popover) ||
+                buildRadioWrapper(C.id, 'website.price_currency', C.price_currency, l_session_data.canuse_popover) ||
                 '<details>
                     <summary>Fluid Typography</summary>
                     <div class="cards-50-50">
@@ -507,7 +508,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
 
         /* No content means it  must be a sub-article */
         IF (l_content IS NULL) THEN 
-            FOR C IN (SELECT wa.navigation_label, wa.collection_type, a.product_price, a.price_currency
+            FOR C IN (SELECT wa.navigation_label, wa.collection_type, a.product_price
                         FROM article a, website_article wa
                        WHERE a.id=l_article_id
                          AND wa.website_id=l_website_id
@@ -517,8 +518,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 l_content:='<form>';
                 IF (C.collection_type='PRODUCT') THEN
                     l_content:=l_content || 
-                    buildInputNumberWrapper(l_article_id, 'article.product_price', TO_CHAR(C.product_price), l_session_data.canuse_popover) ||
-                    buildRadioWrapper(l_article_id, 'article.price_currency', C.price_currency, l_session_data.canuse_popover);
+                    buildInputNumberWrapper(l_article_id, 'article.product_price', TO_CHAR(C.product_price), l_session_data.canuse_popover);
                 END IF;
                 l_content:=l_content || 
                     '<details>
@@ -740,6 +740,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     UPDATE website SET max_width_px=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website.max_scale' THEN
                     UPDATE website SET max_scale=C.value, updated_date=current_timestamp WHERE id=C.id;
+                WHEN 'website.price_currency' THEN
+                    UPDATE website SET price_currency=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website_article.collection_type' THEN
                     UPDATE website_article SET collection_type=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'website_article.page_title' THEN
@@ -750,8 +752,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     UPDATE website_article SET contact_form=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'article.product_price' THEN
                     UPDATE article SET product_price=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'article.price_currency' THEN
-                    UPDATE article SET price_currency=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'users.netlify_token' THEN
                     UPDATE users SET netlify_token=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'users.netlify_account_slug' THEN
