@@ -46,7 +46,7 @@ document.getElementById("cart-show").addEventListener("click",() => {
   let items = `<table><caption class="close">x</caption>`;
   purchases.forEach(purchase => {
     items += `<tr><td rowspan="2"><img src="${purchase.url}"></td><td>${purchase.name}<button type="button" class="delete" data-name="${purchase.name}"><svg><use href="#delete"></use></svg></button></td></tr>`;
-    items += `<tr><td><span>${purchase.price} ${purchase.currency}</span><input type="number" name="quantity" min="1" max="20" step="1" value="${purchase.quantity}" data-name="${purchase.name}" data-price="${purchase.price}"></td></tr>`;
+    items += `<tr><td><span>${purchase.price} ${purchase.currency}</span><input type="text" name="quantity" inputmode="numeric" pattern="[0-9]*" size="3" maxlength="2" value="${purchase.quantity}" data-name="${purchase.name}" data-price="${purchase.price}"></td></tr>`;
   });
   items += "</table>";
   const content = cart_items.querySelector("div");
