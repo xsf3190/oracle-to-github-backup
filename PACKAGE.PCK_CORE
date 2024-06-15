@@ -543,18 +543,23 @@ code.language-html {
     */
     FUNCTION buildProductList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type) RETURN CLOB IS
         l_html CLOB;
+        pos PLS_INTEGER;
     BEGIN
         l_html:='<ol>';
-        FOR C IN (SELECT w.price_currency, art.body_html, art.title, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, art.product_price
+        FOR C IN (SELECT w.price_currency, art.id, art.body_html, art.title, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, art.product_price
                     FROM article art, asset ass, website w
                    WHERE art.parent_id=pArticleId
                      AND ass.id=art.cover_asset_id
                      AND w.id=pWebsiteId
                      ORDER BY art.display_order) 
         LOOP
+            pos:=dbms_lob.instr(C.body_html,'</h1>',1,1)+8;
             l_html:=l_html || 
             '<li>
                 <img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
+                <button type="button" class="description" popovertarget="popover_' || C.id || '" id="btn_' || C.id || '">&#9432;</button>
+                <div id="popover_' || C.id || '" popover anchor="btn_' || C.id || '">' || 
+                    dbms_lob.substr(C.body_html, dbms_lob.getlength(C.body_html)-dbms_lob.instr(C.body_html,'</h1>',1,1)+5,dbms_lob.instr(C.body_html,'</h1>',1,1)+5) || '</div>
                 <h4>' || C.title || '</h4>
                 <button type="button" class="buy" data-name="' || C.title|| '" data-price="' || C.product_price || '" data-currency="' || C.price_currency|| '">' || 
                     TO_CHAR(C.product_price,'fm99999.90') || ' ' ||  C.price_currency ||
