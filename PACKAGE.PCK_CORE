@@ -463,6 +463,7 @@ code.language-html {
         SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
 
         apex_escape.set_html_escaping_mode('E');
+        l_html:='<!--CMS START-->';
         l_html:=l_html || '<ol class="blog">';
         FOR C IN (SELECT art.body_html, art.title, art.excerpt, NVL(art.deployed_date,art.updated_date) deployed_date, art.word_count, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
                     FROM article art, asset ass
@@ -500,6 +501,7 @@ code.language-html {
             </li>';
         END LOOP;
         l_html:=l_html || '</ol>';
+        l_html:=l_html || '<!--CMS END-->';
         RETURN (l_html);
     END;
 
@@ -517,7 +519,7 @@ code.language-html {
         ELSE
             l_href:='#';
         END IF;
-
+        l_html:='<!--CMS START-->';
         l_html:=l_html || '<ol class="gallery-list">';
         FOR C IN (SELECT art.title, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
                     FROM article art, asset ass
@@ -534,18 +536,22 @@ code.language-html {
             </li>';
         END LOOP;
         l_html:=l_html || '</ol>';
+        l_html:=l_html || '<!--CMS END-->';
 
         RETURN (l_html);
     END;
 
     /*
-    ** Construct index of Product entries
+    ** Construct list of Products including image
     */
     FUNCTION buildProductList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type) RETURN CLOB IS
         l_html CLOB;
+        l_description VARCHAR2(250);
         pos PLS_INTEGER;
     BEGIN
-        l_html:='<ol>';
+        l_html:='<!--CMS START-->';
+        l_html:=l_html || '<ol class="product">';
+
         FOR C IN (SELECT w.price_currency, art.id, art.body_html, art.title, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, art.product_price
                     FROM article art, asset ass, website w
                    WHERE art.parent_id=pArticleId
@@ -553,20 +559,20 @@ code.language-html {
                      AND w.id=pWebsiteId
                      ORDER BY art.display_order) 
         LOOP
-            pos:=dbms_lob.instr(C.body_html,'</h1>',1,1)+8;
+            pos:=dbms_lob.instr(C.body_html,'</h1>',1,1)+5;
+            l_description:=SUBSTR(dbms_lob.substr(C.body_html,dbms_lob.getlength(C.body_html) - pos, pos), 1, 250);
+            l_description:=REPLACE(RTRIM(LTRIM(l_description,'<p>'),'</p>'),'&nbsp;',null);
             l_html:=l_html || 
             '<li>
                 <img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '">
-                <button type="button" class="description" popovertarget="popover_' || C.id || '" id="btn_' || C.id || '">&#9432;</button>
-                <div id="popover_' || C.id || '" popover anchor="btn_' || C.id || '">' || 
-                    dbms_lob.substr(C.body_html, dbms_lob.getlength(C.body_html)-dbms_lob.instr(C.body_html,'</h1>',1,1)+5,dbms_lob.instr(C.body_html,'</h1>',1,1)+5) || '</div>
                 <h4>' || C.title || '</h4>
+                <p>' ||  l_description || '</p>
                 <button type="button" class="buy" data-name="' || C.title|| '" data-price="' || C.product_price || '" data-currency="' || C.price_currency|| '">' || 
-                    TO_CHAR(C.product_price,'fm99999.90') || ' ' ||  C.price_currency ||
-                '<span></span></button>
+                    TO_CHAR(C.product_price,'fm99999.90') || ' ' ||  C.price_currency || '<span></span></button>
             </li>';
         END LOOP;
         l_html:=l_html || '</ol>';
+        l_html:=l_html || '<!--CMS END-->';
         RETURN (l_html);
     END;
 
