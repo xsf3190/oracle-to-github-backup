@@ -406,17 +406,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             logDeployment(pWebsiteId, pSiteId, 'All files unchanged since last deployment');
         END IF;
 
-        /*
-        ** Update deployed_date for article belnging to collection pages
-       
-        UPDATE article SET deployed_date = current_timestamp
-         WHERE parent_id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteId AND collection_type<>'N/A')
-           AND deployed_date IS NULL;
-        */
-
-        /* test url */
-        
-
         EXCEPTION
             WHEN OTHERS THEN
                 logDeployment(pWebsiteId, pSiteId, SUBSTR(SQLERRM,1,100),'NOK');
