@@ -149,7 +149,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     END;
 
     /*
-     **  Update website CSS from the contents of an exported Codepen zip file
+     **  Update website HTML / CSS from the contents of an exported Codepen zip file
      */        
     PROCEDURE uploadCodepen(pId IN VARCHAR2, pZipFile IN BLOB) IS
         l_website_id website.id%type;
@@ -210,7 +210,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 IF (dbms_lob.compare(l_body_html, l_clob)=0) THEN
                     l_message:=l_message || ' [HTML - no change]';
                 ELSE
-                    UPDATE article SET body_html=l_clob, updated_date=current_timestamp WHERE id=l_article_id;
+                    UPDATE article SET body_html=l_clob, codepen_editor='Y', updated_date=current_timestamp WHERE id=l_article_id;
                     l_message:=l_message || ' [HTML - updated successfully]';
                 END IF;
             END IF;
