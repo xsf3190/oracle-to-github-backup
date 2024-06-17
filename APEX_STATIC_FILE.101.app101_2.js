@@ -501,6 +501,8 @@ const clickHandler = (e) => {
         account_usage(e); 
     } else if (e.target.matches(".edit-website")) {
         edit_website(e); 
+    } else if (e.target.matches(".go-live")) {
+        go_live(); 
     } else if (e.target.matches(".visits")) {
         get_visits(e); 
     } else if (e.target.matches(".more-visits")) {
@@ -1259,6 +1261,18 @@ const page_options = (e) => {
 }
 
 /* 
+ ** GO LIVE
+ */
+const go_live = () => {
+    execProcess( "website/"+gWebsiteId,"PUT").then( (data) => {
+        websiteNav.querySelectorAll(".edit-website[data-id='"+gWebsiteId+"']").forEach ((item) => {
+            item.parentElement.remove();
+        });
+        websiteNav.querySelector(".dropdown-items").insertAdjacentHTML('afterbegin',data.dropdown);
+    });
+}
+
+/* 
  ** GET WEBSIITE VISITS
  */
 const get_visits = (e) => {
@@ -1482,11 +1496,14 @@ const selected_nav = (nav, id) => {
  */
 const edit_text = (e) => {
     execProcess( "article/"+gArticleId,"GET").then( (data) => {
-        if (editor.isReadOnly) {
+        if (data.readonly) {
+            editor.enableReadOnlyMode( 'lock-id' );
+            editor_status_text.textContent = data.updated_date + " - EDIT IN CODEPEN";
+        } else {
             editor.disableReadOnlyMode( 'lock-id' );
+            editor_status_text.textContent = data.updated_date
         }
-        editor_status = "init";
-        editor_status_text.textContent = data.updated_date;
+        editor_status = "init";        
         if (data.html) {
             editor.setData(data.html);
         } else {
