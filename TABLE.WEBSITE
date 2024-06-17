@@ -30,7 +30,7 @@ CREATE TABLE "WEBSITE"
 	 CONSTRAINT "CHECK_DOMAIN_NAME" CHECK (domain_name<>'TEMPLATES') ENABLE, 
 	 CONSTRAINT "CURRENCY_CHECK" CHECK (price_currency in ('EUR','USD','GBP','CHF')) ENABLE
    ) ;
-COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'Websites are deployed to "https://{Domain Name}.netlify.app".<p>Domain names purchased on Netlify or transferred from a registrar are published live on the internet.</p><p>The same content can therefore be published independently on separate TEST and LIVE websites to allow previewing changes.';
+COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'TEST websites are always deployed as a subdomain of "netlify.app".<p>LIVE websites are deployed only if the Domain name has been purchased either through your Netlify subscription or transferred from a registrar.</p>';
    COMMENT ON COLUMN "WEBSITE"."CONTACT_EMAIL" IS 'Email address to which contact form details are sent';
    COMMENT ON COLUMN "WEBSITE"."FONT" IS 'Google Web Font';
    COMMENT ON COLUMN "WEBSITE"."MAX_WIDTH" IS 'Maximum width of content expressed in CSS units, e.g. "65ch"';
