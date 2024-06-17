@@ -386,7 +386,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_session_data:=pck_core.getSessionData();
 
         FOR C IN (
-            SELECT body_html, apex_util.get_since(COALESCE(updated_date, created_date)) updated_date
+            SELECT body_html, apex_util.get_since(COALESCE(updated_date, created_date)) updated_date, codepen_editor
             FROM article
             WHERE id=pArticleId
             AND author_user_id=l_session_data.user_id)
@@ -397,6 +397,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('html', C.body_html);
             apex_json.write('thumbnails', l_thumbnails);
             apex_json.write('updated_date', C.updated_date);
+            apex_json.write('readonly', CASE WHEN C.codepen_editor='Y' THEN TRUE ELSE FALSE END);
             apex_json.close_object;
         END LOOP;
 
@@ -572,6 +573,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         TYPE tt_table_id IS TABLE OF t_table_id;
         l_table_ids tt_table_id; 
 
+        l_parent_id article.id%type;
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
@@ -594,10 +596,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
                    AND article_id=l_table_ids(i).id;
 
             WHEN 'article' THEN
+                /* If pId references a subpage find the real parent id */
+                SELECT NVL(parent_id,pId) INTO l_parent_id FROM article WHERE id=pId;
                 FORALL i IN l_table_ids.first .. l_table_ids.last
                 UPDATE article 
                    SET display_order=l_table_ids(i).display_order 
-                 WHERE parent_id = pId
+                 WHERE parent_id = parent_id
                    AND id=l_table_ids(i).id;
 
             WHEN 'asset' THEN
