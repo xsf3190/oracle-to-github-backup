@@ -562,6 +562,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_clob CLOB;
         l_session_data pck_core.session_data_rt;
         l_error LONG;
+        l_dns_servers VARCHAR2(200);
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -591,12 +592,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_json.put('site_id', l_netlify_site_id_custom);
         l_json.put('name', l_domain_name);
 
-        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dns_zones', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);         
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dns_zones', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);      
+
+        /* Get dns servers */
+        FOR C IN (SELECT dns_server from json_table(l_clob, '$.dns_servers[*]' columns(dns_server path '$')) ) 
+        LOOP
+            l_dns_servers:=l_dns_servers || '<li>' || C.dns_server || '</li>';
+        END LOOP;
 
         apex_json.open_object;
         apex_json.write('success', TRUE);
         apex_json.write('dropdown', pck_core.makeWebsiteListItem(pWebsiteId, l_domain_name, 'TEST') || pck_core.makeWebsiteListItem(pWebsiteId, l_domain_name, 'LIVE'));
+        apex_json.write('dns_servers', '<ol>' || l_dns_servers || '</ol');
         apex_json.close_object;
+
+        /* Deploy in background */
+        pck_deploy.deployWebsite('{"websiteid":' || pWebsiteId || ',"env":"LIVE"}');
     END;
 
     /*
