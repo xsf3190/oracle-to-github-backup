@@ -647,7 +647,7 @@ code.language-html {
                     </li>
                     <li class="github-repo">
                         <a class="with-icon github-repo" href="https://github.com/xsf3190/oracle-to-github-backup" target="a_blank">
-                           &#9733; Adfreesites Github
+                           &#9733; Github Backup
                         </a>
                     </li>' || 
                     CASE WHEN pIsAdmin<>1 THEN
@@ -966,9 +966,17 @@ code.language-html {
            SET author_user_id=l_transfer_to_user_id 
          WHERE id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteid AND user_id=l_transfer_from_user_id);
 
+        UPDATE article 
+           SET author_user_id=l_transfer_to_user_id 
+         WHERE parent_id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteid AND user_id=l_transfer_from_user_id);
+
         UPDATE asset 
            SET user_id=l_transfer_to_user_id 
          WHERE article_id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteid AND user_id=l_transfer_from_user_id);
+
+        UPDATE asset 
+           SET user_id=l_transfer_to_user_id 
+         WHERE article_id IN (SELECT parent_id FROM article WHERE id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteid AND collection_type<>'NA' AND user_id=l_transfer_from_user_id));
 
         UPDATE website_article SET user_id=l_transfer_to_user_id 
          WHERE website_id=pWebsiteId AND user_id=l_transfer_from_user_id;
