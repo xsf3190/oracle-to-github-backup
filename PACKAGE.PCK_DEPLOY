@@ -1,7 +1,5 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as 
     --
-    PROCEDURE cancelDeployment(pId IN VARCHAR2);
-    --
     PROCEDURE deleteDirectory(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
     PROCEDURE deployInfrastructure(pSenderEmail IN VARCHAR2 DEFAULT 'contact.form');
@@ -133,7 +131,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
-        -- <button type="button" class="cancel-deploy">CANCEL DEPLOY</button>
         apex_json.write('content', '<ol class="deploy"><li><span>' || TO_CHAR(current_timestamp,'hh24:mi:ss') || '</span><span>Starting deployment of ' || l_url || '</span></li></ol>');
         apex_json.close_object;
 
@@ -269,6 +266,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /*
         ** 1. Remove any empty <h1> element from html
         ** 2. Append to parent page links to individual blog/media entries 
+        ** 3. Append adfreesites footer
         */
         FOR i IN 1..l_labels.COUNT LOOP
             l_labels(i).body_html:=REPLACE(l_labels(i).body_html ,'<h1>&nbsp;</h1>',null);
@@ -293,6 +291,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     <button type="button" class="next">&gt;</button>
                 </div>';
             END IF;
+            l_labels(i).body_html:=l_labels(i).body_html || '<footer class="promo">Built by adfreesites.com</footer>';
         END LOOP;
 
         /* Get URL of site to be deployed in order to build navigation links */
@@ -410,35 +409,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             WHEN OTHERS THEN
                 logDeployment(pWebsiteId, pSiteId, SUBSTR(SQLERRM,1,100),'NOK');
                 pck_core.log_error;
-    END;   
-
-    /*
-     **  CANCEL active deployment - HAVE TO STOP JOB FIRST PERHAPS?
-     */
-    PROCEDURE cancelDeployment(pId IN VARCHAR2) IS 
-        l_website_id website_deploy.website_id%type;
-        l_site_id website_deploy.site_id%type;
-        l_netlify_deploy_id website.netlify_deploy_id%type;
-        l_clob CLOB;
-        l_session_data pck_core.session_data_rt;
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-
-        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
-        l_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
-
-        SELECT netlify_deploy_id INTO l_netlify_deploy_id FROM website WHERE id=l_website_id AND user_id=l_session_data.user_id;
-
-        /* Get latest deployment status if started */
-        IF (l_netlify_deploy_id IS NOT NULL) THEN
-            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'deploys/' || l_netlify_deploy_id || '/cancel', pMethod=>'POST', pData=>l_clob);
-            pck_core.log(l_clob);
-            apex_json.open_object; 
-            apex_json.write('success', TRUE);
-            apex_json.write('completed', TRUE);
-            apex_json.write('content', '<li><span></span><span>DEPLOYMENT CANCELLED</span>');
-            apex_json.close_object;
-        END IF;
     END;
 
     /*
