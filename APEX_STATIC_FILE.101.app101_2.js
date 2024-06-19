@@ -1269,6 +1269,7 @@ const go_live = () => {
             item.parentElement.remove();
         });
         websiteNav.querySelector(".dropdown-items").insertAdjacentHTML('afterbegin',data.dropdown);
+        popupOpen("ADD FOLLOWING DNS SERVERS FOR YOUR DOMAIN", data.dns_servers);
     });
 }
 
