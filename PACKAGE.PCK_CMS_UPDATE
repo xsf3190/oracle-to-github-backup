@@ -559,6 +559,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_domain_name website.domain_name%type;
         l_netlify_account_slug users.netlify_account_slug%type;
         l_netlify_site_id_custom website.netlify_site_id_custom%type;
+        l_netlify_dns_zone_id website.netlify_dns_zone_id%type;
         l_clob CLOB;
         l_session_data pck_core.session_data_rt;
         l_error LONG;
@@ -566,25 +567,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT w.domain_name, u.netlify_account_slug 
-          INTO l_domain_name, l_netlify_account_slug
-          FROM website w, users u
+        SELECT w.domain_name
+          INTO l_domain_name
+          FROM website w
          WHERE w.user_id=l_session_data.user_id
-           AND w.id=pWebsiteId
-           AND w.netlify_site_id_custom IS NULL
-           AND u.id=w.user_id;
+           AND w.id=pWebsiteId;
 
-        /* Create NETLIFY site for LIVE site - i.e. for custom domain */
+        /* Create NETLIFY site object for LIVE site - i.e. for custom domain */
         l_json:=new JSON_OBJECT_T;
         l_json.put('name', l_domain_name || ' custom domain');
         l_json.put('custom_domain', l_domain_name);
 
         pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
-        SELECT site_id INTO l_netlify_site_id_custom FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
-        
-        UPDATE website 
-           SET netlify_site_id_custom=l_netlify_site_id_custom, updated_date=current_timestamp 
-         WHERE id=pWebsiteId;
+        SELECT id, account_slug 
+          INTO l_netlify_site_id_custom, l_netlify_account_slug
+          FROM JSON_TABLE(l_clob, '$' COLUMNS (id, account_slug));
 
         /* Create NETLIFY DNS ZONE for LIVE site */
         l_json:=new JSON_OBJECT_T;
@@ -592,13 +589,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_json.put('site_id', l_netlify_site_id_custom);
         l_json.put('name', l_domain_name);
 
-        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dns_zones', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);      
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dns_zones', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
 
         /* Get dns servers */
-        FOR C IN (SELECT dns_server from json_table(l_clob, '$.dns_servers[*]' columns(dns_server path '$')) ) 
+        FOR C IN (SELECT id, dns_server  FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED PATH '$.dns_servers[*]' COLUMNS (dns_server pATH '$'))) ) 
         LOOP
+            l_netlify_dns_zone_id:=C.id;
             l_dns_servers:=l_dns_servers || '<li>' || C.dns_server || '</li>';
         END LOOP;
+
+         UPDATE website 
+            SET netlify_site_id_custom=l_netlify_site_id_custom, netlify_dns_zone_id=l_netlify_dns_zone_id, updated_date=current_timestamp 
+          WHERE id=pWebsiteId;
 
         apex_json.open_object;
         apex_json.write('success', TRUE);
