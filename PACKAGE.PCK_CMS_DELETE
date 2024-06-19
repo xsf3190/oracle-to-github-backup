@@ -222,10 +222,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
         l_website_articles t_website_article;
         l_netlify_site_id website.netlify_site_id%type;
         l_netlify_site_id_custom website.netlify_site_id%type;
+        l_netlify_dns_zone_id website.netlify_dns_zone_id%type;
         l_clob CLOB;
     BEGIN
-        SELECT netlify_site_id, netlify_site_id_custom 
-          INTO l_netlify_site_id, l_netlify_site_id_custom
+        SELECT netlify_site_id, netlify_site_id_custom, netlify_dns_zone_id
+          INTO l_netlify_site_id, l_netlify_site_id_custom, l_netlify_dns_zone_id
           FROM website 
          WHERE user_id=pUserId
            AND id=pWebsiteId;
@@ -234,6 +235,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_DELETE" IS
         IF (pWebsiteEnv='LIVE') THEN
             pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/' || l_netlify_site_id_custom, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
             UPDATE website SET netlify_site_id_custom=NULL WHERE id=pWebsiteId;
+            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'dns_zones/' || l_netlify_dns_zone_id, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
+            UPDATE website SET netlify_dns_zone_id=NULL WHERE id=pWebsiteId;
+
         ELSIF (l_netlify_site_id_custom IS NULL) THEN
                     SELECT * BULK COLLECT INTO l_website_articles FROM website_article WHERE website_id=pWebsiteId AND user_id=pUserId;
                     FOR i IN 1..l_website_articles.COUNT LOOP
