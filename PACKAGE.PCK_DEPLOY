@@ -52,7 +52,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         WITH payload AS (SELECT websiteid, env, list FROM JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, env, list)))
         SELECT p.websiteid, p.env, CASE WHEN p.env='TEST' THEN w.netlify_site_id ELSE w.netlify_site_id_custom END, p.list 
-          INTO l_website_id, l_env, l_site_id, l_list 
+          INTO l_website_id, l_env, l_site_id, l_list
           FROM website w, payload p
          WHERE w.user_id=l_session_data.user_id
            AND w.id=p.websiteid;
