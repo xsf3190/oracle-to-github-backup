@@ -564,6 +564,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_session_data pck_core.session_data_rt;
         l_error LONG;
         l_dns_servers VARCHAR2(200);
+        l_job_name VARCHAR2(30);
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -578,7 +579,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_json.put('name', l_domain_name || ' custom domain');
         l_json.put('custom_domain', l_domain_name);
 
-        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'POST', pStatusAllowed=>422, pBody=>l_json.stringify, pData=>l_clob);
+        IF (apex_web_service.g_status_code=422) THEN
+            apex_json.open_object;
+            apex_json.write('success', TRUE);
+            apex_json.write('message', 'Domain Name must include top level domain, eg ".com"');
+            apex_json.close_object;
+            RETURN;
+        END IF;
+
         SELECT id, account_slug 
           INTO l_netlify_site_id_custom, l_netlify_account_slug
           FROM JSON_TABLE(l_clob, '$' COLUMNS (id, account_slug));
@@ -609,7 +618,48 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         apex_json.close_object;
 
         /* Deploy in background */
-        pck_deploy.deployWebsite('{"websiteid":' || pWebsiteId || ',"env":"LIVE"}');
+        DELETE website_deploy WHERE website_id=pWebsiteId;
+        UPDATE website SET netlify_deploy_id=NULL WHERE id=pWebsiteId;
+        
+        l_job_name:=dbms_scheduler.generate_job_name('DEPLOY_');
+        dbms_scheduler.create_job(
+            job_name   => l_job_name,
+            job_type   =>'STORED_PROCEDURE',
+            job_action =>'pck_deploy.runDeployment',
+            number_of_arguments=>6,
+            start_date=>systimestamp
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 1,
+            argument_value => pWebsiteId
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 2,
+            argument_value => l_session_data.user_id
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 3,
+            argument_value => '.min.js'
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 4,
+            argument_value => l_netlify_site_id_custom
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 5,
+            argument_value => pck_core.getRestUrl()
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 6,
+            argument_value => l_session_data.app_id
+        );
+        dbms_scheduler.enable(l_job_name);
     END;
 
     /*
