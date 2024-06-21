@@ -41,6 +41,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION getSessionData RETURN session_data_rt;
     --
+    PROCEDURE loadGoogleFonts;
+    --
     PROCEDURE log(pMsg IN VARCHAR2);
     --
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB);
@@ -944,6 +946,28 @@ code.language-html {
             WHEN OTHERS THEN
                 log_error;
                 RAISE;
+    END;
+
+    PROCEDURE loadGoogleFonts IS 
+        l_google_api_key users.google_api_key%type;
+        l_google_url VARCHAR2(250);
+        l_clob CLOB;
+    BEGIN
+        SELECT u.google_api_key 
+          INTO l_google_api_key
+          FROM apex_workspace_apex_users w, users u 
+         WHERE w.email=u.email
+           AND w.is_admin='Yes'
+           FETCH FIRST ROW ONLY;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'Content-Type';
+        apex_web_service.g_request_headers(1).value := 'application/json';
+        l_google_url:='https://www.googleapis.com/webfonts/v1/webfonts?key=' || l_google_api_key||'&capability=WOFF2&sort=popularity';
+        l_clob := apex_web_service.make_rest_request(p_url=>l_google_url, p_http_method=>'GET');
+        DELETE google_font;
+        INSERT INTO google_font (seq, family, url_regular)
+        SELECT ROWNUM, family, url_regular FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, url_regular PATH '$.files.regular'));
     END;
 
     /*
