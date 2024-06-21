@@ -1265,6 +1265,10 @@ const page_options = (e) => {
  */
 const go_live = () => {
     execProcess( "website/"+gWebsiteId,"PUT").then( (data) => {
+        if (data.message) {
+            popupOpen("ERROR REQUESTING GO-LIVE", data.message);
+            return;
+        }
         websiteNav.querySelectorAll(".edit-website[data-id='"+gWebsiteId+"']").forEach ((item) => {
             item.parentElement.remove();
         });
