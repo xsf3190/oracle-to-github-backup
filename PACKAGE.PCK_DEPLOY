@@ -222,7 +222,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
-
+        dbms_output.put_line('starting deployment of site id ' || pWebsiteId);
         SELECT REPLACE(font,' ','+') INTO l_font FROM website WHERE id=pWebsiteId;
 
         l_head:=
@@ -398,6 +398,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             logDeployment(pWebsiteId, pSiteId, 'Successfully uploaded ' || l_deploy_files(C.sha1).file_name);
             n:=n+1;
         END LOOP;
+        dbms_output.put_line('uploaded all files to Netify CDN');
 
         IF (n>0) THEN
             logDeployment(pWebsiteId, pSiteId, 'Uploaded files: ' || n || ' Unchanged files: ' || TO_CHAR(l_deploy_files.COUNT-n));
