@@ -134,6 +134,11 @@ input, textarea, select {
     font-weight: 600;
 }
 
+select {
+    inline-size: min(30ch,100%);
+    padding: 0.5em 0;
+}
+
 details > summary {
     cursor: pointer;
     font-weight: 600;
