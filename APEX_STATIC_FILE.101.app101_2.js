@@ -545,7 +545,11 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".delete-page")) {
         delete_page();
     } else if (e.target.matches(".delete-article")) {
-        delete_article(e); 
+        delete_article(e);
+    } else if (e.target.matches(".delete-test-website")) {
+        delete_website('TEST');
+    } else if (e.target.matches(".delete-live-website")) {
+        delete_website('LIVE');         
     } else if (e.target.matches(".delete-website")) {
         delete_website();
     } else if (e.target.matches(".delete-asset")) {
@@ -851,15 +855,10 @@ const widget=cloudinary.createUploadWidget(
             "camera",
             "image_search",
             "google_drive",
-            "facebook",
-            "dropbox",
-            "instagram",
             "unsplash",
             "shutterstock"
         ],
         defaultSource: "local",
-        googleApiKey: "AIzaSyCUob7BOkIEqwI6ZeBgaTUd8mb_-r5kW0Y",
-        dropboxAppKey: "7i2pqj2wc3p47by",
         use_filename: true,
         preBatch: (cb, data) => {
             const maxLength = 248;
@@ -1231,7 +1230,7 @@ const resize = () => {
  */
 const website_options = () => {
     if (gWebsiteId===0) return;
-    execProcess( "website-options/"+gWebsiteId,"GET").then( (data) => {
+    execProcess( "website-options/"+gWebsiteId+","+gWebsiteEnv,"GET").then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
@@ -1322,7 +1321,7 @@ const get_performance = (e) => {
  **  NEW WEBSITE
  */
 const new_website = () => {
-    execProcess( "website-options/0","GET").then( (data) => {
+    execProcess( "website-options/0,TEST","GET").then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
         logDialog.showModal();
@@ -1452,7 +1451,7 @@ const upload_media = () => {
     }
     execProcess( "cld-details","GET").then( (data) => {
         widget.open();
-        widget.update({tags: [gArticleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize});
+        widget.update({tags: [gArticleId], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize, googleApiKey: data.googleApiKey});
     });
 }
 
@@ -1642,7 +1641,7 @@ delete_article = () => {
 /*
  ** EXECUTE DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER
  */
-const delete_website = () => {
+const delete_website = (env) => {
     execProcess("dml","DELETE",{table_name: "website", website_id: gWebsiteId, website_env: gWebsiteEnv}).then( () => {
         websiteNav.querySelector("a").style.textDecorationLine = "line-through";
         websiteNav.querySelectorAll(".edit-website[data-id='"+gWebsiteId+"']").forEach ((item) => {
