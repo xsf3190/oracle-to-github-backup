@@ -33,7 +33,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildPageNav(pWebsiteId IN website.id%type) RETURN CLOB;
     --
-    FUNCTION buildPushableButton(pClassName IN VARCHAR2, pHTMLSymbol IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
+    FUNCTION buildPushableButton(pClassName IN VARCHAR2, pHTMLSymbol IN VARCHAR2 DEFAULT NULL, pButtonText IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION getPageContent RETURN CLOB;
     --
@@ -771,7 +771,7 @@ code.language-html {
         RETURN(l_html);
     END;
 
-    FUNCTION buildPushableButton(pClassName IN VARCHAR2, pHTMLSymbol IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS 
+    FUNCTION buildPushableButton(pClassName IN VARCHAR2, pHTMLSymbol IN VARCHAR2 DEFAULT NULL, pButtonText IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS 
         l_html VARCHAR2(200);
     BEGIN
         RETURN(
@@ -779,10 +779,8 @@ code.language-html {
             <span class="shadow"></span>
             <span class="edge"></span>
             <span class="front">' || 
-                CASE WHEN pHTMLSymbol IS NOT NULL THEN 
-                    pHTMLSymbol || '&nbsp;'
-                END || 
-                UPPER(REPLACE(pClassName,'-',' ')) || 
+                CASE WHEN pHTMLSymbol IS NOT NULL THEN pHTMLSymbol || '&nbsp;' END || 
+                CASE WHEN pButtonText IS NOT NULL THEN pButtonText ELSE UPPER(REPLACE(pClassName,'-',' ')) END || 
             '</span>
         </button>');
     END;
