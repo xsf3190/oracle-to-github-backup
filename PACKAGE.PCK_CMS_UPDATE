@@ -4,7 +4,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS_UPDATE" IS
     --
     PROCEDURE getPageoptions(pId IN VARCHAR2);
     --
-    PROCEDURE getWebsiteoptions(pWebsiteId IN website.id%type);
+    PROCEDURE getWebsiteoptions(pId IN VARCHAR2);
     --
     PROCEDURE goliveWebsite(pWebsiteId IN website.id%type);
     --
@@ -330,12 +330,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     END;
 
     /*
-    ** GET WEBSITE OPTIONS TO DISPLAY IN DIALOG. IF pWebsiteId = null THIS IS REQUEST TO CREATE NEW WEBSITE
+    ** GET WEBSITE OPTIONS TO DISPLAY IN DIALOG. N.B. pWebsiteId=0 IS REQUEST TO CREATE NEW WEBSITE
     */
-    PROCEDURE getWebsiteoptions(pWebsiteId IN website.id%type) IS
+    PROCEDURE getWebsiteoptions(pId IN VARCHAR2) IS
+        l_website_id website.id%type;
+        l_website_env VARCHAR2(4);
         l_session_data pck_core.session_data_rt;
         l_content CLOB;
-        l_website_id website.id%type;
         l_eyedropper VARCHAR2(3);
         l_select_options CLOB;
         l_fluid_types pck_core.fluid_type_t;
@@ -377,9 +378,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        IF (pWebsiteId=0) THEN
+        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
+        l_website_env:=SUBSTR(pId,INSTR(pId,',')+1);
+
+        IF (l_website_id=0) THEN
             l_content:=
-                buildInputWrapper(pWebsiteId, 'website.domain_name', NULL, l_session_data.canuse_popover) ||
+                buildInputWrapper(l_website_id, 'website.domain_name', NULL, l_session_data.canuse_popover) ||
                 pck_core.buildPushableButton('save');
             apex_json.open_object;
             apex_json.write('content', l_content );
@@ -393,7 +397,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                          w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom, w.price_currency,
                          w.netlify_last_published
                     FROM website w, google_font g
-                   WHERE w.id=pWebsiteId
+                   WHERE w.id=l_website_id
                      AND w.font=g.family
                      AND w.user_id=l_session_data.user_id) 
         LOOP
@@ -402,7 +406,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             IF ( C.netlify_site_id_custom IS NULL) THEN
                 l_domain_html:=buildInputWrapper(C.id, 'website.domain_name', C.domain_name, l_session_data.canuse_popover);
                 IF (C.netlify_last_published IS NOT NULL) THEN
-                    l_domain_html:=l_domain_html|| pck_core.buildPushableButton('go-live');
+                    l_domain_html:=l_domain_html|| pck_core.buildPushableButton('go-live',pButtonText=>'GO LIVE WITH PURCHASED DOMAIN NAME');
                 END IF;
             END IF;
 
@@ -447,7 +451,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 </div>
                 <details>
                     <summary>DELETE WEBSITE</summary>' ||
-                    pck_core.buildPushableButton('delete-website','&#128686;') ||
+                    pck_core.buildPushableButton('delete-' || LOWER(l_website_env) || '-website','&#128686;') ||
+                    CASE WHEN l_website_env='TEST' AND C.netlify_site_id_custom IS NULL THEN pck_core.buildPushableButton('delete-website','&#128686;', pButtonText=>'DELETE WEBSITE AND CONTENT') END ||
                 '</details>
             </form>';
 
