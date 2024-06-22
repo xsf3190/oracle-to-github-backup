@@ -10,7 +10,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
     --
     FUNCTION setGithubCurrentBuild(pUserId IN users.id%type, pSessionId IN users.current_build_session%type) RETURN NUMBER;
     --
-    PROCEDURE getCloudinaryData(pUserId IN users.id%type, pCloudName IN OUT users.cld_cloud_name%type, pCldApiKey IN OUT users.cld_api_key%type, pCldImageMaxSize IN OUT INTEGER, pCldVideoMaxSize IN OUT INTEGER);
+    PROCEDURE getCloudinaryData(pUserId IN users.id%type, pCloudName IN OUT users.cld_cloud_name%type, pCldApiKey IN OUT users.cld_api_key%type, pCldImageMaxSize IN OUT INTEGER, pCldVideoMaxSize IN OUT INTEGER, pGoogleApiKey IN OUT VARCHAR2);
     --
     PROCEDURE callAWSemailAPI(pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB);
     --
@@ -229,24 +229,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
     END;
     */
 
-    PROCEDURE getCloudinaryData(pUserId IN users.id%type, pCloudName IN OUT users.cld_cloud_name%type, pCldApiKey IN OUT users.cld_api_key%type, pCldImageMaxSize IN OUT INTEGER, pCldVideoMaxSize IN OUT INTEGER) IS
+    PROCEDURE getCloudinaryData(pUserId IN users.id%type, pCloudName IN OUT users.cld_cloud_name%type, pCldApiKey IN OUT users.cld_api_key%type, pCldImageMaxSize IN OUT INTEGER, pCldVideoMaxSize IN OUT INTEGER, pGoogleApiKey IN OUT VARCHAR2) IS
         l_cld_cloud_name users.cld_cloud_name%type;
         l_cld_api_key users.cld_api_key%type;
+        l_google_api_key users.google_api_key%type;
 
         /* Free Plan limits - we would have to use admin usage API to support higher limits on paid plans */
         DEFAULT_IMAGE_MAX_SIZE CONSTANT NUMBER:=10*1024*1024; 
         DEFAULT_VIDEO_MAX_SIZE CONSTANT NUMBER:=100*1024*1024;
     BEGIN
         /* Get user's Cloud name and API Key */
-        FOR C IN (SELECT cld_cloud_name, cld_api_key FROM users WHERE id=pUserId) LOOP 
+        FOR C IN (SELECT cld_cloud_name, cld_api_key, google_api_key FROM users WHERE id=pUserId) LOOP 
             l_cld_cloud_name:=C.cld_cloud_name;
             l_cld_api_key:=C.cld_api_key;
+            l_google_api_key:=C.google_api_key;
         END LOOP;
 
         /* Get Administrator values if user not registered with Cloudinary */
         IF (l_cld_cloud_name IS NULL) THEN
-            SELECT u.cld_cloud_name,u.cld_api_key
-              INTO l_cld_cloud_name,l_cld_api_key
+            SELECT u.cld_cloud_name, u.cld_api_key, u.google_api_key
+              INTO l_cld_cloud_name, l_cld_api_key, l_google_api_key
               FROM apex_workspace_apex_users w, users u 
              WHERE w.email=u.email
                AND w.is_admin='Yes'
@@ -257,6 +259,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         pCldApiKey:=l_cld_api_key;
         pCldImageMaxSize:=DEFAULT_IMAGE_MAX_SIZE;
         pCldVideoMaxSize:=DEFAULT_VIDEO_MAX_SIZE;
+        pGoogleApiKey:=l_google_api_key;
+
     END;
 
     FUNCTION getCloudinaryAPISecret(pUserId IN users.id%type) RETURN users.cld_api_secret%type IS
