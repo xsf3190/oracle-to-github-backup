@@ -162,11 +162,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_cld_api_secret users.cld_api_secret%type;
         l_image_max_size INTEGER;
         l_video_max_size INTEGER;
+        l_google_api_key users.google_api_key%type;
         l_session_data pck_core.session_data_rt;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        pck_api.getCloudinaryData(pUserId=>l_session_data.user_id, pCloudName=>l_cld_cloud_name, pCldApiKey=>l_cld_api_key, pCldImageMaxSize=>l_image_max_size, pCldVideoMaxSize=>l_video_max_size);
+        pck_api.getCloudinaryData(pUserId=>l_session_data.user_id, pCloudName=>l_cld_cloud_name, pCldApiKey=>l_cld_api_key, pCldImageMaxSize=>l_image_max_size, pCldVideoMaxSize=>l_video_max_size, pGoogleApiKey=>l_google_api_key);
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -174,6 +175,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         apex_json.write('apikey', l_cld_api_key);
         apex_json.write('maxImageFileSize', l_image_max_size);
         apex_json.write('maxVideoFileSize', l_video_max_size);
+        apex_json.write('googleApiKey', l_google_api_key);
         apex_json.close_object;
 
         EXCEPTION
