@@ -341,6 +341,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_select_options CLOB;
         l_fluid_types pck_core.fluid_type_t;
         l_domain_html LONG;
+        l_delete_html LONG;
 
         FUNCTION buildFontOptions(pFont IN VARCHAR2) RETURN VARCHAR2 IS
             l_options LONG;
@@ -392,23 +393,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             RETURN;
         END IF;
 
-        FOR C IN (SELECT w.id, w.domain_name, w.font, g.url_regular, w.contact_email, w.max_width, 
-                         w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, 
-                         w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom, w.price_currency,
-                         w.netlify_last_published
-                    FROM website w, google_font g
-                   WHERE w.id=l_website_id
-                     AND w.font=g.family
-                     AND w.user_id=l_session_data.user_id) 
+        FOR C IN (
+            SELECT w.id, w.domain_name, w.font, g.url_regular, w.contact_email, w.max_width, 
+                     w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, 
+                     w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom, w.price_currency,
+                     w.netlify_last_published
+              FROM website w, google_font g
+             WHERE w.id=l_website_id
+               AND w.font=g.family
+               AND w.user_id=l_session_data.user_id) 
         LOOP
             apex_json.open_object;
 
-            IF ( C.netlify_site_id_custom IS NULL) THEN
+            /* domain name can only be changed if no LIVE website deployed */
+            IF (C.netlify_site_id_custom IS NULL) THEN
                 l_domain_html:=buildInputWrapper(C.id, 'website.domain_name', C.domain_name, l_session_data.canuse_popover);
+                /* Only go live if TEST site deployed */
                 IF (C.netlify_last_published IS NOT NULL) THEN
                     l_domain_html:=l_domain_html|| pck_core.buildPushableButton('go-live',pButtonText=>'GO LIVE WITH PURCHASED DOMAIN NAME');
                 END IF;
             END IF;
+
+            /* DELETE website and definition only if no LIVE site */
+            CASE l_website_env
+                WHEN 'TEST' THEN
+                    IF (C.netlify_site_id_custom IS NULL) THEN
+                        l_delete_html:=pck_core.buildPushableButton('delete-website','&#128686;', pButtonText=>'DELETE WEBSITE AND CONTENT');
+                    END IF;
+                WHEN 'LIVE' THEN
+                    l_delete_html:=pck_core.buildPushableButton('delete-website','&#128686;', pButtonText=>'DELETE LIVE WEBSITE');
+            END CASE;
 
             l_content:=
             '<form>' ||
@@ -448,12 +462,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     <div><span></span></div>
                     <h1></h1>
                     <p></p>
-                </div>
-                <details>
-                    <summary>DELETE WEBSITE</summary>' ||
-                    pck_core.buildPushableButton('delete-' || LOWER(l_website_env) || '-website','&#128686;') ||
-                    CASE WHEN l_website_env='TEST' AND C.netlify_site_id_custom IS NULL THEN pck_core.buildPushableButton('delete-website','&#128686;', pButtonText=>'DELETE WEBSITE AND CONTENT') END ||
-                '</details>
+                </div>' ||
+                CASE WHEN l_delete_html IS NOT NULL THEN
+                '<details><summary>DELETE WEBSITE</summary>' || l_delete_html || '</details>'
+                END || '
             </form>';
 
             apex_json.write('content', l_content);
