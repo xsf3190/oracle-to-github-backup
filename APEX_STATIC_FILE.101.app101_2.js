@@ -247,6 +247,8 @@ const deploy_website = (e) => {
     const pages = pageNav.querySelectorAll("div[data-id]"),
           list = Array.from(pages, (page) => page.dataset.id);
 
+    if (list.length===0) return;
+
     execProcess("deploy","POST",{"websiteid":gWebsiteId,"env":gWebsiteEnv,"list":list.join(":")}).then( (data) => {
         logContent.replaceChildren();
         logContent.insertAdjacentHTML('afterbegin',data.content);
@@ -545,11 +547,7 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".delete-page")) {
         delete_page();
     } else if (e.target.matches(".delete-article")) {
-        delete_article(e);
-    } else if (e.target.matches(".delete-test-website")) {
-        delete_website('TEST');
-    } else if (e.target.matches(".delete-live-website")) {
-        delete_website('LIVE');         
+        delete_article(e);   
     } else if (e.target.matches(".delete-website")) {
         delete_website();
     } else if (e.target.matches(".delete-asset")) {
@@ -1591,7 +1589,7 @@ delete_asset = (e) => {
 }
 
 /*
- ** DELETE PAGE
+ ** DELETE PAGE, I.E WEBSITE_ARTICLE
  */
 delete_page = () => {
     execProcess("dml","DELETE",{table_name: "website_article", website_id: gWebsiteId, article_id: gArticleId}).then( (data) => {
@@ -1639,14 +1637,12 @@ delete_article = () => {
 }
 
 /*
- ** EXECUTE DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER
+ ** DELETE WEBSITE
  */
-const delete_website = (env) => {
+const delete_website = () => {
     execProcess("dml","DELETE",{table_name: "website", website_id: gWebsiteId, website_env: gWebsiteEnv}).then( () => {
         websiteNav.querySelector("a").style.textDecorationLine = "line-through";
-        websiteNav.querySelectorAll(".edit-website[data-id='"+gWebsiteId+"']").forEach ((item) => {
-            item.parentElement.remove();
-        })
+        websiteNav.querySelector(".edit-website[data-id='"+gWebsiteId+"'][data-env='"+gWebsiteEnv+"']").parentElement.remove();
         if (websiteNav.querySelector("hr + hr")) {
             websiteNav.querySelector("hr + hr").remove();
         }
@@ -1666,14 +1662,14 @@ const delete_website = (env) => {
 }
 
 /*
- ** EXECUTE DELETE WEBSITE / WEBSITE_ARTICLE / ASSET / USER
+ ** DELETE USER
  */
 const delete_user = () => {
     execProcess("dml","DELETE",{table_name: "users"}).then( (data) => {
         if (data.deleted===0) {
             document.querySelector(".signout").click();
         } else {
-            popupOpen("Delete Websites", "To avoid inadvertent loss, you should delete your websites first");
+            popupOpen("Delete Websites", "To avoid inadvertent loss, delete your websites first");
         }
     });
 }
