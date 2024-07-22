@@ -278,18 +278,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 </div>';
             ELSIF (l_labels(i).collection_type IS NULL AND l_is_blog) THEN
                 l_labels(i).body_html:=l_labels(i).body_html ||
-                '<div id="g_id_onload"
-                     data-client_id="172908669052-u3neamoi7j07i4vo7dmjmjlifj22spsr.apps.googleusercontent.com"
-                     data-callback="handleCredentialResponse">
-                </div>
-                <div class="g_id_signin"
-                     data-type="standard"
-                     data-shape="rectangular"
-                     data-theme="outline"
-                     data-text="signin_with"
-                     data-size="large"
-                     data-logo_alignment="left">
-                </div>';
+                '<div id="g_login"></div>';
             END IF;
             l_labels(i).body_html:=l_labels(i).body_html || '<footer class="promo">Built by adfreesites.com</footer>';
         END LOOP;
@@ -352,7 +341,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     'gMetricArticleId = "' || CASE WHEN l_labels(i).parent_article_id=l_labels(i).article_id THEN l_labels(i).parent_article_id ELSE l_labels(i).article_id END || '";' || chr(10) || 
                     'gRestUrl = "' || pRestUrl || '";' || chr(10) ||
                     getJSCode('deploy_metric') || 
-                    CASE WHEN l_is_blog AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN 'function handleCredentialResponse(response) {console.log(response.credential);}' END ||
+                    CASE WHEN l_is_blog AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN getJSCode('deploy_login') END ||
                     CASE WHEN l_is_media AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN getJSCode('deploy_gallery') END ||
                     CASE WHEN l_labels(i).collection_type='PRODUCT' THEN getJSCode('deploy_cart') END ||
                     CASE WHEN l_labels(i).contact_form='YES' THEN getJSCode('deploy_contact') END ||
