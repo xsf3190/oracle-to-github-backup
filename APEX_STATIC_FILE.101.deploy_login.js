@@ -8,6 +8,19 @@ function handleCredentialResponse(response) {
     window.identity = parseJwt(response.credential);
     window.isAuthenticated = true;
     showAuthInfo();
+    fetch(gRestUrl + "subscribe", {method: "POST", headers: {Authorization: `Bearer ${response.credential}`}
+    })
+    .then(resp => {
+        if (!resp.ok) {
+        throw Error(resp.status);
+        }
+
+        return resp.json();
+    })
+    .then(data => {
+        console.log(data);
+    })
+    .catch(error => console.error(error.message));
 }
 
 function showAuthInfo() {
