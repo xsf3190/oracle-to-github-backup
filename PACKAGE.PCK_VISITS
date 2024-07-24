@@ -351,7 +351,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             </head>
         <body>';
     BEGIN
-        FOR C IN (SELECT contact_email, domain_name FROM website WHERE id=pWebsiteId) LOOP
+        FOR C IN (SELECT NVL(w.contact_email, u.email) contact_email, w.domain_name FROM website w, users u where u.id=w.user_id AND w.id=pWebsiteId) LOOP
             pck_core.log('Sending website analysis for ' || C.domain_name || ' by email to '|| C.contact_email);
             apex_mail.send(
                 p_to=>C.contact_email, 
