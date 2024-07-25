@@ -13,6 +13,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     PROCEDURE subscribe IS
         l_header_value     VARCHAR2(4000);
         l_bearer_token     VARCHAR2(4000);
+        l_token            APEX_JWT.T_TOKEN;
+        l_user_object      APEX_JSON.T_VALUES;
+        l_email            users.email%type;
     BEGIN
         --get the authorization header value from the request
         l_header_value := OWA_UTIL.get_cgi_env('Authorization');
@@ -30,6 +33,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             --:status := 401;
             RETURN;
         END IF;
+
+        l_token :=apex_jwt.DECODE (p_value =>l_bearer_token);
+        --l_token :=apex_jwt.DECODE (p_value =>l_bearer_token, p_signature_key=>sys.UTL_RAW.cast_to_raw ('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'));
+        apex_json.parse (l_user_object, l_token.payload);
+        l_email:=apex_json.get_varchar2 (p_path => 'email', p_values => l_user_object);
+        pck_core.log('l_email:' || l_email);
+
+        APEX_JSON.open_object;
+        APEX_JSON.write ('success', TRUE);
+        APEX_JSON.close_object;
+
     END;
   
     /*
