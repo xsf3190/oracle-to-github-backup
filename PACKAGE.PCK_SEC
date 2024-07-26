@@ -19,12 +19,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     BEGIN
         --get the authorization header value from the request
         l_header_value := OWA_UTIL.get_cgi_env('Authorization');
-        pck_core.log('l_header_value:' || l_header_value);
+        
 
         -- Check if the Authorization header exists and starts with 'Bearer '
         IF l_header_value IS NOT NULL AND INSTR(l_header_value, 'Bearer ') = 1 THEN
             -- Extract the token part after 'Bearer '
             l_bearer_token := SUBSTR(l_header_value, 8);
+            pck_core.log(l_bearer_token);
         ELSE
             --return error message in json format if the token is not founded
             APEX_JSON.open_object;
