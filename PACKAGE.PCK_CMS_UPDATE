@@ -248,6 +248,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                          CASE WHEN a.is_admin='Yes' THEN u.github_repos_owner ELSE '********' END github_repos_owner, 
                          CASE WHEN a.is_admin='Yes' THEN u.github_repos ELSE '********' END github_repos,
                          CASE WHEN a.is_admin='Yes' THEN u.google_api_key ELSE '********' END google_api_key, 
+                         CASE WHEN a.is_admin='Yes' THEN u.google_client_id ELSE '********' END google_client_id, 
                          CASE WHEN a.is_admin='Yes' THEN u.ipdata_api_key ELSE '********' END ipdata_api_key,
                          CASE WHEN a.is_admin='Yes' THEN u.terraform_token ELSE '********' END terraform_token,
                          CASE WHEN a.is_admin='Yes' THEN u.whatismybrowser_api_key ELSE '********' END whatismybrowser_api_key
@@ -297,6 +298,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     <summary>GOOGLE</summary>
                     <fieldset>' ||
                     buildInputWrapper(C.id, 'users.google_api_key', C.google_api_key, l_session_data.canuse_popover,pReadonly=>l_readonly) || 
+                    buildInputWrapper(C.id, 'users.google_client_id', C.google_client_id, l_session_data.canuse_popover,pReadonly=>l_readonly) || 
                     '</fieldset>
                 </details>
                 <details>
@@ -924,6 +926,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     UPDATE users SET github_repos=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'users.google_api_key' THEN
                     UPDATE users SET google_api_key=C.value, updated_date=current_timestamp WHERE id=C.id;
+                WHEN 'users.google_client_id' THEN
+                    UPDATE users SET google_client_id=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'users.ipdata_api_key' THEN
                     UPDATE users SET ipdata_api_key=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'users.terraform_token' THEN
