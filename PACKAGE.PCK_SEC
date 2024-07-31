@@ -11,7 +11,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
     -- Go to ISS and fetch the public keys
     PROCEDURE UPDATE_JWKS_KEY_CACHE(p_iss IN VARCHAR2);
     -- Returns FALSE if there are problems with validation or signature, TRUE if JWT is valid (not expired, correct ISS) and signature is valid
-    FUNCTION DECODE_AND_VALIDATE(p_jwt IN VARCHAR2, p_iss IN VARCHAR2, p_payload OUT VARCHAR2) RETURN boolean;
+    FUNCTION DECODE_AND_VALIDATE(p_jwt IN VARCHAR2, p_iss IN VARCHAR2, p_aud IN VARCHAR2, p_payload OUT VARCHAR2) RETURN boolean;
     --
     PROCEDURE subscribe;
     --
@@ -69,96 +69,94 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         );
     END;
 
-    PROCEDURE getJwks IS
-        l_clob CLOB; 
-    BEGIN
-        l_clob:=apex_web_service.make_rest_request('https://accounts.google.com/.well-known/openid-configuration','GET');
-    END;
-
     PROCEDURE UPDATE_JWKS_KEY_CACHE(p_iss IN VARCHAR2) AS
         PRAGMA AUTONOMOUS_TRANSACTION;
-        v_url varchar2(300);
         v_lock_handle varchar2(128);
     BEGIN
-        -- This updates local jwks_key_cache from IDP
-        -- Executed when JWT signing key is not found from local key cache
-        -- Tested only with AWS cognito jwks.json
+        -- This updates local jwks_key_cache from Google IDP
+        -- Executed when JWT signing key is not found in table jwks_key_cache
         --
-        -- First we don't want to have multiple copies of this code running, let one process fetch and others wait
-        --dbms_lock.allocate_unique('APEX_JWT_RS256_JWKS_UPDATE', v_lock_handle);
+        -- Avoid simultaneoud executions
+        dbms_lock.allocate_unique('APEX_JWT_RS256_JWKS_UPDATE', v_lock_handle);
         IF dbms_lock.request(lockhandle=>v_lock_handle, timeout=>6, release_on_commit=>true) IN (0,4) THEN
-            -- Update JWKS cache
-            v_url:= p_iss||'/.well-known/jwks.json';
-            merge into jwks_key_cache t
-            using (
-                select * from
-                    json_table(
-                        apex_web_service.make_rest_request(v_url, 'GET', p_transfer_timeout=>5)
-                        , '$.keys[*]' columns (
-                            alg varchar2(20) path '$.alg',
-                            e varchar2(20) path '$.e',
-                            kid varchar2(100) path '$.kid',
-                            kty varchar2(20) path '$.kty',
-                            n varchar2(4000) path '$.n'
-                        )
-                    )) s
+            MERGE INTO jwks_key_cache t
+            USING (
+                WITH jwks AS 
+                (
+                    SELECT jwks_uri FROM JSON_TABLE(apex_web_service.make_rest_request(p_iss || '/.well-known/openid-configuration', 'GET'), '$' COLUMNS (jwks_uri))
+                )
+                SELECT kid, kty, e, alg, n
+                FROM jwks, JSON_TABLE(apex_web_service.make_rest_request(jwks_uri, 'GET'), '$.keys[*]' COLUMNS (kid, kty, e, alg, n)) 
+                ) s
             ON (s.kid = t.kid)
-            when not matched then
-                insert (kid, alg, kty, e, n, pkcs1)
-                values (s.kid, s.alg, s.kty, s.e, s.n,
+            WHEN NOT MATCHED THEN
+                INSERT (kid, alg, kty, e, n, pkcs1)
+                VALUES (s.kid, s.alg, s.kty, s.e, s.n,
                     make_pkcs1_rsa_key(base64url_decode(s.n), base64url_decode(s.e)));
-            commit;
+            COMMIT;
         END IF;
     END;
 
-    FUNCTION DECODE_AND_VALIDATE(p_jwt IN VARCHAR2, p_iss IN VARCHAR2, p_payload OUT VARCHAR2) RETURN boolean IS
-        v_token apex_jwt.t_token;
-        v_keys apex_t_varchar2;
-        v_json_content json_object_t;
-        v_kid jwks_key_cache.kid%type;
-        v_key jwks_key_cache.pkcs1%type;
+    FUNCTION DECODE_AND_VALIDATE(p_jwt IN VARCHAR2, p_iss IN VARCHAR2, p_aud IN VARCHAR2, p_payload OUT VARCHAR2) RETURN boolean IS
+        l_token apex_jwt.t_token;
+        l_json_content json_object_t;
+        l_kid jwks_key_cache.kid%type;
+        l_key jwks_key_cache.pkcs1%type;
     BEGIN
         -- This will split and decode JWT token
-        v_token := apex_jwt.decode(p_jwt);
-        -- This will check if token has not expired and is issued by provider (ISS) we expect to see
-        apex_jwt.validate(p_token => v_token, p_iss => p_iss);
+        l_token := apex_jwt.decode(p_jwt);
+
+        -- This will check if token has not expired and contains expected issued and audience
+        BEGIN
+            apex_jwt.validate(p_token=>l_token, p_iss=>p_iss, p_aud=>p_aud);
+            EXCEPTION WHEN VALUE_ERROR THEN
+                pck_core.log('Token validation error - check issuer or timeout');
+                RETURN FALSE;
+        END;
+
         -- Parsing the header to see if it is signed using RS256
-        v_json_content:= json_object_t.parse(v_token.header);
-        IF v_json_content.get_string('alg') != 'RS256' THEN
-            raise_application_error(-20501, 'This package only handles RS256 signed JWT tokens');
+        l_json_content:= json_object_t.parse(l_token.header);
+        IF l_json_content.get_string('alg') != 'RS256' THEN
+            pck_core.log('Only RS256 signed JWT tokens allowed');
+            RETURN FALSE;
         END IF;
+
         -- Try fetching the key from cache.
-        v_kid:= v_json_content.get_string('kid');
+       l_kid:= l_json_content.get_string('kid');
         FOR i IN 1..2 LOOP
             -- If first time key is not in cache, then update key cache from ISS.
             -- If second time key is also not present, then something is wrong and just fail.
             BEGIN
-                SELECT pkcs1 INTO v_key FROM jwks_key_cache WHERE kid = v_kid;
+                SELECT pkcs1 INTO l_key FROM jwks_key_cache WHERE kid = l_kid;
                 EXIT;
             EXCEPTION
                 WHEN no_data_found THEN
                     IF i = 1 THEN
                         update_jwks_key_cache(p_iss);
                     ELSE
-                        raise_application_error(-20500, 'Required key not found in JWKS cache even after updating the cache');
+                        pck_core.log('Required key not found in JWKS cache table');
+                        RETURN FALSE;
                     END IF;
             END;
         END LOOP;
+
         -- Validate the signature
         IF NOT DBMS_CRYPTO.VERIFY(
                 src => UTL_I18N.STRING_TO_RAW(
                         SUBSTR(p_jwt, 1, INSTR(p_jwt, '.', 1, 2)-1) -- Operate on the input string itself, since v_token is already decoded, but JWT signs the encoded message
                     , 'al32utf8'), 
-                sign => base64url_decode(v_token.signature),
-                pub_key => v_key,
+                sign => base64url_decode(l_token.signature),
+                pub_key => l_key,
                 pubkey_alg => dbms_crypto.KEY_TYPE_RSA,
                 sign_alg => dbms_crypto.SIGN_SHA256_RSA)
         THEN
-            raise_application_error(-20502, 'JWT signature failed cryptographic verification');
+            pck_core.log('JWT signature failed cryptographic verification');
+            RETURN FALSE;
         END IF;
-        -- Signature was valid, finish successfully
-        p_payload:= v_token.payload;
-        RETURN true;
+
+        -- Signature is valid - return decoded JWT payload
+        p_payload:= l_token.payload;
+        RETURN TRUE;
     EXCEPTION
         WHEN others THEN
             -- In case of any exception, usually from APEX_JWT.validate or DBMS_CRYPTO - fail
@@ -173,43 +171,56 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_jwt_payload       VARCHAR2(2000);
         l_user_object      APEX_JSON.T_VALUES;
         l_email            users.email%type;
-        l_iss              VARCHAR2(250):='https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_ZZxxZZxx11';
+        l_iss              VARCHAR2(250):='https://accounts.google.com';
+        l_google_client_id users.google_client_id%type;
     BEGIN
         --get the authorization header value from the request
         l_header_value := OWA_UTIL.get_cgi_env('Authorization');
         
-
         -- Check if the Authorization header exists and starts with 'Bearer '
-        IF l_header_value IS NOT NULL AND INSTR(l_header_value, 'Bearer ') = 1 THEN
-            -- Extract the token part after 'Bearer '
-            l_bearer_token := SUBSTR(l_header_value, 8);
-            pck_core.log(l_bearer_token);
-            l_valid_token:=decode_and_validate(l_bearer_token, l_iss, l_jwt_payload);
-            pck_core.log('l_jwt_payload:'||l_jwt_payload);
-            IF (l_valid_token) THEN
-                pck_core.log('TOKEN VALID');
-            ELSE
-                pck_core.log('TOKEN INVALID');
-            END IF;
-        ELSE
-            --return error message in json format if the token is not founded
+        IF (l_header_value IS NULL OR INSTR(l_header_value, 'Bearer ') <> 1) THEN
             APEX_JSON.open_object;
-            APEX_JSON.write ('message', 'Error no token found');
+            APEX_JSON.write ('success', FALSE);
+            APEX_JSON.write ('message', 'Error - no bearer token in Authorization header');
             APEX_JSON.close_object;
-            --:status := 401;
             RETURN;
         END IF;
 
-        l_token :=apex_jwt.DECODE (p_value =>l_bearer_token);
-        --l_token :=apex_jwt.DECODE (p_value =>l_bearer_token, p_signature_key=>sys.UTL_RAW.cast_to_raw ('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'));
-        apex_json.parse (l_user_object, l_token.payload);
-        l_email:=apex_json.get_varchar2 (p_path => 'email', p_values => l_user_object);
-        pck_core.log('l_email:' || l_email);
 
-        APEX_JSON.open_object;
-        APEX_JSON.write ('success', TRUE);
-        APEX_JSON.close_object;
+        /* Get Admmin user's Google client id name (repository owner) */
+        SELECT u.google_client_id
+          INTO l_google_client_id
+          FROM apex_workspace_apex_users w, users u 
+         WHERE w.email=u.email
+           AND w.is_admin='Yes'
+           FETCH FIRST ROW ONLY;
 
+        -- Extract and validate the JWT token
+        l_bearer_token := SUBSTR(l_header_value, 8);
+        IF (decode_and_validate(l_bearer_token, l_iss, l_google_client_id, l_jwt_payload)) THEN
+            apex_json.parse (l_user_object, l_jwt_payload);
+            l_email:=apex_json.get_varchar2 (p_path => 'email', p_values => l_user_object);
+
+            MERGE INTO users t
+            USING (SELECT email, name FROM JSON_TABLE(l_jwt_payload, '$' COLUMNS (email, name)) ) s
+            ON (s.email = t.email)
+            WHEN MATCHED THEN UPDATE
+                SET t.last_login_date=current_timestamp, t.last_login_provider=l_iss
+            WHEN NOT MATCHED THEN
+                INSERT (email, name, last_login_date, last_login_provider)
+                VALUES (s.email, s.name, current_timestamp, l_iss);
+            COMMIT;
+
+            APEX_JSON.open_object;
+            APEX_JSON.write ('success', TRUE);
+            APEX_JSON.write ('email', l_email);
+            APEX_JSON.close_object;
+        ELSE
+            APEX_JSON.open_object;
+            APEX_JSON.write ('success', FALSE);
+            APEX_JSON.write ('message', 'Error - invalid token');
+            APEX_JSON.close_object;
+        END IF;
     END;
   
     /*
