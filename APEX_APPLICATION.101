@@ -19,7 +19,7 @@ whenever sqlerror exit sql.sqlcode rollback
 begin
 wwv_flow_imp.import_begin (
  p_version_yyyy_mm_dd=>'2024.05.31'
-,p_release=>'24.1.0'
+,p_release=>'24.1.1'
 ,p_default_workspace_id=>9970144890818580
 ,p_default_application_id=>101
 ,p_default_id_offset=>20743441855028655
@@ -33,7 +33,7 @@ prompt APPLICATION 101 - CMS application
 -- Application Export:
 --   Application:     101
 --   Name:            CMS application
---   Date and Time:   21:01 Wednesday July 31, 2024
+--   Date and Time:   21:01 Thursday August 1, 2024
 --   Exported By:     ORDS_PLSQL_GATEWAY
 --   Flashback:       0
 --   Export Type:     Application Export
@@ -68,7 +68,7 @@ prompt APPLICATION 101 - CMS application
 --       Reports:
 --       E-Mail:
 --     Supporting Objects:  Excluded
---   Version:         24.1.0
+--   Version:         24.1.1
 --   Instance ID:     9569883761457244
 --
 
