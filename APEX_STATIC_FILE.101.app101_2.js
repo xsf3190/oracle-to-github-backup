@@ -1352,7 +1352,8 @@ const new_collection = (collection) => {
         gArticleId = data.article_id;
         editor_status = "init";
         editor_status_text.textContent = "";
-        editor.setData("<h1>NEW "+collection + "</h1>");
+        /*editor.setData("<h1>NEW "+collection + "</h1>");*/
+        editor.setData("");
         galleryList.replaceChildren();
         if (editor.isReadOnly) {
             editor.disableReadOnlyMode( 'lock-id' );
