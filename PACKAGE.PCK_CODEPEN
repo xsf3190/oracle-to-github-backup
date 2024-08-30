@@ -7,7 +7,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
-/*
+    /*
     ** Build resources to open requested article in Codepen
     */
     PROCEDURE getCodepen(pArticleId IN article.id%type) IS
@@ -21,6 +21,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_is_media BOOLEAN:=FALSE;
         l_thumbnails CLOB;
         l_html CLOB;
+        l_footer CLOB;
         l_css CLOB;
         l_javascript CLOB;
         l_fluid_types pck_core.fluid_type_t;
@@ -83,8 +84,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
              WHERE w.id=l_website_id
                AND a.id=pArticleId;
         ELSE
-            SELECT w.domain_name, a.body_html, wa.contact_form, wa.collection_type
-              INTO l_domain_name, l_html, l_contact_form, l_collection_type
+            SELECT w.domain_name, w.header || a.body_html, w.footer, wa.contact_form, wa.collection_type
+              INTO l_domain_name, l_html, l_footer, l_contact_form, l_collection_type
               FROM website w, website_article wa, article a
              WHERE w.id=l_website_id
                AND wa.website_id=w.id
@@ -93,12 +94,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         END IF;
 
         IF (l_nav_labels IS NOT NULL) THEN
-            /* Nav labels are sticky by default but blog cards are position:absolue so change to static */
+            /* Nav labels are sticky by default but blog cards are position:absolute so change to static */
             l_nav_labels:='<nav aria-label="Main Navigation"' || CASE WHEN l_collection_type='BLOG' THEN ' style="position:static"' END || '>' || l_nav_labels || '</nav>';
         END IF;
 
         /* build html */
-        l_html:=l_nav_labels || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10);
+        l_html:=REPLACE(l_html,'<h1>&nbsp;</h1>',null);
+
+        IF (INSTR(l_html,'#NAV#')>0) THEN
+            l_html:=REPLACE(l_html,'#NAV#',l_nav_labels) || chr(10);
+        ELSE
+            l_html:=l_nav_labels || chr(10) || l_html || chr(10);
+        END IF;
 
         /*  Start build of Javascript code */
         l_javascript:=
@@ -137,11 +144,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             l_javascript:=l_javascript || getJSCode('deploy_contact.js');
         END IF;
 
+        l_html:=l_html || l_footer;
+
         apex_json.open_object;
         apex_json.write('success', TRUE); 
         apex_json.write('domain_name', l_domain_name);
         apex_json.write('html', l_html);
-        apex_json.write('css', pck_core.buildCssRoot(l_website_id, l_session_data.app_id, TRUE));
+        apex_json.write('css', pck_core.buildCssRoot(l_website_id, l_session_data.app_id, FALSE));
         apex_json.write('js', l_javascript);
         apex_json.close_object;
 
@@ -154,19 +163,66 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     PROCEDURE uploadCodepen(pId IN VARCHAR2, pZipFile IN BLOB) IS
         l_website_id website.id%type;
         l_article_id article.id%type;
-        l_domain_name website.domain_name%type;
-        l_collection_type website_article.collection_type%type;
         l_css CLOB;
+        l_header CLOB;
+        l_footer CLOB;
         l_body_html CLOB;
         l_zip BLOB:=pZipFile;
         l_files apex_zip.t_files;
-        l_file BLOB;
-        l_clob CLOB;
-        l_message VARCHAR2(500);
         l_session_data pck_core.session_data_rt;
-        pos PLS_INTEGER;
-        pos1 PLS_INTEGER;
-        pos2 PLS_INTEGER;
+        l_nb_files PLS_INTEGER:=0;
+
+        FUNCTION extractFragment(pClob IN OUT NOCOPY CLOB, pStartChar IN VARCHAR2, pEndChar IN VARCHAR2) RETURN CLOB IS
+            pos1 PLS_INTEGER;
+            pos2 PLS_INTEGER;
+        BEGIN
+            pos1:=dbms_lob.instr(pClob,pStartChar,1,1);
+            IF (pos1>0) THEN
+                pos2:=dbms_lob.instr(pClob,pEndChar,pos1,1);
+                IF (pos2>0) THEN
+                    pos2:=pos2+LENGTH(pEndChar);
+                    RETURN (dbms_lob.substr(pClob, pos2-pos1, pos1));
+                END IF;
+            END IF;
+            RETURN NULL;
+        END;
+        
+        PROCEDURE deleteFragment(pClob IN OUT NOCOPY CLOB, pStartChar IN VARCHAR2, pEndChar IN VARCHAR2) IS
+            pos1 PLS_INTEGER;
+            pos2 PLS_INTEGER;
+        BEGIN
+            pos1:=dbms_lob.instr(pClob,pStartChar,1,1);
+            IF (pos1>0) THEN
+                pos2:=dbms_lob.instr(pClob,pEndChar,pos1,1);
+                IF (pos2>0) THEN
+                    pos2:=pos2+LENGTH(pEndChar);
+                    dbms_lob.fragment_delete(pClob, pos2-pos1, pos1);
+                END IF;
+            END IF;
+        END;
+
+        PROCEDURE replaceFragment(pClob IN OUT NOCOPY CLOB, pStartChar IN VARCHAR2, pEndChar IN VARCHAR2, pReplaceChar IN VARCHAR2) IS
+            pos1 PLS_INTEGER;
+            pos2 PLS_INTEGER;
+        BEGIN
+            pos1:=dbms_lob.instr(pClob,pStartChar,1,1);
+            IF (pos1>0) THEN
+                pos2:=dbms_lob.instr(pClob,pEndChar,pos1,1);
+                IF (pos2>0) THEN
+                    pos2:=pos2+LENGTH(pEndChar);
+                    dbms_lob.fragment_replace(pClob, pos2-pos1, LENGTH(pReplaceChar), pos1, pReplaceChar);
+                END IF;
+            END IF;
+        END;
+
+        PROCEDURE writeJson(pMessage IN VARCHAR2) IS
+        BEGIN
+            apex_json.open_object;
+            apex_json.write('success', TRUE);
+            apex_json.write('message', pMessage);
+            apex_json.close_object;
+        END;
+
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -174,58 +230,45 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
         l_article_id:=SUBSTR(pId,INSTR(pId,',')+1);
 
-        /* Get existing clobs */
-        SELECT REPLACE(w.domain_name,'.','-'), w.css, a.body_html, wa.collection_type
-          INTO l_domain_name, l_css, l_body_html, l_collection_type
-          FROM website w, article a, website_article wa
-         WHERE w.id=l_website_id
-           AND w.user_id=l_session_data.user_id
-           AND a.id=l_article_id
-           AND wa.website_id=l_website_id
-           AND wa.article_id=l_article_id;
+        l_files:=apex_zip.get_files(p_zipped_blob => l_zip);
 
-        l_files := apex_zip.get_files(p_zipped_blob => l_zip);
         FOR i in 1 .. l_files.COUNT LOOP
-            IF (l_files(i)=l_domain_name||'/src/style.css') THEN
-                l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name => l_files(i)));
-                /* remove design tokens and font link */
-                pos:=dbms_lob.instr(l_clob,'>',1,1)+2;
-                l_clob:=dbms_lob.substr(l_clob,dbms_lob.getlength(l_clob)-pos,pos);
-                IF (dbms_lob.compare(l_css, l_clob)=0) THEN
-                    l_message:=l_message || ' [CSS - no change]';
-                ELSE
-                    UPDATE website SET css=l_clob, updated_date=current_timestamp WHERE id=l_website_id;
-                    l_message:=l_message || ' [CSS - updated successfully]';
-                END IF;
-            END IF;
-            IF (l_files(i)=l_domain_name||'/src/index.html') THEN
-                l_clob := apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name => l_files(i)));
-                IF (l_collection_type<>'N/A') THEN
-                    pos1:=dbms_lob.instr(l_clob,'<!--CMS START-->',1,1);
-                    pos2:=dbms_lob.instr(l_clob,'<!--CMS END-->',1,1)+14;
-                    IF (pos2>pos1) THEN
-                        l_clob:=dbms_lob.substr(l_clob,pos1-1,1) || dbms_lob.substr(l_clob,dbms_lob.getlength(l_clob)-pos2,pos2);
-                    END IF;
-                END IF;
-                IF (dbms_lob.compare(l_body_html, l_clob)=0) THEN
-                    l_message:=l_message || ' [HTML - no change]';
-                ELSE
-                    UPDATE article SET body_html=l_clob, codepen_editor='Y', updated_date=current_timestamp WHERE id=l_article_id;
-                    l_message:=l_message || ' [HTML - updated successfully]';
-                END IF;
+            IF (INSTR(l_files(i),'/src/style.css')>0) THEN
+                l_css:=apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name => l_files(i)));
+                l_nb_files:=l_nb_files+1;
+            ELSIF (INSTR(l_files(i),'/src/index.html')>0) THEN
+                l_body_html:=apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob=>l_zip, p_file_name=>l_files(i)));
+                l_header:=extractFragment(l_body_html,'<header','</header>');
+                l_footer:=extractFragment(l_body_html,'<footer','</footer>');
+                l_nb_files:=l_nb_files+1;
             END IF;
         END LOOP;
 
-        /* Means no CSS file included in zip - set website.css to NULL*/
-        IF (l_message IS NULL) THEN
-            UPDATE website SET css=NULL, updated_date=current_timestamp WHERE id=l_website_id;
-            l_message:=l_message || 'CSS - reset successfully';
-        END IF; 
+        IF (l_nb_files<2) THEN
+            writeJson('** NOT A CODEPEN EXPORT FILE **');
+            RETURN;
+        END IF;
 
-        apex_json.open_object;
-        apex_json.write('success', TRUE);
-        apex_json.write('message', l_message);
-        apex_json.close_object;
+        /* Extract header and footer elements */
+
+        UPDATE website SET css=l_css, header=l_header, footer=l_footer, updated_date=current_timestamp WHERE id=l_website_id;
+        UPDATE article SET body_html=l_body_html, codepen_editor='Y', updated_date=current_timestamp WHERE id=l_article_id;
+        
+        SELECT css, header, footer INTO l_css, l_header, l_footer FROM website WHERE id=l_website_id FOR UPDATE;
+        
+        /* remove design tokens */
+        deleteFragment(l_css,':root','}');
+        deleteFragment(l_css,'<link','>');
+        replaceFragment(l_header,'<nav','</nav>','#NAV#');
+
+        SELECT body_html INTO l_body_html FROM article WHERE id=l_article_id FOR UPDATE;
+        
+        deleteFragment(l_body_html,'<header','</header>');
+        deleteFragment(l_body_html,'<footer','</footer>');
+        replaceFragment(l_body_html,'<nav','</nav>','#NAV#');
+
+        /* Means no CSS file included in zip - set website.css to NULL*/
+        writeJson('Codepen zip uploaded successfully');
 
         EXCEPTION
             WHEN OTHERS THEN
