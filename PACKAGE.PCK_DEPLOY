@@ -289,7 +289,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     <button type="button" class="next">&gt;</button>
                 </div>';
             ELSIF (l_labels(i).collection_type IS NULL AND l_is_blog) THEN
-                l_labels(i).body_html:='<div class="content-grid"><article class="flow breakout">' || l_labels(i).body_html || '</article></div>';
+                l_labels(i).body_html:='<div class="content-grid"><article class="flow breakout blog">' || l_labels(i).body_html || '</article></div>';
                 --'<div id="g_login"></div>';
             END IF;
             --l_labels(i).body_html:=l_labels(i).body_html || '<footer class="promo">Built by adfreesites.com</footer>';
@@ -341,8 +341,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 '<body>' || 
                 l_labels(i).header || chr(10) ||
                 l_labels(i).body_html || chr(10) ||
-                l_labels(i).footer || chr(10) ||
                 CASE WHEN l_labels(i).contact_form='YES' THEN pck_core.buildContactForm(contactEmail(), l_ssl_url) END ||
+                l_labels(i).footer || chr(10) ||
                 '<script type="module">
                     import {onCLS, onLCP, onINP} from ''https://unpkg.com/web-vitals?module'';
                     onCLS(addToVitalsQueue);
