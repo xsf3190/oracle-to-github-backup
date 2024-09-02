@@ -663,17 +663,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_table_html LONG;
     BEGIN
         
-        FOR C IN (WITH data AS
-                    (
-                        SELECT u.terraform_aws_gateway_url, u.terraform_api_key, w.description domain_name 
-                          FROM users u, apex_workspace_apex_users w
-                         WHERE w.email=u.email
-                           AND w.is_admin='Yes'
-                         ORDER BY date_created
-                         FETCH FIRST ROW ONLY
-                    )
-                    SELECT NVL(w.contact_email,u.email) contact_email, j.url form_url, j.email form_email, j.name form_name, j.message form_message, d.terraform_aws_gateway_url, d.terraform_api_key, d.domain_name
-                    FROM website w, data d, users u, JSON_TABLE(l_body_text, '$' COLUMNS (url, email, name, message)) j 
+        FOR C IN (SELECT w.domain_name, NVL(w.contact_email,u.email) contact_email, j.url form_url, j.email form_email, j.name form_name, j.message form_message
+                    FROM website w, users u, JSON_TABLE(l_body_text, '$' COLUMNS (url, email, name, message)) j 
                    WHERE w.id=pWebsiteid
                      AND w.user_id=u.id)
         LOOP
@@ -718,17 +709,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             l_json.put('body', l_table_html);
             l_json.put('sourceEmail','contact.form@' || C.domain_name);
 
-            apex_web_service.clear_request_headers;
-            apex_web_service.g_request_headers(1).name := 'x-api-key';
-            apex_web_service.g_request_headers(1).value := C.terraform_api_key;
-
-            l_clob := apex_web_service.make_rest_request(p_url=>C.terraform_aws_gateway_url, p_http_method=>'POST', p_body=>l_json.stringify);
-            pck_core.log(apex_web_service.g_status_code || ' : POST - ' || C.terraform_aws_gateway_url);
-            
-            IF (apex_web_service.g_status_code<>200) THEN
-                pck_core.log(l_clob);
-            END IF;
-            
+            l_payload:=l_json.stringify;
+            pck_api.callAWSemailAPI(pMethod=>'POST',pBody=>l_payload,pData=>l_clob);
         END LOOP;
         apex_json.open_object; 
         apex_json.write('success', TRUE);
