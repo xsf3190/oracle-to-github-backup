@@ -420,26 +420,20 @@ code.language-html {
         pos PLS_INTEGER;
 
         FUNCTION getExcerpt(pText IN VARCHAR2) RETURN VARCHAR2 IS
-            l_words apex_t_varchar2;
             l_excerpt VARCHAR2(200);
-            l_rem PLS_INTEGER;
             EXCERPT_LENGTH CONSTANT PLS_INTEGER :=100;
         BEGIN
-            l_words:=apex_string.split(REPLACE(pText,CHR(10),' '),' ');
-            FOR i IN 1..l_words.COUNT LOOP
-                IF (l_words(i) IS NULL) THEN
-                    CONTINUE;
-                END IF;
-                l_rem:=EXCERPT_LENGTH - NVL(LENGTHB(l_excerpt),0);
-                IF (LENGTHB(l_words(i)) <= l_rem) THEN
-                    l_excerpt:=l_excerpt || SUBSTR(l_words(i),1,l_rem) || ' ';
-                ELSE
-                    l_excerpt:=RTRIM(l_excerpt) || '...';
-                    EXIT;
-                END IF;
-
-            END LOOP;
-            RETURN (l_excerpt);
+            l_excerpt:=
+                RTRIM(
+                    regexp_replace(
+                        apex_escape.striphtml(
+                            regexp_replace( SUBSTR(pText,1,EXCERPT_LENGTH+10),'</[[:alnum:]]+><[[:alnum:]]+>', '. ')
+                        )
+                    ,' {2,}', ' '
+                    )
+                ,'.,?;: '
+                );
+            RETURN (SUBSTR(l_excerpt,1,INSTR(l_excerpt,' ',-1,1)-1)||'...');
         END;
 
     BEGIN
@@ -464,7 +458,7 @@ code.language-html {
             ELSE
                 l_href:='#';
             END IF;
-            pos:=INSTR(C.body_html,'</h1>',-1); /* all blog post must have this? */
+            pos:=INSTR(C.body_html,'</h1>',1,1)+5; /* all blog post must have this? */
             IF (pos<1) THEN
                 RETURN(NULL);
             END IF;
@@ -472,7 +466,7 @@ code.language-html {
                 '<h4>
                     <a href="' || l_href || '">' || C.title || '</a>
                 </h4>
-                <p>' || getExcerpt(apex_escape.striphtml(SUBSTR(C.body_html,pos)))  || '</p>
+                <p>' || getExcerpt(SUBSTR(C.body_html,pos))  || '</p>
                 <a href="' || l_href || '">Read More</a>
             </li>';
         END LOOP;
