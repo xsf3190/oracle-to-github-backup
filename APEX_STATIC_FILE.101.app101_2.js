@@ -1161,7 +1161,7 @@ const websiteFont = (font_family, font_url) => {
     document.fonts.ready.then(()=>{
         console.log("font " + font_family + " loaded");
         gWebsiteDemo.style.setProperty("--font-family",font_family);
-        gWebsiteDemo.querySelector("h1").textContent = websiteNav.querySelector("a").textContent.toUpperCase();
+        gWebsiteDemo.querySelector("h1").textContent = "My Website"; /* websiteNav.querySelector("a").textContent.toUpperCase();*/
         gWebsiteDemo.querySelector("p").textContent = `"${font_family}" text with background color`;
     });
 }
