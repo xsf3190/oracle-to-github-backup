@@ -295,6 +295,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     **  EMAIL WEBSITE VISIT ANALYSIS
     */
     PROCEDURE sendmail(pWebsiteId IN website.id%type, pContent IN OUT NOCOPY CLOB) IS
+        l_json JSON_OBJECT_T;
+        l_payload CLOB;
+        l_clob CLOB;
         l_body CLOB:='To view the content of this message, please use an HTML enabled mail client.'||utl_tcp.crlf;
         l_body_html CLOB:=
         '<!DOCTYPE html>
@@ -353,14 +356,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     BEGIN
         FOR C IN (SELECT NVL(w.contact_email, u.email) contact_email, w.domain_name FROM website w, users u where u.id=w.user_id AND w.id=pWebsiteId) LOOP
             pck_core.log('Sending website analysis for ' || C.domain_name || ' by email to '|| C.contact_email);
+            /*
             apex_mail.send(
                 p_to=>C.contact_email, 
                 p_from=>'visits@'||C.domain_name, 
                 p_body=>l_body, 
                 p_body_html=>l_body_html || pContent || '</body></html>',
                 p_subj=>'Website Analysis - ' || C.domain_name);
-
             apex_mail.push_queue(); 
+            */
+
+            l_json:=new JSON_OBJECT_T;
+            l_json.put('contactEmail',C.contact_email);
+            l_json.put('subject','Website visits to '|| C.domain_name);
+            l_json.put('body', l_body_html || pContent || '</body></html>');
+            l_json.put('sourceEmail','visits@adfreesites.com');
+
+            l_payload:=l_json.stringify;
+            pck_api.callAWSemailAPI(pMethod=>'POST',pBody=>l_payload,pData=>l_clob);
         END LOOP;
 
         EXCEPTION WHEN OTHERS THEN pck_core.log_error;
