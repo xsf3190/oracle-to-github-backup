@@ -212,7 +212,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
 
         l_password:=generate_password();
         pck_backup.github_backup(l_user_id, l_email_sender, l_email, l_password, l_restore_files);
-
+        UPDATE users SET export_pw=l_password WHERE id=l_user_id;
         /*
         **  3. Restore from Github into Restore database, where a workspace with same name as current schema must exist.
         **     We use dynamic sql for this so that this package compiles after being restored - nb: DB LINKs are not included in any schema export
