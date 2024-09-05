@@ -379,14 +379,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         /* Build sitemap.xml */
 
-        l_sitemap:='<?xml version="1.0" encoding="UTF-8"?>' || chr(10) || 
-                    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' || chr(10);
+        l_sitemap:='<?xml version="1.0" encoding="UTF-8"?>' || chr(10) || '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' || chr(10);
+        l_robots:='User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: ' || l_ssl_url || '/sitemap.xml';
 
         l_sha1:=l_deploy_files.FIRST;
         WHILE (l_sha1 IS NOT NULL) LOOP
-            IF (l_sha1=l_deploy_files.FIRST) THEN
-                l_robots:='User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: ' || l_deploy_files(l_sha1).url || '/sitemap.xml';
-            END IF;
             l_sitemap:=l_sitemap || 
                 '    <url>' || chr(10) || 
                 '        <loc>' || l_deploy_files(l_sha1).url || '</loc>' || chr(10) || 
