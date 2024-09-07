@@ -572,12 +572,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 SELECT 'GRANT','OBJECT_GRANT', 1
                 FROM user_tab_privs
                 WHERE grantee=sys_context('userenv','current_schema') 
+                AND grantor='ADMIN'
                 AND ROWNUM=1
                 UNION ALL
 
                 SELECT 'GRANT','SYSTEM_GRANT', 1
                 FROM user_tab_privs
                 WHERE grantee=sys_context('userenv','current_schema') 
+                AND grantor='ADMIN'
                 AND ROWNUM=1
 
             ) o, 
