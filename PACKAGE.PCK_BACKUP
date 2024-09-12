@@ -2,62 +2,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_BACKUP" is
     --
     PROCEDURE daily_job;
     --
-    PROCEDURE github_backup(
-        p_user_id IN users.id%type,
-        p_email_sender IN VARCHAR2,
-        p_email IN VARCHAR2,
-        p_password IN VARCHAR2,
-        p_restore_files IN OUT VARCHAR2);
-    --
-    PROCEDURE getDumpFileInfo(pDatapumpFileName IN VARCHAR2);
-    --
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
-
-    TYPE t_backup IS RECORD(
-        object_type         user_objects.object_type%type,
-        object_name         user_objects.object_name%type,
-        auto_restore        NUMBER,
-        github_sha          VARCHAR2(40),
-        backup_date         TIMESTAMP WITH TIME ZONE,
-        backup_size         NUMBER,
-        backup_size_base64  NUMBER,
-        message             VARCHAR2(100));
-
-    TYPE tt_backup IS TABLE OF t_backup;
-
-    /*
-    ** Run restore process manually. Need to specify the last data pump export schema encryption password.
-    */
-    PROCEDURE manual_restore(pPassword IN VARCHAR2)  IS 
-        l_restore_files varchar2(1000):='GRANT.OBJECT_GRANT:GRANT.SYSTEM_GRANT:EXPORT_SCHEMA.EXAMPLE.dmp:APEX_APPLICATION.100';
-    BEGIN
-
-        FOR C IN (SELECT github_token, github_repos_owner, github_repos, u.email, w.workspace_name 
-              FROM users u, apex_workspace_developers w 
-             WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
-               AND w.is_admin='Yes'
-               AND w.email=u.email) 
-        LOOP
-            EXECUTE IMMEDIATE q'{
-                BEGIN pck_restore.submit_job@RESTORE_LINK(
-                    pGithub_files=>:B1, 
-                    pGithub_token=>:B2, 
-                    pGithub_repos_owner=>:B3, 
-                    pGithub_repos=>:B4,
-                    pPassword=>:B5,
-                    pEmail=>:B6,
-                    pWorkspace=>:B7,
-                    pSchema=>:B8); END;}' 
-                USING l_restore_files, C.github_token, C.github_repos_owner, C.github_repos, pPassword, C.email, C.workspace_name, sys_context('userenv','current_schema');
-        END LOOP;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-                RAISE;
-    END;
 
     /*
     ** Generate random 16 character password string. Used in order to create encrypted schema export dumpfile
@@ -112,228 +59,136 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         );
 
         RETURN password;
-    END;   
-
-        /*
-     **  Get Cloudinary usage details for each Cloudinary subscriber. Daily job.
-     */    
-    PROCEDURE getUsage(pUserId IN users.id%type DEFAULT NULL, pUsageDate IN DATE DEFAULT NULL) IS
-        l_url VARCHAR2(100);
-        l_clob CLOB;
-        l_error_message VARCHAR2(50);
-        l_usage_date_param VARCHAR2(16):=NULL;
-    BEGIN
-        IF (pUsageDate IS NOT NULL) THEN
-            l_usage_date_param:='/date='||TO_CHAR(pUsageDate,'DD-MM-YYYY');
-        END IF;
-        FOR C IN (SELECT id, cld_cloud_name FROM users WHERE cld_cloud_name IS NOT NULL AND id=NVL(pUserId,id)) LOOP
-            pck_api.callCloudinaryAPI(
-                pUserId=>C.id,
-                pEndpoint=>C.cld_cloud_name || '/usage', 
-                pMethod =>'GET', 
-                pData=>l_clob
-            );
-            DELETE usage WHERE user_id=C.id AND usage_date=NVL(pUsageDate,TRUNC(sysdate));
-            INSERT INTO usage (user_id,usage_date,last_updated,plan,transformations_usage,transformations_credit_usage,bandwidth_usage,bandwidth_credit_usage,storage_usage,storage_credit_usage,
-                credits_usage,credits_limit,used_percent,objects_usage,requests,resources,derived_resources,image_max_size,video_max_size,raw_max_size)
-            SELECT C.id, TO_DATE(date_requested,'YYYY-MM-DD"T"hh24:mi:ss"Z"'),TO_DATE(last_updated,'YYYY-MM-DD'),
-                plan,
-                transformations_usage,transformations_credit_usage,bandwidth_usage,bandwidth_credit_usage,storage_usage,storage_credit_usage,
-                credits_usage,credits_limit,used_percent,
-                objects_usage,requests,resources,derived_resources,
-                image_max_size,video_max_size,raw_max_size
-              FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS 
-                date_requested VARCHAR2(100) PATH '$.date_requested', 
-                last_updated VARCHAR2(100) PATH '$.last_updated', 
-                plan VARCHAR2(100) PATH '$.plan',
-                transformations_usage NUMBER PATH '$.transformations.usage',
-                transformations_credit_usage NUMBER PATH '$.transformations.credits_usage',
-                bandwidth_usage NUMBER PATH '$.bandwidth.usage',
-                bandwidth_credit_usage NUMBER PATH '$.bandwidth.credits_usage',
-                storage_usage NUMBER PATH '$.storage.usage',
-                storage_credit_usage NUMBER PATH '$.storage.credits_usage',
-                credits_usage NUMBER PATH '$.credits.usage',
-                credits_limit NUMBER PATH '$.credits.limit',
-                used_percent NUMBER PATH '$.credits.used_percent',
-                objects_usage NUMBER PATH '$.objects.usage',
-                requests NUMBER PATH '$.requests',
-                resources NUMBER PATH '$.resources',
-                derived_resources NUMBER PATH '$.derived_resources',
-                image_max_size NUMBER PATH '$.media_limits.image_max_size_bytes',
-                video_max_size NUMBER PATH '$.media_limits.video_max_size_bytes',
-                raw_max_size NUMBER PATH '$.media_limits.raw_max_size_bytes'
-                );
-        END LOOP;
-        COMMIT;
-    END;
-
-
-    /*
-    **  Daily job run by dbms_scheduler
-    */
-    PROCEDURE daily_job IS 
-        l_user_id users.id%type; 
-        l_email users.email%type;
-        l_email_sender users.email%type;
-        l_password VARCHAR2(20);
-        l_workspace_name apex_workspace_developers.workspace_name%type;
-        l_restore_files VARCHAR2(4000);
-        l_clob CLOB;
-        l_delete CLOB;
-    BEGIN
-        /*
-        ** 1. Get Cloudinary usage for all subscribers 
-        */
-        getUsage;
-
-        /*
-        **  2. Backup to Github
-        **     Github token and repository details are maintained in USERS table
-        **     Email address of Apex Admin user must match for this to work
-        **     Complex password auto-generated to encrypt schema export dump file
-        */
-
-        SELECT u.id, u.email, w.workspace_name 
-          INTO l_user_id, l_email, l_workspace_name
-          FROM users u, apex_workspace_developers w 
-         WHERE w.first_schema_provisioned=sys_context('userenv','current_schema')
-           AND w.is_admin='Yes'
-           AND w.email=u.email
-           FETCH FIRST ROW ONLY;
-
-        /* Required because Oracle OCI does not allow approved sender email to be "gmail", "hotmail" etc */
-        l_email_sender:='backup@markrussellbrown.com';
-        /*
-        SELECT email 
-          INTO l_email_sender
-          FROM users 
-         WHERE approved_sender_ind='Y';
-        */
-
-        l_password:=generate_password();
-        pck_backup.github_backup(l_user_id, l_email_sender, l_email, l_password, l_restore_files);
-        UPDATE users SET export_pw=l_password WHERE id=l_user_id;
-        /*
-        **  3. Restore from Github into Restore database, where a workspace with same name as current schema must exist.
-        **     We use dynamic sql for this so that this package compiles after being restored - nb: DB LINKs are not included in any schema export
-        **     To avoid ORA-02074 we submit job on restore database remotely using database link
-        **     "l_restore_files" is separated list of github file names to be restored
-        */
-/*
-        pck_core.log('About to submit job on restore server to import Github backup files - ' || l_restore_files);
-        EXECUTE IMMEDIATE q'{
-            BEGIN pck_restore.submit_job@RESTORE_LINK(
-                pGithub_files=>:B1, 
-                pGithub_token=>:B2, 
-                pGithub_repos_owner=>:B3, 
-                pGithub_repos=>:B4,
-                pPassword=>:B5,
-                pEmailSender=>:B6,
-                pEmail=>:B7,
-                pWorkspace=>:B8,
-                pSchema=>:B9); END;}' USING l_restore_files, l_github_token, l_github_repos_owner, l_github_repos, l_password, l_email_sender, l_email, l_workspace_name,sys_context('userenv','current_schema');
-
-        INSERT INTO metrics (id,log_date,nb_assets,bytes,nb_articles,word_count,total_credits,credits_remaining,total_used,max_size)
-        WITH metrics AS 
-            (
-                SELECT nb_assets, bytes, nb_articles, word_count  
-                  FROM (SELECT COUNT(*) nb_assets, SUM(bytes) bytes FROM asset), (SELECT COUNT(*) nb_articles, SUM(word_count) word_count FROM article)
-            ),
-            credits AS
-            (
-                SELECT SUM(credits_limit) total_credits, SUM(credits_limit - (credits_limit*(used_percent/100))) credits_remaining
-                FROM usage 
-                WHERE usage_date=(SELECT MAX(usage_date) FROM usage)
-            ),
-            db1 AS
-            (
-                SELECT total_used_adb1+total_used_adb2 total_used FROM (SELECT SUM(bytes) total_used_adb1 FROM dba_segments WHERE tablespace_name<>'SAMPLESCHEMA'), (SELECT SUM(bytes) total_used_adb2 FROM dba_segments@restore_link WHERE tablespace_name<>'SAMPLESCHEMA')
-            ),
-            db2 AS
-            (
-                SELECT max_size_adb1+max_size_adb2 max_size FROM (SELECT max_size max_size_adb1 FROM v$pdbs), (SELECT max_size max_size_adb2 FROM v$pdbs@restore_link)
-            )            
-        SELECT SEQ_METRICS.nextval as id, current_timestamp as log_date, met.nb_assets, met.bytes, met.nb_articles, met.word_count, cr.total_credits, cr.credits_remaining, db1.total_used, db2.max_size
-          FROM metrics met, credits cr, db1, db2;
-
-        COMMIT;
-        */
-
-        /*
-            4. Delete Github Action workflow logs
-        */
-        pck_api.callGithubAPI(pUserId=>l_user_id, pEndpoint=>'actions/runs', pMethod=>'GET', pData=>l_clob);
-        FOR C IN (SELECT total_count FROM JSON_TABLE(l_clob, '$' COLUMNS(total_count))) LOOP
-            pck_core.log('Github Action workflow runs total_count:'||C.total_count );
-        END LOOP;
-        FOR C IN (SELECT id FROM JSON_TABLE(l_clob, '$.workflow_runs[*]' COLUMNS(id))) LOOP
-            pck_api.callGithubAPI(pUserId=>44, pEndpoint=>'actions/runs/' || C.id, pMethod=>'DELETE', pData=>l_delete);
-        END LOOP;
-
-        /*
-        **   5. Delete log older than 24 hours
-        */
-        DELETE log WHERE log_date<current_timestamp-1;
-
-        /*
-        **   6. Load google Fonts (apparently, the url can change which would bugger up my demo section in website options
-        
-        pck_api.callGoogleApi(pUserId=>l_user_id, pData=>l_clob);
-
-        DELETE google_font;
-        INSERT INTO google_font (seq, family, url_regular)
-        SELECT ROWNUM, family, url_regular FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, url_regular PATH '$.files.regular'));
-        */
-
-        /*
-        **   7. Email Visit reports for custom domains
-        */
-        FOR C IN (SELECT id||',LIVE' id FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
-            pck_visits.getVisits(C.id, TRUE);
-        END LOOP;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-                RAISE;
     END;
 
     /*
     ** Generate schema datapump export
     */ 
-    PROCEDURE datapump_backup(pIncludeRows IN VARCHAR2, pPassword IN VARCHAR2 DEFAULT NULL) IS
+    PROCEDURE datapump_backup(p_repo IN OUT NOCOPY CLOB) IS
         h1 NUMBER;
         l_schema VARCHAR2(30):=sys_context('userenv','current_schema');
+        l_filename VARCHAR2(60);
+        l_schema_size NUMBER;
         l_status varchar2(4000);
+        l_password users.export_pw%type;
+        l_json JSON_OBJECT_T;
+        l_payload CLOB;
+        l_clob CLOB;
+        l_body_html CLOB:=
+        '<!DOCTYPE html>
+         <html>
+            <head>
+                <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta name="format-detection" content="telephone=no">
+                <meta name="format-detection" content="date=no">
+                <meta name="format-detection" content="address=no">
+                <meta name="format-detection" content="email=no">
+                <style type="text/css">
+                    body {
+                        font-family: Georgia,sans-serif;
+                        font-size: 1rem;
+                    }
+                    td,
+                    th {
+                        border: 1px solid rgb(190, 190, 190);
+                        padding: 0.5rem;
+                    }
+                    table {
+                        border-collapse: collapse;
+                        border: 2px solid rgb(200, 200, 200);
+                        width: 100%;
+                    }
+                    thead {
+                        background-color: #d7d9f2;
+                    }
+                </style>
+            </head>
+        <body>';
     BEGIN
-        pck_core.log('Starting datapump export job for Schema:'||l_schema || ' Include Rows:' || pIncludeRows);
-        h1 := dbms_datapump.OPEN (operation => 'EXPORT', job_mode => 'SCHEMA', job_name => 'EXPORT_SCHEMA_JOB', version => 'COMPATIBLE'); 
+        pck_core.log('Starting datapump export job for Schema:'||l_schema);
 
-        dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION', VALUE => 'ALL'); 
-        dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION_ALGORITHM', VALUE => 'MEDIUM'); 
-        dbms_datapump.set_parallel(handle => h1, degree => 1); 
-        dbms_datapump.add_file(handle => h1, filename => l_schema || CASE WHEN pIncludeRows = '0' THEN '.METADATA' END || '.dmp', 
-            directory => 'DATA_PUMP_DIR', filesize => '50M',  filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_DUMP_FILE, reusefile => 1); 
-        dbms_datapump.add_file(handle => h1, filename => l_schema || CASE WHEN pIncludeRows = '0' THEN '.METADATA' END || '.log', 
-            directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
-        dbms_datapump.set_parameter(handle => h1, name => 'KEEP_MASTER', VALUE => 0); 
-        dbms_datapump.set_parameter(handle => h1, name => 'LOGTIME', VALUE => 'ALL'); 
+        EXECUTE IMMEDIATE 'TRUNCATE TABLE DBTOOLS$EXECUTION_HISTORY';
 
-        dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')');
-        dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''DBTOOLS$EXECUTION_HISTORY'',''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'',''PROCOBJ'',''JOB'',''SCHEDULER'')'); 
-        --dbms_datapump.metadata_filter(handle => h1, name => 'NAME_EXPR', value => 'NOT IN (''DBTOOLS$EXECUTION_HISTORY'')');
+        FOR i IN 1..2 LOOP
+            h1 := dbms_datapump.OPEN (operation => 'EXPORT', job_mode => 'SCHEMA', job_name => 'EXPORT_SCHEMA_JOB', version => 'COMPATIBLE'); 
 
-        IF (pIncludeRows='0') THEN
-            dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => 0);
+            dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION', VALUE => 'ALL'); 
+            dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION_ALGORITHM', VALUE => 'MEDIUM'); 
+            dbms_datapump.set_parallel(handle => h1, degree => 1); 
+            
+            l_filename:='EXPORT_SCHEMA.' || l_schema || CASE WHEN i = 1 THEN '.METADATA' END;
+            dbms_datapump.add_file(handle => h1, filename =>  l_filename || '.dmp', 
+                directory => 'DATA_PUMP_DIR', filesize => '50M',  filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_DUMP_FILE, reusefile => 1); 
+            dbms_datapump.add_file(handle => h1, filename => l_filename || '.log', 
+                directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
+            
+            dbms_datapump.set_parameter(handle => h1, name => 'KEEP_MASTER', VALUE => 0); 
+            dbms_datapump.set_parameter(handle => h1, name => 'LOGTIME', VALUE => 'ALL'); 
+
+            dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')');
+            dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''DBTOOLS$EXECUTION_HISTORY'',''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'',''PROCOBJ'',''JOB'',''SCHEDULER'')'); 
+
+            IF (i=1) THEN
+                dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => 0);
+            ELSE
+                l_password:=generate_password();
+                dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_MODE', VALUE => 'PASSWORD'); 
+                dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => l_password); 
+            END IF;
+
+            dbms_datapump.start_job(handle => h1, skip_current => 0, abort_step => 0); 
+            dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
+            dbms_datapump.detach(handle => h1); 
+
+            dbms_cloud_repo.put_file(repo=>p_repo, file_path=>l_filename || '.log', directory_name=>'DATA_PUMP_DIR');
+            IF (l_status='COMPLETED') THEN
+                dbms_cloud_repo.put_file(repo=>p_repo, file_path=>l_filename || '.dmp', directory_name=>'DATA_PUMP_DIR');
+                EXIT;
+            END IF;
+            
+        END LOOP;
+
+        IF (l_status='COMPLETED') THEN
+            l_body_html:=l_body_html || '<table role="presentation">';
+            l_body_html:=l_body_html || '<thead><tr><th>File Name</th><th>File Size</th><th>Schema Size</th><th>Created</th></tr></thead>';
+            l_body_html:=l_body_html || '<tbody>';
+            SELECT SUM(bytes) INTO l_schema_size FROM user_segments;
+            FOR C IN (SELECT object_name, bytes, last_modified FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR') WHERE object_name LIKE '%.dmp')
+            LOOP
+                l_body_html:=l_body_html || '<tr><td>' || C.object_name || '</td><td>' || apex_string_util.to_display_filesize(C.bytes) || '</td>' || apex_string_util.to_display_filesize(l_schema_size) || '<td>' || C.last_modified || '</td></tr>';
+            END LOOP;
+            l_body_html:=l_body_html || '</tbody></table>';
         ELSE
-            dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_MODE', VALUE => 'PASSWORD'); 
-            dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => pPassword); 
+            l_body_html:=l_body_html || '<h1>Daily Backup Failed with status ' || l_status || '</h1>';
         END IF;
+        l_body_html:=l_body_html || '</html>';
 
-        dbms_datapump.start_job(handle => h1, skip_current => 0, abort_step => 0); 
-        dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
-        dbms_datapump.detach(handle => h1); 
-        pck_core.log('Completed datapump export job. Final status:' || l_status);
+        /* Send email confirming backup status to all admin users */
+        FOR C IN (
+            SELECT u.id, u.email
+              FROM users u, apex_workspace_developers w 
+             WHERE w.first_schema_provisioned=l_schema
+               AND w.is_admin='Yes'
+               AND w.email=u.email
+        )
+        LOOP
+            IF (l_status='COMPLETED') THEN
+                UPDATE users SET export_pw=l_password WHERE id=C.id;
+            END IF;
+            l_json:=new JSON_OBJECT_T;
+            l_json.put('contactEmail',C.email);
+            l_json.put('subject','Daily Backup Job ' || l_status);
+            l_json.put('body', l_body_html);
+            l_json.put('sourceEmail','backup@adfreesites.com');
+
+            l_payload:=l_json.stringify;
+            pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_payload, pData=>l_clob);
+        END LOOP;
+
+        DELETE log WHERE log_date<current_timestamp-1;
+
+        pck_core.log('Completed datapump schema exports. Final status:' || l_status);
 
     EXCEPTION
         WHEN OTHERS THEN
@@ -342,187 +197,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     END;
 
     /*
-    ** Send email to Admin user summarizing backup status
-    ** Email formatted as HTML so styling is primitive and included in-line
-    */
-    PROCEDURE sendmail(p_backup IN tt_backup, p_email_sender IN VARCHAR2, p_email IN VARCHAR2, p_password IN VARCHAR2, p_error IN VARCHAR2 DEFAULT NULL) IS
-        l_subject VARCHAR2(100);
-        l_body CLOB;
-        l_body_html CLOB;
-        l_bgcolor VARCHAR2(7);
-        l_total_bytes NUMBER:=0;
-        l_total_bytes_base64 NUMBER:=0;
-        l_schema_size NUMBER;
-        WARNING_FILESIZE CONSTANT NUMBER:=(50*1024*1024)*.8;
-    BEGIN
-        /* Be optimistic about backup status */
-        l_subject:=sys_context('userenv','db_name') || ' - EXPORTED SUCCESSFULLY TO GITHUB';
-        IF (p_backup.COUNT>0) THEN
-            FOR i IN 1..p_backup.COUNT LOOP
-                l_total_bytes_base64:=l_total_bytes_base64+p_backup(i).backup_size_base64;
-                l_total_bytes:=l_total_bytes+p_backup(i).backup_size;
-                IF (p_backup(i).message<>'OK') THEN
-                    l_subject:=sys_context('userenv','db_name') || ' - EXPORT TO GITHUB FAILED';
-                END IF;
-            END LOOP;
-        END IF;
-
-        l_body:='To view the content of this message, please use an HTML enabled mail client.'||utl_tcp.crlf;
-        l_body_html:=to_clob('
-            <html>
-                <head>
-                    <style type="text/css">
-                        body {
-                            font-family:Georgia,sans-serif;
-                            font-size:1rem;
-                        }
-                        td,
-                        th {
-                            border: 1px solid rgb(190, 190, 190);
-                            padding: 0.8rem;
-                        }
-
-                        td {
-                            text-align: center;
-                        }
-
-                        tr:nth-child(even) {
-                            background-color: #eee;
-                        }
-
-                        th[scope="col"] {
-                            background-color: #696969;
-                            color: #fff;
-                        }
-
-                        th[scope="row"] {
-                            background-color: #d7d9f2;
-                        }
-
-                        caption {
-                            padding: 10px;
-                            caption-side: top;
-                        }
-
-                        table {
-                            border-collapse: collapse;
-                            border: 2px solid rgb(200, 200, 200);
-                            letter-spacing: 1px;
-                            font-family: sans-serif;
-                        }
-                    </style>
-                </head>
-                <body>
-        ');
-
-        SELECT SUM(bytes) INTO l_schema_size FROM user_segments;
-
-        l_body_html:=l_body_html || to_clob('
-            <table>
-                <caption>SCHEMA: <strong>'||sys_context('userenv','current_schema') 
-                || '</strong> TOTAL BACKUP/TRANSFER SIZE: <strong>' || apex_string_util.to_display_filesize(l_total_bytes) || '/' || apex_string_util.to_display_filesize(l_total_bytes_base64) || '</strong>' 
-                || '</strong> SCHEMA SIZE: <strong>' || apex_string_util.to_display_filesize(l_schema_size) || '</strong>
-                </caption>
-                <thead>
-                    <tr bgcolor="#d7d9f2">
-                        <th scope="col">Object</th>
-                        <th scope="col">Backed Up</th>
-                        <th scope="col">Backup Size</th>
-                        <th scope="col">Status</td>
-                    </tr>
-                </thead>
-                <tbody>');
-
-        IF (p_backup.COUNT>0) THEN
-            FOR i IN 1..p_backup.COUNT
-            LOOP
-                IF (p_backup(i).message<>'OK') THEN
-                    l_bgcolor:='ff0000';
-                ELSIF (MOD(i,2)=0) THEN
-                    l_bgcolor:='#eeeeee';
-                ELSE
-                    l_bgcolor:=NULL;
-                END IF;
-
-                l_body_html:=l_body_html || to_clob(
-                    '<tr  bgcolor="' || l_bgcolor || '">
-                        <th scope="row">' || p_backup(i).object_type || '.' || p_backup(i).object_name || '</th>
-                        <td>' || TO_CHAR(p_backup(i).backup_date AT TIME ZONE 'Europe/London','dd Mon yyyy hh24:mi:ss TZR') || '</td>
-                        <td>' || apex_string_util.to_display_filesize(p_backup(i).backup_size) || '</td>
-                        <td>' || p_backup(i).message || CASE WHEN p_backup(i).backup_size>WARNING_FILESIZE THEN ' - GITHUB MAXIMUM IS 50MB' END ||'</td>
-                    </tr>');
-            END LOOP;
-        END IF;
-
-        l_body_html:=l_body_html || to_clob('</tbody></table>');
-
-        /* This means there was an unrecoverable error - but some of the backup may have succeeded and would have been reported above */
-        IF (p_error IS NOT NULL) THEN
-            l_subject:='OCI APPLICATION BACKUP FAILED';
-            l_body_html:=l_body_html || to_clob('<p>UNRECOVERABLE ERROR: '|| p_error || '</p>');
-        END IF;
-
-        /*
-        ** Slip this in on the quiet. Would be needed for manual restore.
-        */
-        l_body_html:=l_body_html || to_clob('<p>' || p_password || '<p>');
-
-        l_body_html:=l_body_html || to_clob('</body></html>');
-
-        apex_mail.send(p_to=>p_email, p_from=>p_email_sender, p_body=>l_body, p_body_html=>l_body_html, p_subj=>l_subject);
-        apex_mail.push_queue(); 
-    END;
-
-    /*
     ** Generate and transfer to Github repository the following:
     ** 1. Apex applications
     ** 2. Apex static files
-    ** 3. Datapump export dump file including log
-    ** 4. DDL of TABLES and PACKAGES
+    ** 3. DDL of TABLES and PACKAGES
     */
     PROCEDURE github_backup(
-        p_user_id IN users.id%type,
-        p_email_sender IN VARCHAR2,
-        p_email IN VARCHAR2,
-        p_password IN VARCHAR2,
-        p_restore_files IN OUT VARCHAR2)
+        p_repo IN OUT NOCOPY CLOB)
     IS  
+        TYPE t_backup IS RECORD(
+            object_type         user_objects.object_type%type,
+            object_name         user_objects.object_name%type);
+
+        TYPE tt_backup IS TABLE OF t_backup;
         l_backup tt_backup; 
+        
         l_clob CLOB;
         l_blob BLOB;
-        l_json JSON_OBJECT_T;
-        l_content CLOB;
-        l_message VARCHAR2(500);
-        l_sha VARCHAR2(500);
-        l_db_name VARCHAR2(128):=sys_context('userenv','db_name');
-        l_db_name2 VARCHAR2(50):=SUBSTR(l_db_name,INSTR(l_db_name,'_')+1);
+        l_file_path VARCHAR2(61);
         l_files apex_t_export_files;
-        l_datapump_start TIMESTAMP:=current_timestamp;
-        l_github CLOB;
         n PLS_INTEGER;
     BEGIN
-        /*
-        ** Get existing details of any files previously copied to Github. We need the file name and SHA so that Github can update / insert as required
-        */
-        pck_api.callGithubAPI(pUserId=>p_user_id, pRepository=>'oracle-to-github-backup', pEndpoint=>'contents/', pMethod=>'GET', pBody=>l_clob, pData=>l_github);
-
-        /* 
-        **  Run datapump exports for the current schema: 
-        **  1) encrypted with table rows  
-        **  2) unencrypted metadata only
-        */
-        
-        /* Delete any files left over from previous operation to avoid ora-39001  */
-        FOR C IN (SELECT object_name FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR')) LOOP
-            DBMS_CLOUD.DELETE_FILE(directory_name=>'DATA_PUMP_DIR',file_name=>C.object_name);
-        END LOOP;
-
-        /* Truncate DBTOOLS$EXECUTION_HISTORY */
-        EXECUTE IMMEDIATE 'TRUNCATE TABLE DBTOOLS$EXECUTION_HISTORY';
-
-        datapump_backup(pIncludeRows => '0'); -- metadata only export
-        datapump_backup(pIncludeRows => '1', pPassword => p_password); -- encrypt exports that include table rows
-
         /*
         ** Ensure calls to DBMS_METADATA return nicely formatted code without storage and schema details
         */
@@ -537,63 +232,51 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         /*
         ** Build PLSQL collection of all objects to be exported and copied to Github
         */
-        SELECT o.object_type,o.object_name,o.auto_restore,g.sha,NULL,NULL,NULL,NULL
+        SELECT object_type, object_name
           BULK COLLECT INTO l_backup
          FROM
             (
-                SELECT object_type,object_name, 0 auto_restore
+                SELECT object_type,object_name
                 FROM user_objects
                 WHERE generated='N'
                 AND object_type IN ('TABLE','PACKAGE')
                 UNION ALL 
 
-                SELECT 'APEX_APPLICATION',TO_CHAR(application_id), 1
+                SELECT 'APEX_APPLICATION',TO_CHAR(application_id)
                 FROM apex_applications
                 WHERE owner=sys_context('userenv','current_schema') 
                 UNION ALL 
 
-                SELECT 'APEX_STATIC_FILE',f.application_id || '.' || f.file_name, 0
+                SELECT 'APEX_STATIC_FILE',f.application_id || '.' || f.file_name
                 FROM apex_application_static_files f, apex_applications a
                 WHERE f.application_id=a.application_id
                 AND SUBSTR(f.mime_type,INSTR(f.mime_type,'/')+1) IN ('javascript','css')
                 AND INSTR(f.file_name,'.min.')=0
                 UNION ALL
 
-                SELECT 'ORDS_METADATA',sys_context('userenv','current_schema'), 0
+                SELECT 'ORDS_METADATA',sys_context('userenv','current_schema')
                 FROM dual
                 UNION ALL
 
-                SELECT 'EXPORT_SCHEMA', object_name, CASE WHEN INSTR(object_name,sys_context('userenv','current_schema') || '.dmp')>0 THEN 1 ELSE 0 END
-                FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR') 
-                WHERE bytes>0 
-                AND last_modified > l_datapump_start
-                UNION ALL
-
-                SELECT 'GRANT','OBJECT_GRANT', 1
+                SELECT 'GRANT','OBJECT_GRANT'
                 FROM user_tab_privs
                 WHERE grantee=sys_context('userenv','current_schema') 
                 AND grantor='ADMIN'
                 AND ROWNUM=1
                 UNION ALL
 
-                SELECT 'GRANT','SYSTEM_GRANT', 1
+                SELECT 'GRANT','SYSTEM_GRANT'
                 FROM user_tab_privs
                 WHERE grantee=sys_context('userenv','current_schema') 
                 AND grantor='ADMIN'
                 AND ROWNUM=1
-
-            ) o, 
-            (
-                SELECT SUBSTR(name,1,INSTR(name,'.')-1) object_type, SUBSTR(name,INSTR(name,'.')+1) object_name, sha 
-                  FROM JSON_TABLE(l_github FORMAT JSON, '$[*]' COLUMNS (name, sha))
-            ) g
-        WHERE o.object_type=g.object_type(+)
-          AND o.object_name=g.object_name(+)
-        ORDER BY DECODE(object_type,'GRANT',1,'EXPORT_SCHEMA',2,'APEX_APPLICATION',3,4),object_name;
+            )
+        ORDER BY DECODE(object_type,'GRANT',1,'APEX_APPLICATION',2,3),object_name;
 
         FOR i IN 1..l_backup.COUNT
         LOOP
-            pck_core.log('Backing up to github - '||l_backup(i).object_type||'.'||l_backup(i).object_name);
+            l_file_path:=l_backup(i).object_type||'.'||l_backup(i).object_name;
+            pck_core.log('Backing up to github - ' || l_file_path);
 
             l_clob:='';
 
@@ -613,9 +296,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                     SELECT ords_metadata.ords_export.export_schema() 
                       INTO l_clob 
                       FROM dual;
-
-                WHEN 'EXPORT_SCHEMA' THEN
-                    l_blob:=TO_BLOB(BFILENAME('DATA_PUMP_DIR',l_backup(i).object_name));
 
                 WHEN 'GRANT' THEN
                     dbms_metadata.set_transform_param(dbms_metadata.session_transform,'EMIT_SCHEMA',true);
@@ -658,232 +338,42 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
                 l_blob:=apex_util.clob_to_blob(l_clob);
             END IF;
 
-            l_backup(i).backup_size:=DBMS_LOB.GETLENGTH(l_blob);
-
-            /* 
-            ** Github enforces strict base64 encoding so we must remove carriage return and line feed characters 
-            */
-            l_content:=REPLACE(APEX_WEB_SERVICE.BLOB2CLOBBASE64(l_blob),chr(13)||chr(10));
-
-            l_backup(i).backup_size_base64:=DBMS_LOB.GETLENGTH(l_content);
-
-            /*
-            **  Prepare JSON body for uploading with Github API. Sent with "sha" results in Github update, otherwise insert
-            */
-            l_json:=JSON_OBJECT_T.parse('{"message":"Commit by ' || l_db_name2 || '"}');
-            IF (l_backup(i).github_sha IS NOT NULL) THEN
-                l_json.put('sha',l_backup(i).github_sha);
-            END IF;
-            l_json.put('content', l_content);
-
-            l_github:=l_json.to_clob;
-            pck_api.callGithubAPI(pUserId=>p_user_id, pRepository=>'oracle-to-github-backup', pEndpoint=>'contents/' || l_backup(i).object_type || '.' || l_backup(i).object_name, pMethod=>'PUT', pBody=>l_github, pData=>l_clob);
-
-            /*
-            ** Github API response JSON includes "message" if any error
-            */
-            SELECT NVL(message,'OK'), current_timestamp 
-              INTO l_backup(i).message, l_backup(i).backup_date 
-              FROM JSON_TABLE(l_clob FORMAT JSON, '$' COLUMNS message VARCHAR2(500) PATH '$.message');
+            dbms_cloud_repo.put_file(repo=>p_repo, file_path=>l_file_path, contents=>l_blob);
 
         END LOOP;
-
-        /*
-        ** Send email to APEX Admin user with results of backup. Include encryption password.
-        */
-        sendmail(l_backup, p_email_sender, p_email, p_password);
-
-        /*
-        **  Send back to calling procedure list of Github files to be restored
-        */
-        FOR i IN 1..l_backup.COUNT LOOP
-            IF (l_backup(i).auto_restore=1) THEN
-                p_restore_files:=p_restore_files || l_backup(i).object_type || '.' || l_backup(i).object_name || ':';
-            END IF;
-        END LOOP;
-        p_restore_files:=RTRIM(p_restore_files,':');
 
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error;
-                sendmail(l_backup, p_email_sender, p_email, NULL, sqlcode || ': ' || sqlerrm);
                 RAISE;
     END;
 
-    PROCEDURE getDumpFileInfo(pDatapumpFileName IN VARCHAR2) IS
-        ind        NUMBER;
-        fileType   NUMBER;
-        value      VARCHAR2(2048);
-        infoTab    KU$_DUMPFILE_INFO := KU$_DUMPFILE_INFO();
+    /*
+    **  Daily job run by dbms_scheduler
+    */
+    PROCEDURE daily_job IS 
+        l_repo CLOB;
     BEGIN
-      --
-      -- Get the information about the dump file into the infoTab.
-      --
-      BEGIN
-        DBMS_DATAPUMP.GET_DUMPFILE_INFO(pDatapumpFileName,'DATA_PUMP_DIR',infoTab,fileType);
-        pck_core.log('---------------------------------------------');
-        pck_core.log('Information for file: ' || pDatapumpFileName);
+        l_repo := dbms_cloud_repo.init_github_repo(
+            credential_name => 'GITHUB_CRED', 
+            owner => 'xsf3190', 
+            repo_name => 'oracle-to-github-backup');
 
-        --
-        -- Determine what type of file is being looked at.
-        --
-        CASE fileType
-          WHEN 1 THEN
-            pck_core.log(pDatapumpFileName || ' is a Data Pump dump file');
-          WHEN 2 THEN
-            pck_core.log(pDatapumpFileName || ' is an Original Export dump file');
-          WHEN 3 THEN
-            pck_core.log(pDatapumpFileName || ' is an External Table dump file');
-          ELSE
-            pck_core.log(pDatapumpFileName || ' is not a dump file');
-            pck_core.log('---------------------------------------------');
-        END CASE;
+       --datapump_backup(l_repo);
+       github_backup(l_repo);
 
-      EXCEPTION
-        WHEN OTHERS THEN
-          pck_core.log('---------------------------------------------');
-          pck_core.log('Error retrieving information for file: ' || pDatapumpFileName);
-          pck_core.log(SQLERRM);
-          pck_core.log('---------------------------------------------');
-          fileType := 0;
-      END;
-
-      --
-      -- If a valid file type was returned, then loop through the infoTab and 
-      -- display each item code and value returned.
-      --
-      IF fileType > 0
-      THEN
-        pck_core.log('The information table has ' || 
-                              TO_CHAR(infoTab.COUNT) || ' entries');
-        pck_core.log('---------------------------------------------');
-
-        ind := infoTab.FIRST;
-        WHILE ind IS NOT NULL
-        LOOP
-          --
-          -- The following item codes return boolean values in the form
-          -- of a '1' or a '0'. Display them as 'Yes' or 'No'.
-          --
-          value := NVL(infoTab(ind).value, 'NULL');
-          IF infoTab(ind).item_code IN
-             (DBMS_DATAPUMP.KU$_DFHDR_MASTER_PRESENT,
-              DBMS_DATAPUMP.KU$_DFHDR_DIRPATH,
-              DBMS_DATAPUMP.KU$_DFHDR_METADATA_COMPRESSED,
-              DBMS_DATAPUMP.KU$_DFHDR_DATA_COMPRESSED,
-              DBMS_DATAPUMP.KU$_DFHDR_METADATA_ENCRYPTED,
-              DBMS_DATAPUMP.KU$_DFHDR_DATA_ENCRYPTED,
-              DBMS_DATAPUMP.KU$_DFHDR_COLUMNS_ENCRYPTED)
-          THEN
-            CASE value
-              WHEN '1' THEN value := 'Yes';
-              WHEN '0' THEN value := 'No';
-            END CASE;
-          END IF;
-
-          --
-          -- Display each item code with an appropriate name followed by
-          -- its value.
-          --
-          CASE infoTab(ind).item_code
-            --
-            -- The following item codes have been available since Oracle
-            -- Database 10g, Release 10.2.
-            --
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_FILE_VERSION   THEN
-              pck_core.log('Dump File Version:         ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_MASTER_PRESENT THEN
-              pck_core.log('Master Table Present:      ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_GUID THEN
-              pck_core.log('Job Guid:                  ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_FILE_NUMBER THEN
-              pck_core.log('Dump File Number:          ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_CHARSET_ID  THEN
-              pck_core.log('Character Set ID:          ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_CREATION_DATE THEN
-              pck_core.log('Creation Date:             ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_FLAGS THEN
-              pck_core.log('Internal Dump Flags:       ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_JOB_NAME THEN
-              pck_core.log('Job Name:                  ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_PLATFORM THEN
-              pck_core.log('Platform Name:             ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_INSTANCE THEN
-              pck_core.log('Instance Name:             ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_LANGUAGE THEN
-              pck_core.log('Language Name:             ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_BLOCKSIZE THEN
-              pck_core.log('Dump File Block Size:      ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_DIRPATH THEN
-              pck_core.log('Direct Path Mode:          ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_METADATA_COMPRESSED THEN
-              pck_core.log('Metadata Compressed:       ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_DB_VERSION THEN
-              pck_core.log('Database Version:          ' || value);
-
-            --
-            -- The following item codes were introduced in Oracle Database 11g
-            -- Release 11.1
-            --
-
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_MASTER_PIECE_COUNT THEN
-              pck_core.log('Master Table Piece Count:  ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_MASTER_PIECE_NUMBER THEN
-              pck_core.log('Master Table Piece Number: ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_DATA_COMPRESSED THEN
-              pck_core.log('Table Data Compressed:     ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_METADATA_ENCRYPTED THEN
-              pck_core.log('Metadata Encrypted:        ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_DATA_ENCRYPTED THEN
-              pck_core.log('Table Data Encrypted:      ' || value);
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_COLUMNS_ENCRYPTED THEN
-              pck_core.log('TDE Columns Encrypted:     ' || value);
-
-            --
-            -- For the DBMS_DATAPUMP.KU$_DFHDR_ENCRYPTION_MODE item code a
-            -- numeric value is returned. So examine that numeric value
-            -- and display an appropriate name value for it.
-            --
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCRYPTION_MODE THEN
-              CASE TO_NUMBER(value)
-                WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCMODE_NONE THEN
-                  pck_core.log('Encryption Mode:           None');
-                WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCMODE_PASSWORD THEN
-                  pck_core.log('Encryption Mode:           Password');
-                WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCMODE_DUAL THEN
-                  pck_core.log('Encryption Mode:           Dual');
-                WHEN DBMS_DATAPUMP.KU$_DFHDR_ENCMODE_TRANS THEN
-                  pck_core.log('Encryption Mode:           Transparent');
-              END CASE;
-
-            --
-            -- The following item codes were introduced in Oracle Database 12c
-            -- Release 12.1
-            --
-
-            --
-            -- For the DBMS_DATAPUMP.KU$_DFHDR_COMPRESSION_ALG item code a
-            -- numeric value is returned. So examine that numeric value and
-            -- display an appropriate name value for it.
-            --
-            WHEN DBMS_DATAPUMP.KU$_DFHDR_COMPRESSION_ALG THEN
-              CASE TO_NUMBER(value)
-                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_NONE THEN
-                  pck_core.log('Compression Algorithm:     None');
-                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_BASIC THEN
-                  pck_core.log('Compression Algorithm:     Basic');
-                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_LOW THEN
-                  pck_core.log('Compression Algorithm:     Low');
-                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_MEDIUM THEN
-                  pck_core.log('Compression Algorithm:     Medium');
-                WHEN DBMS_DATAPUMP.KU$_DFHDR_CMPALG_HIGH THEN
-                  pck_core.log('Compression Algorithm:     High');
-              END CASE;
-            ELSE NULL;  -- Ignore other, unrecognized dump file attributes.
-          END CASE;
-          ind := infoTab.NEXT(ind);
+        /*
+        **   7. Email Visit reports for custom domains
+        
+        FOR C IN (SELECT id||',LIVE' id FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
+            pck_visits.getVisits(C.id, TRUE);
         END LOOP;
-      END IF;
+        */
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
+                RAISE;
     END;
 
 end;
