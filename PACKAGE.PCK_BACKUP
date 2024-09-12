@@ -187,13 +187,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         END LOOP;
 
         DELETE log WHERE log_date<current_timestamp-1;
+        COMMIT;
 
         pck_core.log('Completed datapump schema exports. Final status:' || l_status);
-
-    EXCEPTION
-        WHEN OTHERS THEN
-            pck_core.log_error;
-            RAISE;
     END;
 
     /*
@@ -359,16 +355,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             owner => 'xsf3190', 
             repo_name => 'oracle-to-github-backup');
 
-       --datapump_backup(l_repo);
-       github_backup(l_repo);
-
-        /*
-        **   7. Email Visit reports for custom domains
-        
-        FOR C IN (SELECT id||',LIVE' id FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
-            pck_visits.getVisits(C.id, TRUE);
-        END LOOP;
-        */
+        datapump_backup(l_repo);
+        github_backup(l_repo);
 
         EXCEPTION
             WHEN OTHERS THEN
