@@ -12,6 +12,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE uploadPageVisit(pBodyText IN CLOB);
     --
+    PROCEDURE daily_job;
+    --
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
@@ -730,6 +732,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         apex_json.close_object;
     END;
 
-
+    PROCEDURE daily_job IS
+    BEGIN
+        FOR C IN (SELECT id||',LIVE' id FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
+            getVisits(C.id, TRUE);
+        END LOOP;
+    END;
+    
 END;
 /
