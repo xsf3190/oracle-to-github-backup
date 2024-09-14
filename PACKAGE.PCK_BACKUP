@@ -117,6 +117,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
 
         EXECUTE IMMEDIATE 'TRUNCATE TABLE DBTOOLS$EXECUTION_HISTORY';
 
+        /* Delete any files left over from previous operation to avoid ora-39001  */
+        FOR C IN (SELECT object_name FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR')) LOOP
+            DBMS_CLOUD.DELETE_FILE(directory_name=>'DATA_PUMP_DIR',file_name=>C.object_name);
+        END LOOP;
+
         SELECT u.id, u.email
           BULK COLLECT INTO l_admin_users
           FROM users u, apex_workspace_developers w 
@@ -124,62 +129,54 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
            AND w.is_admin='Yes'
            AND w.email=u.email;
 
-        FOR i IN 1..2 LOOP
-            h1 := dbms_datapump.OPEN (operation => 'EXPORT', job_mode => 'SCHEMA', job_name => 'EXPORT_SCHEMA_JOB', version => 'COMPATIBLE'); 
+        h1 := dbms_datapump.OPEN (operation => 'EXPORT', job_mode => 'SCHEMA', job_name => dbms_scheduler.generate_job_name('EXPORT_SCHEMA'), version => 'COMPATIBLE'); 
 
-            dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION', VALUE => 'ALL'); 
-            dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION_ALGORITHM', VALUE => 'MEDIUM'); 
-            dbms_datapump.set_parallel(handle => h1, degree => 1); 
-            
-            l_filename:='EXPORT_SCHEMA.' || l_schema || CASE WHEN i = 1 THEN '.METADATA' END;
-            dbms_datapump.add_file(handle => h1, filename =>  l_filename || '.dmp', 
-                directory => 'DATA_PUMP_DIR', filesize => '50M',  filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_DUMP_FILE, reusefile => 1); 
-            dbms_datapump.add_file(handle => h1, filename => l_filename || '.log', 
-                directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
-            
-            dbms_datapump.set_parameter(handle => h1, name => 'KEEP_MASTER', VALUE => 0); 
-            dbms_datapump.set_parameter(handle => h1, name => 'LOGTIME', VALUE => 'ALL'); 
+        dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION', VALUE => 'ALL'); 
+        dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION_ALGORITHM', VALUE => 'MEDIUM'); 
+        dbms_datapump.set_parallel(handle => h1, degree => 1); 
+        
+        l_filename:='EXPORT_SCHEMA.' || l_schema ;
+        dbms_datapump.add_file(handle => h1, filename =>  l_filename || '.dmp', 
+            directory => 'DATA_PUMP_DIR', filesize => '50M',  filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_DUMP_FILE, reusefile => 1); 
+        dbms_datapump.add_file(handle => h1, filename => l_filename || '.log', 
+            directory => 'DATA_PUMP_DIR', filetype => DBMS_DATAPUMP.KU$_FILE_TYPE_LOG_FILE, reusefile => 1); 
+        
+        dbms_datapump.set_parameter(handle => h1, name => 'KEEP_MASTER', VALUE => 0); 
+        dbms_datapump.set_parameter(handle => h1, name => 'LOGTIME', VALUE => 'ALL'); 
 
-            dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')');
-            dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''DBTOOLS$EXECUTION_HISTORY'',''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'',''PROCOBJ'',''JOB'',''SCHEDULER'')'); 
+        dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')');
+        dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''DBTOOLS$EXECUTION_HISTORY'',''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'',''PROCOBJ'',''JOB'',''SCHEDULER'')'); 
 
-            IF (i=1) THEN
-                dbms_datapump.data_filter(handle => h1, name => 'INCLUDE_ROWS', VALUE => 0);
-            ELSE
-                l_password:=generate_password();
-                dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_MODE', VALUE => 'PASSWORD'); 
-                dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => l_password); 
-            END IF;
+        l_password:=generate_password();
+        dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_MODE', VALUE => 'PASSWORD'); 
+        dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => l_password);
 
-            dbms_datapump.start_job(handle => h1, skip_current => 0, abort_step => 0); 
-            dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
-            dbms_datapump.detach(handle => h1); 
+        dbms_datapump.start_job(handle => h1, skip_current => 0, abort_step => 0); 
+        dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
+        dbms_datapump.detach(handle => h1); 
 
-            dbms_cloud_repo.put_file(repo=>p_repo, file_path=>l_filename || '.log', directory_name=>'DATA_PUMP_DIR');
-            IF (l_status='COMPLETED') THEN
-                dbms_cloud_repo.put_file(repo=>p_repo, file_path=>l_filename || '.dmp', directory_name=>'DATA_PUMP_DIR');
-                IF (l_password IS NOT NULL) THEN
-                    FORALL i IN l_admin_users.FIRST..l_admin_users.LAST
-                        UPDATE users SET export_pw=l_password WHERE id=l_admin_users(i).id;
-                    DELETE log WHERE log_date<current_timestamp-1;
-                    COMMIT;
-                END IF;
-            END IF;
-        END LOOP;
+        /* Always send log file to github */
+        dbms_cloud_repo.put_file(repo=>p_repo, file_path=>l_filename || '.log', directory_name=>'DATA_PUMP_DIR');
 
+        /* Send COMLPETED dump file to Github and save password for any subsequent import */
         IF (l_status='COMPLETED') THEN
-            l_body_html:=l_body_html || '<table role="presentation">';
-            l_body_html:=l_body_html || '<thead><tr><th>File Name</th><th>File Size</th><th>Schema Size</th><th>Created</th></tr></thead>';
-            l_body_html:=l_body_html || '<tbody>';
-            SELECT SUM(bytes) INTO l_schema_size FROM user_segments;
-            FOR C IN (SELECT object_name, bytes, last_modified FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR') WHERE object_name LIKE '%.dmp')
-            LOOP
-                l_body_html:=l_body_html || '<tr><td>' || C.object_name || '</td><td>' || apex_string_util.to_display_filesize(C.bytes) || '</td>' || apex_string_util.to_display_filesize(l_schema_size) || '<td>' || C.last_modified || '</td></tr>';
-            END LOOP;
-            l_body_html:=l_body_html || '</tbody></table>';
-        ELSE
-            l_body_html:=l_body_html || '<h1>Daily Backup Failed with status ' || l_status || '</h1>';
+            dbms_cloud_repo.put_file(repo=>p_repo, file_path=>l_filename || '.dmp', directory_name=>'DATA_PUMP_DIR');
+            FORALL i IN l_admin_users.FIRST..l_admin_users.LAST
+                UPDATE users SET export_pw=l_password WHERE id=l_admin_users(i).id;
+            DELETE log WHERE log_date<current_timestamp-1;
+            COMMIT;
         END IF;
+
+        /* Send Email to Admin users */
+        l_body_html:=l_body_html || '<table role="presentation">';
+        l_body_html:=l_body_html || '<thead><tr><th>File Name</th><th>File Size</th><th>Schema Size</th><th>Created</th></tr></thead>';
+        l_body_html:=l_body_html || '<tbody>';
+        SELECT SUM(bytes) INTO l_schema_size FROM user_segments;
+        FOR C IN (SELECT object_name, bytes, last_modified FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR') WHERE object_name LIKE '%.dmp')
+        LOOP
+            l_body_html:=l_body_html || '<tr><td>' || C.object_name || '</td><td>' || apex_string_util.to_display_filesize(C.bytes) || '</td>' || apex_string_util.to_display_filesize(l_schema_size) || '<td>' || C.last_modified || '</td></tr>';
+        END LOOP;
+        l_body_html:=l_body_html || '</tbody></table>';
         l_body_html:=l_body_html || '</html>';
 
         /* Send email confirming backup status to all admin users */
