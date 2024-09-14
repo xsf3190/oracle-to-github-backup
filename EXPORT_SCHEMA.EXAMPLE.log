@@ -1,49 +1,42 @@
-13-SEP-24 04:28:02.688: Starting "EXAMPLE"."EXPORT_SCHEMA_JOB":  
-13-SEP-24 04:28:05.383: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
-13-SEP-24 04:28:05.535: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
-13-SEP-24 04:28:05.929: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
-13-SEP-24 04:28:06.425: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
-13-SEP-24 04:28:07.674: Processing object type SCHEMA_EXPORT/TABLE/TABLE
-13-SEP-24 04:28:17.103: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
-13-SEP-24 04:28:17.191: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
-13-SEP-24 04:28:17.439: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
-13-SEP-24 04:28:17.736: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
-13-SEP-24 04:28:19.636: Processing object type SCHEMA_EXPORT/VIEW/VIEW
-13-SEP-24 04:28:20.201: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
-13-SEP-24 04:28:20.939: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
-13-SEP-24 04:28:21.373: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
-13-SEP-24 04:28:21.733: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
-13-SEP-24 04:28:21.980: . . exported "EXAMPLE"."ASSET"                           477.8 KB   21565 rows
-13-SEP-24 04:28:21.983: . . exported "EXAMPLE"."DBTOOLS$EXECUTION_HISTORY"           0 KB       0 rows
-13-SEP-24 04:28:22.182: . . exported "EXAMPLE"."ARTICLE"                         593.3 KB     705 rows
-13-SEP-24 04:28:22.252: . . exported "EXAMPLE"."PAGE_HIT"                        73.99 KB    2181 rows
-13-SEP-24 04:28:22.346: ORA-31693: Table data object "EXAMPLE"."USER_LOGIN" failed to load/unload and is being skipped due to error:
-ORA-31644: unable to position to block number 344 in dump file "/u03/dbfs/BDE1649F626EB000E0532E14000A3C29/data/dpdump/EXPORT_SCHEMA.EXAMPLE.dmp"
-ORA-19502: write error on file "/u03/dbfs/BDE1649F626EB000E0532E14000A3C29/data/dpdump/EXPORT_SCHEMA.EXAMPLE.dmp", block number 344 (block size=4096)
-ORA-27072: File I/O error
-Linux-x86_64 Error: 22: Invalid argument
-Additional information: 4
-Additional information: 344
-Additional information: 4294967295
-13-SEP-24 04:28:22.400: . . exported "EXAMPLE"."USAGE"                           73.07 KB    2336 rows
-13-SEP-24 04:28:22.459: . . exported "EXAMPLE"."WEBSITE_ARTICLE_CWV"             28.43 KB     824 rows
-13-SEP-24 04:28:22.526: . . exported "EXAMPLE"."GOOGLE_FONT"                     95.45 KB    1690 rows
-13-SEP-24 04:28:23.036: . . exported "EXAMPLE"."SESSION_DATA"                    44.27 KB    1931 rows
-13-SEP-24 04:28:23.109: . . exported "EXAMPLE"."LOG"                             18.72 KB     406 rows
-13-SEP-24 04:28:23.528: . . exported "EXAMPLE"."WEBSITE_DEPLOY"                  13.30 KB     429 rows
-13-SEP-24 04:28:23.602: . . exported "EXAMPLE"."METRICS"                         13.60 KB     310 rows
-13-SEP-24 04:28:23.663: . . exported "EXAMPLE"."HTMLDB_PLAN_TABLE"               7.656 KB      10 rows
-13-SEP-24 04:28:24.116: . . exported "EXAMPLE"."WEBSITE"                         18.94 KB      16 rows
-13-SEP-24 04:28:24.184: . . exported "EXAMPLE"."IP_LOOKUP"                       12.06 KB     486 rows
-13-SEP-24 04:28:24.248: . . exported "EXAMPLE"."USERS"                           7.453 KB      22 rows
-13-SEP-24 04:28:24.675: . . exported "EXAMPLE"."WEBSITE_ARTICLE"                 7.757 KB      44 rows
-13-SEP-24 04:28:25.083: . . exported "EXAMPLE"."JWKS_KEY_CACHE"                  6.289 KB       4 rows
-13-SEP-24 04:28:25.148: . . exported "EXAMPLE"."BROWSER_LOOKUP"                  5.570 KB      34 rows
-13-SEP-24 04:28:25.202: . . exported "EXAMPLE"."NETLIFY_SITE"                    5.914 KB      18 rows
-13-SEP-24 04:28:25.261: . . exported "EXAMPLE"."NETLIFY_DNS_ZONE"                5.062 KB       7 rows
-13-SEP-24 04:28:25.315: . . exported "EXAMPLE"."NETLIFY_DNS_ZONE_SERVER"         4.789 KB      28 rows
-13-SEP-24 04:28:25.787: Master table "EXAMPLE"."EXPORT_SCHEMA_JOB" successfully loaded/unloaded
-13-SEP-24 04:28:25.791: ******************************************************************************
-13-SEP-24 04:28:25.791: Dump file set for EXAMPLE.EXPORT_SCHEMA_JOB is:
-13-SEP-24 04:28:25.794:   /u03/dbfs/BDE1649F626EB000E0532E14000A3C29/data/dpdump/EXPORT_SCHEMA.EXAMPLE.dmp
-13-SEP-24 04:28:25.798: Job "EXAMPLE"."EXPORT_SCHEMA_JOB" completed with 1 error(s) at Fri Sep 13 04:28:25 2024 elapsed 0 00:00:26
+14-SEP-24 04:45:40.249: Starting "EXAMPLE"."EXPORT_SCHEMA41504":  
+14-SEP-24 04:45:43.640: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
+14-SEP-24 04:45:43.758: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
+14-SEP-24 04:45:44.360: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
+14-SEP-24 04:45:44.857: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
+14-SEP-24 04:45:46.239: Processing object type SCHEMA_EXPORT/TABLE/TABLE
+14-SEP-24 04:45:56.457: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
+14-SEP-24 04:45:56.568: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
+14-SEP-24 04:45:56.919: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
+14-SEP-24 04:45:57.313: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
+14-SEP-24 04:45:59.199: Processing object type SCHEMA_EXPORT/VIEW/VIEW
+14-SEP-24 04:45:59.777: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
+14-SEP-24 04:46:01.045: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
+14-SEP-24 04:46:01.546: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
+14-SEP-24 04:46:01.933: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA
+14-SEP-24 04:46:02.336: . . exported "EXAMPLE"."ASSET"                           477.8 KB   21565 rows
+14-SEP-24 04:46:02.339: . . exported "EXAMPLE"."DBTOOLS$EXECUTION_HISTORY"           0 KB       0 rows
+14-SEP-24 04:46:02.568: . . exported "EXAMPLE"."ARTICLE"                         593.3 KB     705 rows
+14-SEP-24 04:46:02.643: . . exported "EXAMPLE"."PAGE_HIT"                        74.39 KB    2190 rows
+14-SEP-24 04:46:02.707: . . exported "EXAMPLE"."USER_LOGIN"                      84.37 KB    5637 rows
+14-SEP-24 04:46:02.778: . . exported "EXAMPLE"."USAGE"                           73.07 KB    2336 rows
+14-SEP-24 04:46:02.837: . . exported "EXAMPLE"."WEBSITE_ARTICLE_CWV"             28.62 KB     829 rows
+14-SEP-24 04:46:02.903: . . exported "EXAMPLE"."LOG"                             27.32 KB     684 rows
+14-SEP-24 04:46:02.973: . . exported "EXAMPLE"."GOOGLE_FONT"                     95.45 KB    1690 rows
+14-SEP-24 04:46:03.482: . . exported "EXAMPLE"."SESSION_DATA"                    44.35 KB    1935 rows
+14-SEP-24 04:46:03.880: . . exported "EXAMPLE"."WEBSITE_DEPLOY"                  13.32 KB     430 rows
+14-SEP-24 04:46:03.956: . . exported "EXAMPLE"."METRICS"                         13.60 KB     310 rows
+14-SEP-24 04:46:04.016: . . exported "EXAMPLE"."HTMLDB_PLAN_TABLE"               7.656 KB      10 rows
+14-SEP-24 04:46:04.445: . . exported "EXAMPLE"."WEBSITE"                         18.94 KB      16 rows
+14-SEP-24 04:46:04.513: . . exported "EXAMPLE"."IP_LOOKUP"                       12.10 KB     490 rows
+14-SEP-24 04:46:04.583: . . exported "EXAMPLE"."USERS"                           7.468 KB      22 rows
+14-SEP-24 04:46:04.994: . . exported "EXAMPLE"."WEBSITE_ARTICLE"                 7.757 KB      44 rows
+14-SEP-24 04:46:05.405: . . exported "EXAMPLE"."JWKS_KEY_CACHE"                  6.289 KB       4 rows
+14-SEP-24 04:46:05.470: . . exported "EXAMPLE"."BROWSER_LOOKUP"                  5.570 KB      34 rows
+14-SEP-24 04:46:05.526: . . exported "EXAMPLE"."NETLIFY_SITE"                    5.914 KB      18 rows
+14-SEP-24 04:46:05.582: . . exported "EXAMPLE"."NETLIFY_DNS_ZONE"                5.062 KB       7 rows
+14-SEP-24 04:46:05.638: . . exported "EXAMPLE"."NETLIFY_DNS_ZONE_SERVER"         4.789 KB      28 rows
+14-SEP-24 04:46:06.422: Master table "EXAMPLE"."EXPORT_SCHEMA41504" successfully loaded/unloaded
+14-SEP-24 04:46:06.426: ******************************************************************************
+14-SEP-24 04:46:06.426: Dump file set for EXAMPLE.EXPORT_SCHEMA41504 is:
+14-SEP-24 04:46:06.429:   /u03/dbfs/BDE1649F626EB000E0532E14000A3C29/data/dpdump/EXPORT_SCHEMA.EXAMPLE.dmp
+14-SEP-24 04:46:06.433: Job "EXAMPLE"."EXPORT_SCHEMA41504" successfully completed at Sat Sep 14 04:46:06 2024 elapsed 0 00:00:30
