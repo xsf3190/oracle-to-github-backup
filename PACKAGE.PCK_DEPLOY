@@ -260,12 +260,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
           )
          ORDER BY display_order, lastmod DESC;
          
-
+        /* Build Javascript file for website */
+        l_script:=getJSCode('deploy_metric.js');
+        
         /*
         ** 1. Remove any empty <h1> element from html
         ** 2. Append to parent page links to individual blog/media entries 
         ** 3. Append adfreesites footer
         */
+        
+
         FOR i IN 1..l_labels.COUNT LOOP
             l_labels(i).body_html:=REPLACE(l_labels(i).body_html ,'<h1>&nbsp;</h1>',null);
             IF (l_labels.COUNT>1) THEN
@@ -280,10 +284,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_is_media:=FALSE;
                 l_labels(i).body_html:=l_labels(i).body_html || pck_core.buildBlogList(pWebsiteId, l_labels(i).parent_article_id);
             ELSIF (l_labels(i).collection_type='MEDIA') THEN
+                l_script:=l_script || getJSCode('deploy_gallery');
                 l_is_media:=TRUE;
                 l_is_blog:=FALSE;
                 l_labels(i).body_html:=l_labels(i).body_html || pck_core.buildMediaList(pWebsiteId, l_labels(i).parent_article_id);
             ELSIF (l_labels(i).collection_type='PRODUCT') THEN
+                l_script:=l_script || getJSCode('deploy_cart');
                 l_labels(i).body_html:=l_labels(i).body_html || pck_core.buildProductList(pWebsiteId, l_labels(i).parent_article_id);
             ELSIF (l_labels(i).collection_type IS NULL AND l_is_media) THEN
                 l_thumbnails:=NULL;
@@ -316,9 +322,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_style_sha256_raw:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_style,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
         l_style_sha256_b64:=utl_raw.cast_to_varchar2(utl_encode.base64_encode(l_style_sha256_raw));
 
-        l_script:='import {onCLS, onLCP, onINP} from ''https://unpkg.com/web-vitals?module'';onCLS(addToVitalsQueue);onLCP(addToVitalsQueue);onINP(addToVitalsQueue);';
-        l_script_sha256_raw:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_script,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
-        l_script_sha256_b64:=utl_raw.cast_to_varchar2(utl_encode.base64_encode(l_script_sha256_raw));
+        --l_script:='import {onCLS, onLCP, onINP} from ''https://unpkg.com/web-vitals?module'';onCLS(addToVitalsQueue);onLCP(addToVitalsQueue);onINP(addToVitalsQueue);';
+        --l_script_sha256_raw:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_script,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+        --l_script_sha256_b64:=utl_raw.cast_to_varchar2(utl_encode.base64_encode(l_script_sha256_raw));
 
         l_is_media:=FALSE;
         FOR i IN 1..l_labels.COUNT
@@ -348,6 +354,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<meta name="description" content="' || l_labels(i).page_description || '">' || chr(10) ||
                     '<meta name="author" content="www.adfreesites.com">' || chr(10) ||
                     '<meta name="view-transition" content="same-origin">' || chr(10) ||
+                    '<script src="/web-vitals.js" type="module" defer></script>' ||
                     '<link rel="icon" href="https://res.cloudinary.com/mrbapex/believeintalking_favicon_q57es4.svg" type="image/svg+xml">'  || chr(10) ||
                     '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
                     '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
@@ -360,7 +367,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_labels(i).body_html || chr(10) ||
                 CASE WHEN l_labels(i).contact_form='YES' THEN pck_core.buildContactForm(contactEmail(), l_ssl_url) END ||
                 l_labels(i).footer || chr(10) ||
-                '<script type="module">' || l_script || '</script>
+                '<script type="module">
+                    import {onLCP, onINP, onCLS} from ''./web-vitals.js'';
+                    onCLS(addToVitalsQueue);
+                    onLCP(addToVitalsQueue);
+                    onINP(addToVitalsQueue);
+                </script>
                 <script>
                     gMetricWebsiteId = "' || pWebsiteId || '";' || chr(10) || 
                     'gMetricArticleId = "' || CASE WHEN l_labels(i).parent_article_id=l_labels(i).article_id THEN l_labels(i).parent_article_id ELSE l_labels(i).article_id END || '";' || chr(10) || 
@@ -393,7 +405,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_sitemap:='<?xml version="1.0" encoding="UTF-8"?>' || chr(10) || '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' || chr(10);
         l_robots:='User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: ' || l_ssl_url || '/sitemap.xml';
-        l_headers:='/*' || chr(10) || 'Content-Security-Policy: default-src ''self''; img-src ''self'' res.cloudinary.com; font-src fonts.gstatic.com; style-src ''self'' ''sha256-' || l_style_sha256_b64 || ''' fonts.googleapis.com; script-src ''self'' ''sha256-' || l_script_sha256_b64 || '''';
+        l_headers:='/*' || chr(10) || 'Content-Security-Policy: default-src ''self''; img-src ''self'' res.cloudinary.com; font-src fonts.gstatic.com; style-src ''self'' ''sha256-' || l_style_sha256_b64 || ''' fonts.googleapis.com; script-src ''self'' ''unsafe-inline''';
 
         l_sha1:=l_deploy_files.FIRST;
         WHILE (l_sha1 IS NOT NULL) LOOP
@@ -423,6 +435,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_name:='_headers';
         l_deploy_files(l_sha1).file_content:=l_headers;
         l_files.put('_headers', l_sha1);
+
+        logDeployment(pWebsiteId, pSiteId, 'Building web-vitals.js');
+        l_sha1:=LOWER(dbms_crypto.hash(src => getJSCode('web-vitals'), typ => dbms_crypto.hash_sh1));
+        l_deploy_files(l_sha1).file_name:='web-vitals.js';
+        l_deploy_files(l_sha1).file_content:=getJSCode('web-vitals');
+        l_files.put('web-vitals.js', l_sha1);
 
         l_json.put('files',l_files);
 
