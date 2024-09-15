@@ -375,7 +375,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<meta name="view-transition" content="same-origin">' || chr(10) ||
                     '<script src="/web-vitals.js" type="module" defer></script>' || chr(10) ||
                     '<script src="/website.js" defer></script>' || chr(10) ||
-                    '<link rel="icon" href="https://res.cloudinary.com/mrbapex/believeintalking_favicon_q57es4.svg" type="image/svg+xml">'  || chr(10) ||
+                    '<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#x1f955;</text></svg>">'  || chr(10) ||
                     '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
                     '<link rel="preconnect" href="https://fonts.gstatic.com">' || chr(10) ||
                     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || l_font || '&display=swap&text=1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz%20%21%22%23%24%25%26%27">' || chr(10) ||
@@ -415,8 +415,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[Content-Security-Policy: default-src 'none';]' ||
             q'[ img-src res.cloudinary.com; font-src fonts.gstatic.com;]' ||
             q'[ style-src 'self' 'sha256-]' || l_style_sha256_b64 || q'[' fonts.googleapis.com;]' ||
-            q'[ script-src 'self' 'sha256-]' || l_module_sha256_b64 || q'[';]' || 
-            q'[ connect-src ]';
+            q'[ script-src 'self' 'sha256-]' || l_module_sha256_b64 || q'[' 'unsafe-inline';]' || 
+            q'[ connect-src ]' || pRestUrl || ';';
 
         l_sha1:=l_deploy_files.FIRST;
         WHILE (l_sha1 IS NOT NULL) LOOP
