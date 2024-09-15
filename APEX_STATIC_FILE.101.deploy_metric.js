@@ -22,9 +22,10 @@ const flushQueues = () => {
     /* This would happen if user manually clears sessionStorage for example */
     if (website_loaded === 0) return; 
 
+    const data = document.body.dataset;
     const json = {};
-    json["website_id"] = gMetricWebsiteId;
-    json["article_id"] = gMetricArticleId;
+    json["website_id"] = data.websiteid;
+    json["article_id"] = data.articleid;
     json["website_loaded"] = Number(sessionStorage.getItem("website_loaded"));
     json["seq"] = page_visit;
     if (page_loaded !== 0) {
@@ -55,7 +56,7 @@ const flushQueues = () => {
 
     const body = JSON.stringify(json);
     page_visit++;
-    (navigator.sendBeacon && navigator.sendBeacon(gRestUrl+"page-visit", body)) || fetch(visit_url, {body, method: 'POST', keepalive: true});
+    (navigator.sendBeacon && navigator.sendBeacon(data.resturl+"page-visit", body)) || fetch(visit_url, {body, method: 'POST', keepalive: true});
 
 
     /* Send any media performance metrics */
