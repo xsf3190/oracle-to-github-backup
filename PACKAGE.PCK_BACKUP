@@ -129,7 +129,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
            AND w.is_admin='Yes'
            AND w.email=u.email;
 
-        h1 := dbms_datapump.OPEN (operation => 'EXPORT', job_mode => 'SCHEMA', job_name => dbms_scheduler.generate_job_name('EXPORT_SCHEMA'), version => 'COMPATIBLE'); 
+        h1 := dbms_datapump.OPEN (operation => 'EXPORT', job_mode => 'SCHEMA', job_name => dbms_scheduler.generate_job_name('EXPORT_SCHEMA_'), version => 'COMPATIBLE'); 
 
         dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION', VALUE => 'ALL'); 
         dbms_datapump.set_parameter(handle => h1, name => 'COMPRESSION_ALGORITHM', VALUE => 'MEDIUM'); 
