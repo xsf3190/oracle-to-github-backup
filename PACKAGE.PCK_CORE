@@ -277,8 +277,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         SELECT id INTO l_website_id FROM website WHERE domain_name='adfreesites.edu';
  
-        INSERT INTO website(id, domain_name, user_id, netlify_site_id,  updated_date, favicon_url,font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale)
-        SELECT seq_website.nextval, l_domain_name, pUserId, l_netlify_site_id, current_timestamp, favicon_url,font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale
+        INSERT INTO website(id, domain_name, user_id, netlify_site_id,  updated_date, favicon_code,font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale)
+        SELECT seq_website.nextval, l_domain_name, pUserId, l_netlify_site_id, current_timestamp, favicon_code,font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale
           FROM website 
          WHERE id=l_website_id;
 
