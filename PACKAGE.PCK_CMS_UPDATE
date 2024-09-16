@@ -348,7 +348,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         FUNCTION buildFontOptions(pFont IN VARCHAR2) RETURN VARCHAR2 IS
             l_options LONG;
         BEGIN
-            /* Build select options for Google Fonts */
+            /* Build select options for most popular Google Fonts */
             FOR C IN (SELECT family,seq FROM google_font WHERE seq BETWEEN 1 AND 50 
                         UNION
                       SELECT family,seq FROM google_font WHERE family IN ('Roboto Serif','Geologica')
@@ -396,7 +396,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         END IF;
 
         FOR C IN (
-            SELECT w.id, w.domain_name, w.font, g.url_regular, w.contact_email, w.max_width, 
+            SELECT w.id, w.domain_name, w.font, g.url_regular, w.contact_email, w.max_width, w.favicon_code,
                      w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, 
                      w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom, w.price_currency,
                      w.netlify_last_published
@@ -430,6 +430,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             '<form>' ||
                 l_domain_html ||
                 buildInputWrapper(C.id, 'website.contact_email', C.contact_email, l_session_data.canuse_popover) ||
+                buildInputWrapper(C.id, 'website.favicon_code', C.favicon_code, l_session_data.canuse_popover) ||
                 buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover) ||
                 buildSelectWrapper(C.id, 'website.font', C.font, buildFontOptions(C.font), l_session_data.canuse_popover) ||
                 buildRadioWrapper(C.id, 'website.price_currency', C.price_currency, l_session_data.canuse_popover) ||
@@ -876,6 +877,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 WHEN 'website.font' THEN
                     UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id;
                     l_getFontUrl:=TRUE;
+                WHEN 'website.favicon_code' THEN
+                    UPDATE website SET favicon_code=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website.max_width' THEN
                     UPDATE website SET max_width=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website.color_background' THEN
