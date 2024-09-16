@@ -3,7 +3,7 @@ CREATE TABLE "WEBSITE"
 	"DOMAIN_NAME" VARCHAR2(37) NOT NULL ENABLE, 
 	"USER_ID" NUMBER NOT NULL ENABLE, 
 	"CREATED_DATE" TIMESTAMP (6) WITH TIME ZONE DEFAULT current_timestamp, 
-	"FAVICON_URL" VARCHAR2(100), 
+	"FAVICON_CODE" VARCHAR2(100), 
 	"NETLIFY_SITE_ID" VARCHAR2(40), 
 	"CONTACT_EMAIL" VARCHAR2(50), 
 	"UPDATED_DATE" TIMESTAMP (6) WITH TIME ZONE, 
@@ -34,6 +34,7 @@ CREATE TABLE "WEBSITE"
 	 CONSTRAINT "CURRENCY_CHECK" CHECK (price_currency in ('EUR','USD','GBP','CHF')) ENABLE
    ) ;
 COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'TEST websites are always deployed as a subdomain of "netlify.app".<p>LIVE websites are deployed only if the Domain name has been purchased either through your Netlify subscription or transferred from a registrar.</p>';
+   COMMENT ON COLUMN "WEBSITE"."FAVICON_CODE" IS 'Decimal HTML Entity code for emoji to appear as website favicon';
    COMMENT ON COLUMN "WEBSITE"."CONTACT_EMAIL" IS 'Email address to which contact form details are sent';
    COMMENT ON COLUMN "WEBSITE"."FONT" IS 'Google Web Font';
    COMMENT ON COLUMN "WEBSITE"."MAX_WIDTH" IS 'Maximum width of content expressed in CSS units, e.g. "65ch"';
