@@ -190,6 +190,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         TYPE t_jscode IS TABLE OF VARCHAR2(30);
         l_jscode t_jscode:=t_jscode();
 
+        l_favicon CLOB;
+        l_favicon_sha256_raw RAW(2000);
+        l_favicon_sha256_b64 VARCHAR2(2000);
+
         l_style CLOB;
         l_style_sha256_raw RAW(2000);
         l_style_sha256_b64 VARCHAR2(2000);
@@ -339,15 +343,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
 
-        /* Build inline website stylesheet to be compliant with Content Security Policy */
+        /* Build favicon element to be compliant with Content Security Policy */
+        l_favicon:='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>' || l_favicon_code || '</text></svg>';
+        l_favicon_sha256_raw:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_favicon,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+        l_favicon_sha256_b64:=utl_raw.cast_to_varchar2(utl_encode.base64_encode(l_favicon_sha256_raw));
 
         /* Web font is self-hosted - build @font-face css at start of stylesheet */
         l_style:=
-        '@font-face: {' || chr(10) ||
+        '@font-face {' || chr(10) ||
            'font-family: ''' || l_font || ''';' || chr(10) ||
-           'src: url(''' || l_font_filename || ''') format(''woff2'');' || chr(10) ||
-        '}';
-        l_style:=l_style || chr(10) || pck_core.buildCssRoot(pWebsiteId, pApplicationId);
+           'src: url("/' || l_font_filename || '") format("woff2");' || chr(10) ||
+           'font-display: swap;' || chr(10) ||
+        '}' || chr(10) || pck_core.buildCssRoot(pWebsiteId, pApplicationId) || chr(10);
         l_style_sha256_raw:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_style,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
         l_style_sha256_b64:=utl_raw.cast_to_varchar2(utl_encode.base64_encode(l_style_sha256_raw));
 
@@ -389,9 +396,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<meta name="description" content="' || l_labels(i).page_description || '">' || chr(10) ||
                     '<meta name="author" content="www.adfreesites.com">' || chr(10) ||
                     '<meta name="view-transition" content="same-origin">' || chr(10) ||
+                    '<link rel="preload" as="font" href="/' || l_font_filename || '" crossorigin>' || chr(10) ||
                     '<script src="/web-vitals.js" type="module" defer></script>' || chr(10) ||
                     '<script src="/website.js" defer></script>' || chr(10) ||
-                    '<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>' || l_favicon_code || '</text></svg>">'  || chr(10) ||
+                    '<link rel="icon" href="' || l_favicon || '">'  || chr(10) ||
                     '<style>' || l_style || '</style>' || chr(10) || 
                     --CASE WHEN l_is_blog AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN '<script src="https://accounts.google.com/gsi/client" async defer></script>' END ||
                 '</head>' || chr(10) || 
@@ -424,13 +432,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_sitemap:='<?xml version="1.0" encoding="UTF-8"?>' || chr(10) || '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' || chr(10);
         l_robots:='User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: ' || l_ssl_url || '/sitemap.xml';
-        l_headers:='/*' || chr(10) || 
+        l_headers:=
+        '/*' || chr(10) || 
             q'[Content-Security-Policy: default-src 'none';]' ||
-            q'[ img-src 'self' res.cloudinary.com;]' ||
+            q'[ img-src data: res.cloudinary.com;]' ||
             q'[ font-src 'self';]' ||
             q'[ style-src 'self' 'sha256-]' || l_style_sha256_b64 || q'[';]' ||
             q'[ script-src 'self' 'sha256-]' || l_module_sha256_b64 || q'[' 'unsafe-inline';]' || 
-            q'[ connect-src ]' || pRestUrl || ';';
+            q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
+        '/' || l_font_filename || chr(10) || 
+            q'[Cache-Control: "public, max-age=31536000";]';
 
         l_sha1:=l_deploy_files.FIRST;
         WHILE (l_sha1 IS NOT NULL) LOOP
@@ -491,11 +502,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /* upload to Netlify if required - i.e. file content has changed since last deployment  */
         n:=0;
         FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
-            IF (l_deploy_files(C.sha1).file_content_b IS NULL) THEN
-                pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', pBody=>l_deploy_files(C.sha1).file_content, pData=>l_clob);
-            ELSE
-                pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', pBody=>l_deploy_files(C.sha1).file_content_b, pData=>l_clob);
-            END IF;
+            pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', 
+                pBody=>l_deploy_files(C.sha1).file_content, pBodyBlob=>l_deploy_files(C.sha1).file_content_b, 
+                pData=>l_clob
+            );
             logDeployment(pWebsiteId, pSiteId, 'Successfully uploaded ' || l_deploy_files(C.sha1).file_name);
             n:=n+1;
         END LOOP;
