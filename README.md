@@ -1,9 +1,9 @@
 # oracle-to-github-backup
-This repository contains code and data backed up daily from the ORACLE database that is the central component of the adfreesites web application.
+This repository contains code and data backed up daily from an ORACLE database schema.
 
-Data is backed up as a schema export dump file encrypted with a randomly generated complex password.
+Data is backed up as a compressed export dump file encrypted with a randomly generated complex password.
 
-Includes DDL metadata extracts of tables and packages for quick reference.
+Includes DDL metadata extracts of tables, packages and grants.
 
 Includes any APEX applications and static Javascript / CSS files.
 
@@ -34,12 +34,12 @@ end;
 Github supports a maximum file size of 100MB. However, Oracle dump files are compressed by an order of magnitude with the Advanced Compression option that is
 freely available with Oracle OCI Always Free.
 
-For example, the total number of user_segments,bytes in schema EXAMPLE is 22M compressed to a dump file of 2MB.
+The EXAMPLE schema in this repository compresses 22MB into a 2MB dump file.
 
 ## Install
 Logged on to the subject database as ADMIN
 1. GRANT READ,WRITE ON DIRECTORY DATA_PUMP_DIR TO "schema-to-backup"
-2. GRANT EXECUTE ON DBMS_CLOUD TO "schema-to-backup"
+2. GRANT EXECUTE ON DBMS_CinLOUD TO "schema-to-backup"
 3. GRANT EXECUTE ON DBMS_CLOUD_REPO TO "schema-to-backup"
 4. Download contents of TABLE.LOG and PACKAGE.PCK_BACKUP from this repository and create in "schema-to-backup"
 
