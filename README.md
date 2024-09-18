@@ -39,7 +39,7 @@ The EXAMPLE schema in this repository compresses 22MB into a 2MB dump file.
 ## Install
 Logged on to the subject database as ADMIN
 1. GRANT READ,WRITE ON DIRECTORY DATA_PUMP_DIR TO "schema-to-backup"
-2. GRANT EXECUTE ON DBMS_CinLOUD TO "schema-to-backup"
+2. GRANT EXECUTE ON DBMS_CLOUD TO "schema-to-backup"
 3. GRANT EXECUTE ON DBMS_CLOUD_REPO TO "schema-to-backup"
 4. Download contents of TABLE.LOG and PACKAGE.PCK_BACKUP from this repository and create in "schema-to-backup"
 
