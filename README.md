@@ -2,7 +2,6 @@
 This repository contains code and data backed up daily from the ORACLE database that is the central component of the adfreesites web application.
 
 Data is backed up as a schema export dump file encrypted with a randomly generated complex password.
-An unencrypted metadata only version is created at the same time.
 
 Includes DDL metadata extracts of tables and packages for quick reference.
 
@@ -26,10 +25,10 @@ end;
    
 ## Ideas for Use
 1. Include in Terraform process triggered by Github Action to create new instance of adfreesites web application.
-2. Make current and historical code available for easy review / sharing.
+2. Make current and historical code available for easy reference / sharing.
 3. Provide a secure and reliable off-site backup solution. 
 4. Implement an automated backup / restore cycle between 2 Oracle Cloud databases (see "import_schema.sql")
-5. Deploy an environment in order to test new Oracle software versions.
+5. Deploy an environment to test new Oracle software versions.
 6. Run fully scripted migrations between different platforms.
 
 Github supports a maximum file size of 100MB. However, Oracle dump files are compressed by an order of magnitude with the Advanced Compression option that is
