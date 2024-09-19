@@ -134,3 +134,8 @@ document.querySelectorAll("dialog button.close").forEach((button) => {
     /* Anomaly in CKEditor that removes button text */
     if (!button.textContent) button.textContent = "X";
 });
+
+import {onLCP, onINP, onCLS} from '/web-vitals.js';
+onCLS(addToVitalsQueue);
+onLCP(addToVitalsQueue);
+onINP(addToVitalsQueue);
