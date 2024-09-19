@@ -3,8 +3,10 @@
 */
 const sendContact = async () => {
   const formData = new FormData(form);
+  const data = document.body.dataset;
+
   try {
-    const response = await fetch(gRestUrl + "contact/"+gMetricWebsiteId, {
+    const response = await fetch(data.resturl + "contact/"+data.websiteid, {
       method: "POST",
       body: JSON.stringify(Object.fromEntries(formData))
     });
