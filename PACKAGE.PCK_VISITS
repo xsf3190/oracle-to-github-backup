@@ -722,7 +722,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             l_json.put('contactEmail',C.contact_email);
             l_json.put('subject','Contact Form submitted from '|| C.form_url);
             l_json.put('body', l_table_html);
-            l_json.put('sourceEmail','contact.form@' || C.domain_name);
+            l_json.put('sourceEmail','contact.form@adfreesites.com');
 
             l_payload:=l_json.stringify;
             pck_api.callAWSemailAPI(pMethod=>'POST',pBody=>l_payload,pData=>l_clob);
