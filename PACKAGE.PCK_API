@@ -62,7 +62,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
 
         pData := apex_web_service.make_rest_request(p_url=>l_whatismybrowser_url, p_http_method=>'POST', p_body=>pBody);
 
-        pck_core.log(apex_web_service.g_status_code || ' : POST - ' || l_whatismybrowser_url);
+        --pck_core.log(apex_web_service.g_status_code || ' : POST - ' || l_whatismybrowser_url);
 
         IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
             RETURN;
@@ -124,6 +124,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         pData := apex_web_service.make_rest_request(p_url=>l_terraform_aws_gateway_url, p_http_method=>pMethod, p_body=>pBody);
 
         pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_terraform_aws_gateway_url);
+
+        IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
+            RETURN;
+        END IF;
+
+        FOR C IN (SELECT error FROM JSON_TABLE(pData,'$' COLUMNS (error))) LOOP
+            pck_core.log(C.error);
+        END LOOP;
     END;
 
 
