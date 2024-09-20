@@ -315,10 +315,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_fluid_types fluid_type_t;
         l_deploy_css LONG;
     BEGIN
-        FOR C IN (SELECT font, max_width, color_text, color_background, color_primary, css,
-                         min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale
-                    FROM website
-                   WHERE id=pWebsiteId)
+        FOR C IN (SELECT w.font, w.max_width, w.color_text, w.color_background, w.color_primary, w.css,
+                         w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, g.category
+                    FROM website w, google_font g
+                   WHERE w.id=pWebsiteId
+                     AND w.font=g.family)
         LOOP
             /* Build design tokens */
 
@@ -332,7 +333,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 l_deploy_css:=l_deploy_css || chr(9) || l_fluid_types(i).property || ': ' || l_fluid_types(i).value || ';' || chr(10);
             END LOOP;
             l_deploy_css:=l_deploy_css || chr(10) ||
-            chr(9) || '--font-family: "' || C.font || '";' || chr(10) ||
+            chr(9) || '--font-family: "' || C.font || '", ' || CASE WHEN C.category='handwriting' THEN 'cursive' ELSE C.category END || ';' || chr(10) ||
             chr(9) || '--max-width: ' || C.max_width || ';' || chr(10) ||
             chr(9) || '--color-text: ' || C.color_text || ';' || chr(10) ||
             chr(9) || '--color-background: ' || C.color_background || ';' || chr(10) ||
@@ -914,6 +915,9 @@ code.language-html {
                 RAISE;
     END;
 
+    /*
+    **  load Google font definitions into google_font table. wolf3 format only. Colummn url_regular used for dynamic font loading. Websites deployed with optimized foont.r 
+    */
     PROCEDURE loadGoogleFonts IS 
         l_google_api_key users.google_api_key%type;
         l_google_url VARCHAR2(250);
@@ -932,8 +936,8 @@ code.language-html {
         l_google_url:='https://www.googleapis.com/webfonts/v1/webfonts?key=' || l_google_api_key||'&capability=WOFF2&sort=popularity';
         l_clob := apex_web_service.make_rest_request(p_url=>l_google_url, p_http_method=>'GET');
         DELETE google_font;
-        INSERT INTO google_font (seq, family, url_regular)
-        SELECT ROWNUM, family, url_regular FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, url_regular PATH '$.files.regular'));
+        INSERT INTO google_font (seq, family, category, url_regular)
+        SELECT ROWNUM, family, category, url_regular FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, url_regular PATH '$.files.regular'));
     END;
 
     /*
