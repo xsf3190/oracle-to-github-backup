@@ -149,8 +149,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_head CLOB;
         l_page CLOB;
         l_font website.font%type;
+        l_font_category google_font.category%type;
         l_font_filename website.font%type;
-        l_font_url google_font.url_regular%type;
+        l_font_url VARCHAR2(500);
+        l_font_css CLOB;
         l_font_download BLOB;
         l_favicon_code website.favicon_code%type;
         l_deploy_css CLOB;
@@ -241,8 +243,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
-        SELECT w.font, g.url_regular, REPLACE(LOWER(w.font), ' ', '_') || '.woff2', w.favicon_code
-          INTO l_font, l_font_url, l_font_filename, l_favicon_code
+        SELECT w.font, g.category, REPLACE(LOWER(w.font), ' ', '_') || '.woff2', w.favicon_code
+          INTO l_font, l_font_category, l_font_filename, l_favicon_code
           FROM website w, google_font g
          WHERE w.id=pWebsiteId
            AND w.font=g.family;
@@ -456,6 +458,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         logDeployment(pWebsiteId, pSiteId, 'Building font ' || l_font_filename);
         apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'User-Agent';
+        apex_web_service.g_request_headers(1).value := 'Mozilla/5.0 (Windows NT 6.3; rv:39.0) Gecko/20100101 Firefox/39.0';
+        l_font_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(l_font,' ','+') || '&text=' || utl_url.escape('1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
+        l_font_css:=apex_web_service.make_rest_request(p_url=>l_font_url, p_http_method=>'GET');
+        l_font_url:=REGEXP_SUBSTR(l_font_css, '\(([^)]*)\)', 1, 1, NULL, 1);
+        --pck_core.log('font format ' || LTRIM(RTRIM(REGEXP_SUBSTR(l_font_css, '\(([^)]*)\)', 1, 2, NULL, 1))));
         l_font_download:=apex_web_service.make_rest_request_b(p_url=>l_font_url, p_http_method=>'GET');
         l_sha1:=LOWER(dbms_crypto.hash(src => l_font_download, typ => dbms_crypto.hash_sh1));
         l_deploy_files(l_sha1).file_name:=l_font_filename;
