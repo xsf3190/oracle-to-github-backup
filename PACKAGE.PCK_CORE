@@ -419,6 +419,7 @@ code.language-html {
         l_path website_article.navigation_label%type;
         l_href VARCHAR2(200);
         pos PLS_INTEGER;
+        n PLS_INTEGER:=0;
 
         FUNCTION getExcerpt(pText IN VARCHAR2) RETURN VARCHAR2 IS
             l_excerpt VARCHAR2(200);
@@ -447,12 +448,13 @@ code.language-html {
                    WHERE art.parent_id=pArticleId
                      AND ass.id(+)=art.cover_asset_id
                      ORDER BY art.display_order NULLS FIRST, art.updated_date DESC ) 
-        LOOP            
+        LOOP
             l_html:=l_html || 
             '<li class="card">';
             IF (C.cld_cloud_name IS NOT NULL) THEN
+                n:=n+1; 
                 l_html:=l_html || 
-                '<img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" width="'|| C.width || '" height="' || C.height || '" alt="' || C.alt_text || '">';
+                '<img '|| CASE WHEN n>4 THEN 'loading="lazy" ' END || 'src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" width="'|| C.width || '" height="' || C.height || '" alt="' || C.alt_text || '">';
             END IF;
             IF (pIncludeLinks) THEN
                 l_href:='/' || l_path || '/' || apex_string_util.get_slug(C.title);
@@ -464,9 +466,9 @@ code.language-html {
                 RETURN(NULL);
             END IF;
             l_html:=l_html || 
-                '<h4>
+                '<h2>
                     <a href="' || l_href || '">' || C.title || '</a>
-                </h4>
+                </h2>
                 <p>' || getExcerpt(SUBSTR(C.body_html,pos))  || '</p>
                 <a href="' || l_href || '">Read More</a>
             </li>';
