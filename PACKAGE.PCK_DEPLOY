@@ -154,6 +154,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_font_url VARCHAR2(500);
         l_font_css CLOB;
         l_font_download BLOB;
+        l_text CLOB;
+        l_chars VARCHAR2(256):=' ';
+        l_char VARCHAR2(4);
         l_favicon_code website.favicon_code%type;
         l_deploy_css CLOB;
         l_file_name VARCHAR2(200);
@@ -180,6 +183,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             contact_form website_article.contact_form%type,
             lastmod article.updated_date%type,
             word_count article.word_count%type, 
+            deploy_css_file website.deploy_css_file%type,
             header website.footer%type,
             body_html article.body_html%type,
             footer website.footer%type,
@@ -252,17 +256,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /*
         ** Get all website content into collection
         */
-        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count, header, body_html, footer, apex_t_varchar2()
+        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count, deploy_css_file, header, body_html, footer, apex_t_varchar2()
           BULK COLLECT INTO l_labels
           FROM
           (
-        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.display_order, COALESCE(a.updated_date,a.created_date) lastmod, a.word_count, w.header, a.body_html body_html, w.footer
+        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.display_order, COALESCE(a.updated_date,a.created_date) lastmod, a.word_count, w.deploy_css_file, w.header, a.body_html body_html, w.footer
           FROM website w, website_article wa, article a
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
            AND wa.article_id=a.id
          UNION ALL
-        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001), COALESCE(a.deployed_date, a.updated_date) lastmod, a.word_count, w.header, a.body_html, w.footer
+        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001), COALESCE(a.deployed_date, a.updated_date) lastmod, a.word_count, w.deploy_css_file, w.header, a.body_html, w.footer
           FROM website w, website_article wa, article a 
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
@@ -273,14 +277,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
+
+        /* Get URL of site to be deployed */
+        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId, pMethod=>'GET', pData=>l_clob);
+        SELECT ssl_url INTO l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS(ssl_url));
         
         FOR i IN 1..l_labels.COUNT LOOP
             l_labels(i).body_html:=REPLACE(l_labels(i).body_html ,'<h1>&nbsp;</h1>',null);
             IF (l_labels.COUNT>1) THEN
                 IF (INSTR(l_labels(i).header,'#NAV#')>0) THEN
-                    l_labels(i).header:=REPLACE(l_labels(i).header,'#NAV#',buildNavLabels(l_labels(i).parent_article_id)) || chr(10);
+                    l_labels(i).header:=REPLACE(l_labels(i).header,'#NAV#',buildNavLabels(l_labels(i).parent_article_id));
                 ELSE
-                    l_labels(i).body_html:=buildNavLabels(l_labels(i).parent_article_id) || chr(10) || l_labels(i).body_html || chr(10);
+                    l_labels(i).body_html:=buildNavLabels(l_labels(i).parent_article_id) || l_labels(i).body_html;
                 END IF;
             END IF;
             
@@ -317,12 +325,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END IF;
             IF (l_labels(i).contact_form='YES') THEN
                 apex_string.push(l_labels(i).modules,'deploy_contact.js');
+                l_labels(i).body_html:=l_labels(i).body_html || pck_core.buildContactForm(contactEmail(), l_ssl_url);
             END IF;
         END LOOP;
-
-        /* Get URL of site to be deployed in order to build navigation links */
-        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId, pMethod=>'GET', pData=>l_clob);
-        SELECT ssl_url INTO l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS(ssl_url));
 
         /* Build favicon element to be compliant with Content Security Policy */
         l_favicon:='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>' || l_favicon_code || '</text></svg>';
@@ -395,17 +400,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     l_module_html ||
                     l_script_html ||
                     '<link rel="icon" href="' || l_favicon || '">'  || chr(10) ||
-                    '<style>' || l_style || '</style>' || chr(10) || 
+                    CASE WHEN l_labels(i).deploy_css_file='YES' THEN 
+                        '<link rel="stylesheet" href="/website.css">' 
+                    ELSE 
+                        '<style>' || l_style || '</style>' 
+                    END || chr(10) || 
                     --CASE WHEN l_is_blog AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN '<script src="https://accounts.google.com/gsi/client" async defer></script>' END ||
                 '</head>' || chr(10) || 
                 '<body data-websiteid="' || pWebsiteId
                     || '" data-articleid="' || CASE WHEN l_labels(i).parent_article_id=l_labels(i).article_id THEN l_labels(i).parent_article_id ELSE l_labels(i).article_id END
                     || '" data-resturl="' || pRestUrl || '">' || 
                 l_labels(i).header || chr(10) ||
-                l_labels(i).body_html || chr(10) || CASE WHEN l_labels(i).contact_form='YES' THEN pck_core.buildContactForm(contactEmail(), l_ssl_url) END ||
+                l_labels(i).body_html || chr(10) ||
                 l_labels(i).footer || chr(10) ||
                 '</body>' || chr(10) || 
             '</html>';
+
+            l_text:=utl_i18n.unescape_reference(apex_escape.striphtml(l_labels(i).header || l_labels(i).body_html || l_labels(i).footer));
+            FOR i IN 1..LENGTH(l_text) LOOP
+                l_char:=SUBSTR(l_text,i,1);
+                IF (INSTR(l_chars,l_char)=0) THEN
+                    l_chars:=l_chars || l_char;
+                END IF;
+            END LOOP;
 
             l_sha1:=LOWER(dbms_crypto.hash(src=>l_page, typ=>dbms_crypto.hash_sh1));
 
@@ -460,7 +477,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         apex_web_service.clear_request_headers;
         apex_web_service.g_request_headers(1).name := 'User-Agent';
         apex_web_service.g_request_headers(1).value := 'Mozilla/5.0 (Windows NT 6.3; rv:39.0) Gecko/20100101 Firefox/39.0';
-        l_font_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(l_font,' ','+') || '&text=' || utl_url.escape('1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
+        pck_core.log(l_chars);
+        pck_core.log(utl_url.escape(l_chars, escape_reserved_chars=>TRUE, url_charset=>'UTF-8'));
+        l_font_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(l_font,' ','+') || '&text=' || utl_url.escape(l_chars,TRUE,'UTF-8'); --'Herathspcilnd€NofxmwgGFAPITLEbu'; --utl_url.escape(l_chars);
         l_font_css:=apex_web_service.make_rest_request(p_url=>l_font_url, p_http_method=>'GET');
         l_font_url:=REGEXP_SUBSTR(l_font_css, '\(([^)]*)\)', 1, 1, NULL, 1);
         --pck_core.log('font format ' || LTRIM(RTRIM(REGEXP_SUBSTR(l_font_css, '\(([^)]*)\)', 1, 2, NULL, 1))));
