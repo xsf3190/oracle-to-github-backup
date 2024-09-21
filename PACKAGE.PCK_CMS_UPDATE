@@ -399,7 +399,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             SELECT w.id, w.domain_name, w.font, w.contact_email, w.max_width, w.favicon_code,
                      w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, 
                      w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom, w.price_currency,
-                     w.netlify_last_published, g.url_regular
+                     w.deploy_css_file, w.netlify_last_published, g.url_regular
               FROM website w, google_font g
              WHERE w.id=l_website_id
                AND w.font=g.family
@@ -434,6 +434,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover) ||
                 buildSelectWrapper(C.id, 'website.font', C.font, buildFontOptions(C.font), l_session_data.canuse_popover) ||
                 buildRadioWrapper(C.id, 'website.price_currency', C.price_currency, l_session_data.canuse_popover) ||
+                buildRadioWrapper(C.id, 'website.deploy_css_file', C.deploy_css_file, l_session_data.canuse_popover) ||
                 '<details>
                     <summary>Fluid Typography</summary>
                     <div class="cards-50-50">
@@ -901,6 +902,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     UPDATE website SET max_scale=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website.price_currency' THEN
                     UPDATE website SET price_currency=C.value, updated_date=current_timestamp WHERE id=C.id;
+                WHEN 'website.deploy_css_file' THEN
+                    UPDATE website SET deploy_css_file=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website_article.collection_type' THEN
                     UPDATE website_article SET collection_type=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'website_article.page_title' THEN
