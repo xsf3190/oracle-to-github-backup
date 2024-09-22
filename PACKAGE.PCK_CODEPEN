@@ -106,15 +106,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         ELSE
             l_html:=l_nav_labels || chr(10) || l_html || chr(10);
         END IF;
-
-        /*  Start build of Javascript code */
-        l_javascript:=
-        '/*' || chr(10) || 
-        '** Page identifiers used to return metrics to the CMS' || chr(10) || 
-        '*/' || chr(10) ||
-        'gMetricWebsiteId = "' || l_website_id || '";' || chr(10) || 
-        'gMetricArticleId = "' || pArticleId || '";' || chr(10) || 
-        'gRestUrl = "' || pck_core.getRestUrl() || '";' || chr(10);
         
         /* Build index of Blog entries */
         IF (l_collection_type='BLOG') THEN
