@@ -159,6 +159,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_char VARCHAR2(4);
         l_favicon_code website.favicon_code%type;
         l_deploy_css CLOB;
+        l_deploy_css_file website.deploy_css_file%type;
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
 
@@ -247,8 +248,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
-        SELECT w.font, g.category, REPLACE(LOWER(w.font), ' ', '_') || '.woff2', w.favicon_code
-          INTO l_font, l_font_category, l_font_filename, l_favicon_code
+        SELECT w.font, g.category, REPLACE(LOWER(w.font), ' ', '_') || '.woff2', w.favicon_code, deploy_css_file
+          INTO l_font, l_font_category, l_font_filename, l_favicon_code, l_deploy_css_file
           FROM website w, google_font g
          WHERE w.id=pWebsiteId
            AND w.font=g.family;
@@ -361,7 +362,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         FOR i IN 1..l_labels.COUNT
         LOOP
             IF (i=1) THEN
-                logDeployment(pWebsiteId, pSiteId, 'Building ' || l_labels.COUNT || ' page' || CASE WHEN l_labels.COUNT>1 THEN 's' END);
+                logDeployment(pWebsiteId, pSiteId, 'Building ' || l_labels.COUNT || ' website page' || CASE WHEN l_labels.COUNT>1 THEN 's' END);
                 l_sitemap:=
                 '<?xml version="1.0" encoding="UTF-8"?>' || 
                 '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
@@ -400,7 +401,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     l_module_html ||
                     l_script_html ||
                     '<link rel="icon" href="' || l_favicon || '">'  || chr(10) ||
-                    CASE WHEN l_labels(i).deploy_css_file='YES' THEN 
+                    CASE WHEN l_deploy_css_file='YES' THEN 
                         '<link rel="stylesheet" href="/website.css">' 
                     ELSE 
                         '<style>' || l_style || '</style>' 
@@ -459,6 +460,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_content:=l_headers;
         l_files.put('_headers', l_sha1);
 
+        IF (l_deploy_css_file='YES') THEN
+            logDeployment(pWebsiteId, pSiteId, 'Building CSS website.css');
+            l_sha1:=LOWER(dbms_crypto.hash(src => l_style, typ => dbms_crypto.hash_sh1));
+            l_deploy_files(l_sha1).file_name:='website.css';
+            l_deploy_files(l_sha1).file_content:=l_style;
+            l_files.put('website.css', l_sha1);
+        END IF;
+
         FOR i IN 1..l_jscode.COUNT LOOP
             FOR C IN (SELECT apex_util.blob_to_clob(file_content) file_content
                         FROM apex_application_static_files 
@@ -473,7 +482,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END LOOP;
         END LOOP;
 
-        logDeployment(pWebsiteId, pSiteId, 'Building font ' || l_font_filename);
+        logDeployment(pWebsiteId, pSiteId, 'Building FONT ' || l_font_filename);
         apex_web_service.clear_request_headers;
         apex_web_service.g_request_headers(1).name := 'User-Agent';
         apex_web_service.g_request_headers(1).value := 'Mozilla/5.0 (Windows NT 6.3; rv:39.0) Gecko/20100101 Firefox/39.0';
@@ -507,7 +516,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             logDeployment(pWebsiteId, pSiteId, 'Successfully uploaded ' || l_deploy_files(C.sha1).file_name);
             n:=n+1;
         END LOOP;
-        dbms_output.put_line('uploaded all files to Netify CDN');
 
         IF (n>0) THEN
             logDeployment(pWebsiteId, pSiteId, 'Uploaded files: ' || n || ' Unchanged files: ' || TO_CHAR(l_deploy_files.COUNT-n));
