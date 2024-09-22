@@ -112,7 +112,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         pos_1 PLS_INTEGER;
         pos_2 PLS_INTEGER;
         l_popover LONG;
-        l_total_chars PLS_INTEGER:=0;
     BEGIN
         getColumnDetails(pColumn, pCanUsePopover, l_data_length, l_popover);
 
@@ -135,7 +134,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_column_name:=LOWER(l_column_name);
 
         FOR C IN (SELECT column_value FROM TABLE(apex_string.split(l_radio_options,','))) LOOP
-            l_total_chars:=l_total_chars + LENGTH(C.column_value);
             l_html:=l_html || 
             '<div>
                 <label for="' || l_column_name || '-' || LOWER(C.column_value) || '">' || C.column_value|| '</label>
@@ -145,11 +143,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             </div>';
         END LOOP;
 
-        l_total_chars:=GREATEST(l_total_chars,LENGTH(l_column_name));
-
         RETURN
         ('<div class="radio-wrapper">
-                <fieldset style="max-inline-size:' || TO_CHAR(l_total_chars) || 'em">
+                <fieldset>
                     <legend>' || INITCAP(REPLACE(l_column_name,'_',' ')) || l_popover || '</legend>
                     <div class="radio-options">' || l_html || '
                     </div>
@@ -433,7 +429,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 buildInputWrapper(C.id, 'website.favicon_code', C.favicon_code, l_session_data.canuse_popover) ||
                 buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover) ||
                 buildSelectWrapper(C.id, 'website.font', C.font, buildFontOptions(C.font), l_session_data.canuse_popover) ||
-                buildRadioWrapper(C.id, 'website.price_currency', C.price_currency, l_session_data.canuse_popover) ||
                 buildRadioWrapper(C.id, 'website.deploy_css_file', C.deploy_css_file, l_session_data.canuse_popover) ||
                 '<details>
                     <summary>Fluid Typography</summary>
@@ -467,6 +462,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     <h1></h1>
                     <p></p>
                 </div>' ||
+                buildRadioWrapper(C.id, 'website.price_currency', C.price_currency, l_session_data.canuse_popover) ||
                 CASE WHEN l_delete_html IS NOT NULL THEN
                 '<details><summary>DELETE WEBSITE</summary>' || l_delete_html || '</details>'
                 END || '
