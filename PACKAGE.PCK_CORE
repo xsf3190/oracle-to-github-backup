@@ -334,7 +334,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             END LOOP;
             l_deploy_css:=l_deploy_css || chr(10) ||
             chr(9) || '--font-family: "' || C.font || '", ' || CASE WHEN C.category='handwriting' THEN 'cursive' ELSE C.category END || ';' || chr(10) ||
-            chr(9) || '--max-width: ' || C.max_width || ';' || chr(10) ||
+            chr(9) || '--max-width: ' || C.max_width_px || 'px;' || chr(10) ||
             chr(9) || '--color-text: ' || C.color_text || ';' || chr(10) ||
             chr(9) || '--color-background: ' || C.color_background || ';' || chr(10) ||
             chr(9) || '--color-primary: ' || C.color_primary || ';' || chr(10) ||
