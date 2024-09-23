@@ -225,7 +225,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         FUNCTION buildNavLabels(pArticleId IN website_article.article_id%type) RETURN VARCHAR2 IS
             l_nav LONG;
         BEGIN
-            l_nav:='<nav aria-label="Main Navigation">';
+            l_nav:='<nav aria-label="Main Navigation" class="flex-items">';
             FOR i IN 1..l_labels.COUNT LOOP
                 IF (l_labels(i).article_id=l_labels(i).parent_article_id) THEN
                     l_nav:=l_nav || 
@@ -351,6 +351,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[ font-src 'self';]' ||
             q'[ style-src 'self' 'sha256-]' || l_style_sha256_b64 || q'[';]' ||
             q'[ script-src 'self';]' ||
+            q'[ frame-src www.youtube.com;]' ||
             q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
         '/' || l_font_filename || chr(10) || 
             q'[Cache-Control: "public, max-age=31536000";]';
