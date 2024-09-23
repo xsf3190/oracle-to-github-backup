@@ -95,7 +95,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         IF (l_nav_labels IS NOT NULL) THEN
             /* Nav labels are sticky by default but blog cards are position:absolute so change to static */
-            l_nav_labels:='<nav aria-label="Main Navigation"' || CASE WHEN l_collection_type='BLOG' THEN ' style="position:static"' END || '>' || l_nav_labels || '</nav>';
+            l_nav_labels:='<nav aria-label="Main Navigation" class="flex-items"' || CASE WHEN l_collection_type='BLOG' THEN ' style="position:static"' END || '>' || l_nav_labels || '</nav>';
         END IF;
 
         /* build html */
