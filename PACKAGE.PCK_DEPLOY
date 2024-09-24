@@ -332,6 +332,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         /* Build favicon element to be compliant with Content Security Policy */
         l_favicon:='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>' || l_favicon_code || '</text></svg>';
+        --l_favicon:='data:image/svg+xml,<svg viewBox=%220 0 100 100%22></svg>';
+
 
         /* Web font is self-hosted - build @font-face css at start of stylesheet */
         l_style:=
@@ -340,8 +342,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
            'src: url("/' || l_font_filename || '") format("woff2");' || chr(10) ||
            'font-display: swap;' || chr(10) ||
         '}' || chr(10) || pck_core.buildCssRoot(pWebsiteId, pApplicationId) || chr(10);
-        l_style_sha256_raw:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_style,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
-        l_style_sha256_b64:=utl_raw.cast_to_varchar2(utl_encode.base64_encode(l_style_sha256_raw));
+        --l_style_sha256_raw:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_style,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+        --l_style_sha256_b64:=utl_raw.cast_to_varchar2(utl_encode.base64_encode(l_style_sha256_raw));
 
         l_robots:='User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: ' || l_ssl_url || '/sitemap.xml';
         l_headers:=
@@ -349,12 +351,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[Content-Security-Policy: default-src 'none';]' ||
             q'[ img-src data: res.cloudinary.com;]' ||
             q'[ font-src 'self';]' ||
-            q'[ style-src 'self' 'sha256-]' || l_style_sha256_b64 || q'[';]' ||
+            q'[ style-src 'self';]' ||
             q'[ script-src 'self';]' ||
             q'[ frame-src www.youtube.com;]' ||
-            q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
-        '/' || l_font_filename || chr(10) || 
-            q'[Cache-Control: "public, max-age=31536000";]';
+            q'[ connect-src ]' || pRestUrl || ';';
 
         /* 
         ** Build individual website pages
