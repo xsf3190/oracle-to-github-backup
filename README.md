@@ -38,9 +38,9 @@ Logged on to the subject database as ADMIN
 3. GRANT EXECUTE ON DBMS_CLOUD_REPO TO "schema-to-backup"
 4. Compile PACKAGE.PCK_BACKUP from this repository in "schema-to-backup"
 
-This package implements the backuup process for my EXAMPLE application schema which includes:
+This package implements the actual backup process for my EXAMPLE application schema which includes:
 1. Logging process steps in a schema table
-2. Emailing backup result to "admin" users
+2. Emailing backup result to application-specific "admin" users
 
 Adapt the package, therefore, to suit specific requirements.
 
@@ -59,3 +59,19 @@ BEGIN
 end;
 /
 ```
+
+## Restore
+Backing up is pointless unless the data backed up on ADB1 can be reliably restored in ADB2.
+
+The repository includes the "import_schema.sql" script which runs on the second ADB database in my OCI "Always Free" tenancy.
+
+The script runs daily on a Linux Compute instance recreating the schema from the Github export schema dump file.
+
+The main issue here is how to securely serve the encryption password that was used to create the daily dump file.
+
+The simplistic approach I adopted:
+1. Store the randomly generated encryption password in an application schema table for "admin" users on ADB1
+2. Create database link in ADB2 pointing to the ADMIN user in ADB1
+3. The "import_schema.sql" script retrieves the password using the database link
+
+If anyone has a better idea, I would be delighted to hear it.
