@@ -549,7 +549,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
 
         /* No content means it  must be a sub-article */
         IF (l_content IS NULL) THEN 
-            FOR C IN (SELECT wa.navigation_label, wa.collection_type, a.product_price
+            FOR C IN (SELECT wa.navigation_label, wa.collection_type, a.product_price, a.featured
                         FROM article a, website_article wa
                        WHERE a.id=l_article_id
                          AND wa.website_id=l_website_id
@@ -562,6 +562,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     buildInputNumberWrapper(l_article_id, 'article.product_price', TO_CHAR(C.product_price), l_session_data.canuse_popover);
                 END IF;
                 l_content:=l_content || 
+                    buildRadioWrapper(l_article_id, 'article.featured', C.featured, l_session_data.canuse_popover) || 
                     '<details>
                         <summary>CODEPEN FEATURES</summary>' ||
                         pck_core.buildPushableButton('edit-codepen','&#9917;') ||
@@ -910,6 +911,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     UPDATE website_article SET contact_form=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
                 WHEN 'article.product_price' THEN
                     UPDATE article SET product_price=C.value, updated_date=current_timestamp WHERE id=C.id;
+                WHEN 'article.featured' THEN
+                    UPDATE article SET featured=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'users.netlify_token' THEN
                     UPDATE users SET netlify_token=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'users.netlify_account_slug' THEN
