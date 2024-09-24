@@ -25,5 +25,6 @@ CREATE TABLE "USAGE"
 	  REFERENCES "USERS" ("ID") ON DELETE CASCADE ENABLE
    ) ;
 COMMENT ON TABLE "USAGE"  IS 'Registers Cloudinary account usage details captured on daily basis.';
-CREATE UNIQUE INDEX "PK_USAGE" ON "USAGE" ("USER_ID", "USAGE_DATE") 
+
+  CREATE UNIQUE INDEX "PK_USAGE" ON "USAGE" ("USER_ID", "USAGE_DATE") 
   ;
