@@ -29,20 +29,23 @@ end;
 3. Provide an automatic backup / restore cycle betweeen 2 databases.
 4. Deploy an environment to test a new Oracle software release.
 
-Note that Github supports a maximum file size of 100MB. 
-However, using the Advanced Compression option reduces file size by an order of magnitude (up to 10 times).
+Although Github supports a maximum file size of 100MB, the Advanced Compression option reduces dump file size by an order of magnitude (up to 10 times).
 
 ## Install
 Logged on to the subject database as ADMIN
 1. GRANT READ,WRITE ON DIRECTORY DATA_PUMP_DIR TO "schema-to-backup"
 2. GRANT EXECUTE ON DBMS_CLOUD TO "schema-to-backup"
 3. GRANT EXECUTE ON DBMS_CLOUD_REPO TO "schema-to-backup"
-4. Download contents of TABLE.LOG and PACKAGE.PCK_BACKUP from this repository and create in "schema-to-backup"
+4. Compile PACKAGE.PCK_BACKUP from this repository in "schema-to-backup"
 
-Adapt the packages to suit any specific requirements.
+This package implements the backuup process for my EXAMPLE application schema which includes:
+1. Logging process steps in a schema table
+2. Emailing backup result to "admin" users
+
+Adapt the package, therefore, to suit specific requirements.
 
 ## Run
-To schedule secure regular backups, e.g. every day at 9PM
+For example, to schedule every day at 9PM
 ```
 BEGIN
   DBMS_SCHEDULER.create_job (
