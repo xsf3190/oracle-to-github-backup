@@ -159,7 +159,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_char VARCHAR2(4);
         l_favicon_code website.favicon_code%type;
         l_deploy_css CLOB;
-        l_deploy_css_file website.deploy_css_file%type;
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
 
@@ -184,7 +183,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             contact_form website_article.contact_form%type,
             lastmod article.updated_date%type,
             word_count article.word_count%type, 
-            deploy_css_file website.deploy_css_file%type,
             header website.footer%type,
             body_html article.body_html%type,
             footer website.footer%type,
@@ -206,8 +204,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         TYPE t_jscode IS TABLE OF VARCHAR2(30);
         l_jscode t_jscode:=t_jscode();
-
-        l_favicon CLOB;
 
         l_style CLOB;
         l_style_sha256_raw RAW(2000);
@@ -248,8 +244,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
-        SELECT w.font, g.category, REPLACE(LOWER(w.font), ' ', '_') || '.woff2', w.favicon_code, deploy_css_file
-          INTO l_font, l_font_category, l_font_filename, l_favicon_code, l_deploy_css_file
+        SELECT w.font, g.category, REPLACE(LOWER(w.font), ' ', '_') || '.woff2', w.favicon_code
+          INTO l_font, l_font_category, l_font_filename, l_favicon_code
           FROM website w, google_font g
          WHERE w.id=pWebsiteId
            AND w.font=g.family;
@@ -257,17 +253,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /*
         ** Get all website content into collection
         */
-        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count, deploy_css_file, header, body_html, footer, apex_t_varchar2()
+        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count,  header, body_html, footer, apex_t_varchar2()
           BULK COLLECT INTO l_labels
           FROM
           (
-        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.display_order, COALESCE(a.updated_date,a.created_date) lastmod, a.word_count, w.deploy_css_file, w.header, a.body_html body_html, w.footer
+        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.display_order, COALESCE(a.updated_date,a.created_date) lastmod, a.word_count, w.header, a.body_html body_html, w.footer
           FROM website w, website_article wa, article a
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
            AND wa.article_id=a.id
          UNION ALL
-        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001), COALESCE(a.deployed_date, a.updated_date) lastmod, a.word_count, w.deploy_css_file, w.header, a.body_html, w.footer
+        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001), COALESCE(a.deployed_date, a.updated_date) lastmod, a.word_count, w.header, a.body_html, w.footer
           FROM website w, website_article wa, article a 
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
@@ -331,9 +327,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END LOOP;
 
         /* Build favicon element to be compliant with Content Security Policy */
-        l_favicon:='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>' || l_favicon_code || '</text></svg>';
+        --l_favicon:='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>' || l_favicon_code || '</text></svg>';
         --l_favicon:='data:image/svg+xml,<svg viewBox=%220 0 100 100%22></svg>';
-
+        IF (l_favicon_code IS NuLL) THEN
+            l_favicon_code:=
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -4 32 32">
+            	<g>
+            		<circle cx="12" cy="12" r="16" mask="url(#mask)" fill="rgba(226, 27, 27, 0.855)" />
+            		<path stroke-width="1" fill="none" stroke="#ffffff" stroke-linecap="round"
+            			d="M 8 18.7 C 6.3 20.1 4.8 21 2 21 c 1 -1 2.3 -2.4 2.8 -4.4 C 3.1 15.1 2 13.2 2 11 c 0 -4.4 4.5 -8 10 -8 c 5.1 0 9.3 3.1 9.9 7" />
+            		<path fill="#ffffff"
+            			d="M 16 19.9 c -3.3 0 -6 -2 -6 -4.4 C 10 13 12.7 11 16 11 s 6 2 6 4.4 c 0 1.2 -0.6 2.3 -1.7 3.1 c 0.3 1.2 1.1 1.9 1.7 2.5 c -1.8 0 -2.7 -0.5 -3.8 -1.4 c -0.7 0.2 -1.4 0.3 -2.2 0.3 z" />
+            	</g>
+            </svg>';
+        END IF;
 
         /* Web font is self-hosted - build @font-face css at start of stylesheet */
         l_style:=
@@ -349,7 +356,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_headers:=
         '/*' || chr(10) || 
             q'[Content-Security-Policy: default-src 'none';]' ||
-            q'[ img-src data: res.cloudinary.com;]' ||
+            q'[ img-src 'self' res.cloudinary.com;]' ||
             q'[ font-src 'self';]' ||
             q'[ style-src 'self';]' ||
             q'[ script-src 'self';]' ||
@@ -398,15 +405,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<meta name="description" content="' || l_labels(i).page_description || '">' || chr(10) ||
                     '<meta name="author" content="www.adfreesites.com">' || chr(10) ||
                     '<meta name="view-transition" content="same-origin">' || chr(10) ||
+                    '<link rel="icon" href="https://res.cloudinary.com/mrbapex/believeintalking_favicon_q57es4.svg" type="image/svg+xml">' || chr(10) ||
+                    --'<link rel="icon" href=''data:image/svg+xml;utf8,' || l_favicon_code || '''/>'  || chr(10) ||
                     '<link rel="preload" as="font" href="/' || l_font_filename || '" crossorigin>' || chr(10) ||
                     l_module_html ||
                     l_script_html ||
-                    '<link rel="icon" href="' || l_favicon || '">'  || chr(10) ||
-                    CASE WHEN l_deploy_css_file='YES' THEN 
-                        '<link rel="stylesheet" href="/website.css">' 
-                    ELSE 
-                        '<style>' || l_style || '</style>' 
-                    END || chr(10) || 
+                    '<link rel="stylesheet" href="/website.css">'  || chr(10) || 
                     --CASE WHEN l_is_blog AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN '<script src="https://accounts.google.com/gsi/client" async defer></script>' END ||
                 '</head>' || chr(10) || 
                 '<body data-websiteid="' || pWebsiteId
@@ -441,7 +445,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_files.put(l_file_name, l_sha1);
         END LOOP;
 
-        /* Build content of sitemap.xml, robots.txt and _headers */
+        /* Build website assets */
 
         logDeployment(pWebsiteId, pSiteId, 'Building sitemap.xml');
         l_sha1:=LOWER(dbms_crypto.hash(src => l_sitemap, typ => dbms_crypto.hash_sh1));
@@ -461,13 +465,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_content:=l_headers;
         l_files.put('_headers', l_sha1);
 
-        IF (l_deploy_css_file='YES') THEN
-            logDeployment(pWebsiteId, pSiteId, 'Building CSS website.css');
-            l_sha1:=LOWER(dbms_crypto.hash(src => l_style, typ => dbms_crypto.hash_sh1));
-            l_deploy_files(l_sha1).file_name:='website.css';
-            l_deploy_files(l_sha1).file_content:=l_style;
-            l_files.put('website.css', l_sha1);
-        END IF;
+        logDeployment(pWebsiteId, pSiteId, 'Building favicon.svg');
+        l_sha1:=LOWER(dbms_crypto.hash(src => utl_raw.cast_to_raw(l_favicon_code), typ => dbms_crypto.hash_sh1));
+        l_deploy_files(l_sha1).file_name:='favicon.svg';
+        l_deploy_files(l_sha1).file_content_b:=utl_raw.cast_to_raw(l_favicon_code);
+        l_files.put('favicon.svg', l_sha1);
+
+        logDeployment(pWebsiteId, pSiteId, 'Building CSS website.css');
+        l_sha1:=LOWER(dbms_crypto.hash(src => l_style, typ => dbms_crypto.hash_sh1));
+        l_deploy_files(l_sha1).file_name:='website.css';
+        l_deploy_files(l_sha1).file_content:=l_style;
+        l_files.put('website.css', l_sha1);
 
         FOR i IN 1..l_jscode.COUNT LOOP
             FOR C IN (SELECT apex_util.blob_to_clob(file_content) file_content
