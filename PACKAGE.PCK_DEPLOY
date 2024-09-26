@@ -154,13 +154,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_font_url VARCHAR2(500);
         l_font_css CLOB;
         l_font_download BLOB;
+        l_favicon_filename VARCHAR2(11);
+        l_favicon_download BLOB;
         l_text CLOB;
         l_chars VARCHAR2(256):=' ';
         l_char VARCHAR2(4);
-        l_favicon_code website.favicon_code%type;
         l_deploy_css CLOB;
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
+
+        TYPE tt_favicons IS RECORD (
+            format asset.format%type,
+            rel VARCHAR2(16), 
+            attr VARCHAR2(20),
+            url VARCHAR2(200)
+        );
+        TYPE t_favicons IS TABLE OF tt_favicons INDEX BY PLS_INTEGER;
+        l_favicons t_favicons;
 
         TYPE tt_files IS RECORD (
             lastmod article.updated_date%type,
@@ -198,7 +208,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_modules apex_t_varchar2;
         l_module_html LONG;
         l_script_html LONG;
-
+        l_favicon_html LONG;
 
         l_thumbnails CLOB;
 
@@ -244,8 +254,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
-        SELECT w.font, g.category, REPLACE(LOWER(w.font), ' ', '_') || '.woff2', w.favicon_code
-          INTO l_font, l_font_category, l_font_filename, l_favicon_code
+        SELECT w.font, g.category, REPLACE(LOWER(w.font), ' ', '_') || '.woff2'
+          INTO l_font, l_font_category, l_font_filename
           FROM website w, google_font g
          WHERE w.id=pWebsiteId
            AND w.font=g.family;
@@ -326,21 +336,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END IF;
         END LOOP;
 
-        /* Build favicon element to be compliant with Content Security Policy */
-        --l_favicon:='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>' || l_favicon_code || '</text></svg>';
-        --l_favicon:='data:image/svg+xml,<svg viewBox=%220 0 100 100%22></svg>';
-        IF (l_favicon_code IS NuLL) THEN
-            l_favicon_code:=
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -4 32 32">
-            	<g>
-            		<circle cx="12" cy="12" r="16" mask="url(#mask)" fill="rgba(226, 27, 27, 0.855)" />
-            		<path stroke-width="1" fill="none" stroke="#ffffff" stroke-linecap="round"
-            			d="M 8 18.7 C 6.3 20.1 4.8 21 2 21 c 1 -1 2.3 -2.4 2.8 -4.4 C 3.1 15.1 2 13.2 2 11 c 0 -4.4 4.5 -8 10 -8 c 5.1 0 9.3 3.1 9.9 7" />
-            		<path fill="#ffffff"
-            			d="M 16 19.9 c -3.3 0 -6 -2 -6 -4.4 C 10 13 12.7 11 16 11 s 6 2 6 4.4 c 0 1.2 -0.6 2.3 -1.7 3.1 c 0.3 1.2 1.1 1.9 1.7 2.5 c -1.8 0 -2.7 -0.5 -3.8 -1.4 c -0.7 0.2 -1.4 0.3 -2.2 0.3 z" />
-            	</g>
-            </svg>';
-        END IF;
+        /* 
+        ** Favicons are image files uploaded through the CMS to the Asset table
+        */
+        SELECT a.format,
+            DECODE(a.format,'png','rel="apple-touch-icon"','rel="icon"'), 
+            DECODE(a.format,'ico','sizes="32x32"','svg','type="image/svg+xml"'), 
+            pck_media.getCloudinaryUrl(a.cld_cloud_name,a.resource_type,a.public_id,a.format,a.width)
+        BULK COLLECT INTO l_favicons
+        FROM website w, website_article wa, asset a
+        WHERE w.id=pWebsiteId
+        AND wa.website_id=w.id
+        AND wa.article_id=a.article_id
+        AND a.favicon='YES'
+        ORDER BY DECODE(a.format,'ico',1,'svg',2,'png',3);
 
         /* Web font is self-hosted - build @font-face css at start of stylesheet */
         l_style:=
@@ -394,6 +403,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     l_jscode(l_jscode.LAST):=C.column_value;
                 END IF;
             END LOOP;
+
+            /*
+            ** Biuld favicon <link> html - https://evilmartians.com/chronicles/how-to-favicon-in-2021-six-files-that-fit-most-needs
+            */
+            FOR i IN 1..l_favicons.COUNT LOOP
+                l_favicon_html:=l_favicon_html || '<link ' || l_favicons(i).rel 
+                                               || ' href="/favicon.' || l_favicons(i).format || '" ' 
+                                               || l_favicons(i).attr || '>' || chr(10);
+            END LOOP;
+
             
             l_page:=
                 '<!DOCTYPE HTML>' || chr(10) ||
@@ -405,11 +424,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<meta name="description" content="' || l_labels(i).page_description || '">' || chr(10) ||
                     '<meta name="author" content="www.adfreesites.com">' || chr(10) ||
                     '<meta name="view-transition" content="same-origin">' || chr(10) ||
-                    '<link rel="icon" href="https://res.cloudinary.com/mrbapex/believeintalking_favicon_q57es4.svg" type="image/svg+xml">' || chr(10) ||
-                    --'<link rel="icon" href=''data:image/svg+xml;utf8,' || l_favicon_code || '''/>'  || chr(10) ||
                     '<link rel="preload" as="font" href="/' || l_font_filename || '" crossorigin>' || chr(10) ||
                     l_module_html ||
                     l_script_html ||
+                    l_favicon_html ||
                     '<link rel="stylesheet" href="/website.css">'  || chr(10) || 
                     --CASE WHEN l_is_blog AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN '<script src="https://accounts.google.com/gsi/client" async defer></script>' END ||
                 '</head>' || chr(10) || 
@@ -465,11 +483,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_content:=l_headers;
         l_files.put('_headers', l_sha1);
 
-        logDeployment(pWebsiteId, pSiteId, 'Building favicon.svg');
-        l_sha1:=LOWER(dbms_crypto.hash(src => utl_raw.cast_to_raw(l_favicon_code), typ => dbms_crypto.hash_sh1));
-        l_deploy_files(l_sha1).file_name:='favicon.svg';
-        l_deploy_files(l_sha1).file_content_b:=utl_raw.cast_to_raw(l_favicon_code);
-        l_files.put('favicon.svg', l_sha1);
+        apex_web_service.clear_request_headers;
+        FOR i IN 1..l_favicons.COUNT LOOP
+            l_favicon_filename:='favicon.' || l_favicons(i).format;
+            logDeployment(pWebsiteId, pSiteId, 'Building ' || l_favicon_filename);
+            l_favicon_download:=apex_web_service.make_rest_request_b(p_url=>l_favicons(i).url, p_http_method=>'GET');
+            l_sha1:=LOWER(dbms_crypto.hash(src => l_favicon_download, typ => dbms_crypto.hash_sh1));
+            l_deploy_files(l_sha1).file_name:=l_favicon_filename;
+            l_deploy_files(l_sha1).file_content_b:=l_favicon_download;
+            l_files.put(l_favicon_filename, l_sha1);
+        END LOOP;
 
         logDeployment(pWebsiteId, pSiteId, 'Building CSS website.css');
         l_sha1:=LOWER(dbms_crypto.hash(src => l_style, typ => dbms_crypto.hash_sh1));
@@ -497,7 +520,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         apex_web_service.g_request_headers(1).value := 'Mozilla/5.0 (Windows NT 6.3; rv:39.0) Gecko/20100101 Firefox/39.0';
         pck_core.log(l_chars);
         pck_core.log(utl_url.escape(l_chars, escape_reserved_chars=>TRUE, url_charset=>'UTF-8'));
-        l_font_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(l_font,' ','+') || '&text=' || utl_url.escape(l_chars,TRUE,'UTF-8'); --'Herathspcilnd€NofxmwgGFAPITLEbu'; --utl_url.escape(l_chars);
+        l_font_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(l_font,' ','+') || '&text=' || utl_url.escape(l_chars,TRUE,'UTF-8');
         l_font_css:=apex_web_service.make_rest_request(p_url=>l_font_url, p_http_method=>'GET');
         l_font_url:=REGEXP_SUBSTR(l_font_css, '\(([^)]*)\)', 1, 1, NULL, 1);
         --pck_core.log('font format ' || LTRIM(RTRIM(REGEXP_SUBSTR(l_font_css, '\(([^)]*)\)', 1, 2, NULL, 1))));
