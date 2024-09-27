@@ -139,15 +139,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
                         <source src="' || REPLACE(l_url_image,'.png','.mp3') || '" type="audio/mpeg"></source>
                         <source src="' || REPLACE(l_url_image,'.png','.wav') || '" type="audio/wav"></source>
                     </audio>');
-
                 ELSE NULL;
             END CASE;
 
-            IF (NOT pDeploy AND l_media_type='image') THEN
+            IF (NOT pDeploy) THEN
                 pHTML:=pHTML || TO_CLOB(
-                '<button type="button" class="copy" title="Copy URL">URL</button>
-                 <button type="button" class="expand" title="Fullscreen">&#x26F6;</button>
-                 <button type="button" class="delete-asset" title="delete">&times;</button>');
+                '<button type="button" class="media-options" title="Edit Media">&#128397;</button>');
             END IF;
 
             pHTML:=pHTML || TO_CLOB('</li>');
