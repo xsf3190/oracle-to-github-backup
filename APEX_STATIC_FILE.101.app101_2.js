@@ -523,6 +523,8 @@ const clickHandler = (e) => {
         save_fluid_types(e);
     } else if (e.target.matches(".save-colors")) {
         save_colors(e);
+    } else if (e.target.matches(".media-options")) {
+        media_options(e);
     } else if (e.target.matches(".page-options")) {
         page_options();
     } else if (e.target.matches(".new-page")) {
@@ -550,8 +552,8 @@ const clickHandler = (e) => {
         delete_article(e);   
     } else if (e.target.matches(".delete-website")) {
         delete_website();
-    } else if (e.target.matches(".delete-asset")) {
-        delete_asset(e);
+    } else if (e.target.matches(".delete-media")) {
+        delete_media(e);
     } else if (e.target.matches(".delete-user")) {
         delete_user();
     } else if (e.target.matches(".expand")) {
@@ -1247,6 +1249,17 @@ const website_options = () => {
 }
 
 /* 
+ ** GET MEDIA OPTIONS
+ */
+const media_options = (e) => {
+    execProcess( "media-options/"+e.target.closest("li").dataset.id,"GET").then( (data) => {
+        logContent.replaceChildren();
+        logContent.insertAdjacentHTML('afterbegin',data.content);
+        logDialog.showModal();
+    });
+}
+
+/* 
  ** GET PAGE OPTIONS
  */
 const page_options = (e) => {
@@ -1582,9 +1595,8 @@ const restore_article = () => {
 /*
  ** DELETE MEDIA ASSET
  */
-delete_asset = (e) => {
-    const asset = e.target.closest("li");
-    execProcess("dml","DELETE",{table_name: "asset", asset_id: asset.dataset.id}).then( () => {
+delete_media = (e) => {
+    execProcess("dml","DELETE",{table_name: "asset", asset_id: e.target.closest("li").dataset.id}).then( () => {
         asset.remove();
     });
 }
