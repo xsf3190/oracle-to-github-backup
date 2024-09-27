@@ -782,9 +782,10 @@ nav button {
 .gallery-list {
   list-style: none;
   margin: 0;
+  padding: 0;
   display: grid;
-  gap: 0.25em;
-  grid-template-columns: repeat(auto-fill, minmax(min(8rem, 100%), 1fr));
+  gap: 1em;
+  grid-template-columns: repeat(auto-fill, minmax(min(10cqi, 100%), 1fr));
     & li {
         border: 1px solid #ddd;
         padding: var(--space-3xs);
@@ -800,21 +801,13 @@ nav button {
     }
     & button {
         outline: none;
-        background-color: black;
-        color: white;
+        background-color: white;
+        color: black;
         grid-area: overlay;
+        place-self: start start;
     }
     & .landscape {
         grid-column: span 2;
-    }
-    & .copy {
-        place-self: start start;
-    }
-    & .expand {
-        place-self: start end;
-    }
-    & .delete-asset {
-        place-self: end end;
     }
 }
 
