@@ -497,22 +497,35 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 pck_core.log_error;
     END;
 
+    /*
+    ** GET MEDIA OPTIONS TO DISPLAY IN DIALOG
+    */
     PROCEDURE getMediaOptions(pId IN VARCHAR2) IS
         l_session_data pck_core.session_data_rt;
         l_content CLOB;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        FOR C IN (SELECT alt_text, favicon
+        FOR C IN (SELECT alt_text, favicon, cld_cloud_name, resource_type, public_id, format, width, height, bytes, created_date
                     FROM asset 
                    WHERE id=pId
                      AND user_id=l_session_data.user_id) 
         LOOP
-            l_content:=l_content || 
+            l_content:=
+            '<figure>' || 
+                '<img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, c.public_id, C.format, C.width) || '" height="' || C.height || '"  width="' || C.width || '">' ||
+                '<figcaption>' ||
+                    '<span><strong>File: </strong>' || SUBSTR(C.public_id,1,INSTR(C.public_id,'_',-1)-1) || '.' || C.format || '</span>' ||
+                    '<span><strong>Uploaded: </strong>' || TO_CHAR(C.created_date,'dd mon yyyy') || '</span>' ||
+                    '<span><strong>Original Size: </strong>' || apex_string_util.to_display_filesize(C.bytes) || '</span>' ||
+                    '<span><strong>Original Dimensions: </strong>' || C.width || 'x' || C.height || '</span>' ||
+                    '<span>' || pck_core.buildPushableButton('copy-url', '< >') || '<span></span></span>' ||
+                '</figcaption>' ||
+            '</figure>' ||
             '<form>' ||
                 buildInputWrapper(pId, 'asset.alt_text', C.alt_text, l_session_data.canuse_popover) ||
-                buildRadioWrapper(pId, 'asset.favicon', C.favicon, l_session_data.canuse_popover) || 
-                '<details>
+                CASE WHEN C.format IN ('ico','svg','png') THEN buildRadioWrapper(pId, 'asset.favicon', C.favicon, l_session_data.canuse_popover) END ||
+                '<details data-id="' || pId || '">
                     <summary>DELETE MEDIA</summary>' ||
                     pck_core.buildPushableButton('delete-media', '&#128686;') ||
                 '</details>
