@@ -378,10 +378,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[ frame-src www.youtube.com;]' ||
             q'[ connect-src ]' || pRestUrl || ';';
 
+        /*
+        ** Biuld favicon <link> html - https://evilmartians.com/chronicles/how-to-favicon-in-2021-six-files-that-fit-most-needs
+        */
+        FOR i IN 1..l_favicons.COUNT LOOP
+            l_favicon_html:=l_favicon_html || '<link ' || l_favicons(i).rel 
+                                           || ' href="/favicon.' || l_favicons(i).format || '" ' 
+                                           || l_favicons(i).attr || '>' || chr(10);
+        END LOOP;
+
         /* 
         ** Build individual website pages
         */
-
         FOR i IN 1..l_labels.COUNT
         LOOP
             IF (i=1) THEN
@@ -409,16 +417,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     l_jscode(l_jscode.LAST):=C.column_value;
                 END IF;
             END LOOP;
-
-            /*
-            ** Biuld favicon <link> html - https://evilmartians.com/chronicles/how-to-favicon-in-2021-six-files-that-fit-most-needs
-            */
-            FOR i IN 1..l_favicons.COUNT LOOP
-                l_favicon_html:=l_favicon_html || '<link ' || l_favicons(i).rel 
-                                               || ' href="/favicon.' || l_favicons(i).format || '" ' 
-                                               || l_favicons(i).attr || '>' || chr(10);
-            END LOOP;
-
             
             l_page:=
                 '<!DOCTYPE HTML>' || chr(10) ||
