@@ -558,7 +558,7 @@ const clickHandler = (e) => {
         delete_user();
     } else if (e.target.matches(".expand")) {
         showFullScreen(e);                                 
-    } else if (e.target.matches(".copy")) {
+    } else if (e.target.matches(".copy-url")) {
         copy_url(e);                                 
     } else if (e.target.matches(".deploy-website")) {
         deploy_website(e);
@@ -692,13 +692,13 @@ const save_colors = () => {
  **  COPY URL
  */
 const copy_url = async (e) => {
-    const li = e.target.closest("li"),
-          src = li.querySelector("img").src;
+    const src = e.target.closest("figure").querySelector("img").src;
     try {
         await navigator.clipboard.writeText(src);
-        /*popupOpen("Image URL copied to clipboard","... can be inserted into document");*/
-        e.target.textContent = "copied";
-        e.target.style.background = "green";
+        const result = e.target.nextSibling;
+        result.innerHTML = "COPIED &#10004;";
+        result.style.color = "green";
+        result.style.margin = "1em";
     } catch (err) {
         popupOpen('Failed to copy URL!', err)
     }
@@ -1596,8 +1596,10 @@ const restore_article = () => {
  ** DELETE MEDIA ASSET
  */
 delete_media = (e) => {
-    execProcess("dml","DELETE",{table_name: "asset", asset_id: e.target.closest("li").dataset.id}).then( () => {
-        asset.remove();
+    const id = e.target.closest("details").dataset.id;
+    execProcess("dml","DELETE",{table_name: "asset", asset_id: id}).then( () => {
+        galleryList.querySelector("[data-id='"+id+"']").remove();
+        logDialog.close();
     });
 }
 
