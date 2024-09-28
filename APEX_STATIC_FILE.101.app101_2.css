@@ -619,6 +619,25 @@ dialog.log {
         background: red;
         color: white;
     }
+    figure {
+        display: flex;
+        gap: 1em;
+        & img {
+            max-width: 8em;
+            height: auto;
+            align-self: start;
+        }
+        & figcaption {
+            display: flex;
+            flex-direction: column;
+            gap: 1em;
+            border-inline-start: solid 1px black;
+            padding-inline-start: 1em;
+        }
+        & button {
+            align-self: start;
+        }
+    }
 }
 
 /* *************** */
