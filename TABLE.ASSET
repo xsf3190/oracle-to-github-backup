@@ -20,7 +20,9 @@ CREATE TABLE "ASSET"
 	 CONSTRAINT "FK_ARTICLE" FOREIGN KEY ("ARTICLE_ID")
 	  REFERENCES "ARTICLE" ("ID") ON DELETE CASCADE ENABLE
    ) ;
-COMMENT ON TABLE "ASSET"  IS 'Assets contain the metadata of digital media (photos, videos, audio files) uploaded to the Cloudinary account of an authenticated user.';
+COMMENT ON COLUMN "ASSET"."ALT_TEXT" IS 'Description of media is mandatory in order to obtain 100% accessibility Lighthouse score';
+   COMMENT ON COLUMN "ASSET"."FAVICON" IS 'Use image as the website favicon<p>SVG is optimal and universal</p><p>ICO to support legacy browsers</p><p>PNG for Apple IPad</p>';
+   COMMENT ON TABLE "ASSET"  IS 'Assets contain the metadata of digital media (photos, videos, audio files) uploaded to the Cloudinary account of an authenticated user.';
 
   CREATE UNIQUE INDEX "PK_ASSET" ON "ASSET" ("ID") 
   ;
