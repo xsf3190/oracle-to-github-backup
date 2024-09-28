@@ -61,17 +61,15 @@ end;
 ```
 
 ## Restore
-Backing up is pointless unless the data backed up on ADB1 can be reliably restored in ADB2.
-
 The repository includes the "import_schema.sql" script which runs on the second ADB database in my OCI "Always Free" tenancy.
 
-The script runs daily on a Linux Compute instance recreating the schema from the Github export schema dump file.
+The script runs daily on a Linux Compute instance and recreates the schema from the Github export schema dump file.
 
-The main issue here is how to securely serve the encryption password that was used to create the daily dump file.
+The log file is uploaded to the repository as "IMPORT_SCHEMA.EXAMPLE.log" and reflects rows counts in "EXPORT_SCHEMA.EXAMPLE.log".
 
-The simplistic approach I adopted:
-1. Store the randomly generated encryption password in an application schema table for "admin" users on ADB1
-2. Create database link in ADB2 pointing to the ADMIN user in ADB1
+How to securely serve the encryption password that was used to create the daily dump file?
+
+My simplistic naive approach:
+1. Store the randomly generated encryption password in an application schema table for "admin" users in the exporting database
+2. Create database link in the importing database pointing to the ADMIN user in the exporting database
 3. The "import_schema.sql" script retrieves the password using the database link
-
-If anyone has a better idea, I would be delighted to hear it.
