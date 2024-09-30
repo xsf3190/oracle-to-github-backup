@@ -559,7 +559,9 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".expand")) {
         showFullScreen(e);                                 
     } else if (e.target.matches(".copy-url")) {
-        copy_url(e);                                 
+        copy_url(e); 
+    } else if (e.target.matches(".copy-img")) {
+        copy_img(e);                                
     } else if (e.target.matches(".deploy-website")) {
         deploy_website(e);
     } else if (e.target.matches(".cancel-deploy")) {
@@ -701,6 +703,22 @@ const copy_url = async (e) => {
         result.style.margin = "1em";
     } catch (err) {
         popupOpen('Failed to copy URL!', err)
+    }
+};
+
+/*
+ **  COPY IMG
+ */
+const copy_img = async (e) => {
+    const img = e.target.closest("figure").querySelector("img").outerHTML;
+    try {
+        await navigator.clipboard.writeText(img);
+        const result = e.target.nextSibling;
+        result.innerHTML = "COPIED &#10004;";
+        result.style.color = "green";
+        result.style.margin = "1em";
+    } catch (err) {
+        popupOpen('Failed to copy IMG!', err)
     }
 };
 
