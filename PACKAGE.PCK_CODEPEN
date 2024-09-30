@@ -20,6 +20,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_is_blog BOOLEAN:=FALSE;
         l_is_media BOOLEAN:=FALSE;
         l_thumbnails CLOB;
+        l_display_order website_article.display_order%type;
+        l_featured_html CLOB;
         l_html CLOB;
         l_footer CLOB;
         l_css CLOB;
@@ -44,8 +46,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         /* Get id of website owning the article because we need to build navigation labels as would appear in deployed site */
 
-        FOR C IN (SELECT website_id FROM website_article WHERE article_id=pArticleId AND user_id=l_session_data.user_id) LOOP
+        FOR C IN (SELECT website_id, display_order FROM website_article WHERE article_id=pArticleId AND user_id=l_session_data.user_id) LOOP
             l_website_id:=C.website_id;
+            l_display_order:=C.display_order;
         END LOOP;
 
         IF (l_website_id IS NULL) THEN
@@ -54,7 +57,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                         FROM website_article wa, article a 
                        WHERE a.id=pArticleId
                          AND wa.article_id=a.parent_id
-                         AND author_user_id=l_session_data.user_id ) LOOP
+                         AND author_user_id=l_session_data.user_id ) 
+            LOOP
                 l_website_id:=C.website_id;
                 l_is_blog:=C.collection_type='BLOG';
                 l_is_media:=C.collection_type='MEDIA';
@@ -133,6 +137,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
             l_html:=l_html || pck_core.buildContactForm(l_email,'xx');
             l_javascript:=l_javascript || getJSCode('deploy_contact.js');
+        END IF;
+
+        /* 
+        ** Create section for any featured articles if first page 
+        */
+        IF (l_display_order=1) THEN
+            FOR C IN (
+                SELECT wa.article_id, COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY null) n
+                  FROM website_article wa
+                 WHERE wa.website_id=l_website_id
+                   AND EXISTS (
+                            SELECT null FROM article a WHERE a.parent_id=wa.article_id AND a.featured='YES'
+                        )
+            )
+            LOOP
+                IF (C.n=1) THEN
+                    l_featured_html:='<section class="featured">';
+                END IF;
+                l_featured_html:=l_featured_html || pck_core.buildBlogList(l_website_id, C.article_id, pIncludeLinks => FALSE, pFeatured => TRUE);
+                IF (C.n=C.nb) THEN
+                    l_featured_html:=l_featured_html || '</section>';
+                END IF;
+            END LOOP;
+            IF (l_featured_html IS NOT NULL) THEN
+                IF (INSTR(l_html,'#FEATURED#')>0) THEN
+                    l_html:=REPLACE(l_html,'#FEATURED#',l_featured_html) || chr(10);
+                ELSE
+                    l_html:=l_html || l_featured_html;
+                END IF;
+            END IF;
         END IF;
 
         l_html:=l_html || l_footer;
@@ -257,6 +291,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         deleteFragment(l_body_html,'<header','</header>');
         deleteFragment(l_body_html,'<footer','</footer>');
         replaceFragment(l_body_html,'<nav','</nav>','#NAV#');
+        replaceFragment(l_body_html,'<section class="featured">','</section>','#FEATURED#');
 
         /* Means no CSS file included in zip - set website.css to NULL*/
         writeJson('Codepen zip uploaded successfully');
