@@ -17,7 +17,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     );
     TYPE fluid_type_t IS TABLE OF fluid_type_rt;
     --
-    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks IN BOOLEAN DEFAULT TRUE) RETURN CLOB;
+    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks IN BOOLEAN DEFAULT TRUE,  pFeatured IN BOOLEAN DEFAULT FALSE) RETURN CLOB;
     --
     FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pIncludeFontLink IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2;
     --
@@ -277,8 +277,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         SELECT id INTO l_website_id FROM website WHERE domain_name='adfreesites.edu';
  
-        INSERT INTO website(id, domain_name, user_id, netlify_site_id,  updated_date, favicon_code,font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale)
-        SELECT seq_website.nextval, l_domain_name, pUserId, l_netlify_site_id, current_timestamp, favicon_code,font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale
+        INSERT INTO website(id, domain_name, user_id, netlify_site_id,  updated_date, font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale)
+        SELECT seq_website.nextval, l_domain_name, pUserId, l_netlify_site_id, current_timestamp, font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale
           FROM website 
          WHERE id=l_website_id;
 
@@ -414,8 +414,9 @@ code.language-html {
     /*
     ** Construct index of Blog entries
     */
-    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks  IN BOOLEAN) RETURN CLOB IS
+    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks  IN BOOLEAN, pFeatured IN BOOLEAN) RETURN CLOB IS
         l_html CLOB;
+        l_featured article.featured%type;
         l_path website_article.navigation_label%type;
         l_href VARCHAR2(200);
         pos PLS_INTEGER;
@@ -441,14 +442,26 @@ code.language-html {
     BEGIN
         SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
 
-        l_html:='<!--CMS START-->';
-        l_html:=l_html || '<ol class="grid-auto-fit four-card-row centered" role="list">';
-        FOR C IN (SELECT art.body_html, art.title, art.excerpt, NVL(art.deployed_date,art.updated_date) deployed_date, art.word_count, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, ass.height, ass.alt_text
+        IF (pFeatured) THEN
+            l_featured:='YES';
+        END IF;
+
+        FOR C IN (SELECT COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY null) rn,
+                            art.body_html, art.title, NVL(art.deployed_date,art.updated_date) deployed_date, art.word_count, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, ass.height, ass.alt_text
                     FROM article art, asset ass
                    WHERE art.parent_id=pArticleId
+                     AND art.featured=NVL(l_featured,art.featured)
                      AND ass.id(+)=art.cover_asset_id
-                     ORDER BY art.display_order NULLS FIRST, art.updated_date DESC ) 
+                   ORDER BY art.display_order NULLS FIRST, art.updated_date DESC ) 
         LOOP
+            IF (C.rn=1) THEN
+                l_html:=l_html || '<ol class="grid-auto-fit centered ' ||
+                CASE WHEN C.nb=1 THEN 'one-card-row'
+                     WHEN C.nb=2 THEN 'two-card-row'
+                     WHEN C.nb=3 THEN 'three-card-row'
+                     ELSE 'four-card-row'
+                END ||  '" role="list" >';
+            END IF;
             l_html:=l_html || 
             '<li class="card">';
             IF (C.cld_cloud_name IS NOT NULL) THEN
@@ -472,9 +485,10 @@ code.language-html {
                 <p>' || getExcerpt(SUBSTR(C.body_html,pos))  || '</p>
                 <a href="' || l_href || '">Read More</a>
             </li>';
+            IF (C.rn=C.nb) THEN
+                l_html:=l_html || '</ol>';
+            END IF;
         END LOOP;
-        l_html:=l_html || '</ol>';
-        l_html:=l_html || '<!--CMS END-->';
         RETURN (l_html);
     END;
 
