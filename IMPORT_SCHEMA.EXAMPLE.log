@@ -1,39 +1,39 @@
-01-OCT-24 00:00:20.831: Master table "ADMIN"."SCHEMA_IMPORT" successfully loaded/unloaded
-01-OCT-24 00:00:24.516: Starting "ADMIN"."SCHEMA_IMPORT":  
-01-OCT-24 00:00:25.702: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA/LOGREP
-01-OCT-24 00:00:26.163: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
-01-OCT-24 00:00:26.559: Processing object type SCHEMA_EXPORT/TABLE/TABLE
-01-OCT-24 00:00:33.265: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
-01-OCT-24 00:00:33.809: . . imported "EXAMPLE"."DBTOOLS$EXECUTION_HISTORY"           0 KB       0 rows
-01-OCT-24 00:00:35.585: . . imported "EXAMPLE"."ARTICLE"                         595.7 KB     712 rows
-01-OCT-24 00:00:35.589: . . imported "EXAMPLE"."ASSET"                           480.5 KB   21567 rows
-01-OCT-24 00:00:36.120: . . imported "EXAMPLE"."PAGE_HIT"                         85.5 KB    2529 rows
-01-OCT-24 00:00:36.451: . . imported "EXAMPLE"."USER_LOGIN"                       85.8 KB    5712 rows
-01-OCT-24 00:00:36.775: . . imported "EXAMPLE"."WEBSITE_ARTICLE_CWV"              33.6 KB    1047 rows
-01-OCT-24 00:00:37.238: . . imported "EXAMPLE"."USAGE"                            73.1 KB    2336 rows
-01-OCT-24 00:00:37.517: . . imported "EXAMPLE"."GOOGLE_FONT"                     100.3 KB    1722 rows
-01-OCT-24 00:00:37.773: . . imported "EXAMPLE"."SESSION_DATA"                     46.2 KB    2014 rows
-01-OCT-24 00:00:38.053: . . imported "EXAMPLE"."WEBSITE_DEPLOY"                   16.9 KB     543 rows
-01-OCT-24 00:00:38.359: . . imported "EXAMPLE"."LOG"                               8.7 KB     147 rows
-01-OCT-24 00:00:38.683: . . imported "EXAMPLE"."METRICS"                          13.6 KB     310 rows
-01-OCT-24 00:00:38.943: . . imported "EXAMPLE"."IP_LOOKUP"                        12.8 KB     539 rows
-01-OCT-24 00:00:39.665: . . imported "EXAMPLE"."WEBSITE"                          20.9 KB      17 rows
-01-OCT-24 00:00:40.010: . . imported "EXAMPLE"."USERS"                             7.5 KB      22 rows
-01-OCT-24 00:00:40.262: . . imported "EXAMPLE"."WEBSITE_ARTICLE"                   7.9 KB      50 rows
-01-OCT-24 00:00:40.492: . . imported "EXAMPLE"."JWKS_KEY_CACHE"                    6.3 KB       4 rows
-01-OCT-24 00:00:40.709: . . imported "EXAMPLE"."BROWSER_LOOKUP"                    5.6 KB      34 rows
-01-OCT-24 00:00:41.008: . . imported "EXAMPLE"."NETLIFY_SITE"                      5.9 KB      18 rows
-01-OCT-24 00:00:41.370: . . imported "EXAMPLE"."NETLIFY_DNS_ZONE"                  5.1 KB       7 rows
-01-OCT-24 00:00:41.714: . . imported "EXAMPLE"."NETLIFY_DNS_ZONE_SERVER"           4.8 KB      28 rows
-01-OCT-24 00:00:41.828: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
-01-OCT-24 00:00:42.407: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
-01-OCT-24 00:00:43.095: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
-01-OCT-24 00:00:43.656: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
-01-OCT-24 00:00:44.129: Processing object type SCHEMA_EXPORT/VIEW/VIEW
-01-OCT-24 00:00:44.706: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
-01-OCT-24 00:00:47.666: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
-01-OCT-24 00:00:48.654: Processing object type SCHEMA_EXPORT/TABLE/INDEX/FUNCTIONAL_INDEX/INDEX
-01-OCT-24 00:00:49.248: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
-01-OCT-24 00:00:50.244: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
-01-OCT-24 00:00:50.907: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA/LBAC_EXP
-01-OCT-24 00:00:51.183: Job "ADMIN"."SCHEMA_IMPORT" successfully completed at Tue Oct 1 00:00:51 2024 elapsed 0 00:00:35
+02-OCT-24 00:00:22.082: Master table "ADMIN"."SCHEMA_IMPORT" successfully loaded/unloaded
+02-OCT-24 00:00:23.931: Starting "ADMIN"."SCHEMA_IMPORT":  
+02-OCT-24 00:00:24.481: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA/LOGREP
+02-OCT-24 00:00:24.797: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
+02-OCT-24 00:00:25.191: Processing object type SCHEMA_EXPORT/TABLE/TABLE
+02-OCT-24 00:00:31.989: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
+02-OCT-24 00:00:32.724: . . imported "EXAMPLE"."DBTOOLS$EXECUTION_HISTORY"           0 KB       0 rows
+02-OCT-24 00:00:34.734: . . imported "EXAMPLE"."ASSET"                           480.5 KB   21567 rows
+02-OCT-24 00:00:34.738: . . imported "EXAMPLE"."ARTICLE"                           596 KB     713 rows
+02-OCT-24 00:00:35.591: . . imported "EXAMPLE"."PAGE_HIT"                         85.6 KB    2532 rows
+02-OCT-24 00:00:36.321: . . imported "EXAMPLE"."USER_LOGIN"                       85.9 KB    5714 rows
+02-OCT-24 00:00:37.121: . . imported "EXAMPLE"."WEBSITE_ARTICLE_CWV"              34.2 KB    1065 rows
+02-OCT-24 00:00:38.078: . . imported "EXAMPLE"."USAGE"                            73.1 KB    2336 rows
+02-OCT-24 00:00:38.881: . . imported "EXAMPLE"."GOOGLE_FONT"                     100.3 KB    1722 rows
+02-OCT-24 00:00:39.592: . . imported "EXAMPLE"."SESSION_DATA"                     46.3 KB    2016 rows
+02-OCT-24 00:00:40.265: . . imported "EXAMPLE"."WEBSITE_DEPLOY"                   16.9 KB     543 rows
+02-OCT-24 00:00:40.932: . . imported "EXAMPLE"."LOG"                               8.6 KB     141 rows
+02-OCT-24 00:00:41.571: . . imported "EXAMPLE"."METRICS"                          13.6 KB     310 rows
+02-OCT-24 00:00:42.129: . . imported "EXAMPLE"."IP_LOOKUP"                        12.8 KB     539 rows
+02-OCT-24 00:00:43.022: . . imported "EXAMPLE"."WEBSITE"                          20.9 KB      17 rows
+02-OCT-24 00:00:43.596: . . imported "EXAMPLE"."USERS"                             7.5 KB      22 rows
+02-OCT-24 00:00:44.094: . . imported "EXAMPLE"."WEBSITE_ARTICLE"                   7.9 KB      51 rows
+02-OCT-24 00:00:44.467: . . imported "EXAMPLE"."JWKS_KEY_CACHE"                    6.3 KB       4 rows
+02-OCT-24 00:00:44.834: . . imported "EXAMPLE"."BROWSER_LOOKUP"                    5.6 KB      34 rows
+02-OCT-24 00:00:45.190: . . imported "EXAMPLE"."NETLIFY_SITE"                      5.9 KB      18 rows
+02-OCT-24 00:00:45.548: . . imported "EXAMPLE"."NETLIFY_DNS_ZONE"                  5.1 KB       7 rows
+02-OCT-24 00:00:45.909: . . imported "EXAMPLE"."NETLIFY_DNS_ZONE_SERVER"           4.8 KB      28 rows
+02-OCT-24 00:00:46.000: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
+02-OCT-24 00:00:46.429: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
+02-OCT-24 00:00:47.004: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
+02-OCT-24 00:00:47.596: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
+02-OCT-24 00:00:48.201: Processing object type SCHEMA_EXPORT/VIEW/VIEW
+02-OCT-24 00:00:48.859: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
+02-OCT-24 00:00:51.884: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
+02-OCT-24 00:00:52.736: Processing object type SCHEMA_EXPORT/TABLE/INDEX/FUNCTIONAL_INDEX/INDEX
+02-OCT-24 00:00:53.318: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
+02-OCT-24 00:00:54.264: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
+02-OCT-24 00:00:54.898: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA/LBAC_EXP
+02-OCT-24 00:00:55.179: Job "ADMIN"."SCHEMA_IMPORT" successfully completed at Wed Oct 2 00:00:55 2024 elapsed 0 00:00:38
