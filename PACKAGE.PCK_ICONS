@@ -742,3 +742,37 @@ margin-left: -15px;
 }';
 END;
 /
+CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_ICONS" AS
+    FUNCTION getIconList RETURN CLOB IS
+        l_html CLOB;
+    BEGIN
+        FOR C IN (SELECT '#' || id as href, ROW_NUMBER() OVER (ORDER BY null) rn, COUNT(*) OVER () nb  FROM icon ORDER BY id) 
+        LOOP
+            IF (C.rn=1) THEN
+                l_html:='<ul>';
+            END IF;
+            l_html:=l_html || '<svg class="icon" aria-hidden="true" focusable="false"><use href="' || C.href || '""></use></svg>';
+            IF (C.rn=C.nb) THEN
+                l_html:=l_html || '</ul>';
+            END IF;
+        END LOOP;
+        RETURN (l_html);
+    END;
+
+    FUNCTION buildSvgSymbols(pArticleId IN article.id%type) RETURN CLOB IS
+        l_html CLOB;
+    BEGIN
+        FOR C IN (SELECT  id, viewbox, svg, ROW_NUMBER() OVER (ORDER BY null) rn, COUNT(*) OVER () nb  FROM icon ORDER BY id) 
+        LOOP
+            IF (C.rn=1) THEN
+                l_html:='<svg>';
+            END IF;
+            l_html:=l_html || '<symbol id="' || C.id || '" viewBox="' || C.viewbox || '">' || C.svg || '<symbol>';
+            IF (C.rn=C.nb) THEN
+                l_html:=l_html || '</svg>';
+            END IF;
+        END LOOP;
+        RETURN (l_html);
+    END;
+END;
+/
