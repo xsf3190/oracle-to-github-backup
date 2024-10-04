@@ -30,6 +30,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_fluid_types pck_core.fluid_type_t;
         l_fluid_css LONG;
         l_session_data pck_core.session_data_rt;
+        pos PLS_INTEGER;
 
         FUNCTION getJSCode(pFilename IN VARCHAR2) RETURN CLOB IS
         BEGIN
@@ -131,11 +132,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         END IF;
 
         /* 
-        ** Create section for any featured articles if first page 
+        ** Create section for any featured articles to appear on home page 
         */
         IF (l_display_order=1) THEN
             FOR C IN (
-                SELECT wa.article_id, COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY null) n
+                SELECT wa.article_id
                   FROM website_article wa
                  WHERE wa.website_id=l_website_id
                    AND EXISTS (
@@ -143,13 +144,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                         )
             )
             LOOP
-                IF (C.n=1) THEN
-                    l_featured_html:='<section class="featured">';
-                END IF;
-                l_featured_html:=l_featured_html || pck_core.buildBlogList(l_website_id, C.article_id, pIncludeLinks => FALSE, pFeatured => TRUE);
-                IF (C.n=C.nb) THEN
-                    l_featured_html:=l_featured_html || '</section>';
-                END IF;
+                l_featured_html:=
+                pck_core.buildBlogList(l_website_id, C.article_id, pIncludeLinks => FALSE, pClasses => 'featured full-width section');
+                pos:=dbms_lob.instr(l_html,'</main');
+                pck_core.log('pos:'||pos);
+                dbms_lob.fragment_insert(l_html,LENGTH(l_featured_html),pos,l_featured_html);
             END LOOP;
             IF (l_featured_html IS NOT NULL) THEN
                 IF (INSTR(l_html,'#FEATURED#')>0) THEN
