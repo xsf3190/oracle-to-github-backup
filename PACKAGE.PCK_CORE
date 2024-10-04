@@ -17,7 +17,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     );
     TYPE fluid_type_t IS TABLE OF fluid_type_rt;
     --
-    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks IN BOOLEAN DEFAULT TRUE,  pFeatured IN BOOLEAN DEFAULT FALSE) RETURN CLOB;
+    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks IN BOOLEAN DEFAULT TRUE,  pClasses IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
     FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pIncludeFontLink IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2;
     --
@@ -414,7 +414,7 @@ code.language-html {
     /*
     ** Construct index of Blog entries
     */
-    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks  IN BOOLEAN, pFeatured IN BOOLEAN) RETURN CLOB IS
+    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks  IN BOOLEAN, pClasses IN VARCHAR2) RETURN CLOB IS
         l_html CLOB;
         l_featured article.featured%type;
         l_path website_article.navigation_label%type;
@@ -440,11 +440,12 @@ code.language-html {
         END;
 
     BEGIN
-        SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
-
-        IF (pFeatured) THEN
+        
+        IF (INSTR(pClasses,'featured')>0) THEN
             l_featured:='YES';
         END IF;
+
+        SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
 
         FOR C IN (SELECT COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY null) rn,
                             art.body_html, art.title, NVL(art.deployed_date,art.updated_date) deployed_date, art.word_count, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, ass.height, ass.alt_text
@@ -455,12 +456,7 @@ code.language-html {
                    ORDER BY art.display_order NULLS FIRST, art.updated_date DESC ) 
         LOOP
             IF (C.rn=1) THEN
-                l_html:=l_html || '<ol class="grid-auto-fit centered ' ||
-                CASE WHEN C.nb=1 THEN 'one-card-row'
-                     WHEN C.nb=2 THEN 'two-card-row'
-                     WHEN C.nb=3 THEN 'three-card-row'
-                     ELSE 'four-card-row'
-                END ||  '" role="list" >';
+                l_html:=l_html || '<ol class="' || pClasses || ' grid-auto-fit centered" role="list" >';
             END IF;
             l_html:=l_html || 
             '<li class="card">';
@@ -487,6 +483,9 @@ code.language-html {
             </li>';
             IF (C.rn=C.nb) THEN
                 l_html:=l_html || '</ol>';
+                IF (l_featured='YES') THEN
+                    l_html:=l_html || '<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
+                END IF;
             END IF;
         END LOOP;
         RETURN (l_html);
