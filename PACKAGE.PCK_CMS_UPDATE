@@ -376,6 +376,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             RETURN (l_options);
         END;
 
+        FUNCTION buildNavItems(pWebsiteId website.id%type) RETURN VARCHAR2 IS
+            l_nav LONG;
+        BEGIN
+            FOR C IN (SELECT navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
+                l_nav:=l_nav || '<a>' || C.navigation_label || '</a>';
+            END LOOP;
+            RETURN (l_nav);
+        END;
+
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -458,9 +467,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     '</fieldset>
                 </details>
                 <div class="demo-container">
-                    <div><span></span></div>
-                    <h1></h1>
-                    <p></p>
+                    <header><span></span></header>
+                    <nav><div>' || buildNavItems(l_website_id) || '</div></nav>
+                    <svg viewBox="0 0 1440 96">
+                          <path d="m0 96 80-5.3C160 85 320 75 480 64s320-21 480-21.3c160 .3 320 10.3 400 16l80 5.3V0H0v96Z"></path>
+                    </svg>
+                    <h1></h1><h2></h2><h3></h3><p></p>
                 </div>' ||
                 buildRadioWrapper(C.id, 'website.price_currency', C.price_currency, l_session_data.canuse_popover) ||
                 CASE WHEN l_delete_html IS NOT NULL THEN
@@ -474,6 +486,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             apex_json.write('color_text', C.color_text);
             apex_json.write('color_background', C.color_background);
             apex_json.write('color_primary', C.color_primary);
+            apex_json.write('max_width', C.max_width_px);
 
             l_fluid_types:=pck_core.getFluidTypes(C.min_font_size, C.min_width_px, C.min_scale, C.max_font_size, C.max_width_px, C.max_scale);
             apex_json.open_array('fluid_types');
