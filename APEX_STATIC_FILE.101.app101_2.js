@@ -1181,8 +1181,10 @@ const websiteFont = (font_family, font_url) => {
     document.fonts.ready.then(()=>{
         console.log("font " + font_family + " loaded");
         gWebsiteDemo.style.setProperty("--font-family",font_family);
-        gWebsiteDemo.querySelector("h1").textContent = "My Website"; /* websiteNav.querySelector("a").textContent.toUpperCase();*/
-        gWebsiteDemo.querySelector("p").textContent = `"${font_family}" text with background color`;
+        gWebsiteDemo.querySelector("h1").textContent = `${font_family}`;
+        gWebsiteDemo.querySelector("h2").textContent = "heading2";
+        gWebsiteDemo.querySelector("h3").textContent = "heading3";
+        gWebsiteDemo.querySelector("p").textContent = "paragraph";
     });
 }
 
@@ -1190,7 +1192,6 @@ const websiteFont = (font_family, font_url) => {
  ** SET FONT SIZE FOR WEBSIITE DEMO
  */
 const websiteFontSize = (id, value) => {
-    console.log("this one changed-->",id, value);
     const min_font_size = document.getElementById("min_font_size").value,
           min_width_px = document.getElementById("min_width_px").value,
           min_scale = document.getElementById("min_scale").value,
@@ -1261,6 +1262,7 @@ const website_options = () => {
         websiteColors("color_text",data.color_text);
         websiteColors("color_background",data.color_background);
         websiteColors("color_primary",data.color_primary);
+
         resize();
         new ResizeObserver(resize).observe(gWebsiteDemo);
     });
