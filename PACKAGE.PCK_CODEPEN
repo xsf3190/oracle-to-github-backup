@@ -147,9 +147,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             )
             LOOP
                 l_featured_html:=pck_core.buildBlogList(l_website_id, C.article_id, pIncludeLinks => FALSE, pClasses => 'featured_' || C.article_id || ' full-width section');
-                pos:=dbms_lob.instr(l_html,'</main>');
+                --pos:=dbms_lob.instr(l_html,'</main>');
                 
-                dbms_lob.fragment_insert(l_html,LENGTH(l_featured_html),pos,l_featured_html);
+                --dbms_lob.fragment_insert(l_html,LENGTH(l_featured_html),pos,l_featured_html);
             END LOOP;
         END IF;
 
