@@ -666,7 +666,11 @@ code.language-html {
             <button type="button" class="' || pClassName || '" title="Page options">
                 &#128397;
             </button>
-            <a href="" class="nav-label">' || pLabel || '</a>';
+            <a href="" class="nav-label">' || pLabel || '</a>
+            <div class="dropdown">
+                <button type="button" class="show-dropdown show-subpages">&#9776;</button>
+                <ol class="dropdown-items"></ol>
+            </div>';
 
         IF (pClassName='page-options' AND pAttrName IS NOT NULL) THEN
             l_html:=l_html || 
@@ -698,6 +702,7 @@ code.language-html {
             url_custom VARCHAR2(45));
         TYPE t_websites IS TABLE OF tt_websites INDEX BY pls_integer;
         l_websites t_websites;
+        l_website_list LONG;
         l_html LONG;
     BEGIN
         SELECT id, domain_name, netlify_site_id, netlify_site_id_custom, 
@@ -710,29 +715,32 @@ code.language-html {
 
         pSelectedWebsiteId:=l_websites(1).id;
 
-        l_html:=
-        '<div class="website-nav" data-id="' || l_websites(1).id || '" data-env="TEST">
-            <button type="button" class="website-options" title="Website options">&#128397;</button>
-            <a ' || l_websites(1).url || '" target="a_blank" class="selected">' || l_websites(1).domain_name || '</a>
-            <button type="button" class="deploy-website">DEPLOY<span class="env">TEST</span></button>
-            <button type="button" class="visits">VISITS<span class="env">TEST</span></button>
-            <button type="button" class="performance">METRICS<span class="env">TEST</span></button>
-            <section class="dropdown">
-                <button type="button" class="show-dropdown"' || CASE WHEN l_websites.COUNT<2 THEN ' style="display:none"' END || '>&blacktriangledown;</button>
-                <ul class="dropdown-items">';
         FOR i IN 1..l_websites.COUNT
         LOOP
-            l_html:=l_html || makeWebsiteListItem(l_websites(i).id, l_websites(i).domain_name, 'TEST');
+            l_website_list:=l_website_list || makeWebsiteListItem(l_websites(i).id, l_websites(i).domain_name, 'TEST');
             IF (l_websites(i).netlify_site_id_custom IS NOT NULL) THEN
-                l_html:=l_html || makeWebsiteListItem(l_websites(i).id, l_websites(i).domain_name, 'LIVE');
+                l_website_list:=l_website_list || makeWebsiteListItem(l_websites(i).id, l_websites(i).domain_name, 'LIVE');
             END IF;
             IF (i<l_websites.COUNT) THEN
-                l_html:=l_html || '<hr>';
+                l_website_list:=l_website_list || '<hr>';
             END IF;
         END LOOP;
-        l_html:=l_html || 
-                '</ul>
-            </section>';
+
+        l_html:=
+        '<div class="website-nav" data-id="' || l_websites(1).id || '" data-env="TEST">
+            <div>
+                <button type="button" class="website-options" title="Website options">&#128397;</button>
+                <a ' || l_websites(1).url || '" target="a_blank" class="selected">' || l_websites(1).domain_name || '</a>
+                <section class="dropdown">
+                    <button type="button" class="show-dropdown"' || CASE WHEN l_websites.COUNT<2 THEN ' style="display:none"' END || '>&blacktriangledown;</button>
+                    <ul class="dropdown-items">' || l_website_list || '</ul>
+                </section>
+            </div>
+            <button type="button" class="action deploy-website">DEPLOY<span class="env">TEST</span></button>
+            <div>
+                <button type="button" class="action visits">VISITS<span class="env">TEST</span></button>
+                <button type="button" class="action performance">METRICS<span class="env">TEST</span></button>
+            </div>';
 
         RETURN (l_html);
     END;
