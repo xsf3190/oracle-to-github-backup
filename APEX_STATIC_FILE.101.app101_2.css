@@ -223,12 +223,17 @@ a.selected {
 }
 
 .website-nav {
-    display: inline-flex;
+    display: flex;
     flex-wrap: wrap;
     gap: var(--space-s);
     align-items: center;
+    justify-content: space-between;
     font-weight: 900;
-    & button:not(:first-child) {
+    & .dropdown .dropdown-items {
+        right: auto;
+        left: 1em;
+    }
+    & button.action {
         font-size: 80%;
         border-radius: var(--space-3xs);
         padding: var(--space-3xs) var(--space-2xs);
@@ -302,20 +307,29 @@ textarea {
 
     & > nav > div {
         background-color: var(--background-primary);
-        color: white;
+        color: var(--color);
         display: flex;
         flex-wrap: wrap;
         justify-content: space-around;
         gap: 1em;
-        padding: 2em 1em 0;
+        padding-block: 2em 1.5em;
         & > a {
             font-size: var(--step-0);
-            color: white;
+            letter-spacing: 0.10em;
+            color: var(--background);
+            font-weight: 700;
+            padding: 0.20em 0.4em;
+            border-radius: 0.2em;
+        }
+        & > a:hover {
+            background-color: var(--background);
+            color: var(--background-primary);
         }
     }
 
     & > svg {
         fill: var(--background-primary);
+        transform: translateY(-2px);
     }
 
     :is(h1) {
