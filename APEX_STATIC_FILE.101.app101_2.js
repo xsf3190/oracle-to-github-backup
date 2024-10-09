@@ -1064,7 +1064,7 @@ const saveData = async ( data ) => {
 let editor;
 
 ClassicEditor.create(document.querySelector("#editor"), {
-        toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
+        toolbar: ['heading', '|', 'undo', 'redo', 'pageBreak', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
         alignment: {
             options: [ 'left', 'right', 'center', 'justify' ]
         },
