@@ -668,7 +668,6 @@ code.language-html {
             </button>
             <a href="" class="nav-label">' || pLabel || '</a>
             <div class="dropdown">
-                <button type="button" class="show-dropdown show-subpages">&#9776;</button>
                 <ol class="dropdown-items"></ol>
             </div>';
 
@@ -869,7 +868,135 @@ code.language-html {
             </form>' ||
             buildDialogs() ||
         '</div><!-- END wrapper-->
-         <input type="hidden" name="nb_websites" value="' || l_nb_websites ||'" id="nb-websites">';
+         <input type="hidden" name="nb_websites" value="' || l_nb_websites ||'" id="nb-websites">' || 
+         '<script type="importmap">
+            {
+                "imports": {
+                    "ckeditor5": "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js",
+                    "ckeditor5/": "https://cdn.ckeditor.com/ckeditor5/43.2.0/"
+                }
+            }
+        </script>' ||
+        q'@<script type="module">
+            import {
+                ClassicEditor,
+                Essentials,
+                Alignment,
+                Autosave,
+                BlockQuote,
+                Bold,
+                CodeBlock,
+                Heading,
+                HorizontalLine,
+                Image,
+                ImageInsertViaUrl,
+                Italic,
+                Link,
+                List,
+                PageBreak,
+                Paragraph,
+                SelectAll,
+                SourceEditing,
+                WordCount
+            } from 'ckeditor5';
+
+            ClassicEditor
+                .create( document.querySelector( '#editor' ), {
+                    plugins: [ Essentials, Autosave, BlockQuote, Alignment, Bold, CodeBlock, Image, ImageInsertViaUrl, Italic, SelectAll, PageBreak, Heading, Paragraph, HorizontalLine, Link, List, SourceEditing, WordCount ],
+                    toolbar: ['heading', '|', 'undo', 'redo', 'pageBreak', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
+                    alignment: {
+                        options: [ 'left', 'right', 'center', 'justify' ]
+                    },
+                    autosave: {
+                        waitingTime: 2000,
+                        save( editor ) {
+                            return saveData( editor.getData() );
+                        }
+                    },
+                    codeBlock: {
+                        languages: [
+                            { language: 'css', label: 'CSS' },
+                            { language: 'html', label: 'HTML' },
+                            { language: 'javascript', label: 'Javascript' },
+                            { language: 'sql', label: 'SQL' },
+                            { language: 'plsql', label: 'PL/SQL' },
+                            { language: 'shell', label: 'shell' }
+                        ]
+                    },
+                    htmlSupport: {
+                        allow: [
+                            {
+                                name: /.*/,
+                                attributes: true,
+                                classes: true,
+                                styles: true
+                            }
+                        ]
+                    },
+                    image: {
+                        insert: {
+                            type: 'auto',
+                            integrations: ['url']
+                        },
+                        toolbar: [
+                            'imageStyle:inline',
+                            'imageStyle:block',
+                            '|',
+                            'imageStyle:wrapText',
+                            '|',
+                            'toggleImageCaption',
+                            'imageTextAlternative',
+                        ]
+                    },
+                    list: {
+                        properties: {
+                            styles: true,
+                            startIndex: true,
+                            reversed: true
+                        }
+                    },
+                    placeholder: 'Enter content',
+                    title: {
+                        placeholder: 'New title'
+                    },
+                    ui: {
+                        viewportOffset: {
+                            top: 0
+                        }
+                    },
+                    wordCount: {
+                            displayCharacters: true
+                    },
+                } )
+                .then( newEditor => {
+                    editor = newEditor;
+                    const wordCountPlugin = editor.plugins.get( 'WordCount' );
+                    const wordCountWrapper = wrapper.querySelector( '.ck-editor__main' );
+                    wordCountWrapper.appendChild(wordCountPlugin.wordCountContainer );
+
+                    editor.editing.view.document.on( 'drop', ( evt, data ) => {
+            			// Stop execute next callbacks.
+            			evt.stop();
+            	
+            			// Stop the default event action.
+            			data.preventDefault();
+            		}, { priority: 'high' } );
+            	
+            		editor.editing.view.document.on( 'dragover', ( evt, data ) => {
+            			evt.stop();
+            			data.preventDefault();
+            		}, { priority: 'high' } );
+
+                    const toolbar = wrapper.querySelector(".ck-toolbar__items");
+                    toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
+                    editor_status = "init";
+                    editor_status_text = wrapper.querySelector("#editor-status");
+                    editor.enableReadOnlyMode( 'lock-id' );
+                })
+                .catch( error => {
+                    console.error(error);
+                });
+        </script>@';
 
         RETURN l_clob;
     END;
