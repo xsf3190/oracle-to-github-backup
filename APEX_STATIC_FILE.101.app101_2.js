@@ -479,12 +479,14 @@ const clickHandler = (e) => {
 
     if (e.target.matches(".nav-label")) {
         e.preventDefault();
-
+        
+        /*
         if (!wrapper.querySelector(".ck-source-editing-button").matches(".ck-off")) {
             popupOpen("Click Source button",".. cannot switch pages when in Source editing mode");
             return;
         }
-        
+        */
+        console.log("got  here");
         const id = e.target.parentElement.dataset.id,
               nav = e.target.closest("nav");
         
@@ -1050,7 +1052,13 @@ const saveData = async ( data ) => {
     editor_status_text.textContent = "...";
 
     const word_count = document.querySelector(".ck-word-count__words").textContent;
-    const title = document.querySelector(".ck > h1").textContent;
+    const content = document.querySelectorAll(".ck-editor__editable_inline > *:not(:empty)");
+    let title ="";
+    if (content.length) {
+            title = content[0].textContent;
+    }
+
+    console.log("title",title)
     await execProcess("article/"+gArticleId, "PUT",  {body_html: data, title: title, word_count: word_count}).then( (data) => {
         pendingActions.remove( action );
         editor_status_text.textContent = data.message;
@@ -1063,113 +1071,6 @@ const saveData = async ( data ) => {
  */
 let editor;
 
-ClassicEditor.create(document.querySelector("#editor"), {
-        toolbar: ['heading', '|', 'undo', 'redo', 'pageBreak', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
-        alignment: {
-            options: [ 'left', 'right', 'center', 'justify' ]
-        },
-        autosave: {
-            waitingTime: 2000,
-            save( editor ) {
-                return saveData( editor.getData() );
-            }
-        },
-        codeBlock: {
-            languages: [
-                { language: 'css', label: 'CSS' },
-                { language: 'html', label: 'HTML' },
-                { language: 'javascript', label: 'Javascript' },
-                { language: 'sql', label: 'SQL' },
-                { language: 'plsql', label: 'PL/SQL' },
-                { language: 'shell', label: 'shell' }
-            ]
-        },
-        htmlSupport: {
-            allow: [
-                {
-                    name: /.*/,
-                    attributes: true,
-                    classes: true,
-                    styles: true
-                }
-            ]
-        },
-        image: {
-            insert: {
-                type: 'auto',
-                integrations: ['url']
-            },
-            toolbar: [
-                'imageStyle:inline',
-                'imageStyle:block',
-                '|',
-                'imageStyle:wrapText',
-                '|',
-                'toggleImageCaption',
-                'imageTextAlternative',
-            ]
-        },
-        list: {
-            properties: {
-                styles: true,
-                startIndex: true,
-                reversed: true
-            }
-        },
-        placeholder: 'Enter content',
-        title: {
-            placeholder: 'New title'
-        },
-        ui: {
-            viewportOffset: {
-                top: 0
-            }
-        },
-        wordCount: {
-                displayCharacters: true
-        },
-    })
-    .then( (newEditor) => {
-        editor = newEditor;
-        
-        const wordCountPlugin = editor.plugins.get( 'WordCount' );
-        const wordCountWrapper = wrapper.querySelector( '.ck-editor__main' );
-        wordCountWrapper.appendChild(wordCountPlugin.wordCountContainer );
-
-        editor.editing.view.document.on( 'drop', ( evt, data ) => {
-			// Stop execute next callbacks.
-			evt.stop();
-	
-			// Stop the default event action.
-			data.preventDefault();
-		}, { priority: 'high' } );
-	
-		editor.editing.view.document.on( 'dragover', ( evt, data ) => {
-			evt.stop();
-			data.preventDefault();
-		}, { priority: 'high' } );
-
-        const toolbar = wrapper.querySelector(".ck-toolbar__items");
-        toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
-        editor_status = "init";
-        editor_status_text = wrapper.querySelector("#editor-status");
-        editor.enableReadOnlyMode( 'lock-id' );
-
-        const editor_content = wrapper.querySelector(".ck-editor__editable_inline").getBoundingClientRect(),
-              word_count = wrapper.querySelector(".ck-word-count").getBoundingClientRect();
-
-        //const editor_height = window.innerHeight - editor_content.y - word_count.height - 18; /* 18 is margin and border of word_count div */
-        
-        /*wrapper.querySelector(".ck-editor__editable_inline").style.height = editor_height+"px";*/
-        //editor.editing.view.change( writer => {
-        //    writer.setStyle( 'height',editor_height+"px" , editor.editing.view.document.getRoot() );
-        //} );
-
-        //wrapper.querySelector("[aria-label='gallery']").style.height = editor_height +"px";
-    })
-    .catch(error => {
-        console.error(error);
-    });
 
 /*
  ** SET FONT FOR WEBSIITE DEMO
@@ -1500,8 +1401,8 @@ const selected_nav = (nav, id) => {
                 newMedia.classList.remove("visible");
                 newProduct.classList.remove("visible");
 
-            } else {
-                /* If Page is a collection then show relevant "NEW" collection button */
+            } /* else {
+                
                 if (link.nextElementSibling) {
                     const collection = link.nextElementSibling.querySelector(".show-subpages").dataset.collection;
                     switch (collection) {
@@ -1522,7 +1423,7 @@ const selected_nav = (nav, id) => {
                             break;
                     }
                 }
-            }
+            }*/
         }
     });
 }
