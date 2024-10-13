@@ -889,6 +889,11 @@ code.language-html {
                 Heading,
                 HorizontalLine,
                 Image,
+                ImageCaption,
+                ImageResize,
+                ImageStyle,
+                ImageToolbar,
+                ImageInsert,
                 ImageInsertViaUrl,
                 Italic,
                 Link,
@@ -902,7 +907,7 @@ code.language-html {
 
             ClassicEditor
                 .create( document.querySelector( '#editor' ), {
-                    plugins: [ Essentials, Autosave, BlockQuote, Alignment, Bold, CodeBlock, Image, ImageInsertViaUrl, Italic, SelectAll, PageBreak, Heading, Paragraph, HorizontalLine, Link, List, SourceEditing, WordCount ],
+                    plugins: [ Essentials, Autosave, BlockQuote, Alignment, Bold, CodeBlock, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, SelectAll, PageBreak, Heading, Paragraph, HorizontalLine, Link, List, SourceEditing, WordCount ],
                     toolbar: ['heading', '|', 'undo', 'redo', 'pageBreak', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
                     alignment: {
                         options: [ 'left', 'right', 'center', 'justify' ]
