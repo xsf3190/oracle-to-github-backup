@@ -43,6 +43,103 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             END LOOP;
         END;
 
+        PROCEDURE wip IS
+            pArticleId NUMBER:=31626;
+            l_body_html_deploy article.body_html_deploy%type;
+
+            l_sections apex_t_varchar2;
+            l_curve VARCHAR2(100):='<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
+            l_img VARCHAR2(2000);
+            l_img_align VARCHAR2(5);
+
+            FUNCTION extractFragment(pClob IN OUT NOCOPY CLOB, pStartChar IN VARCHAR2) RETURN CLOB IS
+                pos1 PLS_INTEGER;
+                pos2 PLS_INTEGER;
+                l_endchar VARCHAR2(20);
+            BEGIN
+                IF (pStartChar='<img') THEN
+                    l_endchar:='>';
+                ELSE
+                    l_endchar:=REPLACE(pStartChar,'<','</') || '>';
+                END IF;
+                pos1:=dbms_lob.instr(pClob,pStartChar,1,1);
+                IF (pos1>0) THEN
+                    pos2:=dbms_lob.instr(pClob,l_endchar,pos1,1);
+                    IF (pos2>0) THEN
+                        pos2:=pos2+LENGTH(l_endchar);
+                        RETURN (dbms_lob.substr(pClob, pos2-pos1, pos1));
+                    END IF;
+                END IF;
+                RETURN NULL;
+            END;
+
+            PROCEDURE deleteFragment(pClob IN OUT NOCOPY CLOB, pStartChar IN VARCHAR2) IS
+                pos1 PLS_INTEGER;
+                pos2 PLS_INTEGER;
+                l_endchar VARCHAR2(20);
+            BEGIN
+                IF (pStartChar='<img') THEN
+                    l_endchar:='>';
+                ELSE
+                    l_endchar:=REPLACE(pStartChar,'<','</') || '>';
+                END IF;
+                pos1:=dbms_lob.instr(pClob,pStartChar,1,1);
+                IF (pos1>0) THEN
+                    pos2:=dbms_lob.instr(pClob,l_endchar,pos1,1);
+                    IF (pos2>0) THEN
+                        pos2:=pos2+LENGTH(l_endchar);
+                        dbms_lob.fragment_delete(pClob, pos2-pos1, pos1);
+                    END IF;
+                END IF;
+            END;
+
+        begin
+            SELECT body_html INTO l_body_html_deploy FROM article WHERE id=pArticleId;    
+
+            l_sections:=apex_string.split(l_body_html_deploy,'<div class="page-break" style="page-break-after:always;"><span style="display:none;">&nbsp;</span></div>');
+
+            DELETE page_section WHERE article_id=pArticleId;
+            FOR i IN 1..l_sections.COUNT LOOP
+                INSERT INTO page_section(article_id, seq, content) VALUES (pArticleId, i, l_sections(i));
+            END LOOP;
+
+            FOR C IN (SELECT content FROM page_section WHERE article_id=pArticleId ORDER BY seq FOR UPDATE) LOOP
+                l_img:=extractFragment(C.content,'<figure');
+                IF (l_img IS NOT NULL) THEN
+                    deleteFragment(C.content,'<figure');
+                ELSE
+                    l_img:=extractFragment(C.content,'<img');
+                    IF (l_img IS NOT NULL) THEN
+                        deleteFragment(C.content,'<img');
+                    END IF;
+                END IF;
+
+                IF (l_img IS NULL) THEN
+                    dbms_output.put_line(l_curve || '<article>' || C.content || '</article>');
+                    RETURN;
+                END IF;
+
+                IF (INSTR(l_img,'image-style-align-right')>0) THEN
+                    l_img_align:='right';
+                ELSIF (INSTR(l_img,'image-style-align-left')>0) THEN
+                    l_img_align:='left';
+                ELSE
+                    l_img_align:=NULL;
+                END IF;
+                l_img:=REGEXP_REPLACE(l_img,' style="[^"]*"');
+                l_img:=REGEXP_REPLACE(l_img,' class="[^"]*"');
+                CASE l_img_align
+                    WHEN 'right' THEN
+                        dbms_output.put_line(l_curve || '<article><div>' || C.content || '</div>' || l_img || '</article>');
+                    WHEN 'left' THEN
+                        dbms_output.put_line(l_curve || '<article>' || l_img || '<div>' || C.content || '</div></article>');
+                    ELSE 
+                        dbms_output.put_line(l_curve || '<article>' || l_img || C.content || '</article>');
+                END CASE;
+            END LOOP;
+            
+        end;
+
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
