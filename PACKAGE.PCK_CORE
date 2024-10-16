@@ -886,6 +886,7 @@ code.language-html {
                 BlockQuote,
                 Bold,
                 CodeBlock,
+                GeneralHtmlSupport,
                 Heading,
                 HorizontalLine,
                 Image,
@@ -907,7 +908,7 @@ code.language-html {
 
             ClassicEditor
                 .create( document.querySelector( '#editor' ), {
-                    plugins: [ Essentials, Autosave, BlockQuote, Alignment, Bold, CodeBlock, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, SelectAll, PageBreak, Heading, Paragraph, HorizontalLine, Link, List, SourceEditing, WordCount ],
+                    plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, PageBreak, Paragraph, SelectAll, SourceEditing, WordCount ],
                     toolbar: ['heading', '|', 'undo', 'redo', 'pageBreak', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
                     alignment: {
                         options: [ 'left', 'right', 'center', 'justify' ]
@@ -931,11 +932,23 @@ code.language-html {
                     htmlSupport: {
                         allow: [
                             {
-                                name: /.*/,
-                                attributes: true,
-                                classes: true,
-                                styles: true
-                            }
+                                name: /^(div|section|article)$/,
+                                classes: ['flow','centered','full-width','breakout','grid-auto-fit']
+                            },
+                            {
+                                name: 'img',
+                                classes: ['round-border'],
+                                attributes: {
+                                    loading: 'lazy'
+                                }
+                            },
+                            {
+                                name: /^(ul|ol)$/,
+                                classes: ['circled'],
+                                attributes: {
+                                    role: 'list'
+                                }
+                            },
                         ]
                     },
                     image: {
