@@ -96,6 +96,16 @@
     font-size: 70%;
 }
 
+.ck-content .round-border {
+    border-radius: 50%;
+}
+
+.ck-content .grid-auto-fit {
+    display: grid;
+    grid-template-columns: repeat(var(--grid-placement,auto-fit), minmax(min(var(--grid-min-item-size,16rem),100%), 1fr));
+    grid-gap: var(--space-m);
+}
+
 /******************/
 /* PAGE CONTAINER */
 /******************/
