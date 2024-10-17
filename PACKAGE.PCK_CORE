@@ -932,21 +932,18 @@ code.language-html {
                     htmlSupport: {
                         allow: [
                             {
-                                name: /^(div|section|article)$/,
-                                classes: ['flow','centered','full-width','breakout','grid-auto-fit']
+                                name: /^(header|main|footer)$/,
+                                classes: ['content-grid']
+                            },
+                            {
+                                name: /^(div|section|article|ul|ol)$/,
+                                classes: ['flow','centered','full-width','breakout','grid-auto-fit','section']
                             },
                             {
                                 name: 'img',
                                 classes: ['round-border'],
                                 attributes: {
                                     loading: 'lazy'
-                                }
-                            },
-                            {
-                                name: /^(ul|ol)$/,
-                                classes: ['circled'],
-                                attributes: {
-                                    role: 'list'
                                 }
                             },
                         ]
