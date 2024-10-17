@@ -30,6 +30,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_fluid_types pck_core.fluid_type_t;
         l_fluid_css LONG;
         l_session_data pck_core.session_data_rt;
+        l_curve VARCHAR2(100):='<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
         pos PLS_INTEGER;
 
         FUNCTION getJSCode(pFilename IN VARCHAR2) RETURN CLOB IS
@@ -200,7 +201,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                AND a.id=pArticleId;
         END IF;
 
-        l_html:=l_header || chr(10) || l_nav_labels || chr(10) || REPLACE(l_html,'<h1>&nbsp;</h1>',null) || chr(10);
+        /* remove empty headings nd insert content in <main> */
+        l_html:=REPLACE(l_html,'<h1>&nbsp;</h1>',null);
+        l_html:=REPLACE(l_html,'<div class="page-break" style="page-break-after:always;"><span style="display:none;">&nbsp;</span></div>',l_curve);
+
+        l_html:=l_header || l_nav_labels || '<main class="content-grid">' || l_curve || l_html || '</main>';
         
         /* Build index of Blog entries */
         IF (l_collection_type='BLOG') THEN
@@ -251,7 +256,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         END IF;
 
         l_html:=l_html || l_footer;
-       
+
+        /* Append icons */
+        l_html:=l_html || 
+        '<svg><symbol id="curve" viewBox="0 0 1440 96" preserveAspectRatio="none"><path d="m0 96 80-5.3C160 85 320 75 480 64s320-21 480-21.3c160 .3 320 10.3 400 16l80 5.3V0H0v96Z"></path></symbol></svg>';
 
         apex_json.open_object;
         apex_json.write('success', TRUE); 
