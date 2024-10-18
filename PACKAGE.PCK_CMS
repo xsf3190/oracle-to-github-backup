@@ -339,7 +339,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_session_data:=pck_core.getSessionData();
 
         FOR C IN (
-            SELECT body_html, apex_util.get_since(COALESCE(updated_date, created_date)) updated_date, codepen_editor
+            SELECT body_html, apex_util.get_since(COALESCE(updated_date, created_date)) updated_date
             FROM article
             WHERE id=pArticleId
             AND author_user_id=l_session_data.user_id)
@@ -350,7 +350,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
             apex_json.write('html', C.body_html);
             apex_json.write('thumbnails', l_thumbnails);
             apex_json.write('updated_date', C.updated_date);
-            apex_json.write('readonly', CASE WHEN C.codepen_editor='Y' THEN TRUE ELSE FALSE END);
             apex_json.close_object;
         END LOOP;
 
