@@ -611,40 +611,40 @@ code.language-html {
         '<nav class="top-nav">
             <div class="dropdown">
                 <span>' || apex_application.g_user || '</span>
-                <button type="button" class="show-dropdown">&blacktriangledown;</button>
-                <ul class="dropdown-items">                    
-                    <li class="api-keys">
+                <button type="button" class="show-dropdown" aria-haspopup="true" aria-expanded="false" aria-controls="topnav-menu">&blacktriangledown;</button>
+                <ul class="dropdown-items" id="topnav-menu" role="menu" aria-hidden="true">                    
+                    <li class="api-keys" role="menuitem">
                         <button type="button" class="with-icon api-keys">
                             &#128273;
                             API Keys
                         </button>
                     </li>
-                    <li class="account-usage">
+                    <li class="account-usage" role="menuitem">
                         <button type="button" class="with-icon account-usage">
                            %
                             Account Usage
                         </button>
                     </li>
-                    <li class="session-log">
+                    <li class="session-log" role="menuitem">
                         <button type="button" class="with-icon session-log">
                             &#9776;
                             Technical Log
                         </button>
                     </li>
-                    <li class="github-repo">
+                    <li class="github-repo" role="menuitem">
                         <a class="with-icon github-repo" href="https://github.com/xsf3190/oracle-to-github-backup" target="a_blank">
                            &#9733; Github Backup
                         </a>
                     </li>' || 
                     CASE WHEN pIsAdmin<>1 THEN
-                    '<li class="delete-user">
+                    '<li class="delete-user" role="menuitem">
                         <button type="button" class="with-icon delete-user">
                             &#128686;
                             Delete My Data
                         </button>
                     </li>'
                     END ||
-                    '<li class="signout">
+                    '<li class="signout" role="menuitem">
                         <button type="button" class="with-icon">
                             &#8676;
                             Log Out
@@ -686,7 +686,7 @@ code.language-html {
     FUNCTION makeWebsiteListItem(pId IN website.id%type, pDomainName IN website.domain_name%type, pEnv IN VARCHAR2) RETURN VARCHAR2 IS
     BEGIN
         RETURN(
-        '<li>
+        '<li role="menuitem">
             <button type="button" class="edit-website with-icon" data-id="' || pId || '" data-env="' || pEnv || '" data-domain="' || pDomainName || '">' || pDomainName || '<span class="env">' || pEnv || '</span></button>
         </li>');
     END;
@@ -731,8 +731,8 @@ code.language-html {
                 <button type="button" class="website-options" title="Website options">&#128397;</button>
                 <a ' || l_websites(1).url || '" target="a_blank" class="selected">' || l_websites(1).domain_name || '</a>
                 <section class="dropdown">
-                    <button type="button" class="show-dropdown"' || CASE WHEN l_websites.COUNT<2 THEN ' style="display:none"' END || '>&blacktriangledown;</button>
-                    <ul class="dropdown-items">' || l_website_list || '</ul>
+                    <button type="button" class="show-dropdown" aria-haspopup="true" aria-expanded="false" aria-controls="website-dropdown"' || CASE WHEN l_websites.COUNT<2 THEN ' style="display:none"' END || '>&blacktriangledown;</button>
+                    <ul id="website-dropdown" class="dropdown-items" role="menu" aria-hidden="true">' || l_website_list || '</ul>
                 </section>
             </div>
             <button type="button" class="action deploy-website">DEPLOY<span class="env">TEST</span></button>
@@ -911,7 +911,12 @@ code.language-html {
                     plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, PageBreak, Paragraph, SelectAll, SourceEditing, WordCount ],
                     toolbar: ['heading', '|', 'undo', 'redo', 'pageBreak', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
                     alignment: {
-                        options: [ 'left', 'right', 'center', 'justify' ]
+                        options: [
+                            {name:'left', className: 'align-left'},
+                            {name:'right', className: 'align-right'},
+                            {name:'center', className: 'align-center'},
+                            {name:'justify', className: 'align-justify'}
+                        ]
                     },
                     autosave: {
                         waitingTime: 2000,
@@ -937,7 +942,7 @@ code.language-html {
                             },
                             {
                                 name: /^(div|section|article|ul|ol)$/,
-                                classes: ['flow','centered','full-width','breakout','grid-auto-fit','section']
+                                classes: ['flow','centered','full-width','breakout','content','grid-auto-fit','section']
                             },
                             {
                                 name: 'img',
