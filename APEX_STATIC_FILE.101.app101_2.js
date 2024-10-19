@@ -13,9 +13,6 @@ const apex_app_id = document.querySelector("#pFlowId").value,
       wrapper = document.querySelector(".wrapper"),
       logDialog = document.querySelector("dialog.log"),
       logContent = logDialog.querySelector(".content"),
-      newBlog = wrapper.querySelector(".new-blog"),
-      newMedia = wrapper.querySelector(".new-media"),
-      newProduct = wrapper.querySelector(".new-product"),
       websiteNav = wrapper.querySelector(".website-nav"),
       pageNav = wrapper.querySelector(".page-nav"),
       popup = document.querySelector("dialog.popup"),
@@ -146,30 +143,6 @@ const changeHandler = (e) => {
                     pageNav.querySelector("[data-id='"+gArticleId+"'] > a").textContent = value;
                 }
                 break;
-            case 'website_article.collection_type' :
-                switch (value) {
-                    case 'BLOG' :
-                        newBlog.classList.add("visible");
-                        newMedia.classList.remove("visible");
-                        newProduct.classList.remove("visible");
-                        break;
-                    case 'MEDIA' :
-                        newMedia.classList.add("visible");
-                        newBlog.classList.remove("visible");
-                        newProduct.classList.remove("visible");
-                        break;
-                    case 'PRODUCT' :
-                        newProduct.classList.add("visible");
-                        newBlog.classList.remove("visible");
-                        newMedia.classList.remove("visible");
-                        break;
-                    case 'N/A' :
-                        newMedia.classList.remove("visible");
-                        newBlog.classList.remove("visible");
-                        newProduct.classList.remove("visible");
-                        break;
-                }
-                break;
             case 'website.domain_name' :
                 websiteNav.querySelectorAll(".edit-website[data-id='"+data.websiteid+"']").forEach ((item) => {
                     item.parentElement.remove();
@@ -217,10 +190,6 @@ const edit_website = (e) => {
     websiteNav.querySelector(".deploy-website > span").textContent = env;
     websiteNav.querySelector(".visits > span").textContent = env;
     websiteNav.querySelector(".performance > span").textContent = env;
-
-    newBlog.classList.remove("visible");
-    newMedia.classList.remove("visible");
-    newProduct.classList.remove("visible");
 
     websiteNav.querySelector("a").style.textDecorationLine = "revert";
 
@@ -1058,7 +1027,6 @@ const saveData = async ( data ) => {
             title = content[0].textContent;
     }
 
-    console.log("title",title)
     await execProcess("article/"+gArticleId, "PUT",  {body_html: data, title: title, word_count: word_count}).then( (data) => {
         pendingActions.remove( action );
         editor_status_text.textContent = data.message;
@@ -1279,8 +1247,8 @@ const new_page = (e) => {
  ** CREATE NEW SUB PAGE
  */
 const new_collection = (collection) => {
-    const title = document.querySelector(".ck > h1").textContent;
-    if (title==="NEW "+collection) return;
+    //const title = document.querySelector(".ck > h1").textContent;
+    //if (title==="NEW "+collection) return;
     const parent = pageNav.querySelector(".selected").closest("div").dataset.id;
     execProcess( "collection/"+parent,"POST").then( (data) => {
         gArticleId = data.article_id;
@@ -1396,34 +1364,6 @@ const selected_nav = (nav, id) => {
         link.classList.remove("selected");
         if (link.parentElement.dataset.id === id) {
             link.classList.add("selected");
-            if (nav===websiteNav || !link.nextElementSibling) {
-                newBlog.classList.remove("visible");
-                newMedia.classList.remove("visible");
-                newProduct.classList.remove("visible");
-
-            } /* else {
-                
-                if (link.nextElementSibling) {
-                    const collection = link.nextElementSibling.querySelector(".show-subpages").dataset.collection;
-                    switch (collection) {
-                        case 'BLOG' :
-                            newBlog.classList.add("visible");
-                            newMedia.classList.remove("visible");
-                            newProduct.classList.remove("visible");
-                            break;
-                        case 'MEDIA' :
-                            newMedia.classList.add("visible");
-                            newBlog.classList.remove("visible");
-                            newProduct.classList.remove("visible");
-                            break;
-                        case 'PRODUCT' :
-                            newProduct.classList.add("visible");
-                            newMedia.classList.remove("visible");
-                            newBlog.classList.remove("visible");
-                            break;
-                    }
-                }
-            }*/
         }
     });
 }
@@ -1542,17 +1482,6 @@ delete_page = () => {
         editor.setData("");
         editor.enableReadOnlyMode( 'lock-id' );
         galleryList.replaceChildren();
-        switch (data.collection_type) {
-            case 'blog' :
-                newBlog.classList.toggle("visible");
-                break;
-            case 'media' :
-                newMedia.classList.toggle("visible");
-                break;
-            case 'product' :
-                newProduct.classList.toggle("visible");
-                break;
-        }
         logDialog.close();
     });
 }
