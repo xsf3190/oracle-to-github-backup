@@ -829,17 +829,6 @@ nav button {
     overflow-y: scroll;
 }
 
-.new-blog, .new-media, .new-product {
-    visibility: hidden;
-    opacity: 0;
-    transition: opacity 1s ease-in-out;
-}
-
-.new-blog.visible, .new-media.visible, .new-product.visible {
-    visibility: visible;
-    opacity: 1;
-}
-
 .fade-out {
   animation: fade-out 1s forwards;
 }
