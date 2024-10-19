@@ -667,18 +667,10 @@ code.language-html {
                 &#128397;
             </button>
             <a href="" class="nav-label">' || pLabel || '</a>
-            <div class="dropdown">
-                <ol class="dropdown-items"></ol>
-            </div>';
-
-        IF (pClassName='page-options' AND pAttrName IS NOT NULL) THEN
-            l_html:=l_html || 
-            '<div class="dropdown">
-                <button type="button" class="show-dropdown show-subpages" data-'|| pAttrName || '="' || pAttrValue || '">&blacktriangledown;</button>
-                <ol class="dropdown-items"></ol>
-            </div>';
-        END IF;
-        l_html:=l_html || '</div>';
+            <div class="dropdown">' || CASE WHEN pAttrName IS NOT NULL THEN '<button type="button" class="show-dropdown show-subpages" data-'|| pAttrName || '="' || pAttrValue || '">&blacktriangledown;</button>' END ||
+                '<ol class="dropdown-items"></li></ol>
+            </div>
+        </div>';
 
         RETURN(l_html);
     END;
@@ -853,9 +845,6 @@ code.language-html {
                 <div>
                     <div class="button-container">' ||
                     buildPushableButton('new-page','&plus;') ||
-                    buildPushableButton('new-blog','&plus;') ||
-                    buildPushableButton('new-media','&plus;') ||
-                    buildPushableButton('new-product','&plus;') ||
                     '</div>
                     <nav class="page-nav">' ||
                     buildPageNav(l_selected_website_id) ||
