@@ -888,7 +888,6 @@ code.language-html {
                 Italic,
                 Link,
                 List,
-                PageBreak,
                 Paragraph,
                 SelectAll,
                 SourceEditing,
@@ -897,8 +896,8 @@ code.language-html {
 
             ClassicEditor
                 .create( document.querySelector( '#editor' ), {
-                    plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, PageBreak, Paragraph, SelectAll, SourceEditing, WordCount ],
-                    toolbar: ['heading', '|', 'undo', 'redo', 'pageBreak', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
+                    plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, Paragraph, SelectAll, SourceEditing, WordCount ],
+                    toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
                     alignment: {
                         options: [
                             {name:'left', className: 'align-left'},
@@ -930,8 +929,8 @@ code.language-html {
                                 classes: ['content-grid']
                             },
                             {
-                                name: /^(div|section|article|ul|ol)$/,
-                                classes: ['flow','centered','full-width','breakout','content','grid-auto-fit','section']
+                                name: /^(div|section|article|p)$/,
+                                classes: true
                             },
                             {
                                 name: 'img',
