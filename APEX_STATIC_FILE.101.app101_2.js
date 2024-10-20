@@ -1440,6 +1440,8 @@ const upload_codepen = async () => {
     const file = await fileHandle.getFile();
 
     execProcess( "codepen/"+gWebsiteId+","+gArticleId,"POST",file).then( (data) => {
+        editor_status = "init";        
+        editor.setData(data.html);
         popupOpen("CODEPEN UPLOAD COMPLETED",data.message);
     });
 }
