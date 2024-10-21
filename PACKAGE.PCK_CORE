@@ -448,7 +448,7 @@ code.language-html {
         SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
 
         FOR C IN (SELECT COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY null) rn,
-                            art.body_html, art.title, NVL(art.deployed_date,art.updated_date) deployed_date, art.word_count, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, ass.height, ass.alt_text
+                            art.body_html, art.title, NVL(art.deployed_date,art.updated_date) deployed_date, art.word_count, art.cover_icon_id, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, ass.height, ass.alt_text
                     FROM article art, asset ass
                    WHERE art.parent_id=pArticleId
                      AND art.featured=NVL(l_featured,art.featured)
@@ -464,6 +464,12 @@ code.language-html {
                 n:=n+1; 
                 l_html:=l_html || 
                 '<img '|| CASE WHEN n>4 THEN 'loading="lazy" ' END || 'src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" width="'|| C.width || '" height="' || C.height || '" alt="' || C.alt_text || '">';
+            ELSIF (C.cover_icon_id IS NOT NULL) THEN
+                l_html:=l_html || 
+                '<svg class="icon" aria-hidden="true" focusable="false"><use href="#' || C.cover_icon_id || '"></use></svg>';
+            ELSE
+                l_html:=l_html || 
+                '<svg class="icon" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
             END IF;
             IF (pIncludeLinks) THEN
                 l_href:='/' || l_path || '/' || apex_string_util.get_slug(C.title);
@@ -479,13 +485,10 @@ code.language-html {
                     <a href="' || l_href || '">' || C.title || '</a>
                 </h2>
                 <p>' || getExcerpt(SUBSTR(C.body_html,pos))  || '</p>
-                <a href="' || l_href || '">Read More</a>
+                <!--<a href="' || l_href || '">Read More</a>-->
             </li>';
             IF (C.rn=C.nb) THEN
                 l_html:=l_html || '</ol>';
-                IF (l_featured='YES') THEN
-                    l_html:=l_html || '<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
-                END IF;
             END IF;
         END LOOP;
         RETURN (l_html);
