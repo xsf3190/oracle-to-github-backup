@@ -4,15 +4,169 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
     --
     PROCEDURE uploadCodepen(pId IN VARCHAR2, pZipFile IN BLOB);
     --
+    --PROCEDURE buildBodyHtml(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pHeader IN CLob, pFooter IN Clob, pHtml IN OUt NOCOPY CLOB);
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
     g_curve CONSTANT VARCHAR2(100):='<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
+    
+    TYPE tt_nav_labels IS RECORD (
+        article_id website_article.article_id%type,
+        navigation_label website_article.navigation_label%type
+    );
+    TYPE t_nav_labels IS TABLE OF tt_nav_labels;
+    g_nav_labels t_nav_labels;
 
-    PROCEDURE structurePageBody(pBody IN OUt NOCOPY CLOB) IS
+    FUNCTION buildNavLabels(pArticleId IN article.id%type) RETURN VARCHAR2 IS
+        l_nav_labels LONG;
     BEGIN
-    null;
+        l_nav_labels:=
+        '<nav aria-label="Main Navigation" class="content-grid">' || 
+            '<div class="flex-items">';
+        FOR i IN 1..g_nav_labels.COUNT LOOP
+            l_nav_labels:=l_nav_labels || 
+                '<a href="#" class="nav-label' || 
+                    CASE WHEN g_nav_labels(i).article_id=pArticleId THEN ' selected' END  || 
+                    '" data-id="' || g_nav_labels(i).article_id || '">' || g_nav_labels(i).navigation_label || '</a>';
+        END LOOP;
+        l_nav_labels:=l_nav_labels || 
+            '</div>' ||
+        '</nav>';
+
+        RETURN (l_nav_labels);
+    END;
+
+    /*
+    ** HTML document body structured as
+    **
+    ** <header>
+    ** <nav>
+    ** <main>
+    ** <footer>
+    ** <svg>
+    */
+
+    PROCEDURE buildBodyHtml(
+        pUserId IN users.id%type, 
+        pWebsiteId IN website.id%type, 
+        pArticleId IN article.id%type, 
+        pCollectionType IN website_article.collection_type%type, 
+        pIsMedia IN BOOLEAN, 
+        pContactForm IN website_article.contact_form%type, 
+        pHeader IN CLOB, 
+        pFooter IN CLOB, 
+        pHtml IN OUt NOCOPY CLOB) 
+    IS
+        l_featured_html CLOB;
+        l_thumbnails CLOB;
+        l_email users.email%type;
+        l_suppress_margin VARCHAR2(20);
+        n PLS_INTEGER;
+    BEGIN
+        IF (g_nav_labels IS NULL) THEN
+            SELECT wa.article_id, wa.navigation_label
+              BULK COLLECT INTO g_nav_labels
+              FROM website w, website_article wa
+             WHERE w.id=pWebsiteId
+               AND wa.website_id=w.id
+             ORDER BY wa.display_order;
+        END IF;
+
+        /* 
+        ** Create section for any featured articles
+        */
+        IF (INSTR(pHtml,'<article class="featured">')>0) THEN
+            FOR C IN (
+                SELECT wa.article_id
+                  FROM website_article wa
+                 WHERE wa.website_id=pWebsiteId
+                   AND EXISTS (
+                            SELECT null FROM article a WHERE a.parent_id=wa.article_id AND a.featured='YES'
+                        )
+            )
+            LOOP
+                l_featured_html:=l_featured_html || pck_core.buildBlogList(pWebsiteId, C.article_id, pIncludeLinks => FALSE, pClasses => 'featured');
+            END LOOP;
+            pHtml:=REPLACE(pHtml,'<article class="featured">','<article class="featured">' || l_featured_html);
+        END IF;
+
+        /* Enclose content in <article> element if none exists */
+        IF (INSTR(pHtml,'<article')=0) THEN
+            pHtml:='<article>' || pHtml || '</article>';
+            l_suppress_margin:=' suppress-margin';
+        END IF;
+
+        /* Remove empty elements */
+        pHtml:=REPLACE(pHtml,'<h1>&nbsp;</h1>',null);
+
+        /* <article> signifies start of page section - insert svg to show curved sections */
+        pHtml:=REPLACE(pHtml,'<article',g_curve || '<article');
+
+        /* Remove any inline styles - pages are deployed with strict Content Security policy */
+        pHtml:=REGEXP_REPLACE(pHtml,' style="[^"]*"');
+
+        /* Construct page elements except footer */
+        pHtml:=pHeader || buildNavLabels(pArticleId) || '<main class="content-grid' || l_suppress_margin || '">' || pHtml || g_curve || '</main>';
+    
+        /* Build index of Blog / Media / Product entries */
+        IF (pCollectionType='BLOG') THEN
+            pHtml:=pHtml || pck_core.buildBlogList(pWebsiteId, pArticleId, pIncludeLinks => FALSE);
+        ELSIF (pCollectionType='MEDIA') THEN
+            pHtml:=pHtml || pck_core.buildMediaList(pWebsiteId, pArticleId, pIncludeLinks => FALSE);
+        ELSIF (pCollectionType='PRODUCT') THEN
+            pHtml:=pHtml || pck_core.buildProductList(pWebsiteId, pArticleId);
+            --l_javascript:=l_javascript || getJSCode('deploy_cart.js');
+        ELSIF (pIsMedia) THEN
+            pck_media.getThumbnails(pArticleId,pDeploy=>TRUE,pHtml=>l_thumbnails);
+            pHtml:=pHtml || 
+            '<ol class="gallery-list">' || l_thumbnails || '</ol>
+            <div class="gallery-overlay">
+                <img src="">
+                <span class="counter"></span>
+                <button type="button" class="close-fullscreen">&times;</button>
+                <button type="button" class="prev">&lt;</button>
+                <button type="button" class="next">&gt;</button>
+            </div>';
+            --l_javascript:=l_javascript || getJSCode('deploy_gallery.js');
+        END IF;
+
+        /* Append Contact Form */
+        IF (pContactForm='YES') THEN
+            SELECT email INTO l_email FROM users WHERE id=pUserId;
+            pHtml:=pHtml || pck_core.buildContactForm(l_email,'xx');
+            --l_javascript:=l_javascript || getJSCode('deploy_contact.js');
+        END IF;
+
+        /* Append Footer */
+        pHtml:=pHtml || pFooter;
+
+        /* Append all referenced svg symbols */
+        n:=0;
+        FOR C IN (SELECT id, viewbox, NVL(preserveaspectratio,'xMidyMid') preserveaspectratio, svg
+                    FROM icon WHERE id IN
+                    (SELECT wi.icon_id
+                    FROM icon i, website_icon wi 
+                   WHERE wi.website_id=pWebsiteId
+                     AND i.id=wi.icon_id
+                   UNION 
+                   SELECT a.cover_icon_id
+                     FROM icon i, article a, website_article wa
+                    WHERE wa.website_id=pWebsiteId
+                      AND a.parent_id=wa.article_id
+                      AND i.id=a.cover_icon_id
+                      AND a.featured='YES') 
+        )
+        LOOP
+            n:=n+1;
+            IF (n=1) THEN
+                pHtml:=pHtml || '<svg>';
+            END IF;
+            pHtml:=pHtml || '<symbol id="' || C.id|| '" viewBox="' || C.viewbox|| '" preserveAspectRatio="' || C.preserveaspectratio || '">' || C.svg || '</symbol>';
+        END LOOP;
+        IF (n>0) THEN
+            pHtml:=pHtml || '</svg>';
+        END IF;
     END;
 
     /*
@@ -20,16 +174,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     */
     PROCEDURE getCodepen(pArticleId IN article.id%type) IS
         l_website_id website.id%type;
-        l_nav_labels LONG;
-        l_email users.email%type;
+        
         l_domain_name website.domain_name%type;
         l_contact_form website_article.contact_form%type;
         l_collection_type website_article.collection_type%type;
         l_is_blog BOOLEAN:=FALSE;
         l_is_media BOOLEAN:=FALSE;
-        l_thumbnails CLOB;
-        l_display_order website_article.display_order%type;
-        l_featured_html CLOB;
         l_html CLOB;
         l_header CLOB;
         l_footer CLOB;
@@ -38,8 +188,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_fluid_types pck_core.fluid_type_t;
         l_fluid_css LONG;
         l_session_data pck_core.session_data_rt;
-        
-        n PLS_INTEGER;
 
         FUNCTION getJSCode(pFilename IN VARCHAR2) RETURN CLOB IS
         BEGIN
@@ -59,7 +207,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         FOR C IN (SELECT website_id, display_order FROM website_article WHERE article_id=pArticleId AND user_id=l_session_data.user_id) LOOP
             l_website_id:=C.website_id;
-            l_display_order:=C.display_order;
         END LOOP;
 
         IF (l_website_id IS NULL) THEN
@@ -76,25 +223,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             END LOOP;
         END IF;
 
-        FOR C IN (
-            SELECT wa.navigation_label, wa.article_id, ROW_NUMBER() OVER (ORDER BY null) rn, COUNT(*) OVER () nb
-              FROM website w, website_article wa
-             WHERE w.id=l_website_id
-               AND w.user_id=l_session_data.user_id
-               AND wa.website_id=w.id
-             ORDER BY wa.display_order) 
-        LOOP
-            IF (C.rn=1) THEN
-                l_nav_labels:='<nav aria-label="Main Navigation" class="content-grid"><div class="flex-items">';
-            END IF;
-            l_nav_labels:=l_nav_labels || '<a href="#" class="nav-label' || CASE WHEN C.article_id=pArticleId THEN ' selected' END  || '" data-id="' || C.article_id || '">' || C.navigation_label || '</a>';
-            IF (C.rn=C.nb) THEN
-                l_nav_labels:=l_nav_labels || '</div></nav>';
-            END IF;
-        END LOOP;
-
-        /* Build page resources */
-        --dbms_lob.createtemporary(l_html,TRUE,dbms_lob.CALL);
+        /* Get page content */
 
         IF (l_is_blog OR l_is_media) THEN
             SELECT w.domain_name, w.header, a.body_html, w.footer, 'NO', null
@@ -112,98 +241,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                AND a.id=pArticleId;
         END IF;
 
-        /* 
-        ** Create section for any featured articles to appear on home page 
-        */
-        IF (INSTR(l_html,'<article class="featured">')>0) THEN
-            FOR C IN (
-                SELECT wa.article_id
-                  FROM website_article wa
-                 WHERE wa.website_id=l_website_id
-                   AND EXISTS (
-                            SELECT null FROM article a WHERE a.parent_id=wa.article_id AND a.featured='YES'
-                        )
-            )
-            LOOP
-                l_featured_html:=l_featured_html || pck_core.buildBlogList(l_website_id, C.article_id, pIncludeLinks => FALSE, pClasses => 'featured');
-            END LOOP;
-            l_html:=REPLACE(l_html,'<article class="featured">','<article class="featured">' || l_featured_html);
-        END IF;        
-
-        /* Enclose content in <article> if none defined */
-        IF (INSTR(l_html,'<article')=0) THEN
-            l_html:='<article>' || l_html || '</article>';
-        END IF;
-
-        /* Remove empty elements */
-        l_html:=REPLACE(l_html,'<h1>&nbsp;</h1>',null);
-
-        /* <article> signifies start of page section - insert svg to show curved sections */
-        l_html:=REPLACE(l_html,'<article',g_curve || '<article');
-
-        /* Remove any inline styles - pages are deployed with strict Content Security policy */
-        l_html:=REGEXP_REPLACE(l_html,' style="[^"]*"');
-
-        /* Construct page eleeents (not including footer) */
-        l_html:=l_header || l_nav_labels || '<main class="content-grid">' || l_html || g_curve || '</main>';
-
-        
-        /* Build index of Blog entries */
-        IF (l_collection_type='BLOG') THEN
-            l_html:=l_html || pck_core.buildBlogList(l_website_id, pArticleId, pIncludeLinks => FALSE);
-        ELSIF (l_collection_type='MEDIA') THEN
-            l_html:=l_html || pck_core.buildMediaList(l_website_id, pArticleId, pIncludeLinks => FALSE);
-        ELSIF (l_collection_type='PRODUCT') THEN
-            l_html:=l_html || pck_core.buildProductList(l_website_id, pArticleId);
-            l_javascript:=l_javascript || getJSCode('deploy_cart.js');
-        ELSIF (l_is_media) THEN
-            pck_media.getThumbnails(pArticleId,pDeploy=>TRUE,pHtml=>l_thumbnails);
-            l_html:=l_html || 
-            '<ol class="gallery-list">' || l_thumbnails || '</ol>
-            <div class="gallery-overlay">
-                <img src="">
-                <span class="counter"></span>
-                <button type="button" class="close-fullscreen">&times;</button>
-                <button type="button" class="prev">&lt;</button>
-                <button type="button" class="next">&gt;</button>
-            </div>';
-            l_javascript:=l_javascript || getJSCode('deploy_gallery.js');
-        END IF;
-
-        IF (l_contact_form='YES') THEN
-            SELECT email INTO l_email FROM users WHERE id=l_session_data.user_id;
-            l_html:=l_html || pck_core.buildContactForm(l_email,'xx');
-            l_javascript:=l_javascript || getJSCode('deploy_contact.js');
-        END IF;
-
-        l_html:=l_html || l_footer;
-
-        /* Append svg symbols (hidden in css) */
-        n:=0;
-        FOR C IN (SELECT id, viewbox, NVL(preserveaspectratio,'xMidyMid') preserveaspectratio, svg
-                    FROM icon WHERE id IN
-                    (SELECT wi.icon_id
-                    FROM icon i, website_icon wi 
-                   WHERE wi.website_id=l_website_id
-                     AND i.id=wi.icon_id
-                   UNION 
-                   SELECT a.cover_icon_id
-                     FROM icon i, article a, website_article wa
-                    WHERE wa.website_id=l_website_id
-                      AND a.parent_id=wa.article_id
-                      AND i.id=a.cover_icon_id
-                      AND a.featured='YES') 
-        )
-        LOOP
-            n:=n+1;
-            IF (n=1) THEN
-                l_html:=l_html || '<svg>';
-            END IF;
-            l_html:=l_html || '<symbol id="' || C.id|| '" viewBox="' || C.viewbox|| '" preserveAspectRatio="' || C.preserveaspectratio || '">' || C.svg || '</symbol>';
-        END LOOP;
-        IF (n>0) THEN
-            l_html:=l_html || '</svg>';
-        END IF;
+        buildBodyHtml(
+            l_session_data.user_id, 
+            l_website_id, 
+            pArticleId, 
+            l_collection_type, 
+            l_is_media, 
+            l_contact_form, 
+            l_header, 
+            l_footer, 
+            l_html);
 
         apex_json.open_object;
         apex_json.write('success', TRUE); 
@@ -213,9 +260,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         apex_json.write('js', l_javascript);
         apex_json.close_object;
 
-        -- dbms_lob.freetemporary(l_html);
-
-        EXCEPTION WHEN OTHERS THEN dbms_lob.freetemporary(l_html); pck_core.log_error;
+        EXCEPTION WHEN OTHERS THEN 
+            pck_core.log_error;
     END;
 
     /*
