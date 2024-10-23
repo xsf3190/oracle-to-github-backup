@@ -456,7 +456,7 @@ code.language-html {
                    ORDER BY art.display_order NULLS FIRST, art.updated_date DESC ) 
         LOOP
             IF (C.rn=1) THEN
-                l_html:=l_html || '<ol class="' || pClasses || ' grid-auto-fit centered" role="list" >';
+                l_html:=l_html || '<ol class="grid-auto-fit" role="list" >';
             END IF;
             l_html:=l_html || 
             '<li class="card">';
