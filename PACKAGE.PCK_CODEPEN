@@ -10,6 +10,7 @@ end;
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
     g_curve CONSTANT VARCHAR2(100):='<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
+    g_curve_last CONSTANT VARCHAR2(100):='<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
     
     TYPE tt_nav_labels IS RECORD (
         article_id website_article.article_id%type,
@@ -61,8 +62,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_featured_html CLOB;
         l_thumbnails CLOB;
         l_email users.email%type;
-        l_suppress_margin VARCHAR2(20);
+        l_icon_id icon.id%type;
+        l_icons apex_t_varchar2:=apex_t_varchar2();
+        l_svg_html CLOB;
+        nb_articles PLS_INTEGER;
         n PLS_INTEGER;
+
     BEGIN
         IF (g_nav_labels IS NULL) THEN
             SELECT wa.article_id, wa.navigation_label
@@ -93,8 +98,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         /* Enclose content in <article> element if none exists */
         IF (INSTR(pHtml,'<article')=0) THEN
-            pHtml:='<article>' || pHtml || '</article>';
-            l_suppress_margin:=' suppress-margin';
+            pHtml:='<article class="flow">' || pHtml || '</article>';
         END IF;
 
         /* Remove empty elements */
@@ -106,10 +110,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Remove any inline styles - pages are deployed with strict Content Security policy */
         pHtml:=REGEXP_REPLACE(pHtml,' style="[^"]*"');
 
-        /* Construct page elements except footer */
-        pHtml:=pHeader || buildNavLabels(pArticleId) || '<main class="content-grid' || l_suppress_margin || '">' || pHtml || g_curve || '</main>';
+        /* Construct start of <main> element */
+        pHtml:='<main class="content-grid">' || pHtml;
     
-        /* Build index of Blog / Media / Product entries */
+        /* Build index if page is index of Blog / Media / Product */
         IF (pCollectionType='BLOG') THEN
             pHtml:=pHtml || pck_core.buildBlogList(pWebsiteId, pArticleId, pIncludeLinks => FALSE);
         ELSIF (pCollectionType='MEDIA') THEN
@@ -138,33 +142,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             --l_javascript:=l_javascript || getJSCode('deploy_contact.js');
         END IF;
 
-        /* Append Footer */
-        pHtml:=pHtml || pFooter;
+        nb_articles:=regexp_count(pHtml,'<article');
+
+        /* Assemble rest of document */
+        pHtml:=pHeader || buildNavLabels(pArticleId) || pHtml  || g_curve || '</main>' || pFooter;
 
         /* Append all referenced svg symbols */
-        n:=0;
-        FOR C IN (SELECT id, viewbox, NVL(preserveaspectratio,'xMidyMid') preserveaspectratio, svg
-                    FROM icon WHERE id IN
-                    (SELECT wi.icon_id
-                    FROM icon i, website_icon wi 
-                   WHERE wi.website_id=pWebsiteId
-                     AND i.id=wi.icon_id
-                   UNION 
-                   SELECT a.cover_icon_id
-                     FROM icon i, article a, website_article wa
-                    WHERE wa.website_id=pWebsiteId
-                      AND a.parent_id=wa.article_id
-                      AND i.id=a.cover_icon_id
-                      AND a.featured='YES') 
-        )
+        n:=regexp_count(pHtml,'<use href="#([^"]+)');
+        FOR i IN 1..n 
         LOOP
-            n:=n+1;
-            IF (n=1) THEN
-                pHtml:=pHtml || '<svg>';
-            END IF;
-            pHtml:=pHtml || '<symbol id="' || C.id|| '" viewBox="' || C.viewbox|| '" preserveAspectRatio="' || C.preserveaspectratio || '">' || C.svg || '</symbol>';
+            l_icon_id:=REGEXP_SUBSTR(pHtml,'<use href="#([^"]+)',1,i,null,1);
+            apex_string.push(l_icons,l_icon_id);
         END LOOP;
+
         IF (n>0) THEN
+            pHtml:=pHtml || '<svg>';
+            FOR C IN (SELECT id, viewbox, preserveaspectratio, svg FROM icon WHERE id IN (SELECT DISTINCT column_value FROM TABLE(l_icons)))
+            LOOP
+                pHtml:=pHtml || '<symbol id="' || C.id|| '" viewBox="' || C.viewbox|| '" preserveAspectRatio="' || C.preserveaspectratio || '">' || C.svg || '</symbol>';
+            END LOOP;
             pHtml:=pHtml || '</svg>';
         END IF;
     END;
