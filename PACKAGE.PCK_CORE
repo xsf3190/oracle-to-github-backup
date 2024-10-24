@@ -17,7 +17,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     );
     TYPE fluid_type_t IS TABLE OF fluid_type_rt;
     --
-    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks IN BOOLEAN DEFAULT TRUE,  pClasses IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
+    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pClasses IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
     FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pIncludeFontLink IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2;
     --
@@ -313,7 +313,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     */ 
     FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pIncludeFontLink IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2 IS
         l_fluid_types fluid_type_t;
-        l_deploy_css LONG;
+        l_root_css LONG;
+        l_deploy_css CLOB;
     BEGIN
         FOR C IN (SELECT w.font, w.max_width, w.color_text, w.color_background, w.color_primary, w.css,
                          w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, g.category
@@ -325,58 +326,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
             l_fluid_types:=getFluidTypes(C.min_font_size, C.min_width_px, C.min_scale, C.max_font_size, C.max_width_px, C.max_scale);
             
-            l_deploy_css:=
-            ':root {' || chr(10) || 
-            chr(9) || '/* Custom properties for Fluid typography and spacing */' || chr(10);
-
+            l_root_css:=
+            ':root {' || chr(10) || chr(9) || '/* Custom properties for Fluid typography, spacing and colors */' || chr(10);
             FOR i IN 1..l_fluid_types.COUNT LOOP
-                l_deploy_css:=l_deploy_css || chr(9) || l_fluid_types(i).property || ': ' || l_fluid_types(i).value || ';' || chr(10);
+                l_root_css:=l_root_css || chr(9) || l_fluid_types(i).property || ': ' || l_fluid_types(i).value || ';' || chr(10);
             END LOOP;
-            l_deploy_css:=l_deploy_css || chr(10) ||
+            l_root_css:=l_root_css || chr(10) ||
             chr(9) || '--font-family: "' || C.font || '", ' || CASE WHEN C.category='handwriting' THEN 'cursive' ELSE C.category END || ';' || chr(10) ||
             chr(9) || '--max-width: ' || C.max_width_px || 'px;' || chr(10) ||
             chr(9) || '--color-text: ' || C.color_text || ';' || chr(10) ||
             chr(9) || '--color-background: ' || C.color_background || ';' || chr(10) ||
             chr(9) || '--color-primary: ' || C.color_primary || ';' || chr(10) ||
-            '}';
-
+            '}' || chr(10);
+            /*
             IF (pIncludeFontLink) THEN
                 l_deploy_css:=l_deploy_css ||chr(10) ||
                 '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(C.font,' ','+') || '&display=swap">' || chr(10);
             END IF;
-
-            IF (C.css IS NOT NULL) THEN
-                l_deploy_css:=l_deploy_css || chr(10) || C.css;
+            */
+            IF (C.css IS NULL) THEN
+                SELECT apex_util.blob_to_clob(file_content)
+                  INTO l_deploy_css
+                  FROM apex_application_static_files 
+                 WHERE application_id=pApplicationId
+                   AND file_name='deploy.css';
             ELSE
-                FOR C1 IN (SELECT apex_util.blob_to_clob(file_content) css
-                             FROM apex_application_static_files 
-                            WHERE application_id=pApplicationId
-                              AND file_name='deploy.css')  /* Can't use min file because stupid Apex editor removes nested css */
-                LOOP
-                    l_deploy_css:=l_deploy_css || chr(10) || C1.css;
-                    IF (pIncludeFontLink) THEN
-                        l_deploy_css:=l_deploy_css ||chr(10) ||
-'pre:has(.language-html) {
-  position: relative;
-  &::before {
-    background: #000;
-    color: #fff;
-    content: "HTML code block not shown in Codepen";
-    position: absolute;
-    padding:0.5em;
-    left: 1em;
-    top: 0;
-  }
-}
-code.language-html {
-  display:none;
-}';
-                    END IF;
-                END LOOP;
+                l_deploy_css:=C.css;
             END IF;
         END LOOP;
 
-        RETURN (l_deploy_css);
+        RETURN (l_root_css || l_deploy_css);
     END;
 
     /*
@@ -414,7 +393,7 @@ code.language-html {
     /*
     ** Construct index of Blog entries
     */
-    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks  IN BOOLEAN, pClasses IN VARCHAR2) RETURN CLOB IS
+    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pClasses IN VARCHAR2) RETURN CLOB IS
         l_html CLOB;
         l_featured article.featured%type;
         l_path website_article.navigation_label%type;
@@ -423,19 +402,19 @@ code.language-html {
         n PLS_INTEGER:=0;
 
         FUNCTION getExcerpt(pText IN VARCHAR2) RETURN VARCHAR2 IS
-            l_excerpt VARCHAR2(200);
-            EXCERPT_LENGTH CONSTANT PLS_INTEGER :=100;
+            l_excerpt VARCHAR2(100);
         BEGIN
             l_excerpt:=
                 RTRIM(
                     regexp_replace(
                         apex_escape.striphtml(
-                            regexp_replace( SUBSTR(pText,1,EXCERPT_LENGTH+10),'</[[:alnum:]]+><[[:alnum:]]+>', '. ')
+                            regexp_replace(pText,'</[[:alnum:]]+><[[:alnum:]]+>', ' ')
                         )
                     ,' {2,}', ' '
                     )
                 ,'.,?;: '
                 );
+            l_excerpt:=REPLACE(l_excerpt,'..','.');
             RETURN (SUBSTR(l_excerpt,1,INSTR(l_excerpt,' ',-1,1)-1)||'...');
         END;
 
@@ -456,7 +435,7 @@ code.language-html {
                    ORDER BY art.display_order NULLS FIRST, art.updated_date DESC ) 
         LOOP
             IF (C.rn=1) THEN
-                l_html:=l_html || '<ol class="grid-auto-fit" role="list" >';
+                l_html:=l_html || '<ol class="breakout grid-auto-fit" role="list" >';
             END IF;
             l_html:=l_html || 
             '<li class="card">';
@@ -471,20 +450,13 @@ code.language-html {
                 l_html:=l_html || 
                 '<svg class="icon" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
             END IF;
-            IF (pIncludeLinks) THEN
-                l_href:='/' || l_path || '/' || apex_string_util.get_slug(C.title);
-            ELSE
-                l_href:='#';
-            END IF;
-            pos:=INSTR(C.body_html,'</h1>',1,1)+5; /* all blog post must have this? */
-            IF (pos<1) THEN
-                RETURN(NULL);
-            END IF;
+            l_href:='/' || l_path || '/' || apex_string_util.get_slug(C.title);
+            pos:=regexp_instr(C.body_html,'<[^/>]*>',1,2);
             l_html:=l_html || 
                 '<h2>
                     <a href="' || l_href || '">' || C.title || '</a>
                 </h2>
-                <p>' || getExcerpt(SUBSTR(C.body_html,pos))  || '</p>
+                <p>' || getExcerpt(SUBSTR(C.body_html,pos,100))  || '</p>
                 <!--<a href="' || l_href || '">Read More</a>-->
             </li>';
             IF (C.rn=C.nb) THEN
@@ -877,6 +849,7 @@ code.language-html {
                 Autosave,
                 BlockQuote,
                 Bold,
+                Code,
                 CodeBlock,
                 GeneralHtmlSupport,
                 Heading,
@@ -894,13 +867,14 @@ code.language-html {
                 Paragraph,
                 SelectAll,
                 SourceEditing,
+                Underline,
                 WordCount
             } from 'ckeditor5';
 
             ClassicEditor
                 .create( document.querySelector( '#editor' ), {
-                    plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, Paragraph, SelectAll, SourceEditing, WordCount ],
-                    toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
+                    plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Code, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, Paragraph, SelectAll, SourceEditing, Underline, WordCount ],
+                    toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'underline', 'code', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
                     alignment: {
                         options: [
                             {name:'left', className: 'align-left'},
