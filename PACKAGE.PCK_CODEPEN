@@ -4,13 +4,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
     --
     PROCEDURE uploadCodepen(pId IN VARCHAR2, pZipFile IN BLOB);
     --
-    --PROCEDURE buildBodyHtml(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pHeader IN CLob, pFooter IN Clob, pHtml IN OUt NOCOPY CLOB);
+    PROCEDURE buildBodyHtml(
+        pUserId IN users.id%type, 
+        pWebsiteId IN website.id%type, 
+        pArticleId IN article.id%type, 
+        pCollectionType IN website_article.collection_type%type, 
+        pIsMedia IN BOOLEAN, 
+        pContactForm IN website_article.contact_form%type, 
+        pHeader IN CLOB, 
+        pFooter IN CLOB, 
+        pHtml IN OUt NOCOPY CLOB
+    );
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
     g_curve CONSTANT VARCHAR2(100):='<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
-    g_curve_last CONSTANT VARCHAR2(100):='<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
     
     TYPE tt_nav_labels IS RECORD (
         article_id website_article.article_id%type,
@@ -27,7 +36,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             '<div class="flex-items">';
         FOR i IN 1..g_nav_labels.COUNT LOOP
             l_nav_labels:=l_nav_labels || 
-                '<a href="#" class="nav-label' || 
+                '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="nav-label' || 
                     CASE WHEN g_nav_labels(i).article_id=pArticleId THEN ' selected' END  || 
                     '" data-id="' || g_nav_labels(i).article_id || '">' || g_nav_labels(i).navigation_label || '</a>';
         END LOOP;
@@ -91,7 +100,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                         )
             )
             LOOP
-                l_featured_html:=l_featured_html || pck_core.buildBlogList(pWebsiteId, C.article_id, pIncludeLinks => FALSE, pClasses => 'featured');
+                l_featured_html:=l_featured_html || pck_core.buildBlogList(pWebsiteId, C.article_id, pClasses => 'featured');
             END LOOP;
             pHtml:=REPLACE(pHtml,'<article class="featured">','<article class="featured">' || l_featured_html);
         END IF;
@@ -115,9 +124,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     
         /* Build index if page is index of Blog / Media / Product */
         IF (pCollectionType='BLOG') THEN
-            pHtml:=pHtml || pck_core.buildBlogList(pWebsiteId, pArticleId, pIncludeLinks => FALSE);
+            pHtml:=pHtml || pck_core.buildBlogList(pWebsiteId, pArticleId);
         ELSIF (pCollectionType='MEDIA') THEN
-            pHtml:=pHtml || pck_core.buildMediaList(pWebsiteId, pArticleId, pIncludeLinks => FALSE);
+            pHtml:=pHtml || pck_core.buildMediaList(pWebsiteId, pArticleId);
         ELSIF (pCollectionType='PRODUCT') THEN
             pHtml:=pHtml || pck_core.buildProductList(pWebsiteId, pArticleId);
             --l_javascript:=l_javascript || getJSCode('deploy_cart.js');
@@ -142,10 +151,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             --l_javascript:=l_javascript || getJSCode('deploy_contact.js');
         END IF;
 
-        nb_articles:=regexp_count(pHtml,'<article');
+        nb_articles:=MOD(regexp_count(pHtml,'<article'),2);
 
         /* Assemble rest of document */
-        pHtml:=pHeader || buildNavLabels(pArticleId) || pHtml  || g_curve || '</main>' || pFooter;
+        pHtml:=pHeader || buildNavLabels(pArticleId) || pHtml  || CASE WHEN nb_articles=1 THEN g_curve ELSE REPLACE(g_curve,'full-width','full-width height-2x') END || '</main>' || pFooter;
 
         /* Append all referenced svg symbols */
         n:=regexp_count(pHtml,'<use href="#([^"]+)');
@@ -157,7 +166,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         IF (n>0) THEN
             pHtml:=pHtml || '<svg>';
-            FOR C IN (SELECT id, viewbox, preserveaspectratio, svg FROM icon WHERE id IN (SELECT DISTINCT column_value FROM TABLE(l_icons)))
+            FOR C IN (SELECT id, viewbox, preserveaspectratio, svg FROM icon WHERE id IN (SELECT DISTINCT column_value FROM TABLE(l_icons)) ORDER BY id)
             LOOP
                 pHtml:=pHtml || '<symbol id="' || C.id|| '" viewBox="' || C.viewbox|| '" preserveAspectRatio="' || C.preserveaspectratio || '">' || C.svg || '</symbol>';
             END LOOP;
@@ -268,6 +277,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_article_id article.id%type;
         l_css CLOB;
         l_header CLOB;
+        l_main CLOB;
         l_footer CLOB;
         l_body_html CLOB;
         l_zip BLOB:=pZipFile;
@@ -349,8 +359,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 l_nb_files:=l_nb_files+1;
             ELSIF (INSTR(l_files(i),'/src/index.html')>0) THEN
                 l_body_html:=apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob=>l_zip, p_file_name=>l_files(i)));
-                --l_body_html:=REPLACE(l_body_html,g_curve,'<div class="page-break" style="page-break-after:always;"><span style="display:none;">&nbsp;</span></div>');
+                /* Extract header, main and footer elements */
                 l_header:=extractFragment(l_body_html,'<header','</header>');
+                l_main:=extractFragment(l_body_html,'<main','</main>');
                 l_footer:=extractFragment(l_body_html,'<footer','</footer>');
                 l_nb_files:=l_nb_files+1;
             END IF;
@@ -364,16 +375,30 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             RETURN;
         END IF;
 
-        /* Extract header and footer elements */
+        /* Remove :root {..} element */
+        l_pos:=INSTR(l_css,':root');
+        IF (l_pos>0) THEN
+            l_css:=SUBSTR(l_css,INSTR(l_css,'}')+1);
+            l_css:=LTRIM(l_css,chr(10));
+        END IF;
 
-        UPDATE website SET css=l_css, header=l_header, footer=l_footer, updated_date=current_timestamp WHERE id=l_website_id;
-        UPDATE article SET body_html=l_body_html, updated_date=current_timestamp WHERE id=l_article_id;
-        
-        SELECT css, header, footer INTO l_css, l_header, l_footer FROM website WHERE id=l_website_id FOR UPDATE;
+        FOR C IN (SELECT css, header, footer FROM website WHERE id=l_website_id) LOOP
+            IF (dbms_lob.compare(C.css,l_css)<>0) THEN
+                UPDATE website SET css=l_css, updated_date=current_timestamp WHERE id=l_website_id;
+                pck_core.log('CSS updated');
+            END IF;
+            IF (dbms_lob.compare(C.header,l_header)<>0) THEN
+                UPDATE website SET header=l_header, updated_date=current_timestamp WHERE id=l_website_id;
+                pck_core.log('header updated');
+            END IF;
+            IF (dbms_lob.compare(C.footer,l_footer)<>0) THEN
+                UPDATE website SET footer=l_footer, updated_date=current_timestamp WHERE id=l_website_id;
+                pck_core.log('footer updated');
+            END IF;
+        END LOOP;
         
         /* remove design tokens and font link */
-        deleteFragment(l_css,':root','}');
-        deleteFragment(l_css,'<link','>');
+
 
         SELECT body_html INTO l_body_html FROM article WHERE id=l_article_id FOR UPDATE;
         
