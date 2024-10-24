@@ -1405,13 +1405,14 @@ const edit_codepen = () => {
             title: data.domain_name,
             html: data.html,
             css: data.css,
-            js: data.js
+            js: data.js,
+            editors: "110"
         };
         const input = form.querySelector("[name='data']");
-        let JSONstring = JSON.stringify(formdata)
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&apos;");
-        input.value = JSONstring;
+        //let JSONstring = JSON.stringify(formdata);
+            //.replace(/"/g, "&quot;")
+            //.replace(/'/g, "&apos;");
+        input.value = JSON.stringify(formdata);
         form.submit();
     });
 }
