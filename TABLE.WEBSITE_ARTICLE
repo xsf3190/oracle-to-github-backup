@@ -23,7 +23,7 @@ COMMENT ON COLUMN "WEBSITE_ARTICLE"."NAVIGATION_LABEL" IS 'Page navigation label
    COMMENT ON COLUMN "WEBSITE_ARTICLE"."PAGE_TITLE" IS 'Title for this page to appear in Search Engine listings';
    COMMENT ON COLUMN "WEBSITE_ARTICLE"."PAGE_DESCRIPTION" IS 'Description for this page to appear in Search Engine listings';
    COMMENT ON COLUMN "WEBSITE_ARTICLE"."CONTACT_FORM" IS 'Append contact form to end of page';
-   COMMENT ON COLUMN "WEBSITE_ARTICLE"."COLLECTION_TYPE" IS 'BLOG and MEDIA enable sub-pages to be created';
+   COMMENT ON COLUMN "WEBSITE_ARTICLE"."COLLECTION_TYPE" IS 'Indicate if the page will be an index of a collection. Cannot be changed if page currently has entries';
 
   CREATE UNIQUE INDEX "PK_WEBSITE_ARTICLE" ON "WEBSITE_ARTICLE" ("WEBSITE_ID", "ARTICLE_ID") 
   ;
