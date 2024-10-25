@@ -501,11 +501,11 @@ const clickHandler = (e) => {
     } else if (e.target.matches(".new-page")) {
         new_page(e);   
     } else if (e.target.matches(".new-blog")) {
-        new_collection('BLOG');   
+        new_collection(e);   
     } else if (e.target.matches(".new-media")) {
-        new_collection('MEDIA');     
+        new_collection(e);     
     }  else if (e.target.matches(".new-product")) {
-        new_collection('PRODUCT');     
+        new_collection(e);     
     } else if (e.target.matches(".show-subpages")) {
         show_subpages(e);   
     } else if (e.target.matches(".edit-codepen")) {
@@ -531,8 +531,8 @@ const clickHandler = (e) => {
         showFullScreen(e);                                 
     } else if (e.target.matches(".copy-url")) {
         copy_url(e); 
-    } else if (e.target.matches(".copy-img")) {
-        copy_img(e);                                
+    } else if (e.target.matches(".copy-html")) {
+        copy_html(e);             
     } else if (e.target.matches(".deploy-website")) {
         deploy_website(e);
     } else if (e.target.matches(".cancel-deploy")) {
@@ -678,18 +678,19 @@ const copy_url = async (e) => {
 };
 
 /*
- **  COPY IMG
+ **  COPY HTML SNIPPET TO INCLuDE FEATURED SUB-ARTICLES
  */
-const copy_img = async (e) => {
-    const img = e.target.closest("figure").querySelector("img").outerHTML;
+const copy_html = async (e) => {
+    const html = '<article class="featured" data-id="' + gArticleId + '"></article>';
     try {
-        await navigator.clipboard.writeText(img);
+        await navigator.clipboard.writeText(html);
         const result = e.target.nextSibling;
         result.innerHTML = "COPIED &#10004;";
         result.style.color = "green";
         result.style.margin = "1em";
+        result.style.opacity = "1";
     } catch (err) {
-        popupOpen('Failed to copy IMG!', err)
+        popupOpen('Failed to copy HTML!', err)
     }
 };
 
@@ -1246,16 +1247,23 @@ const new_page = (e) => {
 /* 
  ** CREATE NEW SUB PAGE
  */
-const new_collection = (collection) => {
-    //const title = document.querySelector(".ck > h1").textContent;
-    //if (title==="NEW "+collection) return;
-    const parent = pageNav.querySelector(".selected").closest("div").dataset.id;
+const new_collection = (e) => {
+    const selected = pageNav.querySelector(".selected"),
+          parent = selected.closest("div").dataset.id,
+          label = selected.textContent;
+
+    let placeholder;
+    if (e.target.classList.contains("new-media")) {
+        placeholder = 'Upload Media for new ' + label;
+    } else {
+        placeholder = 'Enter content for new ' + label;
+    }
     execProcess( "collection/"+parent,"POST").then( (data) => {
         gArticleId = data.article_id;
         editor_status = "init";
         editor_status_text.textContent = "";
-        /*editor.setData("<h1>NEW "+collection + "</h1>");*/
         editor.setData("");
+        editor.editing.view.document.getRoot( 'main' ).placeholder =  placeholder;
         galleryList.replaceChildren();
         if (editor.isReadOnly) {
             editor.disableReadOnlyMode( 'lock-id' );
