@@ -68,12 +68,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         pFooter IN CLOB, 
         pHtml IN OUt NOCOPY CLOB) 
     IS
-        l_featured_html CLOB;
+        l_featured_id VARCHAR2(10);
+        l_featured_ids apex_t_varchar2:=apex_t_varchar2();
+        l_featured_replace VARCHAR2(200);
         l_thumbnails CLOB;
         l_email users.email%type;
         l_icon_id icon.id%type;
         l_icons apex_t_varchar2:=apex_t_varchar2();
         l_svg_html CLOB;
+        l_close_article BOOLEAN:=FALSE;
         nb_articles PLS_INTEGER;
         n PLS_INTEGER;
 
@@ -88,26 +91,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         END IF;
 
         /* 
-        ** Create section for any featured articles
+        ** Create sections for any featured articles
         */
-        IF (INSTR(pHtml,'<article class="featured">')>0) THEN
-            FOR C IN (
-                SELECT wa.article_id
-                  FROM website_article wa
-                 WHERE wa.website_id=pWebsiteId
-                   AND EXISTS (
-                            SELECT null FROM article a WHERE a.parent_id=wa.article_id AND a.featured='YES'
-                        )
-            )
+        n:=regexp_count(pHtml,'<article class="featured" data-id="([^"]+)"');
+        FOR i IN 1..n 
+        LOOP
+            l_featured_id:=REGEXP_SUBSTR(pHtml,'<article class="featured" data-id="([^"]+)"',1,i,null,1);
+            apex_string.push(l_featured_ids,l_featured_id);
+        END LOOP;
+
+        IF (n>0) THEN
+            FOR C IN (SELECT column_value as article_id FROM TABLE(l_featured_ids))
             LOOP
-                l_featured_html:=l_featured_html || pck_core.buildBlogList(pWebsiteId, C.article_id, pClasses => 'featured');
+                l_featured_replace:='<article class="featured" data-id="' || C.article_id || '">';
+                pHtml:=REPLACE(pHtml,l_featured_replace,l_featured_replace || pck_core.buildBlogList(pWebsiteId, C.article_id, pClasses => 'featured'));
             END LOOP;
-            pHtml:=REPLACE(pHtml,'<article class="featured">','<article class="featured">' || l_featured_html);
         END IF;
 
         /* Enclose content in <article> element if none exists */
-        IF (INSTR(pHtml,'<article')=0) THEN
-            pHtml:='<article class="flow">' || pHtml || '</article>';
+        IF (pHtml IS NULL OR INSTR(pHtml,'<article')=0) THEN
+            pHtml:='<article class="flow breakout">' || pHtml;
+            l_close_article:=TRUE;
         END IF;
 
         /* Remove empty elements */
@@ -142,6 +146,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 <button type="button" class="next">&gt;</button>
             </div>';
             --l_javascript:=l_javascript || getJSCode('deploy_gallery.js');
+        END IF;
+
+        IF (l_close_article) THEN
+            pHtml:=pHtml || '</article>';
         END IF;
 
         /* Append Contact Form */
@@ -407,11 +415,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         deleteFragment(l_body_html,'<main','>');
         deleteFragment(l_body_html,'</main','>');
         deleteFragment(l_body_html,'<footer','</footer>');
+        deleteFragment(l_body_html,'<svg>','</svg>');
         LOOP
             EXIT WHEN deleteFragment(l_body_html,'<svg class="curve','</svg>')=0;
         END LOOP;
-        deleteFragment(l_body_html,'<svg>','</svg>');
-        replaceFragment(l_body_html,'<article class="featured','</article>','<article class="featured"></article>');
+        LOOP
+            EXIT WHEN deleteFragment(l_body_html,'<ol class="featured','</ol>')=0;
+        END LOOP;
 
         /* Means no CSS file included in zip - set website.css to NULL*/
         apex_json.open_object;
