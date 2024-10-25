@@ -435,7 +435,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    ORDER BY art.display_order NULLS FIRST, art.updated_date DESC ) 
         LOOP
             IF (C.rn=1) THEN
-                l_html:=l_html || '<ol class="breakout grid-auto-fit" role="list" >';
+                l_html:=l_html || '<ol class="' || pClasses || ' breakout grid-auto-fit' || CASE WHEN C.nb<2 THEN ' auto-fill' END || '" role="list" >';
             END IF;
             l_html:=l_html || 
             '<li class="card">';
@@ -446,18 +446,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             ELSIF (C.cover_icon_id IS NOT NULL) THEN
                 l_html:=l_html || 
                 '<svg class="icon" aria-hidden="true" focusable="false"><use href="#' || C.cover_icon_id || '"></use></svg>';
-            ELSE
-                l_html:=l_html || 
-                '<svg class="icon" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
             END IF;
             l_href:='/' || l_path || '/' || apex_string_util.get_slug(C.title);
             pos:=regexp_instr(C.body_html,'<[^/>]*>',1,2);
             l_html:=l_html || 
-                '<h2>
-                    <a href="' || l_href || '">' || C.title || '</a>
-                </h2>
-                <p>' || getExcerpt(SUBSTR(C.body_html,pos,100))  || '</p>
-                <!--<a href="' || l_href || '">Read More</a>-->
+                '<div class="text-content flow">
+                    <h2>
+                        <a href="' || l_href || '">' || C.title || '</a>
+                    </h2>
+                    <p>' || getExcerpt(SUBSTR(C.body_html,pos,100))  || '</p>
+                </div>
+                <div class="ending-text">
+                    <span>' || TO_CHAR(C.deployed_date,'Mon YYYY') || '</span>
+                    <span>' || C.word_count || ' words</span>
+                </div>
             </li>';
             IF (C.rn=C.nb) THEN
                 l_html:=l_html || '</ol>';
@@ -480,7 +482,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         ELSE
             l_href:='#';
         END IF;
-        l_html:='<!--CMS START-->';
         l_html:=l_html || '<ol class="gallery-list">';
         FOR C IN (SELECT art.title, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
                     FROM article art, asset ass
@@ -497,7 +498,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             </li>';
         END LOOP;
         l_html:=l_html || '</ol>';
-        l_html:=l_html || '<!--CMS END-->';
 
         RETURN (l_html);
     END;
@@ -907,7 +907,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             },
                             {
                                 name: /^(div|section|article|p)$/,
-                                classes: true
+                                classes: true,
+                                attributes: true
                             },
                             {
                                 name: 'img',
