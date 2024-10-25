@@ -121,6 +121,12 @@
 .ck-content .align-justify {
     text-align: justify;
 }
+
+.ck-editor__editable > .ck-placeholder::before {
+    color: var(--color-solid);
+    font-family: monospace;
+}
+
 /******************/
 /* PAGE CONTAINER */
 /******************/
