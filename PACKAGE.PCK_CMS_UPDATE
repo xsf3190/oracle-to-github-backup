@@ -105,7 +105,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     /*
      **  Create wrapper html for radio elements
      */
-    FUNCTION buildRadioWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN) RETURN VARCHAR2 IS
+    FUNCTION buildRadioWrapper(pId IN VARCHAR2, pColumn IN VARCHAR2, pValue IN VARCHAR2, pCanUsePopover IN BOOLEAN, pDisabled IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2 IS
         l_column_name user_tab_columns.column_name%type;
         l_data_length user_tab_columns.data_length%type;
         l_comments user_col_comments.comments%type;
@@ -139,7 +139,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             l_html:=l_html || 
             '<div>
                 <label for="' || l_column_name || '-' || LOWER(C.column_value) || '">' || C.column_value|| '</label>
-                <input class="cms" type="radio" data-column="' || pColumn || '" data-id="' || pId || '" id="' || l_column_name || '-' || LOWER(C.column_value) || '" name="' || l_column_name || '" value="' || C.column_value || '"' ||
+                <input ' || CASE WHEN pDisabled THEN 'disabled ' END || 'class="cms" type="radio" data-column="' || pColumn || '" data-id="' || pId || '" id="' || l_column_name || '-' || LOWER(C.column_value) || '" name="' || l_column_name || '" value="' || C.column_value || '"' ||
                 CASE WHEN pValue=C.column_value THEN ' checked' END || '>
                 </input> 
             </div>';
@@ -533,7 +533,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     '<span><strong>Original Size: </strong>' || apex_string_util.to_display_filesize(C.bytes) || '</span>' ||
                     '<span><strong>Original Dimensions: </strong>' || C.width || 'x' || C.height || '</span>' ||
                     '<span>' || pck_core.buildPushableButton('copy-url', '< >') || '<span></span></span>' ||
-                    '<span>' || pck_core.buildPushableButton('copy-img', '< >') || '<span></span></span>' ||
                 '</figcaption>' ||
             '</figure>' ||
             '<form>' ||
@@ -567,6 +566,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_content CLOB;
         l_website_id website_article.website_id%type;
         l_article_id website_article.article_id%type;
+        l_sub_articles PLS_INTEGER;
+        l_disabled_collection BOOLEAN;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
@@ -588,10 +589,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                      AND article_id=l_article_id
                      AND user_id=l_session_data.user_id) 
         LOOP
+            IF (C.collection_type<>'N/A') THEN
+                SELECT COUNT(*) INTO l_sub_articles FROM dual WHERE EXISTS (SELECT NULL FROM article WHERE parent_id=l_article_id);
+                l_disabled_collection:=l_sub_articles>0;
+            END IF;
             l_content:=l_content || 
             '<form>' ||
                 buildInputWrapper(pId, 'website_article.navigation_label', C.navigation_label, l_session_data.canuse_popover) ||
-                buildRadioWrapper(pId, 'website_article.collection_type', C.collection_type, l_session_data.canuse_popover) || 
+                buildRadioWrapper(pId, 'website_article.collection_type', C.collection_type, l_session_data.canuse_popover, l_disabled_collection) || 
                 buildTextareaWrapper(pId, 'website_article.page_title', C.page_title, l_session_data.canuse_popover) ||
                 buildTextareaWrapper(pId, 'website_article.page_description', C.page_description, l_session_data.canuse_popover) ||
                 buildRadioWrapper(pId, 'website_article.contact_form', C.contact_form, l_session_data.canuse_popover) || 
@@ -599,8 +604,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     <summary>CODEPEN FEATURES</summary>' ||
                     pck_core.buildPushableButton('edit-codepen','&#9917;') ||
                     pck_core.buildPushableButton('upload-codepen','&#9917;') ||
-                '</details>
-                <details>
+                '</details>' || 
+                CASE WHEN l_sub_articles>0 THEN
+                '<details>
+                    <summary>FEATURED ' || UPPER(C.navigation_label) || '</summary>' ||
+                    pck_core.buildPushableButton('copy-html', '&#9733;') || '<span class="result"></span>' ||
+                '</details>' 
+                END ||
+                '<details>
                     <summary>DELETE PAGE</summary>' ||
                     pck_core.buildPushableButton('delete-page', '&#128686;') ||
                 '</details>
