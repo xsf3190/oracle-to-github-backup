@@ -450,17 +450,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             l_href:='/' || l_path || '/' || apex_string_util.get_slug(C.title);
             pos:=regexp_instr(C.body_html,'<[^/>]*>',1,2);
             l_html:=l_html || 
-                '<div class="text-content flow">
-                    <h2>
-                        <a href="' || l_href || '">' || C.title || '</a>
-                    </h2>
-                    <p>' || getExcerpt(SUBSTR(C.body_html,pos,100))  || '</p>
-                </div>
-                <div class="ending-text">
-                    <span>' || TO_CHAR(C.deployed_date,'Mon YYYY') || '</span>
-                    <span>' || C.word_count || ' words</span>
-                </div>
-            </li>';
+                '<div class="text-content flow">' ||
+                    '<h2>' ||
+                        '<a href="' || l_href || '">' || C.title || '</a>' ||
+                    '</h2>' ||
+                    '<p>' || getExcerpt(SUBSTR(C.body_html,pos,100))  || '</p>' ||
+                '</div>' ||
+                '<div class="ending-text">' ||
+                    '<span>' || TO_CHAR(C.deployed_date,'Mon YYYY') || '</span>' ||
+                    '<span>' || C.word_count || ' words</span>' ||
+                '</div>' ||
+            '</li>';
             IF (C.rn=C.nb) THEN
                 l_html:=l_html || '</ol>';
             END IF;
