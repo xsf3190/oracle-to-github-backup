@@ -681,7 +681,7 @@ const copy_url = async (e) => {
  **  COPY HTML SNIPPET TO INCLuDE FEATURED SUB-ARTICLES
  */
 const copy_html = async (e) => {
-    const html = '<article class="featured" data-id="' + gArticleId + '"></article>';
+    const html = '<article class="featured full-width" data-id="' + gArticleId + '"></article>';
     try {
         await navigator.clipboard.writeText(html);
         const result = e.target.nextSibling;
@@ -1449,8 +1449,10 @@ const upload_codepen = async () => {
     const file = await fileHandle.getFile();
 
     execProcess( "codepen/"+gWebsiteId+","+gArticleId,"POST",file).then( (data) => {
-        editor_status = "init";        
-        editor.setData(data.html);
+        if (data.html) {
+            editor_status = "init";        
+            editor.setData(data.html);
+        }
         popupOpen("CODEPEN UPLOAD COMPLETED",data.message);
     });
 }
