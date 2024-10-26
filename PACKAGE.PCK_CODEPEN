@@ -70,6 +70,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     IS
         l_featured_id VARCHAR2(10);
         l_featured_ids apex_t_varchar2:=apex_t_varchar2();
+        l_featured_regex VARCHAR2(200);
         l_featured_replace VARCHAR2(200);
         l_thumbnails CLOB;
         l_email users.email%type;
@@ -81,6 +82,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         n PLS_INTEGER;
 
     BEGIN
+        /* Build navigation label collection once */
         IF (g_nav_labels IS NULL) THEN
             SELECT wa.article_id, wa.navigation_label
               BULK COLLECT INTO g_nav_labels
@@ -93,17 +95,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* 
         ** Create sections for any featured articles
         */
-        n:=regexp_count(pHtml,'<article class="featured" data-id="([^"]+)"');
+        l_featured_regex:='<article class="featured full-width" data-id="([^"]+)">';
+        n:=regexp_count(pHtml,l_featured_regex);
         FOR i IN 1..n 
         LOOP
-            l_featured_id:=REGEXP_SUBSTR(pHtml,'<article class="featured" data-id="([^"]+)"',1,i,null,1);
+            l_featured_id:=REGEXP_SUBSTR(pHtml,l_featured_regex,1,i,null,1);
             apex_string.push(l_featured_ids,l_featured_id);
         END LOOP;
 
         IF (n>0) THEN
             FOR C IN (SELECT column_value as article_id FROM TABLE(l_featured_ids))
             LOOP
-                l_featured_replace:='<article class="featured" data-id="' || C.article_id || '">';
+                l_featured_replace:=replace(l_featured_regex,'([^"]+)',C.article_id);
                 pHtml:=REPLACE(pHtml,l_featured_replace,l_featured_replace || pck_core.buildBlogList(pWebsiteId, C.article_id, pClasses => 'featured'));
             END LOOP;
         END IF;
@@ -124,7 +127,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         pHtml:=REGEXP_REPLACE(pHtml,' style="[^"]*"');
 
         /* Construct start of <main> element */
-        pHtml:='<main class="content-grid">' || pHtml;
+        --pHtml:='<main class="content-grid">' || pHtml;
     
         /* Build index if page is index of Blog / Media / Product */
         IF (pCollectionType='BLOG') THEN
@@ -161,8 +164,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         nb_articles:=MOD(regexp_count(pHtml,'<article'),2);
 
-        /* Assemble rest of document */
-        pHtml:=pHeader || buildNavLabels(pArticleId) || pHtml  || CASE WHEN nb_articles=1 THEN g_curve ELSE REPLACE(g_curve,'full-width','full-width height-2x') END || '</main>' || pFooter;
+        /* Assemble document */
+        pHtml:=pHeader || 
+               buildNavLabels(pArticleId) || 
+               '<main class="content-grid">' || 
+                    pHtml  || CASE WHEN nb_articles=1 THEN g_curve ELSE REPLACE(g_curve,'full-width','full-width height-2x') END || 
+                '</main>' || 
+               pFooter;
 
         /* Append all referenced svg symbols */
         n:=regexp_count(pHtml,'<use href="#([^"]+)');
@@ -292,64 +300,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_files apex_zip.t_files;
         l_session_data pck_core.session_data_rt;
         l_nb_files PLS_INTEGER:=0;
-        l_pos PLS_INTEGER;
+        l_updated_files apex_t_varchar2:=apex_t_varchar2();
 
-        FUNCTION extractFragment(pClob IN OUT NOCOPY CLOB, pStartChar IN VARCHAR2, pEndChar IN VARCHAR2) RETURN CLOB IS
-            pos1 PLS_INTEGER;
-            pos2 PLS_INTEGER;
+        PROCEDURE send_json(pMessage IN VARCHAR2) IS
+            l_message VARCHAR2(200);
         BEGIN
-            pos1:=dbms_lob.instr(pClob,pStartChar,1,1);
-            IF (pos1>0) THEN
-                pos2:=dbms_lob.instr(pClob,pEndChar,pos1,1);
-                IF (pos2>0) THEN
-                    pos2:=pos2+LENGTH(pEndChar);
-                    RETURN (dbms_lob.substr(pClob, pos2-pos1, pos1));
-                END IF;
+            IF (l_updated_files.COUNT>0) THEN
+                l_message:='UPLOADED: ' || apex_string.join(l_updated_files,',');
             END IF;
-            RETURN NULL;
-        END;
-
-        PROCEDURE deleteFragment(pClob IN OUT NOCOPY CLOB, pStartChar IN VARCHAR2, pEndChar IN VARCHAR2) IS
-            pos1 PLS_INTEGER;
-            pos2 PLS_INTEGER;
-        BEGIN
-            pos1:=dbms_lob.instr(pClob,pStartChar,1,1);
-            IF (pos1>0) THEN
-                pos2:=dbms_lob.instr(pClob,pEndChar,pos1,1);
-                IF (pos2>0) THEN
-                    pos2:=pos2+LENGTH(pEndChar);
-                    dbms_lob.fragment_delete(pClob, pos2-pos1, pos1);
-                END IF;
-            END IF;
-        END;
-        
-        FUNCTION deleteFragment(pClob IN OUT NOCOPY CLOB, pStartChar IN VARCHAR2, pEndChar IN VARCHAR2) RETURN PLS_INTEGER IS
-            pos1 PLS_INTEGER;
-            pos2 PLS_INTEGER;
-        BEGIN
-            pos1:=dbms_lob.instr(pClob,pStartChar,1,1);
-            IF (pos1>0) THEN
-                pos2:=dbms_lob.instr(pClob,pEndChar,pos1,1);
-                IF (pos2>0) THEN
-                    pos2:=pos2+LENGTH(pEndChar);
-                    dbms_lob.fragment_delete(pClob, pos2-pos1, pos1);
-                END IF;
-            END IF;
-            RETURN (pos1);
-        END;
-
-        PROCEDURE replaceFragment(pClob IN OUT NOCOPY CLOB, pStartChar IN VARCHAR2, pEndChar IN VARCHAR2, pReplaceChar IN VARCHAR2) IS
-            pos1 PLS_INTEGER;
-            pos2 PLS_INTEGER;
-        BEGIN
-            pos1:=dbms_lob.instr(pClob,pStartChar,1,1);
-            IF (pos1>0) THEN
-                pos2:=dbms_lob.instr(pClob,pEndChar,pos1,1);
-                IF (pos2>0) THEN
-                    pos2:=pos2+LENGTH(pEndChar);
-                    dbms_lob.fragment_replace(pClob, pos2-pos1, LENGTH(pReplaceChar), pos1, pReplaceChar);
-                END IF;
-            END IF;
+            apex_json.open_object;
+            apex_json.write('success', TRUE);
+            apex_json.write('message', l_message || pMessage);
+            apex_json.close_object;
         END;
 
     BEGIN
@@ -363,71 +325,71 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         FOR i in 1 .. l_files.COUNT LOOP
             IF (INSTR(l_files(i),'/src/style.css')>0) THEN
-                l_css:=apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name => l_files(i)));
+                l_css:=replace(apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name => l_files(i))),chr(10));
                 l_nb_files:=l_nb_files+1;
             ELSIF (INSTR(l_files(i),'/src/index.html')>0) THEN
-                l_body_html:=apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob=>l_zip, p_file_name=>l_files(i)));
-                /* Extract header, main and footer elements */
-                l_header:=extractFragment(l_body_html,'<header','</header>');
-                l_main:=extractFragment(l_body_html,'<main','</main>');
-                l_footer:=extractFragment(l_body_html,'<footer','</footer>');
+                l_body_html:=replace(apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob=>l_zip, p_file_name=>l_files(i))),chr(10));
+                /* Extract header and footer elements */
+                l_header:=regexp_substr(l_body_html,'<header.+?</header>');
+                l_main:=regexp_substr(l_body_html,'<main.+?</main>');
+                l_footer:=regexp_substr(l_body_html,'<footer.+?</footer>');
                 l_nb_files:=l_nb_files+1;
             END IF;
         END LOOP;
 
         IF (l_nb_files<2) THEN
             apex_json.open_object;
-            apex_json.write('success', TRUE);
-            apex_json.write('message', '** NOT A CODEPEN EXPORT FILE **');
+            apex_json.write('success', FALSE);
+            apex_json.write('message', '** ZIP MUST INCLUDE FILES "/src/index.html", "/src/css.styles" **');
             apex_json.close_object;
             RETURN;
         END IF;
 
-        /* Remove :root {..} element */
-        l_pos:=INSTR(l_css,':root');
-        IF (l_pos>0) THEN
-            l_css:=SUBSTR(l_css,INSTR(l_css,'}')+1);
-            l_css:=LTRIM(l_css,chr(10));
-        END IF;
+        /* Remove :root prepended in getCodepen procedure */
+        l_css:=regexp_replace(l_css,':root.+?}');
 
         FOR C IN (SELECT css, header, footer FROM website WHERE id=l_website_id) LOOP
             IF (dbms_lob.compare(C.css,l_css)<>0) THEN
                 UPDATE website SET css=l_css, updated_date=current_timestamp WHERE id=l_website_id;
-                pck_core.log('CSS updated');
+                apex_string.push(l_updated_files,'CSS');
             END IF;
             IF (dbms_lob.compare(C.header,l_header)<>0) THEN
                 UPDATE website SET header=l_header, updated_date=current_timestamp WHERE id=l_website_id;
-                pck_core.log('header updated');
+                apex_string.push(l_updated_files,'HEADER');
             END IF;
             IF (dbms_lob.compare(C.footer,l_footer)<>0) THEN
                 UPDATE website SET footer=l_footer, updated_date=current_timestamp WHERE id=l_website_id;
-                pck_core.log('footer updated');
+                apex_string.push(l_updated_files,'FOOTER');
             END IF;
         END LOOP;
+
+        IF (INSTR(l_main,'<pre>')>0) THEN
+            apex_json.open_object;
+            apex_json.write('success', TRUE);
+            apex_json.write('message', CASE WHEN l_updated_files.COUNT>0 THEN 'UPLOADED: ' || apex_string.join(l_updated_files,',') END || ' - ** HTML SKIPPED AS CONTAINS &lt;PRE&gt; ELEMENT **');
+            apex_json.close_object;
+            RETURN;
+        END IF;
         
-        /* remove design tokens and font link */
-
-
-        SELECT body_html INTO l_body_html FROM article WHERE id=l_article_id FOR UPDATE;
+        /* Remove elements added in getCodepen procedure */
+        l_main:=regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(l_main,
+            '<ol class="featured.+?</ol>'),
+            '<form.+?</form>'),
+            '<svg.+?</svg>'),
+            '<main.+?>'),
+            '</main>');
         
-        deleteFragment(l_body_html,'<header','</header>');
-        deleteFragment(l_body_html,'<nav','</nav>');
-        deleteFragment(l_body_html,'<main','>');
-        deleteFragment(l_body_html,'</main','>');
-        deleteFragment(l_body_html,'<footer','</footer>');
-        deleteFragment(l_body_html,'<svg>','</svg>');
-        LOOP
-            EXIT WHEN deleteFragment(l_body_html,'<svg class="curve','</svg>')=0;
-        END LOOP;
-        LOOP
-            EXIT WHEN deleteFragment(l_body_html,'<ol class="featured','</ol>')=0;
+        FOR C IN (SELECT body_html FROM article WHERE id=l_article_id) LOOP
+            IF (dbms_lob.compare(C.body_html,l_main)<>0) THEN
+                UPDATE article SET body_html=l_main, updated_date=current_timestamp WHERE id=l_article_id;
+                apex_string.push(l_updated_files,'MAIN');
+            END IF;
         END LOOP;
 
-        /* Means no CSS file included in zip - set website.css to NULL*/
         apex_json.open_object;
         apex_json.write('success', TRUE);
-        apex_json.write('message', 'Codepen zip uploaded successfully');
-        apex_json.write('html',l_body_html);
+        apex_json.write('message', CASE WHEN l_updated_files.COUNT>0 THEN 'UPLOADED: ' || apex_string.join(l_updated_files,',') END );
+        apex_json.write('html',l_main);
         apex_json.close_object;
 
         EXCEPTION
