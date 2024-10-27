@@ -48,7 +48,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     END;
 
     /*
-    ** HTML document body structured as
+    ** HTML document body structure
     **
     ** <header>
     ** <nav>
@@ -96,7 +96,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         ** Create sections for any featured articles
         */
         l_featured_regex:='<article class="featured full-width" data-id="([^"]+)">';
-        n:=regexp_count(pHtml,l_featured_regex);
+        n:=NVL(regexp_count(pHtml,l_featured_regex),0);
         FOR i IN 1..n 
         LOOP
             l_featured_id:=REGEXP_SUBSTR(pHtml,l_featured_regex,1,i,null,1);
@@ -172,7 +172,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 '</main>' || 
                pFooter;
 
-        /* Append all referenced svg symbols */
+        /* 
+        ** Append all referenced svg symbols 
+        */
         n:=regexp_count(pHtml,'<use href="#([^"]+)');
         FOR i IN 1..n 
         LOOP
@@ -366,7 +368,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         IF (INSTR(l_main,'<pre>')>0) THEN
             apex_json.open_object;
             apex_json.write('success', TRUE);
-            apex_json.write('message', CASE WHEN l_updated_files.COUNT>0 THEN 'UPLOADED: ' || apex_string.join(l_updated_files,',') END || ' - ** HTML SKIPPED AS CONTAINS &lt;PRE&gt; ELEMENT **');
+            apex_json.write('message', CASE WHEN l_updated_files.COUNT>0 THEN 'UPLOADED: ' || apex_string.join(l_updated_files,',') END || ' - ** &lt;main&gt; SKIPPED - CONTAINS &lt;PRE&gt; ELEMENT **');
             apex_json.close_object;
             RETURN;
         END IF;
