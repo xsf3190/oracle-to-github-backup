@@ -355,7 +355,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_headers:=
         '/*' || chr(10) || 
             q'[Content-Security-Policy: default-src 'none';]' ||
-            q'[ img-src 'self' res.cloudinary.com;]' ||
+            q'[ img-src 'self' data: res.cloudinary.com;]' ||
             q'[ font-src 'self';]' ||
             q'[ style-src 'self';]' ||
             q'[ script-src 'self';]' ||
@@ -370,6 +370,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                                            || ' href="/favicon.' || l_favicons(i).format || '" ' 
                                            || l_favicons(i).attr || '>' || chr(10);
         END LOOP;
+
+        l_favicon_html:=
+        '<link rel="icon" href="/favicon.ico" sizes="any">' ||
+        q'{<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewport='0 0 100 100'><rect width='100' height='100' stroke='none' fill='#0042bf'><text x='50' y='50' text-anchor='middle' fill='white' stroke='white' alignment-baseline='middle' font-family='system-ui'>SR</text></svg>" sizes="any" type="image/svg+xml">}';
 
         /* 
         ** Build individual website pages
