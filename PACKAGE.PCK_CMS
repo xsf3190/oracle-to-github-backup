@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS" is
     --
+    PROCEDURE uploadFavicon;
+    --
     PROCEDURE getAccountUsage;
     --
     PROCEDURE getArticle(pArticleId IN article.id%type);
@@ -208,6 +210,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error;
+    END;
+
+    PROCEDURE uploadFavicon IS 
+        l_svg LONG:='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>';
+        l_url varchar2(300):='https://api.cloudinary.com/v1_1/mrbapex/image/upload';
+        -- -X POST --data 'file=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==&timestamp=173719931&api_key=436464676&signature=a781d61f86a6f818af''
+        l_params varchar2(200);
+        pData CLOB;
+        pBody CLOB;
+        l_parm_names apex_application_global.VC_ARR2;
+        l_parm_values apex_application_global.VC_ARR2;
+        l_timestamp NUMBER:=trunc((cast(current_timestamp at time zone 'UTC' as date) - to_date('01-jan-1970','dd-mon-yyyy')) * (86400));
+        l_signature VARCHAR2(100);
+        l_string_to_sign varchar2(2000);  
+    BEGIN
+        l_svg:=utl_raw.cast_to_varchar2(utl_encode.base64_encode(utl_raw.cast_to_raw(l_svg)));
+        pBody:='file=data:image/svg;base64,' || l_svg;
+        apex_web_service.clear_request_headers;
+        FOR C IN (SELECT cld_cloud_name, cld_api_key FROM users WHERE id=44) loop
+        l_params:='timestamp='||(CAST(SYS_EXTRACT_UTC(SYSTIMESTAMP) AS DATE) - DATE'1970-01-01') * 86400  || 'api_key='||C.cld_api_key;
+        apex_web_service.g_request_headers(1).name := 'timestamp';
+        apex_web_service.g_request_headers(1).value := l_timestamp;   
+        apex_web_service.g_request_headers(2).name := 'api_key';
+        apex_web_service.g_request_headers(2).value := C.cld_api_key;
+        apex_web_service.g_request_headers(3).name := 'upload_preset';
+        apex_web_service.g_request_headers(3).value := 'favicon';
+        apex_web_service.g_request_headers(4).name := 'signature';
+        apex_web_service.g_request_headers(4).value :=dbms_crypto.hash(utl_raw.cast_to_raw(l_params || pck_api.getCloudinaryAPISecret(44)), dbms_crypto.HASH_SH1);
+        end loop;
+        pData := apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'POST', p_body=>pBody);
+        pck_core.log(pData);
     END;
 
     /*
