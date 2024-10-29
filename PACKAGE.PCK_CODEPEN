@@ -31,6 +31,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     FUNCTION buildNavLabels(pArticleId IN article.id%type) RETURN VARCHAR2 IS
         l_nav_labels LONG;
     BEGIN
+        IF (g_nav_labels.COUNT<2) THEN
+            RETURN (NULL);
+        END IF;
         l_nav_labels:=
         '<nav aria-label="Main Navigation" class="content-grid">' || 
             '<div class="flex-items">';
