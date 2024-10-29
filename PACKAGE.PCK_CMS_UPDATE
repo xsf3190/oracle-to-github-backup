@@ -518,7 +518,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        FOR C IN (SELECT alt_text, favicon, cld_cloud_name, resource_type, public_id, format, width, height, bytes, created_date
+        FOR C IN (SELECT alt_text, cld_cloud_name, resource_type, public_id, format, width, height, bytes, created_date
                     FROM asset 
                    WHERE id=pId
                      AND user_id=l_session_data.user_id) 
@@ -537,7 +537,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             '</figure>' ||
             '<form>' ||
                 buildInputWrapper(pId, 'asset.alt_text', C.alt_text, l_session_data.canuse_popover) ||
-                CASE WHEN C.format IN ('ico','svg','png') THEN buildRadioWrapper(pId, 'asset.favicon', C.favicon, l_session_data.canuse_popover) END ||
                 '<details data-id="' || pId || '">
                     <summary>DELETE MEDIA</summary>' ||
                     pck_core.buildPushableButton('delete-media', '&#128686;') ||
@@ -948,8 +947,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 WHEN 'website.font' THEN
                     UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id;
                     l_getFontUrl:=TRUE;
-                WHEN 'asset.favicon' THEN
-                    UPDATE asset SET favicon=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'asset.alt_text' THEN
                     UPDATE asset SET alt_text=C.value, updated_date=current_timestamp WHERE id=C.id;
                 WHEN 'website.max_width' THEN
