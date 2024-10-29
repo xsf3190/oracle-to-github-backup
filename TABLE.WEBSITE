@@ -27,9 +27,12 @@ CREATE TABLE "WEBSITE"
 	"NETLIFY_DNS_ZONE_ID" VARCHAR2(40), 
 	"HEADER" CLOB, 
 	"FOOTER" CLOB, 
+	"FAVICON_ASSET_ID" NUMBER, 
 	 CONSTRAINT "PK_WEBSITE" PRIMARY KEY ("ID")
   USING INDEX  ENABLE, 
-	 CONSTRAINT "CURRENCY_CHECK" CHECK (price_currency in ('EUR','USD','GBP','CHF')) ENABLE
+	 CONSTRAINT "CURRENCY_CHECK" CHECK (price_currency in ('EUR','USD','GBP','CHF')) ENABLE, 
+	 CONSTRAINT "FK_FAVICON_ASSET_ID" FOREIGN KEY ("FAVICON_ASSET_ID")
+	  REFERENCES "ASSET" ("ID") ON DELETE SET NULL ENABLE
    ) ;
 COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'TEST websites are always deployed as a subdomain of "netlify.app".<p>LIVE websites are deployed only if the Domain name has been purchased either through your Netlify subscription or transferred from a registrar.</p>';
    COMMENT ON COLUMN "WEBSITE"."CONTACT_EMAIL" IS 'Email address to which contact form details are sent';
