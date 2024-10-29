@@ -13,21 +13,13 @@ CREATE TABLE "ASSET"
 	"UPDATED_DATE" TIMESTAMP (6) WITH TIME ZONE, 
 	"USER_ID" NUMBER, 
 	"ALT_TEXT" VARCHAR2(100), 
-	"FAVICON" VARCHAR2(3) DEFAULT 'NO', 
 	 CONSTRAINT "PK_ASSET" PRIMARY KEY ("ID")
   USING INDEX  ENABLE, 
-	 CONSTRAINT "FAVICON_VALUES" CHECK (favicon in ('YES','NO')) ENABLE, 
 	 CONSTRAINT "FK_ARTICLE" FOREIGN KEY ("ARTICLE_ID")
 	  REFERENCES "ARTICLE" ("ID") ON DELETE CASCADE ENABLE
    ) ;
 COMMENT ON COLUMN "ASSET"."ALT_TEXT" IS 'Description of media is mandatory in order to obtain 100% accessibility Lighthouse score';
-   COMMENT ON COLUMN "ASSET"."FAVICON" IS 'Use image as the website favicon<p>SVG is optimal and universal</p><p>ICO to support legacy browsers</p><p>PNG for Apple IPad</p>';
    COMMENT ON TABLE "ASSET"  IS 'Assets contain the metadata of digital media (photos, videos, audio files) uploaded to the Cloudinary account of an authenticated user.';
 
   CREATE UNIQUE INDEX "PK_ASSET" ON "ASSET" ("ID") 
   ;
-
-  CREATE UNIQUE INDEX "ASSET_FAVICON_IX" ON "ASSET" (CASE "FAVICON" WHEN 'YES' THEN TO_CHAR("ARTICLE_ID")||'/'||"FORMAT" END ) 
-  ;
-
-  ALTER TABLE "ASSET" ADD CONSTRAINT "FAVICON_VALUES" CHECK (favicon in ('YES','NO')) ENABLE;
