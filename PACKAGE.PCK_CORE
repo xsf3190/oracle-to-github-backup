@@ -402,7 +402,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         n PLS_INTEGER:=0;
 
         FUNCTION getExcerpt(pText IN VARCHAR2) RETURN VARCHAR2 IS
-            l_excerpt VARCHAR2(100);
+            l_excerpt VARCHAR2(200);
         BEGIN
             l_excerpt:=
                 RTRIM(
