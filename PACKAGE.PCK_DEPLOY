@@ -282,6 +282,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 apex_string.push(l_labels(i).modules,'deploy_gallery.js');
             END IF;
 
+            IF (l_labels(i).contact_form='YES') THEN
+                apex_string.push(l_labels(i).modules,'deploy_contact.js');
+            END IF;
+
             pck_codepen.buildBodyHtml(
                 pUserId, 
                 pWebsiteId, 
@@ -422,17 +426,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_name:='_headers';
         l_deploy_files(l_sha1).file_content:=l_headers;
         l_files.put('_headers', l_sha1);
-        /*
-        IF (l_favicon_svg IS NOT NULL) THEN
-            apex_web_service.clear_request_headers;
-            l_favicon_filename:='favicon.ico';
-            logDeployment(pWebsiteId, pSiteId, 'Building ' || l_favicon_filename);
-            l_favicon_download:=apex_web_service.make_rest_request_b(p_url=>l_favicon_svg||'.ico', p_http_method=>'GET');
-            l_sha1:=LOWER(dbms_crypto.hash(src => l_favicon_download, typ => dbms_crypto.hash_sh1));
-            l_deploy_files(l_sha1).file_name:=l_favicon_filename;
-            l_deploy_files(l_sha1).file_content_b:=l_favicon_download;
-            l_files.put(l_favicon_filename, l_sha1);
-        END IF;*/
 
         logDeployment(pWebsiteId, pSiteId, 'Building CSS website.css');
         l_sha1:=LOWER(dbms_crypto.hash(src => l_style, typ => dbms_crypto.hash_sh1));
