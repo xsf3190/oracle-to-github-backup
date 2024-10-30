@@ -14,18 +14,22 @@ h2,
 h3,
 h4,
 p,
-figure {
-  margin: 0;
-}
-ul,
-ol {
-  list-style: disc;
-  padding: 0;
+figure,
+blockquote {
   margin: 0;
 }
 [role="list"] {
   padding: 0;
   list-style: none;
+}
+blockquote {
+  font-style: italic;
+  background: #f9f9f9;
+  border-left: var(--space-3xs) solid var(--color-primary);
+  margin-inline-start: var(--space-m);
+}
+blockquote > * {
+  padding: var(--space-s);
 }
 img {
   max-width: 100%;
@@ -80,7 +84,7 @@ img {
   --block-size: 20vh;
 }
 svg:nth-child(even of .curve) {
-  transform: rotate(180deg);
+  transform: rotate(180deg) translateY(-1px);
 }
 *:nth-child(even of article),
 header,
