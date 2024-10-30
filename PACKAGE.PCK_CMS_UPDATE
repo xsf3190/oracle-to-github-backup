@@ -477,7 +477,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 buildRadioWrapper(C.id, 'website.price_currency', C.price_currency, l_session_data.canuse_popover) ||
                 CASE WHEN l_delete_html IS NOT NULL THEN
                 '<details><summary>DELETE WEBSITE</summary>' || l_delete_html || '</details>'
-                END || '
+                END ||
+                '<details><summary>TECHNICAL DETAILS</summary><span>Database ID: ' || C.id || '</span></details>
             </form>';
 
             apex_json.write('content', l_content);
@@ -541,6 +542,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     <summary>DELETE MEDIA</summary>' ||
                     pck_core.buildPushableButton('delete-media', '&#128686;') ||
                 '</details>
+                <details><summary>TECHNICAL DETAILS</summary><span>Database ID: ' || pId || '</span></details>
             </form>';            
         END LOOP;
 
@@ -614,6 +616,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     <summary>DELETE PAGE</summary>' ||
                     pck_core.buildPushableButton('delete-page', '&#128686;') ||
                 '</details>
+                <details><summary>TECHNICAL DETAILS</summary><span>Database ID: ' || l_article_id || '</span></details>
             </form>';            
         END LOOP;
 
@@ -642,6 +645,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                         <summary>DELETE ' || UPPER(C.navigation_label) || ' ITEM</summary>' ||
                         pck_core.buildPushableButton('delete-article', '&#128686;') ||
                     '</details>
+                    <details><summary>TECHNICAL DETAILS</summary><span>Database ID: ' || l_article_id || '</span></details>
                 </form>';
             END LOOP;
         END IF;
