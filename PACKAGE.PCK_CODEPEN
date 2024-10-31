@@ -7,6 +7,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
     PROCEDURE buildBodyHtml(
         pUserId IN users.id%type, 
         pWebsiteId IN website.id%type, 
+        pEnv IN VARCHAR2,
         pArticleId IN article.id%type, 
         pCollectionType IN website_article.collection_type%type, 
         pIsMedia IN BOOLEAN, 
@@ -63,6 +64,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     PROCEDURE buildBodyHtml(
         pUserId IN users.id%type, 
         pWebsiteId IN website.id%type, 
+        pEnv IN VARCHAR2,
         pArticleId IN article.id%type, 
         pCollectionType IN website_article.collection_type%type, 
         pIsMedia IN BOOLEAN, 
@@ -110,13 +112,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             FOR C IN (SELECT column_value as article_id FROM TABLE(l_featured_ids))
             LOOP
                 l_featured_replace:=replace(l_featured_regex,'([^"]+)',C.article_id);
-                pHtml:=REPLACE(pHtml,l_featured_replace,l_featured_replace || pck_core.buildBlogList(pWebsiteId, C.article_id, pClasses => 'featured'));
+                pHtml:=REPLACE(pHtml,l_featured_replace,l_featured_replace || pck_core.buildBlogList(pEnv, pWebsiteId, C.article_id, pClasses => 'featured'));
             END LOOP;
         END IF;
 
         /* Enclose content in <article> element if none exists */
         IF (pHtml IS NULL OR INSTR(pHtml,'<article')=0) THEN
-            pHtml:='<article class="flow breakout">' || pHtml;
+            pHtml:='<article class="flow">' || pHtml;
             l_close_article:=TRUE;
         END IF;
 
@@ -134,7 +136,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     
         /* Build index if page is index of Blog / Media / Product */
         IF (pCollectionType='BLOG') THEN
-            pHtml:=pHtml || pck_core.buildBlogList(pWebsiteId, pArticleId);
+            pHtml:=pHtml || pck_core.buildBlogList(pEnv, pWebsiteId, pArticleId);
         ELSIF (pCollectionType='MEDIA') THEN
             pHtml:=pHtml || pck_core.buildMediaList(pWebsiteId, pArticleId);
         ELSIF (pCollectionType='PRODUCT') THEN
@@ -163,6 +165,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             SELECT email INTO l_email FROM users WHERE id=pUserId;
             pHtml:=pHtml || pck_core.buildContactForm(l_email,'xx');
             --l_javascript:=l_javascript || getJSCode('deploy_contact.js');
+        END IF;
+
+        /* 
+        ** All images lazy loaded except first
+        */
+        n:=regexp_count(pHtml,'<img');
+        IF (n>1) THEN
+            FOR i IN 2..n 
+            LOOP
+                pHtml:=REGEXP_REPLACE(pHtml,'<img', '<img loading="lazy"',1,i);
+            END LOOP;
         END IF;
 
         nb_articles:=MOD(regexp_count(pHtml,'<article'),2);
@@ -269,7 +282,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         buildBodyHtml(
             l_session_data.user_id, 
-            l_website_id, 
+            l_website_id,
+            'TEST', 
             pArticleId, 
             l_collection_type, 
             l_is_media, 
@@ -282,7 +296,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         apex_json.write('success', TRUE); 
         apex_json.write('domain_name', l_domain_name);
         apex_json.write('html', l_html);
-        apex_json.write('css', pck_core.buildCssRoot(l_website_id, l_session_data.app_id, FALSE));
+        apex_json.write('css', pck_core.buildCssRoot(l_website_id, l_session_data.app_id));
         apex_json.write('js', l_javascript);
         apex_json.close_object;
 
