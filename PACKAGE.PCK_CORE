@@ -17,9 +17,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     );
     TYPE fluid_type_t IS TABLE OF fluid_type_rt;
     --
-    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pClasses IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
+    FUNCTION buildBlogList( pEnv IN VARCHAR2, pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pClasses IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
-    FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pIncludeFontLink IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2;
+    FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER) RETURN VARCHAR2;
     --
     FUNCTION buildMediaList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks  IN BOOLEAN DEFAULT TRUE) RETURN CLOB;
     --
@@ -311,7 +311,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     /* 
     ** Build page CSS
     */ 
-    FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pIncludeFontLink IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2 IS
+    FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER) RETURN VARCHAR2 IS
         l_fluid_types fluid_type_t;
         l_root_css LONG;
         l_deploy_css CLOB;
@@ -327,29 +327,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             l_fluid_types:=getFluidTypes(C.min_font_size, C.min_width_px, C.min_scale, C.max_font_size, C.max_width_px, C.max_scale);
             
             l_root_css:=
-            ':root {' || chr(10) || chr(9) || '/* Custom properties for Fluid typography, spacing and colors */' || chr(10);
+            ':root {';
             FOR i IN 1..l_fluid_types.COUNT LOOP
-                l_root_css:=l_root_css || chr(9) || l_fluid_types(i).property || ': ' || l_fluid_types(i).value || ';' || chr(10);
+                l_root_css:=l_root_css || l_fluid_types(i).property || ': ' || l_fluid_types(i).value || ';';
             END LOOP;
-            l_root_css:=l_root_css || chr(10) ||
-            chr(9) || '--font-family: "' || C.font || '", ' || CASE WHEN C.category='handwriting' THEN 'cursive' ELSE C.category END || ';' || chr(10) ||
-            chr(9) || '--max-width: ' || C.max_width_px || 'px;' || chr(10) ||
-            chr(9) || '--color-text: ' || C.color_text || ';' || chr(10) ||
-            chr(9) || '--color-background: ' || C.color_background || ';' || chr(10) ||
-            chr(9) || '--color-primary: ' || C.color_primary || ';' || chr(10) ||
-            '}' || chr(10);
-            /*
-            IF (pIncludeFontLink) THEN
-                l_deploy_css:=l_deploy_css ||chr(10) ||
-                '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' || REPLACE(C.font,' ','+') || '&display=swap">' || chr(10);
-            END IF;
-            */
+            l_root_css:=l_root_css ||
+            '--font-family: "' || C.font || '", ' || CASE WHEN C.category='handwriting' THEN 'cursive' ELSE C.category END || ';'||
+            '--max-width: ' || C.max_width_px || 'px;' || 
+            '--color-text: ' || C.color_text || ';' || 
+            '--color-background: ' || C.color_background || ';' || 
+            '--color-primary: ' || C.color_primary || ';' ||
+            '}';
+
             IF (C.css IS NULL) THEN
                 SELECT apex_util.blob_to_clob(file_content)
                   INTO l_deploy_css
                   FROM apex_application_static_files 
                  WHERE application_id=pApplicationId
-                   AND file_name='deploy.css';
+                   AND file_name='deploy.min.css';
             ELSE
                 l_deploy_css:=C.css;
             END IF;
@@ -393,13 +388,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     /*
     ** Construct index of Blog entries
     */
-    FUNCTION buildBlogList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pClasses IN VARCHAR2) RETURN CLOB IS
+    FUNCTION buildBlogList(pEnv IN VARCHAR2, pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pClasses IN VARCHAR2) RETURN CLOB IS
         l_html CLOB;
         l_featured article.featured%type;
         l_path website_article.navigation_label%type;
         l_href VARCHAR2(200);
         pos PLS_INTEGER;
-        n PLS_INTEGER:=0;
 
         FUNCTION getExcerpt(pText IN VARCHAR2) RETURN VARCHAR2 IS
             l_excerpt VARCHAR2(200);
@@ -427,12 +421,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
 
         FOR C IN (SELECT COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY null) rn,
-                            art.body_html, art.title, NVL(art.deployed_date,art.updated_date) deployed_date, art.word_count, art.cover_icon_id, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, ass.height, ass.alt_text
-                    FROM article art, asset ass
-                   WHERE art.parent_id=pArticleId
+                            wa.collection_date_format, art.body_html, art.title,DECODE(pEnv,'TEST',art.deployed_date,'LIVE',art.deployed_date_custom) deployed_date, art.word_count, art.cover_icon_id, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, ass.height, ass.alt_text
+                    FROM website_article wa, article art, asset ass
+                   WHERE wa.article_id=pArticleId
+                     AND art.parent_id=wa.article_id
                      AND art.featured=NVL(l_featured,art.featured)
                      AND ass.id(+)=art.cover_asset_id
-                   ORDER BY art.display_order NULLS FIRST, art.updated_date DESC ) 
+                   ORDER BY deployed_date DESC ) 
         LOOP
             IF (C.rn=1) THEN
                 l_html:=l_html || '<ol class="' || pClasses || ' breakout grid-auto-fit' || CASE WHEN C.nb<2 THEN ' auto-fill' END || '" role="list" >';
@@ -440,9 +435,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             l_html:=l_html || 
             '<li class="card">';
             IF (C.cld_cloud_name IS NOT NULL) THEN
-                n:=n+1; 
                 l_html:=l_html || 
-                '<img '|| CASE WHEN n>4 THEN 'loading="lazy" ' END || 'src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" width="'|| C.width || '" height="' || C.height || '" alt="' || C.alt_text || '">';
+                '<img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" width="'|| C.width || '" height="' || C.height || '" alt="' || C.alt_text || '">';
             ELSIF (C.cover_icon_id IS NOT NULL) THEN
                 l_html:=l_html || 
                 '<svg class="icon" aria-hidden="true" focusable="false"><use href="#' || C.cover_icon_id || '"></use></svg>';
@@ -457,7 +451,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     '<p>' || getExcerpt(SUBSTR(C.body_html,pos,100))  || '</p>' ||
                 '</div>' ||
                 '<div class="ending-text">' ||
-                    '<span>' || TO_CHAR(C.deployed_date,'Mon YYYY') || '</span>' ||
+                    CASE WHEN NVL(C.collection_date_format,'NONE')<>'NONE' THEN
+                    '<span>' || TO_CHAR(NVL(C.deployed_date,current_timestamp),'fm'||C.collection_date_format) || '</span>'
+                    END ||
                     '<span>' || C.word_count || ' words</span>' ||
                 '</div>' ||
             '</li>';
