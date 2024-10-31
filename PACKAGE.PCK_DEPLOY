@@ -102,7 +102,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
             argument_position => 3,
-            argument_value => CASE WHEN l_env='LIVE' THEN '.min.js' ELSE '.js' END
+            argument_value => l_env
         );
         dbms_scheduler.set_job_argument_value(
             job_name => l_job_name,
@@ -243,13 +243,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
           BULK COLLECT INTO l_labels
           FROM
           (
-        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.display_order, COALESCE(a.updated_date,a.created_date) lastmod, a.word_count, w.header, a.body_html body_html, w.footer
+        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.display_order, a.updated_date lastmod, a.word_count, w.header, a.body_html body_html, w.footer
           FROM website w, website_article wa, article a
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
            AND wa.article_id=a.id
          UNION ALL
-        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001), COALESCE(a.deployed_date, a.updated_date) lastmod, a.word_count, w.header, a.body_html, w.footer
+        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001), a.updated_date lastmod, a.word_count, w.header, a.body_html, w.footer
           FROM website w, website_article wa, article a 
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
@@ -267,8 +267,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         
         FOR i IN 1..l_labels.COUNT LOOP
             
-            apex_string.push(l_labels(i).modules,'web-vitals.js');
-            apex_string.push(l_labels(i).modules,'deploy_metric.js');
+            apex_string.push(l_labels(i).modules,'web-vitals.js'); /* already inified from google download */
+            apex_string.push(l_labels(i).modules,'deploy_metric.min.js');
 
             IF (l_labels(i).collection_type='BLOG') THEN
                 l_is_blog:=TRUE;
@@ -279,16 +279,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             ELSIF (l_labels(i).collection_type='PRODUCT') THEN
                 apex_string.push(l_labels(i).modules,'deploy_cart.js');
             ELSIF (l_labels(i).collection_type IS NULL AND l_is_media) THEN
-                apex_string.push(l_labels(i).modules,'deploy_gallery.js');
+                apex_string.push(l_labels(i).modules,'deploy_gallery.min.js');
             END IF;
 
             IF (l_labels(i).contact_form='YES') THEN
-                apex_string.push(l_labels(i).modules,'deploy_contact.js');
+                apex_string.push(l_labels(i).modules,'deploy_contact.min.js');
             END IF;
 
             pck_codepen.buildBodyHtml(
                 pUserId, 
                 pWebsiteId, 
+                pEnv,
                 l_labels(i).article_id, 
                 l_labels(i).collection_type, 
                 l_is_media, 
@@ -301,7 +302,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END LOOP;
 
         /* 
-        ** Favicons are image files uploaded through the CMS to the Asset table.
+        ** The site favicon is an SVG format image file uploaded through the CMS to the Asset table.
         */
         FOR C IN (SELECT cld_cloud_name, resource_type, public_id, format FROM asset WHERE id=l_favicon_asset_id) LOOP
            l_favicon_url:=pck_media.getCloudinaryUrl(C.cld_cloud_name,C.resource_type,C.public_id,C.format, 96) || '.svg';
@@ -310,11 +311,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         /* Web font is self-hosted - build @font-face css at start of stylesheet */
         l_style:=
-        '@font-face {' || chr(10) ||
-           'font-family: ''' || l_font || ''';' || chr(10) ||
-           'src: url("/' || l_font_filename || '") format("woff2");' || chr(10) ||
-           'font-display: swap;' || chr(10) ||
-        '}' || chr(10) || pck_core.buildCssRoot(pWebsiteId, pApplicationId) || chr(10);
+        '@font-face {' || 
+           'font-family: ''' || l_font || ''';' ||
+           'src: url("/' || l_font_filename || '") format("woff2");' ||
+           'font-display: swap;' ||
+        '}' || pck_core.buildCssRoot(pWebsiteId, pApplicationId);
         --l_style_sha256_raw:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_style,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
         --l_style_sha256_b64:=utl_raw.cast_to_varchar2(utl_encode.base64_encode(l_style_sha256_raw));
 
@@ -322,7 +323,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_headers:=
         '/*' || chr(10) || 
             q'[Content-Security-Policy: default-src 'none';]' ||
-            q'[ img-src 'self' data: res.cloudinary.com;]' ||
+            q'[ img-src 'self' res.cloudinary.com;]' ||
             q'[ font-src 'self';]' ||
             q'[ style-src 'self';]' ||
             q'[ script-src 'self';]' ||
@@ -489,6 +490,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         ELSE
             logDeployment(pWebsiteId, pSiteId, 'All files unchanged since last deployment');
         END IF;
+
+        /* Update deployed_date if null */
+        CASE pEnv
+            WHEN 'TEST' THEN
+                UPDATE article SET deployed_date=current_timestamp WHERE deployed_date IS NULL AND parent_id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteId AND collection_type<>'N/A');
+            WHEN 'LIVE' THEN
+                UPDATE article SET deployed_date_custom=current_timestamp WHERE deployed_date_custom IS NULL AND parent_id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteId AND collection_type<>'N/A');
+        END CASE;
 
         EXCEPTION
             WHEN OTHERS THEN
