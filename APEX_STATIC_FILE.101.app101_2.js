@@ -455,7 +455,6 @@ const clickHandler = (e) => {
             return;
         }
         */
-        console.log("got  here");
         const id = e.target.parentElement.dataset.id,
               nav = e.target.closest("nav");
         
@@ -884,6 +883,7 @@ const widget=cloudinary.createUploadWidget(
                         "height": item.uploadInfo.height,
                         "format": item.uploadInfo.format,
                         "cld_cloud_name": item.uploadInfo.url.split("/")[3],
+                        "website_id": gWebsiteId,
                         "article_id": item.uploadInfo.tags[0]
                     });
                 }
@@ -1285,7 +1285,7 @@ const show_subpages = (e) => {
         selected_nav(pageNav, parent_id);
     }
 
-    execProcess( "articles/"+parent_id+","+gArticleId,"GET").then( (data) => {
+    execProcess( "articles/"+gWebsiteEnv+","+parent_id+","+gArticleId,"GET").then( (data) => {
         if (data.html) {
             gArticleId = parent_id;
             editor_status = "init";
