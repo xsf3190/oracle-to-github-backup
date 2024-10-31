@@ -310,7 +310,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        SELECT article_id INTO l_article_id FROM users, JSON_TABLE(l_bodytext,'$.images[*]' COLUMNS (article_id))  WHERE ROWNUM=1 AND users.id=l_session_data.user_id;
+        SELECT website_id, article_id 
+          INTO l_website_id, l_article_id 
+          FROM users, JSON_TABLE(l_bodytext,'$.images[*]' COLUMNS (website_id, article_id))  WHERE ROWNUM=1 AND users.id=l_session_data.user_id;
 
         INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, display_order, created_date, user_id)
         SELECT seq_asset.nextval, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, seq_asset.currval, current_timestamp, l_session_data.user_id
@@ -319,12 +321,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         UPDATE article SET (cover_asset_id, nb_assets) = (SELECT  MIN(id), COUNT(*) FROM asset WHERE article_id=l_article_id)
          WHERE id=l_article_id;
 
-        SELECT w.favicon_asset_id, wa.website_id INTO l_favicon_asset_id, l_website_id FROM website_article wa, website w WHERE wa.article_id=l_article_id AND w.id=wa.website_id;
-        IF (l_favicon_asset_id IS NULL) THEN
+        /* Use any SVG image for the website favicon */
+        FOR C IN (SELECT favicon_asset_id FROM website WHERE id=l_website_id AND favicon_asset_id IS NULL)
+        LOOP
             UPDATE website 
                SET favicon_asset_id=(SELECT MIN(id) FROM asset WHERE article_id=l_article_id AND format='svg')
              WHERE id=l_website_id;
-        END IF;
+        END LOOP;
 
         pck_media.getThumbnails(l_article_id,pDeploy=>FALSE,pHtml=>l_thumbnails);
 
@@ -376,6 +379,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         l_content CLOB;
         l_collection_type website_article.collection_type%type;
         l_navigation_label website_article.navigation_label%type;
+        l_env VARCHAR2(4);
         l_parent_id article.id%type;
         l_subarticle_id article.id%type;
         l_item VARCHAR2(500);
@@ -387,8 +391,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        l_parent_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
-        l_subarticle_id:=SUBSTR(pId,INSTR(pId,',')+1);
+        l_env:=SUBSTR(pId,1,INSTR(pId,',',1,1)-1);
+        l_parent_id:=SUBSTR(pId,INSTR(pId,',',1,1)+1,INSTR(pId,',',1,2)-INSTR(pId,',',1,1)-1);
+        l_subarticle_id:=SUBSTR(pId,INSTR(pId,',',1,2)+1);
 
         SELECT collection_type, navigation_label INTO l_collection_type, l_navigation_label FROM website_article WHERE article_id=l_parent_id;
         l_content:='<li data-id="0">' || pck_core.buildPushableButton('new-'||LOWER(l_collection_type),'&plus;','New '||l_navigation_label) || '</li>';
@@ -396,13 +401,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         DELETE article WHERE parent_id=l_parent_id AND author_user_id=l_session_data.user_id AND body_html IS NULL;
 
         FOR C IN (
-            SELECT art.id, NVL(art.title,'&#9888; TITLE MISSING') title, apex_util.get_since(COALESCE(art.updated_date, art.created_date)) updated_date,
+            SELECT art.id, NVL(art.title,'&#9888; TITLE MISSING') title, apex_util.get_since(art.updated_date) updated_date,
+                    DECODE(l_env,'TEST',art.deployed_date,'LIVE',art.deployed_date_custom) deployed_date,
                     ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
               FROM article art, asset ass
              WHERE art.parent_id=l_parent_id
                AND art.author_user_id=l_session_data.user_id
                AND art.cover_asset_id=ass.id(+)
-             ORDER BY art.display_order NULLS FIRST, art.updated_date DESC) 
+             ORDER BY NVL(deployed_date,art.updated_date) DESC) 
         LOOP
             CASE l_collection_type
                 WHEN 'BLOG' THEN
