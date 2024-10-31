@@ -110,9 +110,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         l_data_length user_tab_columns.data_length%type;
         l_comments user_col_comments.comments%type;
         l_radio_options user_constraints.search_condition_vc%type;
+        l_option VARCHAR2(50);
         l_html LONG;
-        pos_1 PLS_INTEGER;
-        pos_2 PLS_INTEGER;
+        n PLS_INTEGER;
         l_popover LONG;
     BEGIN
         getColumnDetails(pColumn, pCanUsePopover, l_data_length, l_popover);
@@ -129,18 +129,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
            AND col.constraint_name=con.constraint_name
            AND con.constraint_type='C';
 
-        pos_1:=INSTR(l_radio_options,'(');
-        pos_2:=INSTR(l_radio_options,')');
-        l_radio_options:=REPLACE(SUBSTR(l_radio_options,pos_1+1,pos_2-pos_1-1), '''',NULL);
-
         l_column_name:=LOWER(l_column_name);
 
-        FOR C IN (SELECT column_value FROM TABLE(apex_string.split(l_radio_options,','))) LOOP
+        n:=NVL(regexp_count(l_radio_options,'''([^'']+)'''),0);
+        IF (n=0) THEN
+            RETURN('<span style="color:red">SYSTEM ERROR - CONSTRAINT CHECK INVALID FOR <strong>' || l_column_name || '</strong></span>');
+        END IF;
+
+        FOR i IN 1..n LOOP
+            l_option:=REGEXP_SUBSTR(l_radio_options,'''([^'']+)''',1,i,null,1);
             l_html:=l_html || 
             '<div>
-                <label for="' || l_column_name || '-' || LOWER(C.column_value) || '">' || C.column_value|| '</label>
-                <input ' || CASE WHEN pDisabled THEN 'disabled ' END || 'class="cms" type="radio" data-column="' || pColumn || '" data-id="' || pId || '" id="' || l_column_name || '-' || LOWER(C.column_value) || '" name="' || l_column_name || '" value="' || C.column_value || '"' ||
-                CASE WHEN pValue=C.column_value THEN ' checked' END || '>
+                <label for="' || l_column_name || '-' || LOWER(l_option) || '">' || l_option || '</label>
+                <input ' || CASE WHEN pDisabled THEN 'disabled ' END || 'class="cms" type="radio" data-column="' || pColumn || '" data-id="' || pId || '" id="' || l_column_name || '-' || LOWER(l_option) || '" name="' || l_column_name || '" value="' || l_option || '"' ||
+                CASE WHEN pValue=l_option THEN ' checked' END || '>
                 </input> 
             </div>';
         END LOOP;
@@ -584,7 +586,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             RETURN;
         END IF;
 
-        FOR C IN (SELECT navigation_label, collection_type, contact_form, page_title, page_description
+        FOR C IN (SELECT navigation_label, collection_type, collection_date_format, contact_form, page_title, page_description
                     FROM website_article 
                    WHERE website_id=l_website_id
                      AND article_id=l_article_id
@@ -598,6 +600,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             '<form>' ||
                 buildInputWrapper(pId, 'website_article.navigation_label', C.navigation_label, l_session_data.canuse_popover) ||
                 buildRadioWrapper(pId, 'website_article.collection_type', C.collection_type, l_session_data.canuse_popover, l_disabled_collection) || 
+                CASE WHEN C.collection_type<>'N/A' THEN buildRadioWrapper(pId, 'website_article.collection_date_format', C.collection_date_format, l_session_data.canuse_popover) END ||
                 buildTextareaWrapper(pId, 'website_article.page_title', C.page_title, l_session_data.canuse_popover) ||
                 buildTextareaWrapper(pId, 'website_article.page_description', C.page_description, l_session_data.canuse_popover) ||
                 buildRadioWrapper(pId, 'website_article.contact_form', C.contact_form, l_session_data.canuse_popover) || 
@@ -917,7 +920,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
     PROCEDURE init(pBodyText IN CLOB) IS
         l_id_1 NUMBER;
         l_id_2 NUMBER;
-
+        l_table_name VARCHAR2(30);
+        l_column_name VARCHAR2(30);
+        l_ddl VARCHAR2(200);
         l_message VARCHAR2(50);
         l_color VARCHAR2(5);
         l_getFontUrl BOOLEAN:=FALSE;
@@ -946,82 +951,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 WHEN 'website_article.navigation_label' THEN
                     processNavigationLabel(l_session_data.user_id, l_id_1, l_id_2, C.value);
                     RETURN;
-                WHEN 'website.contact_email' THEN
-                    UPDATE website SET contact_email=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website.font' THEN
-                    UPDATE website SET font=C.value, updated_date=current_timestamp WHERE id=C.id;
-                    l_getFontUrl:=TRUE;
-                WHEN 'asset.alt_text' THEN
-                    UPDATE asset SET alt_text=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website.max_width' THEN
-                    UPDATE website SET max_width=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website.color_background' THEN
-                    UPDATE website SET color_background=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website.color_primary' THEN
-                    UPDATE website SET color_primary=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website.color_text' THEN
-                    UPDATE website SET color_text=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website.min_font_size' THEN
-                    UPDATE website SET min_font_size=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website.min_width_px' THEN
-                    UPDATE website SET min_width_px=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website.min_scale' THEN
-                    UPDATE website SET min_scale=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website.max_font_size' THEN
-                    UPDATE website SET max_font_size=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website.max_width_px' THEN
-                    UPDATE website SET max_width_px=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website.max_scale' THEN
-                    UPDATE website SET max_scale=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website.price_currency' THEN
-                    UPDATE website SET price_currency=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'website_article.collection_type' THEN
-                    UPDATE website_article SET collection_type=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
-                WHEN 'website_article.page_title' THEN
-                    UPDATE website_article SET page_title=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
-                WHEN 'website_article.page_description' THEN
-                    UPDATE website_article SET page_description=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
-                WHEN 'website_article.contact_form' THEN
-                    UPDATE website_article SET contact_form=C.value, updated_date=current_timestamp WHERE website_id=l_id_1 AND article_id=l_id_2;
-                WHEN 'article.product_price' THEN
-                    UPDATE article SET product_price=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'article.featured' THEN
-                    UPDATE article SET featured=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.netlify_token' THEN
-                    UPDATE users SET netlify_token=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.netlify_account_slug' THEN
-                    UPDATE users SET netlify_account_slug=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.cld_cloud_name' THEN
-                    UPDATE users SET cld_cloud_name=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.cld_api_key' THEN
-                    UPDATE users SET cld_api_key=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.cld_api_secret' THEN
-                    UPDATE users SET cld_api_secret=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.github_token' THEN
-                    UPDATE users SET github_token=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.github_repos_owner' THEN
-                    UPDATE users SET github_repos_owner=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.github_repos' THEN
-                    UPDATE users SET github_repos=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.google_api_key' THEN
-                    UPDATE users SET google_api_key=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.google_client_id' THEN
-                    UPDATE users SET google_client_id=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.ipdata_api_key' THEN
-                    UPDATE users SET ipdata_api_key=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.terraform_token' THEN
-                    UPDATE users SET terraform_token=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.stripe_publishable_key_test' THEN
-                    UPDATE users SET stripe_publishable_key_test=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.stripe_secret_key_test' THEN
-                    UPDATE users SET stripe_secret_key_test=C.value, updated_date=current_timestamp WHERE id=C.id;
-                WHEN 'users.whatismybrowser_api_key' THEN
-                    UPDATE users SET whatismybrowser_api_key=C.value, updated_date=current_timestamp WHERE id=C.id;
                 ELSE
-                    l_error:='id:' || C.id || 'table_column:' || C.table_column;
+                    l_table_name:=SUBSTR(C.table_column,1,INSTR(C.table_column,'.')-1);
+                    l_column_name:=SUBSTR(C.table_column,INSTR(C.table_column,'.')+1);
+                    l_ddl:='UPDATE ' || l_table_name || ' SET updated_date=current_timestamp,' || l_column_name || '=:B1 WHERE ';
+                    IF (l_table_name='website_article') THEN
+                        l_ddl:=l_ddl || 'website_id=:B2 AND article_id=:B3';
+                        EXECUTE IMMEDIATE l_ddl USING C.value, l_id_1, l_id_2;
+                    ELSE
+                        l_ddl:=l_ddl || 'id=:B2';
+                         EXECUTE IMMEDIATE l_ddl USING C.value, C.id;
+                    END IF;
             END CASE;
+
             n:=sql%rowcount;
-            IF (l_getFontUrl AND n=1) THEN
+            IF (l_table_name='website' AND l_column_name='font' AND n=1) THEN
                 SELECT family, url_regular INTO l_family, l_url_regular FROM google_font WHERE family=C.value;
             END IF;
         END LOOP;
@@ -1038,7 +982,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         apex_json.write('success', TRUE);
         apex_json.write('message', CASE WHEN n=1 THEN 'Updated OK' ELSE 'Updated NOK' END);
         apex_json.write('color', CASE WHEN n=1 THEN 'green' ELSE 'red' END);
-        IF (l_getFontUrl) THEN
+        IF (l_table_name='website' AND l_column_name='font') THEN
             apex_json.write('font_family', l_family);
             apex_json.write('font_url','url(' || l_url_regular || ')');
         END IF;
