@@ -504,22 +504,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
     PROCEDURE updateArticle(pBodyText IN CLOB, pArticleId IN article.id%type) IS
         l_session_data pck_core.session_data_rt;
         l_word_count article.word_count%type;
-        l_parent_id article.parent_id%type;
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        UPDATE article t SET (t.title, t.word_count, t.body_html, t.updated_date) = 
+        UPDATE article t SET (t.title, t.excerpt, t.word_count, t.body_html, t.updated_date) = 
             (
-                SELECT SUBSTR(title,1,100) title, REGEXP_SUBSTR(word_count,'(\d)+') word_count, body_html, current_timestamp as updated_date
-                FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (title, word_count, body_html CLOB))
+                SELECT SUBSTR(title,1,100) title, SUBSTR(excerpt,1,160) excerpt, REGEXP_SUBSTR(word_count,'(\d)+') word_count, body_html, current_timestamp as updated_date
+                FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (title, excerpt, word_count, body_html CLOB))
             )
         WHERE t.id=pArticleId
           AND t.author_user_id=l_session_data.user_id
-        RETURNING t.parent_id, t.word_count INTO l_parent_id, l_word_count;
-
-        UPDATE website SET updated_date=current_timestamp 
-         WHERE user_id=l_session_data.user_id
-           AND id IN (SELECT website_id FROM website_article WHERE article_id=COALESCE(l_parent_id,pArticleId));
+        RETURNING t.word_count INTO l_word_count;
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
