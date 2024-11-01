@@ -160,7 +160,7 @@ a {
   gap: 1em;
   padding: 1em;
 }
-[data-font="75%"] :is(p) {
+[data-font="75%"] {
   font-size: 75%;
 }
 .selected {
@@ -192,10 +192,14 @@ a {
   inline-size: 25%;
   fill: white;
 }
-.card :is(h2, h3, h4, h5, h6),
-footer :is(h2, h3, h4, h5, h6) {
-  font-size: var(--step-0);
+.card :is(h2, h3, h4),
+footer :is(h2, h3, h4) {
   text-transform: uppercase;
+  font-size: var(--step--1);
+}
+.card :is(p),
+footer :is(p) {
+  font-size: var(--step--1);
 }
 .card img {
   block-size: 16rem;
@@ -203,8 +207,6 @@ footer :is(h2, h3, h4, h5, h6) {
 }
 .card p {
   hyphens: manual;
-  word-break: break-word;
-  font-size: var(--step--1);
 }
 .card h2 {
   transition: all 0.2s ease-in-out;
@@ -307,7 +309,8 @@ pre {
 }
 pre:has(code) {
   position: relative;
-  &::after {
+}
+pre:has(code)::after {
     background: #000;
     color: #fff;
     position: absolute;
@@ -315,30 +318,19 @@ pre:has(code) {
     padding: var(--space-3xs);
     right: 0;
     top: 0;
-  }
 }
-pre:has(.language-html) {
-  &::after {
+pre:has(.language-html)::after {
     content: "HTML";
-  }
 }
-pre:has(.language-css) {
-  &::after {
+pre:has(.language-css)::after {
     content: "CSS";
-  }
 }
-pre:has(.language-javascript) {
-  &::after {
+pre:has(.language-javascript)::after {
     content: "Javascript";
-  }
 }
-pre:has(.language-plsql) {
-  &::after {
+pre:has(.language-plsql)::after {
     content: "PL/SQL";
-  }
 }
-pre:has(.language-sql) {
-  &::after {
+pre:has(.language-sql)::after {
     content: "SQL";
-  }
 }
