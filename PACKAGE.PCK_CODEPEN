@@ -118,8 +118,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         /* Enclose content in <article> element if none exists */
         IF (pHtml IS NULL OR INSTR(pHtml,'<article')=0) THEN
-            pHtml:='<article class="flow">' || pHtml;
-            l_close_article:=TRUE;
+            pHtml:='<article class="flow">' || pHtml || '</article>';
+            --l_close_article:=TRUE;
         END IF;
 
         /* Remove empty elements */
@@ -156,9 +156,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             --l_javascript:=l_javascript || getJSCode('deploy_gallery.js');
         END IF;
 
-        IF (l_close_article) THEN
-            pHtml:=pHtml || '</article>';
-        END IF;
+        --IF (l_close_article) THEN
+        --    pHtml:=pHtml || '</article>';
+        --END IF;
 
         /* Append Contact Form */
         IF (pContactForm='YES') THEN
