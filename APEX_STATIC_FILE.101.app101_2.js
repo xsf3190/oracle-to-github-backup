@@ -320,9 +320,9 @@ window.addEventListener("DOMContentLoaded", () => {
     } else {
         wrapper.addEventListener("click",clickHandler);
     }
-    wrapper.addEventListener("input",inputHandler);
-    wrapper.addEventListener("focusin",focusHandler);
-    wrapper.addEventListener("change",changeHandler);
+    logContent.addEventListener("input",inputHandler);
+    logContent.addEventListener("focusin",focusHandler);
+    logContent.addEventListener("change",changeHandler);
     
     gWebsiteId = websiteNav.dataset.id;
     gWebsiteEnv = websiteNav.dataset.env;
@@ -1022,13 +1022,24 @@ const saveData = async ( data ) => {
     editor_status_text.textContent = "...";
 
     const word_count = document.querySelector(".ck-word-count__words").textContent;
-    const content = document.querySelectorAll(".ck-editor__editable_inline > *:not(:empty)");
-    let title ="";
-    if (content.length) {
-            title = content[0].textContent;
+    const content = document.querySelectorAll(".ck-editor__editable_inline > :is(h2,h3,h4,p,blockquote,ol,ul):nth-child(-n+4):not(:empty)");
+    
+    let title, excerpt;
+    if (content.length>0) {
+        title = content[0].textContent;
+        for (let i=1; i < content.length; i++) {
+            if (content[i].tagName.substring(0,1) != "H") {
+                excerpt = content[i].textContent;
+                let period = excerpt.indexOf(".");
+                if (period>1) {
+                    excerpt = excerpt.substring(0,period);
+                }
+                break;
+            }
+        }
     }
 
-    await execProcess("article/"+gArticleId, "PUT",  {body_html: data, title: title, word_count: word_count}).then( (data) => {
+    await execProcess("article/"+gArticleId, "PUT",  {body_html: data, title: title, excerpt: excerpt, word_count: word_count}).then( (data) => {
         pendingActions.remove( action );
         editor_status_text.textContent = data.message;
         editor_status_text.style.color = "green";
