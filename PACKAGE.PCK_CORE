@@ -391,37 +391,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     FUNCTION buildBlogList(pEnv IN VARCHAR2, pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pClasses IN VARCHAR2) RETURN CLOB IS
         l_html CLOB;
         l_featured article.featured%type;
+        l_classes VARCHAR2(100);
         l_path website_article.navigation_label%type;
         l_href VARCHAR2(200);
         pos PLS_INTEGER;
-
-        FUNCTION getExcerpt(pText IN VARCHAR2) RETURN VARCHAR2 IS
-            l_excerpt VARCHAR2(200);
-        BEGIN
-            l_excerpt:=
-                RTRIM(
-                    regexp_replace(
-                        apex_escape.striphtml(
-                            regexp_replace(pText,'</[[:alnum:]]+><[[:alnum:]]+>', ' ')
-                        )
-                    ,' {2,}', ' '
-                    )
-                ,'.,?;: '
-                );
-            l_excerpt:=REPLACE(l_excerpt,'..','.');
-            RETURN (SUBSTR(l_excerpt,1,INSTR(l_excerpt,' ',-1,1)-1)||'...');
-        END;
-
     BEGIN
         
         IF (INSTR(pClasses,'featured')>0) THEN
             l_featured:='YES';
         END IF;
 
+        iF (pClasses IS NULL) THEN
+            l_classes:='breakout grid-auto-fit';
+        ELSE
+            l_classes:=l_classes || ' breakout grid-auto-fit';
+        END IF;
+
         SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
 
         FOR C IN (SELECT COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY null) rn,
-                            wa.collection_date_format, art.body_html, art.title,DECODE(pEnv,'TEST',art.deployed_date,'LIVE',art.deployed_date_custom) deployed_date, art.word_count, art.cover_icon_id, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, ass.height, ass.alt_text
+                            wa.collection_date_format, art.body_html, art.title, art.excerpt, DECODE(pEnv,'TEST',art.deployed_date,'LIVE',art.deployed_date_custom) deployed_date, art.word_count, art.cover_icon_id, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, ass.height, ass.alt_text
                     FROM website_article wa, article art, asset ass
                    WHERE wa.article_id=pArticleId
                      AND art.parent_id=wa.article_id
@@ -430,7 +419,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    ORDER BY deployed_date DESC ) 
         LOOP
             IF (C.rn=1) THEN
-                l_html:=l_html || '<ol class="' || pClasses || ' breakout grid-auto-fit' || CASE WHEN C.nb<2 THEN ' auto-fill' END || '" role="list" >';
+                l_html:=l_html || '<ol class="' || l_classes || CASE WHEN C.nb<2 THEN ' auto-fill' END || '" role="list" >';
             END IF;
             l_html:=l_html || 
             '<li class="card">';
@@ -442,13 +431,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 '<svg class="icon" aria-hidden="true" focusable="false"><use href="#' || C.cover_icon_id || '"></use></svg>';
             END IF;
             l_href:='/' || l_path || '/' || apex_string_util.get_slug(C.title);
-            pos:=regexp_instr(C.body_html,'<[^/>]*>',1,2);
             l_html:=l_html || 
-                '<div class="text-content flow">' ||
+                '<div class="flow">' ||
                     '<h2>' ||
                         '<a href="' || l_href || '">' || C.title || '</a>' ||
                     '</h2>' ||
-                    '<p>' || getExcerpt(SUBSTR(C.body_html,pos,100))  || '</p>' ||
+                    '<p>' || CASE WHEN LENGTH(C.excerpt)<160 THEN C.excerpt ELSE SUBSTR(C.excerpt,1,INSTR(C.excerpt,' ',-1)) || '...' END  || '</p>' ||
                 '</div>' ||
                 '<div class="ending-text">' ||
                     CASE WHEN NVL(C.collection_date_format,'NONE')<>'NONE' THEN
@@ -908,10 +896,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                             },
                             {
                                 name: 'img',
-                                classes: ['round-border'],
-                                attributes: {
-                                    loading: 'lazy'
-                                }
+                                classes: true,
+                                attributes: true
                             },
                         ]
                     },
