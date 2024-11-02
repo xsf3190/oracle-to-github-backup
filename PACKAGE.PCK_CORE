@@ -254,6 +254,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     PROCEDURE createStarterWebsite(pUserId IN users.id%type) IS
         l_domain_name website.domain_name%type;
         l_username users.name%type;
+        l_email users.email%type;
         l_json JSON_OBJECT_T;
         l_clob CLOB;
         l_netlify_site_id website.netlify_site_id%type;
@@ -262,7 +263,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_site_created BOOLEAN:=FALSE;
         n PLS_INTEGER:=0;
     BEGIN
-        SELECT REPLACE(SUBSTR(email,1,INSTR(email,'@')-1),'.','-'), name INTO l_domain_name, l_username FROM users WHERE id=pUserId;
+        SELECT REPLACE(SUBSTR(email,1,INSTR(email,'@')-1),'.','-'), name, email INTO l_domain_name, l_username, l_email FROM users WHERE id=pUserId;
 
         l_json:=new JSON_OBJECT_T;
         WHILE TRUE LOOP
@@ -275,25 +276,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END LOOP;
         SELECT site_id INTO l_netlify_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
 
-        SELECT id INTO l_website_id FROM website WHERE domain_name='adfreesites.edu';
+        SELECT id INTO l_website_id FROM website WHERE domain_name='jordanbyrne.com';
  
-        INSERT INTO website(id, domain_name, user_id, netlify_site_id,  updated_date, font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale)
-        SELECT seq_website.nextval, l_domain_name, pUserId, l_netlify_site_id, current_timestamp, font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale
+        INSERT INTO website(id, domain_name, user_id, contact_email, netlify_site_id,  updated_date, font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale)
+        SELECT seq_website.nextval, l_domain_name, pUserId, l_email, l_netlify_site_id, current_timestamp, font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale
           FROM website 
          WHERE id=l_website_id;
 
         FOR C IN (
-            SELECT article_id, display_order, created_date, navigation_label, updated_date, user_id, contact_form, collection_type, page_title, page_description
+            SELECT article_id, display_order, created_date, navigation_label, updated_date, user_id, contact_form, collection_type, collection_date_format, page_title, page_description
               FROM website_article 
              WHERE website_id=l_website_id) 
         LOOP
-            INSERT INTO article(id, title, author_user_id, word_count, updated_date, body_html, nb_assets, display_order)
-            SELECT seq_article.nextval, title, pUserId, word_count, current_timestamp, CASE WHEN C.display_order=1 THEN REPLACE(body_html,'<h1>&nbsp;</h1>','<h1>Welcome ' || INITCAP(l_username) || '</h1>') ELSE body_html END, nb_assets, display_order
+            INSERT INTO article(id, title, excerpt, author_user_id, word_count, updated_date, body_html, nb_assets, display_order)
+            SELECT seq_article.nextval, title, excerpt, pUserId, word_count, current_timestamp, body_html, nb_assets, display_order
               FROM article
              WHERE id=C.article_id;
             
-            INSERT INTO website_article(website_id, article_id, display_order, navigation_label, updated_date, user_id, contact_form, collection_type, page_title, page_description)
-            VALUES (seq_website.currval, seq_article.currval, C.display_order, C.navigation_label, current_timestamp, pUserid, C.contact_form, C.collection_type, C.page_title, C.page_description);
+            INSERT INTO website_article(website_id, article_id, display_order, navigation_label, updated_date, user_id, contact_form, collection_type, collection_date_format, page_title, page_description)
+            VALUES (seq_website.currval, seq_article.currval, C.display_order, C.navigation_label, current_timestamp, pUserid, C.contact_form, C.collection_type, C.collection_date_format, C.page_title, C.page_description);
 
             IF (C.collection_type<>'N/A') THEN
                 l_parent_id:=seq_article.currval;
@@ -833,6 +834,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 Autosave,
                 BlockQuote,
                 Bold,
+                Clipboard,
                 Code,
                 CodeBlock,
                 GeneralHtmlSupport,
@@ -857,7 +859,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
             ClassicEditor
                 .create( document.querySelector( '#editor' ), {
-                    plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Code, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, Paragraph, SelectAll, SourceEditing, Underline, WordCount ],
+                    plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, Paragraph, SelectAll, SourceEditing, Underline, WordCount ],
                     toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'underline', 'code', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
                     alignment: {
                         options: [
@@ -941,7 +943,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     const wordCountPlugin = editor.plugins.get( 'WordCount' );
                     const wordCountWrapper = wrapper.querySelector( '.ck-editor__main' );
                     wordCountWrapper.appendChild(wordCountPlugin.wordCountContainer );
-
+                    /*
                     editor.editing.view.document.on( 'drop', ( evt, data ) => {
             			// Stop execute next callbacks.
             			evt.stop();
@@ -954,7 +956,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             			evt.stop();
             			data.preventDefault();
             		}, { priority: 'high' } );
-
+                    */
                     const toolbar = wrapper.querySelector(".ck-toolbar__items");
                     toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
                     editor_status = "init";
