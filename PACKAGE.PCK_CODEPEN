@@ -199,10 +199,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         END LOOP;
 
         IF (n>0) THEN
-            pHtml:=pHtml || '<svg>';
-            FOR C IN (SELECT id, viewbox, preserveaspectratio, svg FROM icon WHERE id IN (SELECT DISTINCT column_value FROM TABLE(l_icons)) ORDER BY id)
+            pHtml:=pHtml || '<svg width="0" height="0">';
+            FOR C IN (SELECT id, title, viewbox, preserveaspectratio, svg FROM icon WHERE id IN (SELECT DISTINCT column_value FROM TABLE(l_icons)) ORDER BY id)
             LOOP
-                pHtml:=pHtml || '<symbol id="' || C.id|| '" viewBox="' || C.viewbox|| '" preserveAspectRatio="' || C.preserveaspectratio || '">' || C.svg || '</symbol>';
+                pHtml:=pHtml || '<symbol id="' || C.id|| '" viewBox="' || C.viewbox|| '" preserveAspectRatio="' || C.preserveaspectratio || '"><title>' || C.title || '</title>' || C.svg || '</symbol>';
             END LOOP;
             pHtml:=pHtml || '</svg>';
         END IF;
