@@ -207,6 +207,10 @@ footer :is(p) {
 }
 .card p {
   hyphens: manual;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 .card h2 {
   transition: all 0.2s ease-in-out;
