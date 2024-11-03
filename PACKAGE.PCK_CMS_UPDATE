@@ -625,7 +625,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
 
         /* No content means it  must be a sub-article */
         IF (l_content IS NULL) THEN 
-            FOR C IN (SELECT wa.navigation_label, wa.collection_type, a.product_price, a.featured
+            FOR C IN (SELECT wa.navigation_label, wa.collection_type, a.product_price, a.featured, a.excerpt
                         FROM article a, website_article wa
                        WHERE a.id=l_article_id
                          AND wa.website_id=l_website_id
@@ -639,6 +639,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 END IF;
                 l_content:=l_content || 
                     buildRadioWrapper(l_article_id, 'article.featured', C.featured, l_session_data.canuse_popover) || 
+                    buildTextareaWrapper(l_article_id, 'article.excerpt', C.excerpt, l_session_data.canuse_popover) ||
                     '<details>
                         <summary>CODEPEN FEATURES</summary>' ||
                         pck_core.buildPushableButton('edit-codepen','&#9917;') ||
@@ -954,7 +955,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 ELSE
                     l_table_name:=SUBSTR(C.table_column,1,INSTR(C.table_column,'.')-1);
                     l_column_name:=SUBSTR(C.table_column,INSTR(C.table_column,'.')+1);
-                    l_ddl:='UPDATE ' || l_table_name || ' SET updated_date=current_timestamp,' || l_column_name || '=:B1 WHERE ';
+                    l_ddl:='UPDATE ' || l_table_name || ' SET updated_date=current_timestamp,' || CASE WHEN C.table_column='article.excerpt' THEN 'excerpt_updated_flag=''Y'',' END || l_column_name || '=:B1 WHERE ';
                     IF (l_table_name='website_article') THEN
                         l_ddl:=l_ddl || 'website_id=:B2 AND article_id=:B3';
                         EXECUTE IMMEDIATE l_ddl USING C.value, l_id_1, l_id_2;
