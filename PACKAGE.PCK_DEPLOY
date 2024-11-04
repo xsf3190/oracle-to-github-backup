@@ -273,6 +273,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             IF (l_labels(i).collection_type='BLOG') THEN
                 l_is_blog:=TRUE;
                 l_is_media:=FALSE;
+                apex_string.push(l_labels(i).modules,'deploy_blog.min.js');
             ELSIF (l_labels(i).collection_type='MEDIA') THEN
                 l_is_media:=TRUE;
                 l_is_blog:=FALSE;
@@ -298,6 +299,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_labels(i).footer, 
                 l_labels(i).body_html
             );
+
+            IF (INSTR(l_labels(i).body_html,'class="featured')>0) THEN
+                apex_string.push(l_labels(i).modules,'deploy_blog.min.js');
+            END IF;
 
         END LOOP;
 
@@ -369,7 +374,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<meta name="viewport" content="width=device-width, initial-scale=1.0">' || chr(10) || 
                     '<title>' || l_labels(i).page_title || '</title>' || chr(10) ||
                     '<meta name="description" content="' || l_labels(i).page_description || '">' || chr(10) ||
-                    '<meta name="author" content="www.adfreesites.com">' || chr(10) ||
+                    '<meta name="author" content="mark.russellbrown@gmail.com">' || chr(10) ||
                     '<meta name="view-transition" content="same-origin">' || chr(10) ||
                     '<link rel="preload" as="font" href="/' || l_font_filename || '" crossorigin>' || chr(10) ||
                     l_module_html ||
@@ -385,7 +390,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 '</body>' || chr(10) || 
             '</html>';
 
-            l_text:=utl_i18n.unescape_reference(apex_escape.striphtml(l_labels(i).header || l_labels(i).body_html || l_labels(i).footer));
+            l_text:=utl_i18n.unescape_reference(apex_escape.striphtml(l_labels(i).body_html));
             FOR i IN 1..LENGTH(l_text) LOOP
                 l_char:=SUBSTR(l_text,i,1);
                 IF (INSTR(l_chars,l_char)=0) THEN
@@ -410,19 +415,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         /* Build website assets */
 
-        logDeployment(pWebsiteId, pSiteId, 'Building sitemap.xml');
+        logDeployment(pWebsiteId, pSiteId, 'Building sitemap.xml for SEO');
         l_sha1:=LOWER(dbms_crypto.hash(src => l_sitemap, typ => dbms_crypto.hash_sh1));
         l_deploy_files(l_sha1).file_name:='sitemap.xml';
         l_deploy_files(l_sha1).file_content:=l_sitemap;
         l_files.put('sitemap.xml', l_sha1);
 
-        logDeployment(pWebsiteId, pSiteId, 'Building robots.txt');
+        logDeployment(pWebsiteId, pSiteId, 'Building robots.txt for SEO');
         l_sha1:=LOWER(dbms_crypto.hash(src => l_robots, typ => dbms_crypto.hash_sh1));
         l_deploy_files(l_sha1).file_name:='robots.txt';
         l_deploy_files(l_sha1).file_content:=l_robots;
         l_files.put('robots.txt', l_sha1);
 
-        logDeployment(pWebsiteId, pSiteId, 'Building _headers');
+        logDeployment(pWebsiteId, pSiteId, 'Building Content Security Policy');
         l_sha1:=LOWER(dbms_crypto.hash(src => l_headers, typ => dbms_crypto.hash_sh1));
         l_deploy_files(l_sha1).file_name:='_headers';
         l_deploy_files(l_sha1).file_content:=l_headers;
@@ -448,7 +453,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END LOOP;
         END LOOP;
 
-        logDeployment(pWebsiteId, pSiteId, 'Building FONT ' || l_font_filename || ' (' || LENGTH(l_chars) || ' characters)');
+        logDeployment(pWebsiteId, pSiteId, 'Building FONT ' || l_font_filename || ' (' || LENGTH(l_chars) || ' distinct characters)');
         apex_web_service.clear_request_headers;
         apex_web_service.g_request_headers(1).name := 'User-Agent';
         apex_web_service.g_request_headers(1).value := 'Mozilla/5.0 (Windows NT 6.3; rv:39.0) Gecko/20100101 Firefox/39.0';
@@ -459,7 +464,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_font_url:=REGEXP_SUBSTR(l_font_css, '\(([^)]*)\)', 1, 1, NULL, 1);
         --pck_core.log('font format ' || LTRIM(RTRIM(REGEXP_SUBSTR(l_font_css, '\(([^)]*)\)', 1, 2, NULL, 1))));
         l_font_download:=apex_web_service.make_rest_request_b(p_url=>l_font_url, p_http_method=>'GET');
-        pck_core.log(rawtohex(DBMS_LOB.SUBSTR(l_font_download,24,1)));
         
         l_sha1:=LOWER(dbms_crypto.hash(src => l_font_download, typ => dbms_crypto.hash_sh1));
         l_deploy_files(l_sha1).file_name:=l_font_filename;
@@ -468,7 +472,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_json.put('files',l_files);
 
-        logDeployment(pWebsiteId, pSiteId, 'Sending digest of all files to Netlify');
+        logDeployment(pWebsiteId, pSiteId, 'Sending digest of ' || l_deploy_files.COUNT || ' files to Netlify');
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId || '/deploys', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
         UPDATE website SET netlify_deploy_id=(SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) WHERE id=pWebsiteId;
         COMMIT;
