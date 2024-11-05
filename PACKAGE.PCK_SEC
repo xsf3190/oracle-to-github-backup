@@ -1,5 +1,9 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS 
     --
+    PROCEDURE createAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB);
+    --
+    PROCEDURE verifyAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB);
+    --
     PROCEDURE post_auth_facebook;
     --
     PROCEDURE post_auth_google;
@@ -18,6 +22,113 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
 END PCK_SEC;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
+
+    /*
+    ** USER SUBMITS EMAIL ADDRESS TO BE AUTHENTICATED
+    ** - CREATE RANDOM PASSCODE 
+    ** - SEND TO EMAIL ADDRESS
+    */
+
+    PROCEDURE createAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
+        l_payload apex_json.t_values;
+        l_email users.email%type;
+        l_url varchar2(100);
+        l_user_exists PLS_INTEGER;
+        l_digits   CONSTANT VARCHAR2(10) := '0123456789';
+        l_passcode VARCHAR2(6);
+        l_json JSON_OBJECT_T;
+        l_email_payload CLOB;
+        l_clob CLOB;
+    BEGIN
+        apex_json.parse(l_payload, pBodyText);
+        l_email:=apex_json.get_varchar2 (p_path => 'email', p_values => l_payload);
+        l_url:=apex_json.get_varchar2 (p_path => 'url', p_values => l_payload);
+
+        SELECT COUNT(*) INTO l_user_exists FROM  users WHERE email=l_email;
+
+        SELECT LISTAGG(letter, NULL) WITHIN GROUP (ORDER BY DBMS_RANDOM.VALUE)
+        INTO   l_passcode
+        FROM   (
+            SELECT SUBSTR(
+                     l_digits,
+                     FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(l_digits) + 1)),
+                     1
+                   ) AS letter
+            FROM   DUAL
+            CONNECT BY LEVEL <= 6);
+
+        CASE l_user_exists
+            WHEN 0 THEN INSERT INTO users (email, passcode) VALUES (l_email, l_passcode);
+            WHEN 1 THEN UPDATE users SET passcode=l_passcode WHERE email=l_email;
+        END CASE;
+
+        /* Send mail to email address with passcode */
+        l_json:=new JSON_OBJECT_T;
+        l_json.put('contactEmail',l_email);
+        l_json.put('subject','Passcode for authenticating to ' || l_url);
+        l_json.put('body', '<html><body><h1>Passcode is ' || l_passcode || '</h1></body></html>');
+        l_json.put('sourceEmail','authenticate@adfreesites.com');
+        l_email_payload:=l_json.stringify;
+        pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_email_payload, pData=>l_clob);
+
+        APEX_JSON.open_object;
+        APEX_JSON.write ('success', TRUE);
+        APEX_JSON.close_object;
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error;
+    END;
+
+        /*
+    ** USER SUBMITS EMAIL ADDRESS TO BE AUTHENTICATED
+    ** - CREATE RANDOM PASSCODE 
+    ** - SEND TO EMAIL ADDRESS
+    */
+
+    PROCEDURE verifyAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
+        l_payload apex_json.t_values;
+        l_email users.email%type;
+        l_url VARCHAR2(100);
+        l_user_exists PLS_INTEGER;
+        l_passcode VARCHAR2(6);
+        l_verified_code PLS_INTEGER;
+        l_token VARCHAR2 (4000);
+        l_json JSON_OBJECT_T;
+        l_email_payload CLOB;
+        l_clob CLOB;
+    BEGIN
+        
+        apex_json.parse(l_payload, pBodyText);
+        l_email:=apex_json.get_varchar2 (p_path => 'email', p_values => l_payload);
+        l_passcode:=apex_json.get_varchar2 (p_path => 'passcode', p_values => l_payload);
+
+        SELECT COUNT(*) INTO l_verified_code FROM  users WHERE email=l_email AND passcode=l_passcode;
+        pck_core.log(' l_verified_code:' || l_verified_code);
+
+        IF (l_verified_code=0) THEN
+            APEX_JSON.open_object;
+            APEX_JSON.write ('success', FALSE);
+            APEX_JSON.close_object;
+            RETURN;
+        END IF;
+
+        l_token:=apex_jwt.encode (
+            p_iss       => 'ORDS',
+            p_sub       => l_email,
+            p_aud       => 'user',
+            p_iat_ts    => SYSDATE,
+            p_exp_sec   => 60 * 5,
+            p_signature_key => UTL_RAW.cast_to_raw ('secretKey')
+        );
+        pck_core.log('l_token:'||l_token);
+        APEX_JSON.open_object;
+        APEX_JSON.write ('success', TRUE);
+        APEX_JSON.write ('token', l_token);
+        APEX_JSON.close_object;
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error;
+    END;
 
     FUNCTION BASE64URL_DECODE(p_input IN varchar2) RETURN RAW DETERMINISTIC PARALLEL_ENABLE AS
         PRAGMA UDF;
