@@ -8,10 +8,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
         pUserId IN users.id%type, 
         pWebsiteId IN website.id%type, 
         pEnv IN VARCHAR2,
+        pRestUrl IN VARCHAR2,
         pArticleId IN article.id%type, 
         pCollectionType IN website_article.collection_type%type, 
         pIsMedia IN BOOLEAN, 
         pContactForm IN website_article.contact_form%type, 
+        pLoginForm IN website_article.login_form%type, 
         pHeader IN CLOB, 
         pFooter IN CLOB, 
         pHtml IN OUt NOCOPY CLOB
@@ -52,6 +54,66 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     END;
 
     /*
+     **  Build Contact Form
+     */
+    FUNCTION buildContactForm RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+'<div class="content-grid">
+    <form class="contact flow">
+      <input type="hidden" name="url" value="">
+      <div>
+        <label for="nameInput">Name</label>
+        <input type="text" id="nameInput" name="name" required minlength="1" maxlength="50">
+      </div>
+      <div>
+        <label for="emailInput">Email</label>
+        <input type="email" id="emailInput" name="email" required maxlength="50">
+      </div>
+      <div>
+        <label for="messageInput">Message</label>
+        <textarea id="messageInput" name="message" required minlength="1" maxlength="400" rows="5" cols="40"></textarea>
+      </div>
+      <div>
+        <button type="submit">
+          SEND
+        </button>
+        <span class="result"></span>
+      </div>
+    </form>
+ </div>');
+    END;
+
+    /*
+     **  Build Contact Form
+     */
+    FUNCTION buildLoginForm RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+'<div>
+    <form class="login flow">
+      <input type="hidden" name="url" value="">
+      <div>
+        <label for="emailInput">Email</label>
+        <input type="email" id="emailInput" name="email" required maxlength="50">
+        <span class="sendmail-result"></span>
+      </div>
+      <div>
+        <button class="sendmail" type="submit">SEND</button>
+      </div>
+      <div class="sendcode">
+        <label for="passcodeInput">Enter the 6 digit Passcode sent to your inbox</label>
+        <input type="text" id="passcodeInput" name="passcode" required pattern="\d{6}" title="6 digit passcode">
+        <span class="sendcode-result"></span>
+      </div>
+      <div>
+        <button class="sendcode" type="submit">LOGIN</button>
+      </div>
+    </form>
+ </div>');
+    END;    
+
+    /*
     ** HTML document body structure
     **
     ** <header>
@@ -65,10 +127,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         pUserId IN users.id%type, 
         pWebsiteId IN website.id%type, 
         pEnv IN VARCHAR2,
+        pRestUrl IN VARCHAR2,
         pArticleId IN article.id%type, 
         pCollectionType IN website_article.collection_type%type, 
         pIsMedia IN BOOLEAN, 
         pContactForm IN website_article.contact_form%type, 
+        pLoginForm IN website_article.login_form%type, 
         pHeader IN CLOB, 
         pFooter IN CLOB, 
         pHtml IN OUt NOCOPY CLOB) 
@@ -82,7 +146,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_icon_id icon.id%type;
         l_icons apex_t_varchar2:=apex_t_varchar2();
         l_svg_html CLOB;
-        l_close_article BOOLEAN:=FALSE;
         nb_articles PLS_INTEGER;
         n PLS_INTEGER;
 
@@ -119,7 +182,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Enclose content in <article> element if none exists */
         IF (pHtml IS NULL OR INSTR(pHtml,'<article')=0) THEN
             pHtml:='<article class="flow">' || pHtml || '</article>';
-            --l_close_article:=TRUE;
         END IF;
 
         /* Remove empty elements */
@@ -156,14 +218,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             --l_javascript:=l_javascript || getJSCode('deploy_gallery.js');
         END IF;
 
-        --IF (l_close_article) THEN
-        --    pHtml:=pHtml || '</article>';
-        --END IF;
-
         /* Append Contact Form */
         IF (pContactForm='YES') THEN
             SELECT email INTO l_email FROM users WHERE id=pUserId;
-            pHtml:=pHtml || pck_core.buildContactForm(l_email,'xx');
+            pHtml:=pHtml || buildContactForm();
+            --l_javascript:=l_javascript || getJSCode('deploy_contact.js');
+        END IF;
+
+        /* Append Login Form */
+        IF (pLoginForm IS NOT NULL) THEN
+            CASE pLoginForm
+                WHEN 'EMAIL' THEN pHtml:=pHtml || buildLoginForm();
+            END CASE;
+
             --l_javascript:=l_javascript || getJSCode('deploy_contact.js');
         END IF;
 
@@ -206,6 +273,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             END LOOP;
             pHtml:=pHtml || '</svg>';
         END IF;
+
+        /*
+        ** Return complete <body> element with identifying attributes 
+        */
+        pHtml:='<body data-websiteid="' || pWebsiteId || '" data-articleid="' || pArticleId || '" data-resturl="' || pRestUrl || '">' || pHtml || '</body>';
+
     END;
 
     /*
@@ -216,6 +289,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         
         l_domain_name website.domain_name%type;
         l_contact_form website_article.contact_form%type;
+        l_login_form website_article.login_form%type; 
         l_collection_type website_article.collection_type%type;
         l_is_blog BOOLEAN:=FALSE;
         l_is_media BOOLEAN:=FALSE;
@@ -265,14 +339,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Get page content */
 
         IF (l_is_blog OR l_is_media) THEN
-            SELECT w.domain_name, w.header, a.body_html, w.footer, 'NO', null
-              INTO l_domain_name, l_header, l_html, l_footer, l_contact_form, l_collection_type
+            SELECT w.domain_name, w.header, a.body_html, w.footer, 'NO', null, null
+              INTO l_domain_name, l_header, l_html, l_footer, l_contact_form, l_login_form,l_collection_type
               FROM website w, article a
              WHERE w.id=l_website_id
                AND a.id=pArticleId;
         ELSE
-            SELECT w.domain_name, w.header, a.body_html, w.footer, wa.contact_form, wa.collection_type
-              INTO l_domain_name, l_header, l_html, l_footer, l_contact_form, l_collection_type
+            SELECT w.domain_name, w.header, a.body_html, w.footer, wa.contact_form, wa.login_form, wa.collection_type
+              INTO l_domain_name, l_header, l_html, l_footer, l_contact_form, l_login_form,l_collection_type
               FROM website w, website_article wa, article a
              WHERE w.id=l_website_id
                AND wa.website_id=w.id
@@ -284,10 +358,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             l_session_data.user_id, 
             l_website_id,
             'TEST', 
+            pck_core.getresturl(),
             pArticleId, 
             l_collection_type, 
             l_is_media, 
             l_contact_form, 
+            l_login_form,
             l_header, 
             l_footer, 
             l_html);
