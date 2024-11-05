@@ -192,12 +192,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         ** Send Email to Admin users 
         */
         l_body_html:=l_body_html || '<table role="presentation">';
-        l_body_html:=l_body_html || '<thead><tr><th>File Name</th><th>File Size</th><th>Schema Size</th><th>Created</th></tr></thead>';
+        l_body_html:=l_body_html || '<thead><tr><th>File Name on Github</th><th>Compression</th><th>Created</th><th>Encryption Password</th></tr></thead>';
         l_body_html:=l_body_html || '<tbody>';
         SELECT SUM(bytes) INTO l_schema_size FROM user_segments;
         FOR C IN (SELECT object_name, bytes, last_modified FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR') WHERE object_name LIKE '%.dmp')
         LOOP
-            l_body_html:=l_body_html || '<tr><td>' || C.object_name || '</td><td>' || apex_string_util.to_display_filesize(C.bytes) || '</td>' || apex_string_util.to_display_filesize(l_schema_size) || '<td>' || C.last_modified || '</td></tr>';
+            l_body_html:=l_body_html || '<tr><td>' || C.object_name || '</td><td>' || apex_string_util.to_display_filesize(l_schema_size) || ' --> ' || apex_string_util.to_display_filesize(C.bytes) || '<td>' || to_char(C.last_modified,'dd.mm.yyyy hh24:mi pm') || '</td><td>' || l_password || '</td></tr>';
         END LOOP;
         l_body_html:=l_body_html || '</tbody></table>';
         l_body_html:=l_body_html || '</html>';
