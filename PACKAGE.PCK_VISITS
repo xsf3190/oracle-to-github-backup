@@ -52,18 +52,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
               FROM JSON_TABLE(l_clob2 FORMAT JSON, '$.detection' 
                 COLUMNS (simple_software_string)); 
         END;
-        
-        /*
-        l_browser:=REGEXP_SUBSTR(l_user_agent,'*(Chrome\/\d*)');
-        IF (l_browser IS NULL) THEN
-            l_browser:=REGEXP_SUBSTR(l_user_agent,'*(Version\/\d*.\d* Safari)');
-            IF (l_browser IS NOT NULL) THEN
-                l_browser:='Safari ' || REGEXP_SUBSTR(l_browser,'\d+(\.\d+)?');
-            ELSE
-                l_browser:=REGEXP_SUBSTR(l_user_agent,'*(Firefox\/\d*)');
-            END IF;
-        END IF;
-        */
 
         INSERT INTO website_article_cwv (
             website_id, article_id, seq, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, 
