@@ -27,8 +27,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION getFluidTypes(pMinFontSize IN NUMBER, pMinWidthPx IN NUMBER, pMinScale IN NUMBER, pMaxFontSize IN NUMBER, pMaxWidthPx IN NUMBER, pMaxScale IN NUMBER) RETURN fluid_type_t;
     --
-    FUNCTION buildContactForm(pContactEmail IN website.contact_email%type DEFAULT NULL, pUrl IN VARCHAR2) RETURN VARCHAR2;
-    --
     FUNCTION buildNavLabel(pId IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pAttrName IN VARCHAR2 DEFAULT NULL, pAttrValue IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION buildPageNav(pWebsiteId IN website.id%type) RETURN CLOB;
@@ -352,38 +350,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END LOOP;
 
         RETURN (l_root_css || l_deploy_css);
-    END;
-
-    /*
-     **  Build Contact Form
-     */
-    FUNCTION buildContactForm(pContactEmail IN website.contact_email%type, pUrl IN VARCHAR2) RETURN VARCHAR2 IS
-
-    BEGIN
-        RETURN(
-'<div class="content-grid">
-    <form class="contact flow">
-      <input type="hidden" name="url" value="">
-      <div>
-        <label for="nameInput">Name</label>
-        <input type="text" id="nameInput" name="name" required minlength="1" maxlength="50">
-      </div>
-      <div>
-        <label for="emailInput">Email</label>
-        <input type="email" id="emailInput" name="email" required maxlength="50">
-      </div>
-      <div>
-        <label for="messageInput">Message</label>
-        <textarea id="messageInput" name="message" required minlength="1" maxlength="400" rows="5" cols="40"></textarea>
-      </div>
-      <div>
-        <button type="submit">
-          SEND
-        </button>
-        <span class="result"></span>
-      </div>
-    </form>
- </div>');
     END;
 
     /*
