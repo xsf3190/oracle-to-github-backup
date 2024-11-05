@@ -183,6 +183,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             page_title website_article.page_title%type,
             page_description website_article.page_description%type,
             contact_form website_article.contact_form%type,
+            login_form website_article.login_form%type,
             lastmod article.updated_date%type,
             word_count article.word_count%type, 
             header website.footer%type,
@@ -239,17 +240,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /*
         ** Get all website content into collection
         */
-        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count,  header, body_html, footer, apex_t_varchar2()
+        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, login_form, lastmod, word_count,  header, body_html, footer, apex_t_varchar2()
           BULK COLLECT INTO l_labels
           FROM
           (
-        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.display_order, a.updated_date lastmod, a.word_count, w.header, a.body_html body_html, w.footer
+        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.login_form, wa.display_order, a.updated_date lastmod, a.word_count, w.header, a.body_html body_html, w.footer
           FROM website w, website_article wa, article a
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
            AND wa.article_id=a.id
          UNION ALL
-        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001), a.updated_date lastmod, a.word_count, w.header, a.body_html, w.footer
+        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001), a.updated_date lastmod, a.word_count, w.header, a.body_html, w.footer
           FROM website w, website_article wa, article a 
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
@@ -287,14 +288,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 apex_string.push(l_labels(i).modules,'deploy_contact.min.js');
             END IF;
 
+            IF (l_labels(i).login_form='EMAIL') THEN
+                apex_string.push(l_labels(i).modules,'deploy_login_email.js');
+            END IF;
+
             pck_codepen.buildBodyHtml(
                 pUserId, 
                 pWebsiteId, 
                 pEnv,
+                pRestUrl,
                 l_labels(i).article_id, 
                 l_labels(i).collection_type, 
                 l_is_media, 
                 l_labels(i).contact_form, 
+                l_labels(i).login_form, 
                 l_labels(i).header, 
                 l_labels(i).footer, 
                 l_labels(i).body_html
@@ -367,27 +374,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END LOOP;
             
             l_page:=
-                '<!DOCTYPE HTML>' || chr(10) ||
-                '<html lang="en">' || chr(10) ||
-                '<head>' || chr(10) ||
-                    '<meta charset="UTF-8">' || chr(10) ||
-                    '<meta name="viewport" content="width=device-width, initial-scale=1.0">' || chr(10) || 
-                    '<title>' || l_labels(i).page_title || '</title>' || chr(10) ||
-                    '<meta name="description" content="' || l_labels(i).page_description || '">' || chr(10) ||
-                    '<meta name="author" content="mark.russellbrown@gmail.com">' || chr(10) ||
-                    '<meta name="view-transition" content="same-origin">' || chr(10) ||
-                    '<link rel="preload" as="font" href="/' || l_font_filename || '" crossorigin>' || chr(10) ||
+                '<!DOCTYPE HTML>' ||
+                '<html lang="en">' ||
+                '<head>' ||
+                    '<meta charset="UTF-8">' ||
+                    '<meta name="viewport" content="width=device-width, initial-scale=1.0">' ||
+                    '<title>' || l_labels(i).page_title || '</title>' ||
+                    '<meta name="description" content="' || l_labels(i).page_description || '">' ||
+                    '<meta name="author" content="mark.russellbrown@gmail.com">' ||
+                    '<meta name="view-transition" content="same-origin">' ||
+                    '<link rel="preload" as="font" href="/' || l_font_filename || '" crossorigin>' ||
                     l_module_html ||
                     l_script_html ||
-                    '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' || chr(10) ||
-                    '<link rel="stylesheet" href="/website.css">'  || chr(10) || 
+                    '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
+                    '<link rel="stylesheet" href="/website.css">'  ||
                     --CASE WHEN l_is_blog AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN '<script src="https://accounts.google.com/gsi/client" async defer></script>' END ||
-                '</head>' || chr(10) || 
-                '<body data-websiteid="' || pWebsiteId
-                    || '" data-articleid="' || CASE WHEN l_labels(i).parent_article_id=l_labels(i).article_id THEN l_labels(i).parent_article_id ELSE l_labels(i).article_id END
-                    || '" data-resturl="' || pRestUrl || '">' || 
-                l_labels(i).body_html || chr(10) ||
-                '</body>' || chr(10) || 
+                '</head>' ||
+                l_labels(i).body_html ||
             '</html>';
 
             l_text:=utl_i18n.unescape_reference(apex_escape.striphtml(l_labels(i).body_html));
