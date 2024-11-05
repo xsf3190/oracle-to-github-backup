@@ -263,7 +263,7 @@ footer :is(p) {
 .icon:has(+ .condensed) {
   align-self: flex-start;
 }
-form.contact {
+form {
   display: flex;
   flex-direction: column;
   border: solid 1px var(--color-primary);
@@ -271,22 +271,22 @@ form.contact {
   border-radius: 0.5em;
   margin-top: var(--space-s);
 }
-form.contact label {
+form label {
   display: block;
   font-weight: 600;
 }
-form.contact input {
+form input {
   inline-size: 95%;
   line-height: 2;
   font-size: var(--step-0);
 }
-form.contact textarea {
+form textarea {
   inline-size: 95%;
   resize: vertical;
   min-block-size: 5rem;
   font-size: var(--step-0);
 }
-form.contact button {
+form button {
   border-radius: 1.5em;
   padding: 1rem 1.5em;
   letter-spacing: 0.2em;
