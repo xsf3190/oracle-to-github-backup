@@ -99,7 +99,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         <span class="sendmail-result"></span>
       </div>
       <div>
-        <button class="sendmail" type="submit">SEND</button>
+        <button class="sendmail" type="button">SEND</button>
       </div>
       <div class="sendcode">
         <label for="passcodeInput">Enter the 6 digit Passcode sent to your inbox</label>
@@ -107,7 +107,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         <span class="sendcode-result"></span>
       </div>
       <div>
-        <button class="sendcode" type="submit">LOGIN</button>
+        <button class="sendcode" type="button">LOGIN</button>
       </div>
     </form>
  </div>');
