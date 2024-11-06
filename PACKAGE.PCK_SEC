@@ -4,6 +4,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
     --
     PROCEDURE verifyAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB);
     --
+    PROCEDURE makeAuthRequest(pWebsiteId IN website.id%type);
+    --
     PROCEDURE post_auth_facebook;
     --
     PROCEDURE post_auth_google;
@@ -73,29 +75,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
+        APEX_JSON.write ('message', 'Check your inbox for a message from authenticate@adfreesites.com');
         APEX_JSON.close_object;
 
         EXCEPTION WHEN OTHERS THEN
             pck_core.log_error;
     END;
 
-        /*
-    ** USER SUBMITS EMAIL ADDRESS TO BE AUTHENTICATED
-    ** - CREATE RANDOM PASSCODE 
-    ** - SEND TO EMAIL ADDRESS
+    /*
+    ** VERIFY PASSCODE ENTERED BY USER MATCHES
+    ** RETURN JWT TOKEN IF PASSCODES MATCH
     */
-
     PROCEDURE verifyAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
         l_payload apex_json.t_values;
         l_email users.email%type;
-        l_url VARCHAR2(100);
-        l_user_exists PLS_INTEGER;
         l_passcode VARCHAR2(6);
         l_verified_code PLS_INTEGER;
         l_token VARCHAR2 (4000);
-        l_json JSON_OBJECT_T;
-        l_email_payload CLOB;
-        l_clob CLOB;
+        l_scope VARCHAR2 (5);
     BEGIN
         
         apex_json.parse(l_payload, pBodyText);
@@ -103,28 +100,98 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_passcode:=apex_json.get_varchar2 (p_path => 'passcode', p_values => l_payload);
 
         SELECT COUNT(*) INTO l_verified_code FROM  users WHERE email=l_email AND passcode=l_passcode;
-        pck_core.log(' l_verified_code:' || l_verified_code);
 
         IF (l_verified_code=0) THEN
             APEX_JSON.open_object;
             APEX_JSON.write ('success', FALSE);
+            APEX_JSON.write ('message', 'Passcode does not match');
             APEX_JSON.close_object;
             RETURN;
+        END IF;
+
+        FOR C IN (SELECT null 
+                    FROM website w, users u 
+                   WHERE w.id=pWebsiteId 
+                     AND u.id=w.user_id
+                     AND u.email=l_email) 
+        LOOP
+            l_scope:='admin';
+        END LOOP;
+
+        IF (l_scope IS NULL) THEN
+            l_scope:='user';
         END IF;
 
         l_token:=apex_jwt.encode (
             p_iss       => 'ORDS',
             p_sub       => l_email,
-            p_aud       => 'user',
+            p_aud       => l_scope,
             p_iat_ts    => SYSDATE,
             p_exp_sec   => 60 * 5,
             p_signature_key => UTL_RAW.cast_to_raw ('secretKey')
         );
-        pck_core.log('l_token:'||l_token);
+
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('token', l_token);
+        APEX_JSON.write ('message', 'Successfully Logged in');
         APEX_JSON.close_object;
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error;
+    END;
+
+    /*
+    ** USER MAKES AUTHENTICATED REQUEST USING THEIR JWT TOKEN
+    */
+    PROCEDURE makeAuthRequest(pWebsiteId IN website.id%type) IS
+        l_header_value     VARCHAR2(4000);
+        l_bearer_token     VARCHAR2(4000);
+        l_token            APEX_JWT.T_TOKEN;
+        l_user_object      APEX_JSON.T_VALUES;
+        l_scope            VARCHAR2(200);
+        l_email            users.email%type;
+    BEGIN
+        --get the authorization header value from the request
+        l_header_value := OWA_UTIL.get_cgi_env('Authorization');
+        
+        -- Check if the Authorization header exists and starts with 'Bearer '
+        IF (l_header_value IS NULL OR INSTR(l_header_value, 'Bearer ') <> 1) THEN
+            APEX_JSON.open_object;
+            APEX_JSON.write ('success', FALSE);
+            APEX_JSON.write ('message', 'Error - no bearer token in Authorization header');
+            APEX_JSON.close_object;
+            RETURN;
+        END IF;
+
+        l_bearer_token := SUBSTR(l_header_value, 8);
+
+        l_token:=apex_jwt.DECODE (
+            p_value   => l_bearer_token,
+            p_signature_key   => UTL_RAW.cast_to_raw ('secretKey'));
+
+        apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS', p_aud => 'user');
+
+        apex_json.parse (l_user_object, l_token.payload);
+
+        IF NOT apex_json.does_exist (p_path => 'sub', p_values => l_user_object) THEN
+            APEX_JSON.open_object;
+            APEX_JSON.write ('success', FALSE);
+            APEX_JSON.write ('message', 'Error no user found in JWT Token');
+            APEX_JSON.close_object;
+            RETURN;
+        ELSIF NOT apex_json.does_exist (p_path => 'aud', p_values => l_user_object) THEN
+            APEX_JSON.open_object;
+            APEX_JSON.write ('success', FALSE);
+            APEX_JSON.write ('message', 'Error no scope found in JWT Token');
+            APEX_JSON.close_object;
+            RETURN;
+        END IF;
+
+        l_scope:=apex_json.get_varchar2 (p_path => 'aud', p_values => l_user_object);
+        l_email:=apex_json.get_varchar2 (p_path => 'sub', p_values => l_user_object);
+
+        pck_core.log(l_scope||':'||l_email);
 
         EXCEPTION WHEN OTHERS THEN
             pck_core.log_error;
