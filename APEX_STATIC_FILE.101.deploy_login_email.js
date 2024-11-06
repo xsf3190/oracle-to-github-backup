@@ -1,88 +1,72 @@
 /*
 ** LOGIN WITH EMAIL FORM SUBMISSION
 */
-const showMessage = (result, message, color) => {
-    result.textContent = message;
-}
 
-const sendEmailAddress = async (e) => {
+const callAPI = async (url, method) => {
     const formData = new FormData(form);
 
-    const response = await fetch(
-        bodydata.resturl + "authenticate/"+bodydata.websiteid, {
-        method: "POST",
+    const response = await fetch(url, {
+        method: method,
         body: JSON.stringify(Object.fromEntries(formData))
     });
 
-    const result = form.querySelector(".sendmail-result");
-
     if (!response.ok) {
-        const message = `An error has occured: ${response.status} - ${response.message}`;
-        showMessage(result, message, 'red');
-        return;
+        throw Error(`System Error: ${response.status} - ${response.message}`);
     }
 
     const data = await response.json();
-
     if (!data.success) {
-        const message = `An error has occured: ${data.sqlerrm}`;
-        showMessage(result, message, 'red');
+        if (data.sqlcode) {
+            throw Error(`Database error: ${data.sqlcode} - ${data.sqlerrm}`);
+        } else {
+            throw Error(data.message);
+        }
     }
     return(data);
 }
 
-const sendAuthCode = async () => {
-    const formData = new FormData(form);
-    
-    const response = await fetch(
-        bodydata.resturl + "authenticate/"+bodydata.websiteid, {
-        method: "PUT",
-        body: JSON.stringify(Object.fromEntries(formData))
-    });
-
-    const result = form.querySelector(".sendcode-result");
-
-    if (!response.ok) {
-        const message = `An error has occured: ${response.status} - ${response.message}`;
-        showMessage(result, message, 'red');
-        return;
-    }
-
-    const data = await response.json();
-
-    if (!data.success) {
-        const message = `An error has occured: ${data.sqlerrm}`;
-        showMessage(result, message, 'red');
-        return;
-    }
-    
-    sessionStorage.setItem("token",data.token);
-    showMessage(result, "Check your inbox for passcode", 'green');
-}
-
 const bodydata = document.body.dataset;
+const url = bodydata.resturl + "authenticate/" +bodydata.websiteid;
 const form = document.querySelector("form.login");
 const sendmail_btn = form.querySelector("button.sendmail"),
       sendmail_msg = form.querySelector(".sendmail-result"),
       sendcode_btn = form.querySelector("button.sendcode"),
       sendcode_msg = form.querySelector(".sendcode-result");
 
-form.querySelector("[name='url']").value = window.location.hostname; /* includes website in submission */
-
-sendmail_btn.addEventListener("click", () => {
-    callAPI("POST", sendmail_msg);
-    showMessage(sendmail_msg, "Check your inbox for passcode", 'green');
-    sendmail_btn.style.display = "none";
-    form.querySelectorAll(".sendcode").forEach((ele) => {
-        ele.style.display = "block";
-    });
-});
-
-sendcode_btn.addEventListener("click", () => {
-        sendAuthCode();
-});
+/* Include website url in submitted form data */
+form.querySelector("[name='url']").value = window.location.hostname; 
 
 /* sendcode elements hidden until code has been emailed */
 form.querySelectorAll(".sendcode").forEach((ele) => {
     ele.style.display = "none";
+});
+
+form.addEventListener("submit", (e) => {
+    e.preventDefault();
+});
+
+/* Submit email address - hide send button and display elements to process passcode */
+sendmail_btn.addEventListener("click", () => {
+    callAPI(url,"POST").then((data) => {
+        sendmail_msg.textContent = data.message;
+        sendmail_btn.style.display = "none";
+        form.querySelectorAll(".sendcode").forEach((ele) => {
+            ele.style.display = "block";
+        });
+    }).catch((error) => {
+        sendmail_msg.textContent = error;
+        sendmail_msg.style.color = "red";
+    });
+});
+
+sendcode_btn.addEventListener("click", () => {
+    callAPI(url,"PUT").then((data) => {
+        sessionStorage.setItem("token",data.token);
+        sendcode_msg.textContent = data.message;
+        sendcode_msg.style.color = "green";
+        sendcode_btn.style.display = "none";
+    }).catch((error) => {
+        sendcode_msg.textContent = error;
+        sendcode_msg.style.color = "red";
+    });
 });
