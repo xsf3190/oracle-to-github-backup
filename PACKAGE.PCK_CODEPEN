@@ -229,6 +229,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         IF (pLoginForm IS NOT NULL) THEN
             CASE pLoginForm
                 WHEN 'EMAIL' THEN pHtml:=pHtml || buildLoginForm();
+                WHEN 'NONE' THEN null;
             END CASE;
 
             --l_javascript:=l_javascript || getJSCode('deploy_contact.js');
