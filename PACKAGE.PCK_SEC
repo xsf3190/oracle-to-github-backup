@@ -50,6 +50,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_user_exists PLS_INTEGER;
         l_digits   CONSTANT VARCHAR2(10) := '0123456789';
         l_passcode VARCHAR2(6);
+        l_passcode_hash raw(32);
         l_json JSON_OBJECT_T;
         l_email_payload CLOB;
         l_clob CLOB;
@@ -60,6 +61,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         SELECT COUNT(*) INTO l_user_exists FROM  users WHERE email=l_email;
 
+        /* Generate 6 digit random passcode */
         SELECT LISTAGG(letter, NULL) WITHIN GROUP (ORDER BY DBMS_RANDOM.VALUE)
         INTO   l_passcode
         FROM   (
@@ -71,10 +73,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             FROM   DUAL
             CONNECT BY LEVEL <= 6);
 
+        /* Store passcode as hash for later comparison with user-entered value */
+        l_passcode_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_passcode,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+
         CASE l_user_exists
-            WHEN 0 THEN INSERT INTO users (email, passcode) VALUES (l_email, l_passcode);
-            WHEN 1 THEN UPDATE users SET passcode=l_passcode WHERE email=l_email;
+            WHEN 0 THEN INSERT INTO users (email, passcode) VALUES (l_email, l_passcode_hash);
+            WHEN 1 THEN UPDATE users SET passcode=l_passcode_hash WHERE email=l_email;
         END CASE;
+
+        
 
         /* Send mail to email address with passcode */
         l_json:=new JSON_OBJECT_T;
@@ -91,6 +98,39 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             pck_core.log_error;
     END;
 
+    FUNCTION getScope(pWebsiteId IN website.id%type, pEmail IN VARCHAR2) RETURN VARCHAR2
+    IS
+        l_scope VARCHAR2(7);
+    BEGIN
+        /* 
+        ** Determine token access rights of user for the website : admin, contact, user
+        */
+        FOR C IN (SELECT null 
+                    FROM website w, users u 
+                   WHERE w.id=pWebsiteId 
+                     AND u.id=w.user_id
+                     AND u.email=pEmail) 
+        LOOP
+            l_scope:='admin';
+        END LOOP;
+
+        IF (l_scope IS NULL) THEN
+            FOR C IN (SELECT null
+                    FROM website w
+                   WHERE w.id=pWebsiteId 
+                     AND w.contact_email=pEmail) 
+            LOOP
+                l_scope:='contact';
+            END LOOP;
+        END IF;
+
+        IF (l_scope IS NULL) THEN
+            l_scope:='user';
+        END IF;
+
+        RETURN (l_scope);
+    END;
+
     /*
     ** VERIFY PASSCODE ENTERED BY USER MATCHES
     ** RETURN JWT ACCESS AND REFRESH TOKENS IF PASSCODES MATCH
@@ -98,8 +138,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     PROCEDURE verifyAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
         l_payload apex_json.t_values;
         l_email users.email%type;
+        l_email_id users.id%type;
         l_passcode VARCHAR2(6);
-        l_verified_code PLS_INTEGER;
+        l_passcode_hash raw(32);
         l_token VARCHAR2 (4000);
         l_refresh VARCHAR2 (4000);
         l_scope VARCHAR2 (5);
@@ -108,42 +149,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         
         l_email:=apex_json.get_varchar2 (p_path => 'email', p_values => l_payload);
         l_passcode:=apex_json.get_varchar2 (p_path => 'passcode', p_values => l_payload);
+        l_passcode_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_passcode,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
 
-        SELECT COUNT(*) INTO l_verified_code FROM  users WHERE email=l_email AND passcode=l_passcode;
+        SELECT NVL(MAX(id),0) INTO l_email_id FROM  users WHERE email=l_email AND passcode=l_passcode_hash;
 
-        IF (l_verified_code=0) THEN
+        IF (l_email_id=0) THEN
             sendMessage(FALSE,'Passcode does not match');
             RETURN;
         END IF;
 
-        FOR C IN (SELECT null 
-                    FROM website w, users u 
-                   WHERE w.id=pWebsiteId 
-                     AND u.id=w.user_id
-                     AND u.email=l_email) 
-        LOOP
-            l_scope:='admin';
-        END LOOP;
+        l_scope:=getScope(pWebsiteId,l_email);
 
-        IF (l_scope IS NULL) THEN
-            l_scope:='user';
-        END IF;
-
-        l_token:=apex_jwt.encode (
+        l_token:=apex_jwt.ENCODE (
             p_iss       => 'ORDS',
             p_sub       => l_email,
             p_aud       => l_scope,
-            p_iat_ts    => SYSDATE,
+            p_jti       => TO_CHAR(l_email_id),
+            p_iat_ts    => current_timestamp,
             p_exp_sec   => 60 * 5,
             p_signature_key => UTL_RAW.cast_to_raw (SECRET_KEY)
         );
 
-        l_refresh:=apex_jwt.encode (
+        l_refresh:=apex_jwt.ENCODE (
             p_iss       => 'ORDS',
             p_sub       => l_email,
             p_aud       => l_scope,
-            p_iat_ts    => SYSDATE,
-            p_exp_sec   => 60 * 5 * 10,
+            p_jti       => TO_CHAR(l_email_id),
+            p_iat_ts    => current_timestamp,
+            p_exp_sec   => 60 * 5 * 2,
             p_signature_key => UTL_RAW.cast_to_raw (SECRET_KEY)
         );
 
@@ -168,12 +201,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_token APEX_JWT.T_TOKEN;
         l_payload apex_json.t_values;
         l_user_object APEX_JSON.T_VALUES;
+        l_keys APEX_T_VARCHAR2;
         l_scope VARCHAR2(200);
         l_email users.email%type;
+        l_email_id users.id%type;
         l_new_token VARCHAR2 (4000);
         l_new_refresh VARCHAR2 (4000);
     BEGIN
-        pck_core.log('start refreshToken');
+        pck_core.log('start refreshAuthToken');
         /* Validate the refresh token used to authenticate (the access token has expired)  */
         l_header_value := OWA_UTIL.get_cgi_env('Authorization');
         
@@ -189,7 +224,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             p_value   => l_bearer_token,
             p_signature_key   => UTL_RAW.cast_to_raw (SECRET_KEY));
 
-        /* if refresh token has expired means user hasn't logged on for long time */
+        /* 
+        ** if refresh token has expired means user hasn't logged on for long time 
+        */
         BEGIN
             apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
             EXCEPTION WHEN VALUE_ERROR THEN
@@ -199,26 +236,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         apex_json.parse (l_user_object, l_token.payload);
         
-        l_email:=apex_json.get_varchar2 (p_path => 'email', p_values => l_user_object);
+        l_email:=apex_json.get_varchar2 (p_path => 'sub', p_values => l_user_object);
+        l_email_id:=apex_json.get_varchar2 (p_path => 'jti', p_values => l_user_object);
 
-        FOR C IN (SELECT null
-                    FROM website w, users u 
-                   WHERE w.id=pWebsiteId 
-                     AND u.id=w.user_id
-                     AND u.email=l_email) 
-        LOOP
-            l_scope:='admin';
-        END LOOP;
-
-        IF (l_scope IS NULL) THEN
-            l_scope:='user';
-        END IF;
+        l_scope:=getScope(pWebsiteId, l_email);
 
         l_new_token:=apex_jwt.encode (
             p_iss       => 'ORDS',
             p_sub       => l_email,
             p_aud       => l_scope,
-            p_iat_ts    => SYSDATE,
+            p_jti       => l_email_id,
+            p_iat_ts    => current_timestamp,
             p_exp_sec   => 60 * 5,
             p_signature_key => UTL_RAW.cast_to_raw (SECRET_KEY)
         );
@@ -227,8 +255,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             p_iss       => 'ORDS',
             p_sub       => l_email,
             p_aud       => l_scope,
-            p_iat_ts    => SYSDATE,
-            p_exp_sec   => 60 * 5 * 10,
+            p_jti       => l_email_id,
+            p_iat_ts    => current_timestamp,
+            p_exp_sec   => 60 * 5 * 2,
             p_signature_key => UTL_RAW.cast_to_raw (SECRET_KEY)
         );
 
