@@ -34,6 +34,20 @@ const callAPI = async (endpoint, method, token) => {
     return(data);
 }
 
+const b64DecodeUnicode = str =>
+  decodeURIComponent(
+    Array.prototype.map.call(atob(str), c =>
+      '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+    ).join(''))
+
+const parseJwt = token =>
+  JSON.parse(
+    b64DecodeUnicode(
+      token.split('.')[1].replace('-', '+').replace('_', '/')
+    )
+  )
+
+
 
 const bodydata = document.body.dataset;
 const form = document.querySelector("form.login");
@@ -44,47 +58,90 @@ form.querySelectorAll(".sendcode").forEach((ele) => {
 });
 
 /* CHECK IF USER ALREADY LOGGED IN. REFRESH TOKEN IF EXPIRED */
+let html="";
+let token_type="";
+
 let token = sessionStorage.getItem("token");
+
 if (token) {
-    console.log("Using session token");
+    token_type="AT";
+    html+="<table><caption>Access Token</caption>";
 } else {
     token = localStorage.getItem("refresh");
     if (token) {
-        console.log("Using refresh token");
+        token_type="RT"; /* Means user previously logged and is revisiting website - need to get Access token */
+        html+="<table><caption>Refresh Token</caption>";
     }
 }
+/* Show token values if exists */
+if (token) {
+    const token_obj = parseJwt(token)
+    const keys = Object.keys(token_obj);
+    let value, utc;
+    let j = 0;
+    for (let i = 1; i < keys.length; i++) {
+        if (keys[j]==="iat" || keys[j]==="exp") {
+            utc = new Date(Number(token_obj[keys[j]])*1000);
+            value = utc.toUTCString();
+            console.log(token_obj[keys[j]])
+        } else {
+            value = token_obj[keys[j]];
+        }
+        html+="<tr><td>" + keys[j] + "</td><td>" + value + "</td></tr>"
+        j++;
+    }
+    html+="</table>";
+}
+
 
 if (token) {
     form.style.display = "none";
     const article = document.querySelector("article:first-of-type");
     article.replaceChildren();
-    article.insertAdjacentHTML('beforeend',"<p>Already logged in</p>");
+    article.insertAdjacentHTML('beforeend',html);
+  
+    switch (token_type) {
+      case "AT":
 
-    callAPI("authenticate", "GET", token)
-        .then((data) => {
-            if (data.message==="expired") {
-                article.insertAdjacentHTML('beforeend',"<p>token expired - get new access token using refresh token</p>");
-                return callAPI("authenticate-refresh", "POST", localStorage.getItem("refresh"));
-            }
-            article.insertAdjacentHTML('beforeend',"<p>" + data.email + " with " + data.scope + " privilege</p>");
-            return Promise.resolve();
-        })
-        .then((data) => {
-            if (!data) return;
-            if (data.message==="login") {
-                article.insertAdjacentHTML('beforeend',"<p>Refresh token has expired. Have to login again.</p>");
-                sessionStorage.removeItem("token");
-                localStorage.removeItem("refresh");
-            } else {
-                article.insertAdjacentHTML('beforeend',"<p>" + data.email + ":" + data.scope + "</p>");
-                sessionStorage.setItem("token",data.token);
-                localStorage.setItem("refresh",data.refresh);
-                form.style.display = "block";
-            }
-        })
-        .catch((error) => {
-            article.insertAdjacentHTML('beforeend',"<p>" + error + "</p>");
-        })
+          callAPI("authenticate", "GET", token)
+              .then((data) => {
+                  if (data.message==="expired") {
+                      article.insertAdjacentHTML('beforeend',"<p>token expired - get new access token using refresh token</p>");
+                      return callAPI("authenticate-refresh", "POST", localStorage.getItem("refresh"));
+                  }
+                  article.insertAdjacentHTML('beforeend',"<p>Access Token used</p>");
+                  return Promise.resolve();
+              })
+              .then((data) => {
+                  if (!data) return;
+                  if (data.message==="login") {
+                      article.insertAdjacentHTML('beforeend',"<p>Refresh token has expired. Have to login again.</p>");
+                      sessionStorage.removeItem("token");
+                      localStorage.removeItem("refresh");
+                  } else {
+                      article.insertAdjacentHTML('beforeend',"<p>Refresh token used to get new Access / Refresh token pair</p>");
+                      sessionStorage.setItem("token",data.token);
+                      localStorage.setItem("refresh",data.refresh);
+                  }
+              })
+              .catch((error) => {
+                  article.insertAdjacentHTML('beforeend',"<p>" + error + "</p>");
+              });
+          break;
+            
+      case "RT":
+          callAPI("authenticate-refresh", "POST", token)
+              .then((data) => {
+                  article.insertAdjacentHTML('beforeend',"<p>Refresh token used to get new Access / Refresh token pair</p>");
+                  sessionStorage.setItem("token",data.token);
+                  localStorage.setItem("refresh",data.refresh);
+              })
+              .catch((error) => {
+                  article.insertAdjacentHTML('beforeend',"<p>" + error + "</p>");
+              });
+          break;
+     }          
+           
 } else {
 
 
@@ -95,10 +152,6 @@ const sendmail_btn = form.querySelector("button.sendmail"),
 
 /* Include website url in submitted form data */
 form.querySelector("[name='url']").value = window.location.hostname; 
-
-form.addEventListener("submit", (e) => {
-    e.preventDefault();
-});
 
 /* Submit email address - hide send button and display elements to process passcode */
 sendmail_btn.addEventListener("click", () => {
