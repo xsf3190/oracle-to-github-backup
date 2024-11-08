@@ -231,8 +231,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 WHEN 'EMAIL' THEN pHtml:=pHtml || buildLoginForm();
                 WHEN 'NONE' THEN null;
             END CASE;
-
-            --l_javascript:=l_javascript || getJSCode('deploy_contact.js');
         END IF;
 
         /* 
@@ -369,6 +367,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             l_footer, 
             l_html);
 
+        IF (l_login_form='EMAIL') THEN
+            l_javascript:=l_javascript || getJSCode('deploy_login_email.js');
+        END IF;
+        
         apex_json.open_object;
         apex_json.write('success', TRUE); 
         apex_json.write('domain_name', l_domain_name);
