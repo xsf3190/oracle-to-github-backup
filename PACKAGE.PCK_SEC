@@ -27,7 +27,9 @@ END PCK_SEC;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
-    SECRET_KEY CONSTANT VARCHAR2(16):='secretkey';
+    REFRESH_TOKEN_EXP CONSTANT PLS_INTEGER:=(24*60*60)*90; --90 DAYS
+    ACCESS_TOKEN_EXP CONSTANT PLS_INTEGER:=60*5; --90 DAYS
+
 
     PROCEDURE sendMessage(pSuccess IN BOOLEAN, pMessage IN VARCHAR2) IS
     BEGIN
@@ -44,91 +46,88 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     */
 
     PROCEDURE createAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
-        l_payload apex_json.t_values;
         l_email users.email%type;
         l_url varchar2(100);
-        l_user_exists PLS_INTEGER;
+        l_user_id users.id%type;
         l_digits   CONSTANT VARCHAR2(10) := '0123456789';
         l_passcode VARCHAR2(6);
         l_passcode_hash raw(32);
         l_json JSON_OBJECT_T;
         l_email_payload CLOB;
+        l_favicon_url VARCHAR2(200);
         l_clob CLOB;
     BEGIN
-        apex_json.parse(l_payload, pBodyText);
-        l_email:=apex_json.get_varchar2 (p_path => 'email', p_values => l_payload);
-        l_url:=apex_json.get_varchar2 (p_path => 'url', p_values => l_payload);
+        FOR C IN (SELECT j.email, j.url, NVL(u.id,0) user_id, a.cld_cloud_name, a.resource_type, a.public_id, a.format--, w.color_primary
+                    FROM asset a, website w, users u, JSON_TABLE(pBodyText, '$' COLUMNS email, url) j
+                   WHERE w.id=pWebsiteId
+                     AND u.email(+)=j.email
+                     AND a.id(+)=w.favicon_asset_id) 
+        LOOP
+            l_email:=C.email;
+            l_url:=C.url;
+            l_user_id:=C.user_id;
+            IF (C.cld_cloud_name IS NOT NULL) THEN
+                l_favicon_url:=pck_media.getCloudinaryUrl(C.cld_cloud_name,C.resource_type,C.public_id,C.format, 96) || '.png';
+                l_favicon_url:=REPLACE(l_favicon_url,'q_auto,f_auto','f_auto,w_96,h_96');
+            END IF;
+        END LOOP;
 
-        SELECT COUNT(*) INTO l_user_exists FROM  users WHERE email=l_email;
-
-        /* Generate 6 digit random passcode */
-        SELECT LISTAGG(letter, NULL) WITHIN GROUP (ORDER BY DBMS_RANDOM.VALUE)
-        INTO   l_passcode
-        FROM   (
-            SELECT SUBSTR(
-                     l_digits,
-                     FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(l_digits) + 1)),
-                     1
-                   ) AS letter
-            FROM   DUAL
-            CONNECT BY LEVEL <= 6);
+        FoR i IN 1..6 LOOP
+            l_passcode:=l_passcode || SUBSTR(l_digits,FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(l_digits) + 1)),1);
+        END LOOP;
 
         /* Store passcode as hash for later comparison with user-entered value */
         l_passcode_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_passcode,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
 
-        CASE l_user_exists
-            WHEN 0 THEN INSERT INTO users (email, passcode) VALUES (l_email, l_passcode_hash);
-            WHEN 1 THEN UPDATE users SET passcode=l_passcode_hash WHERE email=l_email;
-        END CASE;
-
-        
+        IF (l_user_id=0) THEN
+            INSERT INTO users (email, passcode) VALUES (l_email, l_passcode_hash);
+        ELSE
+            UPDATE users SET passcode=l_passcode_hash WHERE id=l_user_id;
+        END IF;
 
         /* Send mail to email address with passcode */
         l_json:=new JSON_OBJECT_T;
         l_json.put('contactEmail',l_email);
-        l_json.put('subject','Passcode for authenticating to ' || l_url);
-        l_json.put('body', '<html><body><h1>Passcode is ' || l_passcode || '</h1></body></html>');
+        l_json.put('subject','Passcode '||l_passcode||' will authenticate you on ' || l_url);
+        l_json.put('body', '<html><body>' || CASE WHEN l_favicon_url IS NOT NULL THEN '<img src="'||l_favicon_url||'">' END|| '<h1>Passcode is ' || l_passcode || '</h1></body></html>');
         l_json.put('sourceEmail','authenticate@adfreesites.com');
         l_email_payload:=l_json.stringify;
         pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_email_payload, pData=>l_clob);
 
-        sendMessage(TRUE,'Check your inbox for a message from authenticate@adfreesites.com');
+        sendMessage(TRUE,'Passcode was sent to your inbox from authenticate@adfreesites.com');
 
         EXCEPTION WHEN OTHERS THEN
             pck_core.log_error;
     END;
 
-    FUNCTION getScope(pWebsiteId IN website.id%type, pEmail IN VARCHAR2) RETURN VARCHAR2
+    PROCEDURE getKeyAndScope(pWebsiteId IN website.id%type, pEmail IN VARCHAR2, pJwtEncKey IN OUT website.jwt_enc_key%type, pScope IN OUT VARCHAR2) 
     IS
         l_scope VARCHAR2(7);
+        l_jwt_enc_key website.jwt_enc_key%type;
+        l_contact_email website.contact_email%type;
     BEGIN
-        /* 
-        ** Determine token access rights of user for the website : admin, contact, user
-        */
-        FOR C IN (SELECT null 
-                    FROM website w, users u 
-                   WHERE w.id=pWebsiteId 
-                     AND u.id=w.user_id
-                     AND u.email=pEmail) 
-        LOOP
-            l_scope:='admin';
-        END LOOP;
-
-        IF (l_scope IS NULL) THEN
-            FOR C IN (SELECT null
-                    FROM website w
-                   WHERE w.id=pWebsiteId 
-                     AND w.contact_email=pEmail) 
-            LOOP
-                l_scope:='contact';
+        SELECT jwt_enc_key, contact_email 
+          INTO pJwtEncKey, l_contact_email
+          FROM website
+         WHERE id=pWebsiteId;
+        
+        IF (l_contact_email=pEmail) THEN 
+            l_scope:='contact';
+        ELSE 
+            FOR C IN (SELECT null FROM website w, users u WHERE w.id=pWebsiteId AND u.id=w.user_id AND u.email=pEmail) LOOP
+                l_scope:='admin';
             END LOOP;
         END IF;
+        
+        pScope:=NVL(l_scope,'user');
 
-        IF (l_scope IS NULL) THEN
-            l_scope:='user';
-        END IF;
+    END;
 
-        RETURN (l_scope);
+    FUNCTION getEncKey(pWebsiteId IN website.id%type) RETURN VARCHAR2 IS
+        l_jwt_enc_key website.jwt_enc_key%type;
+    BEGIN
+        SELECT jwt_enc_key INTO l_jwt_enc_key FROM website WHERE id=pWebsiteId;
+        RETURN (l_jwt_enc_key);
     END;
 
     /*
@@ -136,48 +135,53 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     ** RETURN JWT ACCESS AND REFRESH TOKENS IF PASSCODES MATCH
     */
     PROCEDURE verifyAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
-        l_payload apex_json.t_values;
         l_email users.email%type;
-        l_email_id users.id%type;
+        l_user_id users.id%type;
+        l_jwt_enc_key website.jwt_enc_key%type;
         l_passcode VARCHAR2(6);
         l_passcode_hash raw(32);
         l_token VARCHAR2 (4000);
         l_refresh VARCHAR2 (4000);
         l_scope VARCHAR2 (5);
     BEGIN
-        apex_json.parse(l_payload, pBodyText);
-        
-        l_email:=apex_json.get_varchar2 (p_path => 'email', p_values => l_payload);
-        l_passcode:=apex_json.get_varchar2 (p_path => 'passcode', p_values => l_payload);
-        l_passcode_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_passcode,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+        FOR C IN (SELECT j.email, j.passcode passcode_entered, u.passcode passcode_emailed, u.id user_id
+                    FROM users u, JSON_TABLE(pBodyText, '$' COLUMNS email, passcode) j
+                   WHERE u.email=j.email) 
+        LOOP
+            l_email:=C.email;
+            l_user_id:=C.user_id;
+            l_passcode_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(C.passcode_entered,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+            IF (l_passcode_hash<>C.passcode_emailed) THEN
+                sendMessage(FALSE,'Passcodes do not match. Check your inbox and try again.');
+                RETURN;
+            END IF;
+        END LOOP;
 
-        SELECT NVL(MAX(id),0) INTO l_email_id FROM  users WHERE email=l_email AND passcode=l_passcode_hash;
-
-        IF (l_email_id=0) THEN
-            sendMessage(FALSE,'Passcode does not match');
+        IF (l_email IS NULL) THEN
+            sendMessage(FALSE,'Something not right. Either email not sent or user not created.');
             RETURN;
         END IF;
 
-        l_scope:=getScope(pWebsiteId,l_email);
+        getKeyAndScope(pWebsiteId, l_email, l_jwt_enc_key, l_scope);
 
         l_token:=apex_jwt.ENCODE (
             p_iss       => 'ORDS',
             p_sub       => l_email,
             p_aud       => l_scope,
-            p_jti       => TO_CHAR(l_email_id),
+            p_jti       => TO_CHAR(l_user_id),
             p_iat_ts    => current_timestamp,
-            p_exp_sec   => 60 * 5,
-            p_signature_key => UTL_RAW.cast_to_raw (SECRET_KEY)
+            p_exp_sec   => ACCESS_TOKEN_EXP,
+            p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
         );
 
         l_refresh:=apex_jwt.ENCODE (
             p_iss       => 'ORDS',
             p_sub       => l_email,
             p_aud       => l_scope,
-            p_jti       => TO_CHAR(l_email_id),
+            p_jti       => TO_CHAR(l_user_id),
             p_iat_ts    => current_timestamp,
-            p_exp_sec   => 60 * 5 * 2,
-            p_signature_key => UTL_RAW.cast_to_raw (SECRET_KEY)
+            p_exp_sec   => REFRESH_TOKEN_EXP,
+            p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
         );
 
         APEX_JSON.open_object;
@@ -199,30 +203,38 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_header_value VARCHAR2(4000);
         l_bearer_token VARCHAR2(4000);
         l_token APEX_JWT.T_TOKEN;
-        l_payload apex_json.t_values;
+        l_jwt_enc_key website.jwt_enc_key%type;
         l_user_object APEX_JSON.T_VALUES;
-        l_keys APEX_T_VARCHAR2;
-        l_scope VARCHAR2(200);
+        l_scope VARCHAR2(7);
         l_email users.email%type;
-        l_email_id users.id%type;
+        l_user_id VARCHAR2(6);
         l_new_token VARCHAR2 (4000);
         l_new_refresh VARCHAR2 (4000);
     BEGIN
-        pck_core.log('start refreshAuthToken');
-        /* Validate the refresh token used to authenticate (the access token has expired)  */
+        /* 
+        ** Client authenticates with Refresh token in order to obtain a new Access token
+        */
         l_header_value := OWA_UTIL.get_cgi_env('Authorization');
         
         -- Check if the Authorization header exists and starts with 'Bearer '
         IF (l_header_value IS NULL OR INSTR(l_header_value, 'Bearer ') <> 1) THEN
-            sendMessage(FALSE,'Error - no bearer token in Authorization header');
+            sendMessage(FALSE,'No bearer token in Authorization header');
             RETURN;
         END IF;
 
         l_bearer_token := SUBSTR(l_header_value, 8);
 
+        /*
+        ** Refresh token can only be used once. Access Denied otherwise.
+        */
+        INSERT INTO jwt_refresh_token (website_id, token) VALUES (pWebsiteId, l_bearer_token);
+
+        --getKeyAndScope(pWebsiteId, l_email, l_jwt_enc_key, l_scope);
+        l_jwt_enc_key:=getEncKey(pWebsiteId);
+        
         l_token:=apex_jwt.DECODE (
             p_value   => l_bearer_token,
-            p_signature_key   => UTL_RAW.cast_to_raw (SECRET_KEY));
+            p_signature_key   => UTL_RAW.cast_to_raw (l_jwt_enc_key));
 
         /* 
         ** if refresh token has expired means user hasn't logged on for long time 
@@ -234,31 +246,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 RETURN;
         END;
 
+        /* 
+        ** Parse the received token payload and extract relevant properties 
+        */
         apex_json.parse (l_user_object, l_token.payload);
-        
         l_email:=apex_json.get_varchar2 (p_path => 'sub', p_values => l_user_object);
-        l_email_id:=apex_json.get_varchar2 (p_path => 'jti', p_values => l_user_object);
+        l_scope:=apex_json.get_varchar2 (p_path => 'aud', p_values => l_user_object);
+        l_user_id:=apex_json.get_varchar2 (p_path => 'jti', p_values => l_user_object);
 
-        l_scope:=getScope(pWebsiteId, l_email);
-
-        l_new_token:=apex_jwt.encode (
+        l_new_token:=apex_jwt.ENCODE (
             p_iss       => 'ORDS',
             p_sub       => l_email,
             p_aud       => l_scope,
-            p_jti       => l_email_id,
+            p_jti       => l_user_id,
             p_iat_ts    => current_timestamp,
-            p_exp_sec   => 60 * 5,
-            p_signature_key => UTL_RAW.cast_to_raw (SECRET_KEY)
+            p_exp_sec   => ACCESS_TOKEN_EXP,
+            p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
         );
 
-        l_new_refresh:=apex_jwt.encode (
+        l_new_refresh:=apex_jwt.ENCODE (
             p_iss       => 'ORDS',
             p_sub       => l_email,
             p_aud       => l_scope,
-            p_jti       => l_email_id,
+            p_jti       => l_user_id,
             p_iat_ts    => current_timestamp,
-            p_exp_sec   => 60 * 5 * 2,
-            p_signature_key => UTL_RAW.cast_to_raw (SECRET_KEY)
+            p_exp_sec   => REFRESH_TOKEN_EXP,
+            p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
         );
 
         APEX_JSON.open_object;
@@ -280,6 +293,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_bearer_token     VARCHAR2(4000);
         l_token            APEX_JWT.T_TOKEN;
         l_user_object      APEX_JSON.T_VALUES;
+        l_jwt_enc_key website.jwt_enc_key%type;
         l_scope            VARCHAR2(200);
         l_email            users.email%type;
     BEGIN
@@ -294,10 +308,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         l_bearer_token := SUBSTR(l_header_value, 8);
 
+        getKeyAndScope(pWebsiteId, l_email, l_jwt_enc_key, l_scope);
+
         --pck_core.log('DECODE');
         l_token:=apex_jwt.DECODE (
             p_value   => l_bearer_token,
-            p_signature_key   => UTL_RAW.cast_to_raw (SECRET_KEY));
+            p_signature_key   => UTL_RAW.cast_to_raw (l_jwt_enc_key));
 
         --pck_core.log('VALIDATE');
         BEGIN
@@ -310,10 +326,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         apex_json.parse (l_user_object, l_token.payload);
 
         IF NOT apex_json.does_exist (p_path => 'sub', p_values => l_user_object) THEN
-            sendMessage(FALSE,'Error no user found in JWT Token');
+            sendMessage(FALSE,'No user found in JWT Token');
             RETURN;
         ELSIF NOT apex_json.does_exist (p_path => 'aud', p_values => l_user_object) THEN
-            sendMessage(FALSE,'Error no scope found in JWT Token');
+            sendMessage(FALSE,'No scope found in JWT Token');
             RETURN;
         END IF;
 
