@@ -5,62 +5,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_BACKUP" is
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
-
-    /*
-    ** Generate random 16 character password string. Used in order to create encrypted schema export dumpfile
-    */
-    FUNCTION generate_password(
-        no_of_digits             in number DEFAULT 5,
-        no_of_special_characters in number DEFAULT 3,
-        no_of_lower              in number DEFAULT 4,
-        no_of_upper              in number DEFAULT 4
-        ) return varchar2
-    IS
-        password VARCHAR2(4000);
-        digits   CONSTANT VARCHAR2(10) := '0123456789';
-        lower    CONSTANT VARCHAR2(26) := 'abcdefghijklmnopqrstuvwxyz';
-        upper    CONSTANT VARCHAR2(26) := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        special  CONSTANT VARCHAR2(30) := '!"£$%^*()-_=+{}[]<>,\|/?;:@#';
-    BEGIN
-        SELECT LISTAGG(letter, NULL) WITHIN GROUP (ORDER BY DBMS_RANDOM.VALUE)
-        INTO   password
-        FROM   (
-        SELECT SUBSTR(
-                 digits,
-                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(digits) + 1)),
-                 1
-               ) AS letter
-        FROM   DUAL
-        CONNECT BY LEVEL <= no_of_digits
-        UNION ALL
-        SELECT SUBSTR(
-                 lower,
-                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(lower) + 1)),
-                 1
-               ) AS letter
-        FROM   DUAL
-        CONNECT BY LEVEL <= no_of_lower
-        UNION ALL
-        SELECT SUBSTR(
-                 upper,
-                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(upper) + 1)),
-                 1
-               ) AS letter
-        FROM   DUAL
-        CONNECT BY LEVEL <= no_of_upper
-        UNION ALL
-        SELECT SUBSTR(
-                 special,
-                 FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(special) + 1)),
-                 1
-               ) AS letter
-        FROM   DUAL
-        CONNECT BY LEVEL <= no_of_special_characters
-        );
-
-        RETURN password;
-    END;
-
     /*
     ** Generate schema datapump export
     */ 
@@ -159,7 +103,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')');
         dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''DBTOOLS$EXECUTION_HISTORY'',''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'',''PROCOBJ'',''JOB'',''SCHEDULER'')'); 
 
-        l_password:=generate_password();
+        l_password:=pck_core.password;
         dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_MODE', VALUE => 'PASSWORD'); 
         dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => l_password);
 
