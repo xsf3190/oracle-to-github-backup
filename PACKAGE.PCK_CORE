@@ -51,6 +51,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
+    FUNCTION password RETURN VARCHAR2;
+    --
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
@@ -1062,6 +1064,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
          WHERE website_id=pWebsiteId AND user_id=l_transfer_from_user_id;
 
         COMMIT;
+    END;
+
+    /*
+    ** Generate random 20 character password string. All characters must be Ascii.
+    */
+    FUNCTION password RETURN VARCHAR2
+    IS
+        l_password VARCHAR2(20);
+        digits   CONSTANT VARCHAR2(10) := '0123456789';
+        lower    CONSTANT VARCHAR2(26) := 'abcdefghijklmnopqrstuvwxyz';
+        upper    CONSTANT VARCHAR2(26) := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        special  CONSTANT VARCHAR2(26) := '!"$%^*()-_=+{}[]<>,|/?;:@#';
+        l_password_return VARCHAR2(20);
+    BEGIN
+        FOR i IN 1..5 LOOP
+            l_password:=l_password || SUBSTR(digits,FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(digits) + 1)),1) ;
+            l_password:=l_password || SUBSTR(lower,FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(lower) + 1)),1) ;
+            l_password:=l_password || SUBSTR(upper,FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(upper) + 1)),1) ;
+            l_password:=l_password || SUBSTR(special,FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(special) + 1)),1) ;
+        END LOOP;
+
+        FOR i IN 1..20 LOOP
+            l_password_return:=l_password_return || SUBSTR(l_password,FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(l_password) + 1)),1) ;
+        END LOOP;
+
+        RETURN l_password_return;
+        
     END;
 
 END;
