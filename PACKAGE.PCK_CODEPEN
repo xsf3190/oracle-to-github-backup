@@ -13,7 +13,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
         pCollectionType IN website_article.collection_type%type, 
         pIsMedia IN BOOLEAN, 
         pContactForm IN website_article.contact_form%type, 
-        pLoginForm IN website_article.login_form%type, 
+        pLoginForm IN website.login_form%type, 
         pHeader IN CLOB, 
         pFooter IN CLOB, 
         pHtml IN OUt NOCOPY CLOB
@@ -31,24 +31,61 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     TYPE t_nav_labels IS TABLE OF tt_nav_labels;
     g_nav_labels t_nav_labels;
 
-    FUNCTION buildNavLabels(pArticleId IN article.id%type) RETURN VARCHAR2 IS
+        /*
+     **  Build Contact Form
+     */
+    FUNCTION buildLoginForm RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+'<dialog>
+    <form class="login flow">
+      <input type="hidden" name="url" value="">
+      <div>
+        <label for="emailInput">Email</label>
+        <input type="email" id="emailInput" name="email" required maxlength="50">
+        <span class="sendmail-result"></span>
+      </div>
+      <div>
+        <button class="sendmail" type="button">SEND</button>
+      </div>
+      <div class="sendcode">
+        <label for="passcodeInput">Enter the 6 digit Passcode sent to your inbox</label>
+        <input type="text" id="passcodeInput" name="passcode" required pattern="\d{6}" title="6 digit passcode">
+        <span class="sendcode-result"></span>
+      </div>
+      <div>
+        <button class="sendcode" type="button">LOGIN</button>
+      </div>
+    </form>
+ </dialog>');
+    END;
+
+    FUNCTION buildNavLabels(pArticleId IN article.id%type, pLoginForm IN VARCHAR2) RETURN VARCHAR2 IS
         l_nav_labels LONG;
     BEGIN
         IF (g_nav_labels.COUNT<2) THEN
             RETURN (NULL);
         END IF;
-        l_nav_labels:=
+
+        l_nav_labels:=l_nav_labels ||
         '<nav aria-label="Main Navigation" class="content-grid">' || 
+            CASE WHEN pLoginForm='YES' THEN 
+            '<div class="flex-items full-width login"><button type="button" class="button">Login</button></div>' 
+            END ||
             '<div class="flex-items">';
         FOR i IN 1..g_nav_labels.COUNT LOOP
             l_nav_labels:=l_nav_labels || 
-                '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="nav-label' || 
-                    CASE WHEN g_nav_labels(i).article_id=pArticleId THEN ' selected' END  || 
+                '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="nav-label"' || 
+                    CASE WHEN g_nav_labels(i).article_id=pArticleId THEN ' aria-current="page"' END  || 
                     '" data-id="' || g_nav_labels(i).article_id || '">' || g_nav_labels(i).navigation_label || '</a>';
         END LOOP;
         l_nav_labels:=l_nav_labels || 
             '</div>' ||
         '</nav>';
+
+        IF (pLoginForm='YES') THEN 
+            l_nav_labels:=l_nav_labels || buildLoginForm;
+        END IF;
 
         RETURN (l_nav_labels);
     END;
@@ -85,35 +122,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     END;
 
     /*
-     **  Build Contact Form
-     */
-    FUNCTION buildLoginForm RETURN VARCHAR2 IS
-    BEGIN
-        RETURN(
-'<div>
-    <form class="login flow">
-      <input type="hidden" name="url" value="">
-      <div>
-        <label for="emailInput">Email</label>
-        <input type="email" id="emailInput" name="email" required maxlength="50">
-        <span class="sendmail-result"></span>
-      </div>
-      <div>
-        <button class="sendmail" type="button">SEND</button>
-      </div>
-      <div class="sendcode">
-        <label for="passcodeInput">Enter the 6 digit Passcode sent to your inbox</label>
-        <input type="text" id="passcodeInput" name="passcode" required pattern="\d{6}" title="6 digit passcode">
-        <span class="sendcode-result"></span>
-      </div>
-      <div>
-        <button class="sendcode" type="button">LOGIN</button>
-      </div>
-    </form>
- </div>');
-    END;    
-
-    /*
     ** HTML document body structure
     **
     ** <header>
@@ -132,7 +140,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         pCollectionType IN website_article.collection_type%type, 
         pIsMedia IN BOOLEAN, 
         pContactForm IN website_article.contact_form%type, 
-        pLoginForm IN website_article.login_form%type, 
+        pLoginForm IN website.login_form%type, 
         pHeader IN CLOB, 
         pFooter IN CLOB, 
         pHtml IN OUt NOCOPY CLOB) 
@@ -225,14 +233,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             --l_javascript:=l_javascript || getJSCode('deploy_contact.js');
         END IF;
 
-        /* Append Login Form */
-        IF (pLoginForm IS NOT NULL) THEN
-            CASE pLoginForm
-                WHEN 'EMAIL' THEN pHtml:=pHtml || buildLoginForm();
-                WHEN 'NONE' THEN null;
-            END CASE;
-        END IF;
-
         /* 
         ** All images lazy loaded except first
         */
@@ -248,7 +248,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         /* Assemble document */
         pHtml:=pHeader || 
-               buildNavLabels(pArticleId) || 
+               buildNavLabels(pArticleId,pLoginForm) || 
                '<main class="content-grid">' || 
                     pHtml  || CASE WHEN nb_articles=1 THEN g_curve ELSE REPLACE(g_curve,'full-width','full-width height-2x') END || 
                 '</main>' || 
@@ -288,7 +288,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         
         l_domain_name website.domain_name%type;
         l_contact_form website_article.contact_form%type;
-        l_login_form website_article.login_form%type; 
+        l_login_form website.login_form%type; 
         l_collection_type website_article.collection_type%type;
         l_is_blog BOOLEAN:=FALSE;
         l_is_media BOOLEAN:=FALSE;
@@ -339,12 +339,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         IF (l_is_blog OR l_is_media) THEN
             SELECT w.domain_name, w.header, a.body_html, w.footer, 'NO', null, null
-              INTO l_domain_name, l_header, l_html, l_footer, l_contact_form, l_login_form,l_collection_type
+              INTO l_domain_name, l_header, l_html, l_footer, l_login_form, l_contact_form, l_collection_type
               FROM website w, article a
              WHERE w.id=l_website_id
                AND a.id=pArticleId;
         ELSE
-            SELECT w.domain_name, w.header, a.body_html, w.footer, wa.contact_form, wa.login_form, wa.collection_type
+            SELECT w.domain_name, w.header, a.body_html, w.footer, w.login_form, wa.contact_form, wa.collection_type
               INTO l_domain_name, l_header, l_html, l_footer, l_contact_form, l_login_form,l_collection_type
               FROM website w, website_article wa, article a
              WHERE w.id=l_website_id
