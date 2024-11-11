@@ -407,7 +407,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         FOR C IN (
             SELECT w.id, w.domain_name, w.font, w.contact_email, w.max_width, 
                      w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, 
-                     w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom, w.price_currency,
+                     w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom, w.price_currency, w.login_form,
                      w.netlify_last_published, g.url_regular
               FROM website w, google_font g
              WHERE w.id=l_website_id
@@ -441,6 +441,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 buildInputWrapper(C.id, 'website.contact_email', C.contact_email, l_session_data.canuse_popover) ||
                 buildInputWrapper(C.id, 'website.max_width', C.max_width, l_session_data.canuse_popover) ||
                 buildSelectWrapper(C.id, 'website.font', C.font, buildFontOptions(C.font), l_session_data.canuse_popover) ||
+                buildRadioWrapper(C.id, 'website.login_form', C.login_form, l_session_data.canuse_popover) || 
                 '<details>
                     <summary>Fluid Typography</summary>
                     <div class="cards-50-50">
@@ -586,7 +587,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             RETURN;
         END IF;
 
-        FOR C IN (SELECT navigation_label, collection_type, collection_date_format, contact_form, login_form, page_title, page_description
+        FOR C IN (SELECT navigation_label, collection_type, collection_date_format, contact_form, page_title, page_description
                     FROM website_article 
                    WHERE website_id=l_website_id
                      AND article_id=l_article_id
@@ -604,7 +605,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 buildTextareaWrapper(pId, 'website_article.page_title', C.page_title, l_session_data.canuse_popover) ||
                 buildTextareaWrapper(pId, 'website_article.page_description', C.page_description, l_session_data.canuse_popover) ||
                 buildRadioWrapper(pId, 'website_article.contact_form', C.contact_form, l_session_data.canuse_popover) || 
-                buildRadioWrapper(pId, 'website_article.login_form', C.login_form, l_session_data.canuse_popover) || 
                 '<details>
                     <summary>CODEPEN FEATURES</summary>' ||
                     pck_core.buildPushableButton('edit-codepen','&#9917;') ||
