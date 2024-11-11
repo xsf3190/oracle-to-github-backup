@@ -156,6 +156,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_font_download BLOB;
         l_color_primary website.color_primary%type;
         l_favicon_asset_id website.favicon_asset_id%type;
+        l_login_form website.login_form%type;
         l_favicon_url VARCHAR2(250);
         l_text CLOB;
         l_chars VARCHAR2(256):=' ';
@@ -183,7 +184,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             page_title website_article.page_title%type,
             page_description website_article.page_description%type,
             contact_form website_article.contact_form%type,
-            login_form website_article.login_form%type,
             lastmod article.updated_date%type,
             word_count article.word_count%type, 
             header website.footer%type,
@@ -231,8 +231,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
-        SELECT w.font, g.category, REPLACE(LOWER(w.font), ' ', '_') || '.woff2', SUBSTR(w.color_primary,2), w.favicon_asset_id
-          INTO l_font, l_font_category, l_font_filename, l_color_primary, l_favicon_asset_id
+        SELECT w.font, g.category, REPLACE(LOWER(w.font), ' ', '_') || '.woff2', SUBSTR(w.color_primary,2), w.favicon_asset_id, w.login_form
+          INTO l_font, l_font_category, l_font_filename, l_color_primary, l_favicon_asset_id, l_login_form
           FROM website w, google_font g
          WHERE w.id=pWebsiteId
            AND w.font=g.family;
@@ -240,17 +240,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /*
         ** Get all website content into collection
         */
-        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, login_form, lastmod, word_count,  header, body_html, footer, apex_t_varchar2()
+        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count,  header, body_html, footer, apex_t_varchar2()
           BULK COLLECT INTO l_labels
           FROM
           (
-        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.login_form, wa.display_order, a.updated_date lastmod, a.word_count, w.header, a.body_html body_html, w.footer
+        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.display_order, a.updated_date lastmod, a.word_count, w.header, a.body_html body_html, w.footer
           FROM website w, website_article wa, article a
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
            AND wa.article_id=a.id
          UNION ALL
-        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001), a.updated_date lastmod, a.word_count, w.header, a.body_html, w.footer
+        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001), a.updated_date lastmod, a.word_count, w.header, a.body_html, w.footer
           FROM website w, website_article wa, article a 
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
@@ -288,10 +288,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 apex_string.push(l_labels(i).modules,'deploy_contact.min.js');
             END IF;
 
-            IF (l_labels(i).login_form='EMAIL') THEN
-                apex_string.push(l_labels(i).modules,'deploy_login_email.js');
-            END IF;
-
             pck_codepen.buildBodyHtml(
                 pUserId, 
                 pWebsiteId, 
@@ -301,7 +297,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_labels(i).collection_type, 
                 l_is_media, 
                 l_labels(i).contact_form, 
-                l_labels(i).login_form, 
+                l_login_form, 
                 l_labels(i).header, 
                 l_labels(i).footer, 
                 l_labels(i).body_html
