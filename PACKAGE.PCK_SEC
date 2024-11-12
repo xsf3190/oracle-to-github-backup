@@ -163,6 +163,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         END IF;
 
         getKeyAndScope(pWebsiteId, l_email, l_jwt_enc_key, l_scope);
+        /*
+        ** Set website JWT encryption key on first  use. 
+        ** Have to move this to OCI Vault later
+        */
+        IF (l_jwt_enc_key IS NULL) THEN
+            l_jwt_enc_key:=pck_core.password;
+            UPDATE website SET jwt_enc_key=l_jwt_enc_key WHERE id=pWebsiteId;
+        END IF;
 
         l_token:=apex_jwt.ENCODE (
             p_iss       => 'ORDS',
