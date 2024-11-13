@@ -19,7 +19,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildBlogList( pEnv IN VARCHAR2, pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pClasses IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
-    FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER) RETURN VARCHAR2;
+    FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pDeploy IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2;
     --
     FUNCTION buildMediaList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks  IN BOOLEAN DEFAULT TRUE) RETURN CLOB;
     --
@@ -312,8 +312,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     /* 
     ** Build page CSS
     */ 
-    FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER) RETURN VARCHAR2 IS
+    FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pDeploy IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2 IS
         l_fluid_types fluid_type_t;
+        l_css_file apex_application_static_files.file_name%type;
         l_root_css LONG;
         l_deploy_css CLOB;
     BEGIN
@@ -341,11 +342,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             '}';
 
             IF (C.css IS NULL) THEN
+                 IF (pDeploy) THEN
+                    l_css_file:='deploy.min.css'; -- deploy minimised css 
+                ELSE
+                    l_css_file:='deploy.css'; -- retain format and comments
+                END IF;
                 SELECT apex_util.blob_to_clob(file_content)
                   INTO l_deploy_css
                   FROM apex_application_static_files 
                  WHERE application_id=pApplicationId
-                   AND file_name='deploy.min.css';
+                   AND file_name=l_css_file;
             ELSE
                 l_deploy_css:=C.css;
             END IF;
