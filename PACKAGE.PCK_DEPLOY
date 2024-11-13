@@ -323,7 +323,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
            'font-family: ''' || l_font || ''';' ||
            'src: url("/' || l_font_filename || '") format("woff2");' ||
            'font-display: swap;' ||
-        '}' || pck_core.buildCssRoot(pWebsiteId, pApplicationId);
+        '}' || pck_core.buildCssRoot(pWebsiteId, pApplicationId, pDeploy=>TRUE);
         --l_style_sha256_raw:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_style,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
         --l_style_sha256_b64:=utl_raw.cast_to_varchar2(utl_encode.base64_encode(l_style_sha256_raw));
 
