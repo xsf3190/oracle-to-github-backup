@@ -39,39 +39,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         RETURN(
 q'{<dialog>
     <form class="login flow">
-      <input type="hidden" name="url" value="">
-      <header>
-        <section>
-            <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-              <circle cx="8.5" cy="7" r="4"></circle>
-              <line x1="20" y1="8" x2="20" y2="14"></line>
-              <line x1="23" y1="11" x2="17" y2="11"></line>
-            </svg>
-            <h2>REGISTER AS USER</h2>
-        </section>
-        <button onclick="this.closest('dialog').close('close')"></button>
-      </section>
-      <article>
-          <div>
-            <label for="emailInput">Email</label>
-            <input type="email" id="emailInput" name="email" required maxlength="50">
-            <span class="sendmail-result"></span>
-          </div>
-          <div class="sendcode hide">
-            <label for="passcodeInput">Enter the 6 digit Passcode sent to your inbox</label>
-            <input type="text" id="passcodeInput" name="passcode" required pattern="\d{6}" title="6 digit passcode">
-            <span class="sendcode-result"></span>
-          </div>
-      </article>
-      <footer>
-          <menu>
-            <button class="button sendmail-magic" type="button">Email me a Magic Link</button>
-            <button class="button sendmail-passcode" type="button">Email me a 6-digit passcode</button>
-            <button class="button validate-passcode hide" type="button">LOGIN</button>
-            <button class="button" autofocus type="button" onclick="this.closest('dialog').close('cancel')">Cancel</button>
-          </menu>
-      </footer>
+        <input type="hidden" name="url" value="">
+        <header>
+            <h2>Sign up or log in</h2>
+            <button onclick="this.closest('dialog').close('close')"></button>
+        </header>
+        <article>
+            <div>
+                <label for="emailInput">Email</label>
+                <input type="email" id="emailInput" name="email" required maxlength="50">
+                <span class="sendmail-result"></span>
+            </div>
+            <div class="sendcode hide">
+                <label for="passcodeInput">Enter the 6 digit Passcode sent to your inbox</label>
+                <input type="text" id="passcodeInput" name="passcode" required pattern="\d{6}" title="6 digit passcode">
+                <span class="sendcode-result"></span>
+            </div>
+        </article>
+        <footer>
+            <menu>
+                <button class="button sendmail-magic" type="button">Email me a Magic Link</button>
+                <button class="button sendmail-passcode" type="button">Email me a 6-digit passcode</button>
+                <button class="button validate-passcode hide" type="button">LOGIN</button>
+                <button class="button" autofocus type="button" onclick="this.closest('dialog').close('cancel')">Cancel</button>
+            </menu>
+        </footer>
     </form>
  </dialog>}');
     END;
@@ -263,12 +255,12 @@ q'{<dialog>
         nb_articles:=MOD(regexp_count(pHtml,'<article'),2);
 
         /* Assemble document */
-        pHtml:=pHeader || 
+        pHtml:=NVL(pHeader,'<header></header>') || 
                buildNavLabels(pArticleId,pLoginForm) || 
                '<main class="content-grid">' || 
                     pHtml  || CASE WHEN nb_articles=1 THEN g_curve ELSE REPLACE(g_curve,'full-width','full-width height-2x') END || 
                 '</main>' || 
-               pFooter;
+               NVL(pFooter,'<footer></footer>');
 
         /* 
         ** Append all referenced svg symbols 
@@ -414,6 +406,7 @@ q'{<dialog>
         l_files apex_zip.t_files;
         l_session_data pck_core.session_data_rt;
         l_nb_files PLS_INTEGER:=0;
+        l_compare PLS_INTEGER;
         l_updated_files apex_t_varchar2:=apex_t_varchar2();
 
         PROCEDURE send_json(pMessage IN VARCHAR2) IS
@@ -439,10 +432,10 @@ q'{<dialog>
 
         FOR i in 1 .. l_files.COUNT LOOP
             IF (INSTR(l_files(i),'/src/style.css')>0) THEN
-                l_css:=replace(apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name => l_files(i))),chr(10));
+                l_css:=apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name => l_files(i)));
                 l_nb_files:=l_nb_files+1;
             ELSIF (INSTR(l_files(i),'/src/index.html')>0) THEN
-                l_body_html:=replace(apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob=>l_zip, p_file_name=>l_files(i))),chr(10));
+                l_body_html:=apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob=>l_zip, p_file_name=>l_files(i)));
                 /* Extract header and footer elements */
                 l_header:=regexp_substr(l_body_html,'<header.+?</header>');
                 l_main:=regexp_substr(l_body_html,'<main.+?</main>');
@@ -463,10 +456,18 @@ q'{<dialog>
         l_css:=regexp_replace(l_css,':root.+?}');
 
         FOR C IN (SELECT css, header, footer FROM website WHERE id=l_website_id) LOOP
-            IF (dbms_lob.compare(C.css,l_css)<>0) THEN
+            IF (C.css IS NOT NULL AND l_css IS NOT NULL) THEN
+                l_compare:=dbms_lob.compare(C.css,l_css);
+            ELSE
+                l_compare:=1;
+            END IF;
+            IF (l_compare<>0) THEN
                 UPDATE website SET css=l_css, updated_date=current_timestamp WHERE id=l_website_id;
                 apex_string.push(l_updated_files,'CSS');
             END IF;
+
+
+
             IF (dbms_lob.compare(C.header,l_header)<>0) THEN
                 UPDATE website SET header=l_header, updated_date=current_timestamp WHERE id=l_website_id;
                 apex_string.push(l_updated_files,'HEADER');
@@ -486,8 +487,9 @@ q'{<dialog>
         END IF;
         
         /* Remove elements added in getCodepen procedure */
-        l_main:=regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(l_main,
+        l_main:=regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(l_main,
             '<ol class="featured.+?</ol>'),
+            '<dialog.+?</dialog>'),
             '<form.+?</form>'),
             '<svg.+?</svg>'),
             '<main.+?>'),
