@@ -71,29 +71,26 @@ q'{<dialog>
     FUNCTION buildNavLabels(pArticleId IN article.id%type, pLoginForm IN VARCHAR2) RETURN VARCHAR2 IS
         l_nav_labels LONG;
     BEGIN
-        IF (g_nav_labels.COUNT<2) THEN
-            RETURN (NULL);
-        END IF;
-
         l_nav_labels:=l_nav_labels ||
         '<nav aria-label="Main Navigation" class="content-grid">' || 
             CASE WHEN pLoginForm='YES' THEN 
             '<div class="flex-items full-width"><button type="button" class="button login-btn">Login</button></div>' 
-            END ||
-            '<div class="flex-items">';
+            END;
+            
         FOR i IN 1..g_nav_labels.COUNT LOOP
+            IF (i=1) THEN
+                l_nav_labels:=l_nav_labels || '<div class="flex-items">';
+            END IF;
             l_nav_labels:=l_nav_labels || 
                 '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="nav-label"' || 
                     CASE WHEN g_nav_labels(i).article_id=pArticleId THEN ' aria-current="page"' END  || 
                     '" data-id="' || g_nav_labels(i).article_id || '">' || g_nav_labels(i).navigation_label || '</a>';
+            IF (i=g_nav_labels.COUNT) THEN
+                l_nav_labels:=l_nav_labels || '</div>';
+            END IF;
         END LOOP;
-        l_nav_labels:=l_nav_labels || 
-            '</div>' ||
-        '</nav>';
-
-        IF (pLoginForm='YES') THEN 
-            l_nav_labels:=l_nav_labels || buildLoginForm;
-        END IF;
+        
+        l_nav_labels:=l_nav_labels || '</nav>';
 
         RETURN (l_nav_labels);
     END;
@@ -263,6 +260,12 @@ q'{<dialog>
                NVL(pFooter,'<footer></footer>');
 
         /* 
+        ** Append any Dialog elements
+        */
+        IF (pLoginForm='YES') THEN 
+            pHtml:=pHtml || buildLoginForm;
+        END IF;
+        /* 
         ** Append all referenced svg symbols 
         */
         n:=regexp_count(pHtml,'<use href="#([^"]+)');
@@ -353,7 +356,7 @@ q'{<dialog>
                AND a.id=pArticleId;
         ELSE
             SELECT w.domain_name, w.header, a.body_html, w.footer, w.login_form, wa.contact_form, wa.collection_type
-              INTO l_domain_name, l_header, l_html, l_footer, l_contact_form, l_login_form,l_collection_type
+              INTO l_domain_name, l_header, l_html, l_footer, l_login_form, l_contact_form, l_collection_type
               FROM website w, website_article wa, article a
              WHERE w.id=l_website_id
                AND wa.website_id=w.id
@@ -406,14 +409,16 @@ q'{<dialog>
         l_files apex_zip.t_files;
         l_session_data pck_core.session_data_rt;
         l_nb_files PLS_INTEGER:=0;
-        l_compare PLS_INTEGER;
-        l_updated_files apex_t_varchar2:=apex_t_varchar2();
+        l_ddl VARCHAR2(500);
+        l_deploy_css CLOB;
+        l_updated_columns apex_t_varchar2:=apex_t_varchar2();
+        l_updated_files apex_t_clob:=apex_t_clob();
 
         PROCEDURE send_json(pMessage IN VARCHAR2) IS
             l_message VARCHAR2(200);
         BEGIN
             IF (l_updated_files.COUNT>0) THEN
-                l_message:='UPLOADED: ' || apex_string.join(l_updated_files,',');
+                l_message:='UPLOADED: ' || apex_string.join(l_updated_columns,',');
             END IF;
             apex_json.open_object;
             apex_json.write('success', TRUE);
@@ -435,11 +440,7 @@ q'{<dialog>
                 l_css:=apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob => l_zip, p_file_name => l_files(i)));
                 l_nb_files:=l_nb_files+1;
             ELSIF (INSTR(l_files(i),'/src/index.html')>0) THEN
-                l_body_html:=apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob=>l_zip, p_file_name=>l_files(i)));
-                /* Extract header and footer elements */
-                l_header:=regexp_substr(l_body_html,'<header.+?</header>');
-                l_main:=regexp_substr(l_body_html,'<main.+?</main>');
-                l_footer:=regexp_substr(l_body_html,'<footer.+?</footer>');
+                l_body_html:=REPLACE(apex_util.blob_to_clob(p_blob => apex_zip.get_file_content(p_zipped_blob=>l_zip, p_file_name=>l_files(i))),chr(10));
                 l_nb_files:=l_nb_files+1;
             END IF;
         END LOOP;
@@ -452,44 +453,83 @@ q'{<dialog>
             RETURN;
         END IF;
 
-        /* Remove :root prepended in getCodepen procedure */
-        l_css:=regexp_replace(l_css,':root.+?}');
-
         FOR C IN (SELECT css, header, footer FROM website WHERE id=l_website_id) LOOP
-            IF (C.css IS NOT NULL AND l_css IS NOT NULL) THEN
-                l_compare:=dbms_lob.compare(C.css,l_css);
-            ELSE
-                l_compare:=1;
-            END IF;
-            IF (l_compare<>0) THEN
-                UPDATE website SET css=l_css, updated_date=current_timestamp WHERE id=l_website_id;
-                apex_string.push(l_updated_files,'CSS');
+            
+            SELECT apex_util.blob_to_clob(file_content)
+              INTO l_deploy_css
+              FROM apex_application_static_files 
+             WHERE application_id=l_session_data.app_id
+               AND file_name='deploy.css';
+
+            /* 
+            ** remove :root css pre-pended when codepen was created 
+            ** 'n' handles case where user formats the css in codepen before exporting
+            ** Note that we want to retain user formatting uploaded to the css column
+            */
+            l_css:=regexp_replace(l_css,':root(.*?)}',null,1,1,'n');
+
+            IF (l_css IS NULL) THEN
+                apex_string.push(l_updated_columns,'CSS');
+                apex_string.push(l_updated_files,l_css);
+            ELSIF (dbms_lob.compare(REPLACE(l_deploy_css,chr(10)),REPLACE(l_css,chr(10)))<>0) THEN
+                apex_string.push(l_updated_columns,'CSS');
+                apex_string.push(l_updated_files,l_css);
             END IF;
 
-
-
-            IF (dbms_lob.compare(C.header,l_header)<>0) THEN
-                UPDATE website SET header=l_header, updated_date=current_timestamp WHERE id=l_website_id;
-                apex_string.push(l_updated_files,'HEADER');
+            l_header:=regexp_substr(l_body_html,'<header.+?</header>');
+            IF (l_header IS NULL AND C.header IS NOT NULL) THEN
+                apex_string.push(l_updated_columns,'HEADER');
+                apex_string.push(l_updated_files,l_header);
+            ELSIF (dbms_lob.compare(REPLACE(l_header,chr(10)),REPLACE(NVL(C.header,'x'),chr(10)))<>0) THEN
+                apex_string.push(l_updated_columns,'HEADER');
+                apex_string.push(l_updated_files,l_header);
             END IF;
-            IF (dbms_lob.compare(C.footer,l_footer)<>0) THEN
-                UPDATE website SET footer=l_footer, updated_date=current_timestamp WHERE id=l_website_id;
-                apex_string.push(l_updated_files,'FOOTER');
+
+            l_footer:=regexp_substr(l_body_html,'<footer.+?</footer>');
+            IF (l_footer IS NULL AND C.footer IS NOT NULL) THEN
+                apex_string.push(l_updated_columns,'FOOTER');
+                apex_string.push(l_updated_files,l_footer);
+            ELSIF (dbms_lob.compare(REPLACE(l_footer,chr(10)),REPLACE(NVL(C.footer,'x'),chr(10)))<>0) THEN
+                apex_string.push(l_updated_columns,'FOOTER');
+                apex_string.push(l_updated_files,l_footer);
+            END IF;
+
+            FOR i IN 1..l_updated_columns.COUNT LOOP
+                IF (i=1) THEN
+                    l_ddl:='UPDATE website SET updated_date=current_timestamp';
+                END IF;
+                CASE l_updated_columns(i)
+                    WHEN 'CSS' THEN l_ddl:=l_ddl || ',css=:B' || i;
+                    WHEN 'HEADER' THEN l_ddl:=l_ddl || ',header=:B' || i;
+                    WHEN 'FOOTER' THEN l_ddl:=l_ddl || ',footer=:B' || i;
+                END CASE;
+            END LOOP;
+
+            IF (l_ddl IS NOT NULL) THEN
+                l_ddl:=l_ddl || ' WHERE id=:B';
+                CASE l_updated_columns.COUNT
+                    WHEN 1 THEN EXECUTE IMMEDIATE l_ddl USING l_updated_files(1), l_website_id;
+                    WHEN 2 THEN EXECUTE IMMEDIATE l_ddl USING l_updated_files(1), l_updated_files(2), l_website_id;
+                    WHEN 3 THEN EXECUTE IMMEDIATE l_ddl USING l_updated_files(1), l_updated_files(2), l_updated_files(3), l_website_id;
+                END CASE;
             END IF;
         END LOOP;
 
+        /*
+        ** EXTRACT AND PROCESS HTML ELEMENT
+        */
+        l_main:=regexp_substr(l_body_html,'<main.+?</main>');
         IF (INSTR(l_main,'<pre>')>0) THEN
             apex_json.open_object;
             apex_json.write('success', TRUE);
-            apex_json.write('message', CASE WHEN l_updated_files.COUNT>0 THEN 'UPLOADED: ' || apex_string.join(l_updated_files,',') END || ' - ** &lt;main&gt; SKIPPED - CONTAINS &lt;PRE&gt; ELEMENT **');
+            apex_json.write('message', CASE WHEN l_updated_files.COUNT>0 THEN 'UPLOADED: ' || apex_string.join(l_updated_columns,',') END || ' - ** &lt;main&gt; SKIPPED - CONTAINS &lt;PRE&gt; ELEMENT **');
             apex_json.close_object;
             RETURN;
         END IF;
         
         /* Remove elements added in getCodepen procedure */
-        l_main:=regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(l_main,
+        l_main:=regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(l_main,
             '<ol class="featured.+?</ol>'),
-            '<dialog.+?</dialog>'),
             '<form.+?</form>'),
             '<svg.+?</svg>'),
             '<main.+?>'),
@@ -504,7 +544,7 @@ q'{<dialog>
 
         apex_json.open_object;
         apex_json.write('success', TRUE);
-        apex_json.write('message', CASE WHEN l_updated_files.COUNT>0 THEN 'UPLOADED: ' || apex_string.join(l_updated_files,',') END );
+        apex_json.write('message', CASE WHEN l_updated_files.COUNT>0 THEN 'UPLOADED: ' || apex_string.join(l_updated_columns,',') ELSE 'NO CHANGES' END );
         apex_json.write('html',l_main);
         apex_json.close_object;
 
