@@ -40,9 +40,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 q'{<dialog>
     <form class="login flow">
         <input type="hidden" name="url" value="">
-        <header>
+        <header class="flex-items space-between no-padding">
             <h2>Sign up or log in</h2>
-            <button onclick="this.closest('dialog').close('close')"></button>
+            <button class="button" onclick="this.closest('dialog').close('close')">
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="#cross"></use></svg>
+            </button>
         </header>
         <article>
             <div>
@@ -57,11 +59,10 @@ q'{<dialog>
             </div>
         </article>
         <footer>
-            <menu>
-                <button class="button sendmail-magic" type="button">Email me a Magic Link</button>
-                <button class="button sendmail-passcode" type="button">Email me a 6-digit passcode</button>
+            <menu class="flex-items space-between no-padding">
+                <button class="button sendmail-magic" type="button">Send me a Magic Link</button>
+                <button class="button sendmail-passcode" type="button">Send me a 6-digit passcode</button>
                 <button class="button validate-passcode hide" type="button">LOGIN</button>
-                <button class="button" autofocus type="button" onclick="this.closest('dialog').close('cancel')">Cancel</button>
             </menu>
         </footer>
     </form>
@@ -76,19 +77,21 @@ q'{<dialog>
             CASE WHEN pLoginForm='YES' THEN 
             '<div class="flex-items full-width"><button type="button" class="button login-btn">Login</button></div>' 
             END;
-            
-        FOR i IN 1..g_nav_labels.COUNT LOOP
-            IF (i=1) THEN
-                l_nav_labels:=l_nav_labels || '<div class="flex-items">';
-            END IF;
-            l_nav_labels:=l_nav_labels || 
-                '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="nav-label"' || 
-                    CASE WHEN g_nav_labels(i).article_id=pArticleId THEN ' aria-current="page"' END  || 
-                    '" data-id="' || g_nav_labels(i).article_id || '">' || g_nav_labels(i).navigation_label || '</a>';
-            IF (i=g_nav_labels.COUNT) THEN
-                l_nav_labels:=l_nav_labels || '</div>';
-            END IF;
-        END LOOP;
+
+        IF (g_nav_labels.COUNT>1) THEN
+            FOR i IN 1..g_nav_labels.COUNT LOOP
+                IF (i=1) THEN
+                    l_nav_labels:=l_nav_labels || '<div class="flex-items">';
+                END IF;
+                l_nav_labels:=l_nav_labels || 
+                    '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="nav-label"' || 
+                        CASE WHEN g_nav_labels(i).article_id=pArticleId THEN ' aria-current="page"' END  || 
+                        ' data-id="' || g_nav_labels(i).article_id || '">' || g_nav_labels(i).navigation_label || '</a>';
+                IF (i=g_nav_labels.COUNT) THEN
+                    l_nav_labels:=l_nav_labels || '</div>';
+                END IF;
+            END LOOP;
+        END IF;
         
         l_nav_labels:=l_nav_labels || '</nav>';
 
@@ -476,11 +479,15 @@ q'{<dialog>
                 apex_string.push(l_updated_files,l_css);
             END IF;
 
+            /*
+            ** header and footer are the first and last elements of their type in l_body_html
+            */
+
             l_header:=regexp_substr(l_body_html,'<header.+?</header>');
             IF (l_header IS NULL AND C.header IS NOT NULL) THEN
                 apex_string.push(l_updated_columns,'HEADER');
                 apex_string.push(l_updated_files,l_header);
-            ELSIF (dbms_lob.compare(REPLACE(l_header,chr(10)),REPLACE(NVL(C.header,'x'),chr(10)))<>0) THEN
+            ELSIF (dbms_lob.compare(l_header,NVL(C.header,'x'))<>0) THEN
                 apex_string.push(l_updated_columns,'HEADER');
                 apex_string.push(l_updated_files,l_header);
             END IF;
@@ -538,7 +545,7 @@ q'{<dialog>
         FOR C IN (SELECT body_html FROM article WHERE id=l_article_id) LOOP
             IF (dbms_lob.compare(C.body_html,l_main)<>0) THEN
                 UPDATE article SET body_html=l_main, updated_date=current_timestamp WHERE id=l_article_id;
-                apex_string.push(l_updated_files,'MAIN');
+                apex_string.push(l_updated_columns,'MAIN');
             END IF;
         END LOOP;
 
