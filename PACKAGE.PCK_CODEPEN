@@ -49,7 +49,7 @@ q'{<dialog>
         <article>
             <div>
                 <label for="emailInput">Email</label>
-                <input type="email" id="emailInput" name="email" required maxlength="50">
+                <input type="email" id="emailInput" name="email" required maxlength="50" autocapitalize="none" autocorrect="off">
                 <span class="sendmail-result"></span>
             </div>
             <div class="sendcode hide">
