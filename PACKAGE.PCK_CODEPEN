@@ -37,63 +37,78 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     FUNCTION buildLoginForm RETURN VARCHAR2 IS
     BEGIN
         RETURN(
-q'{<dialog>
-    <form class="login flow">
+q'{<dialog class="login-email">
+    <form class="flow">
         <input type="hidden" name="url" value="">
-        <header class="flex-items space-between no-padding">
+        <header class="flex-items space-between">
             <h2>Sign up or log in</h2>
-            <button class="button" onclick="this.closest('dialog').close('close')">
-                <svg class="icon" aria-hidden="true" focusable="false"><use href="#cross"></use></svg>
+            <button class="button" data-button-variant="round-icon" onclick="this.closest('dialog').close('close')">
+                <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
+                    <use href="#cross"></use>
+                </svg>
             </button>
         </header>
         <article>
             <div>
                 <label for="emailInput">Email</label>
-                <input type="email" id="emailInput" name="email" required maxlength="50" autocapitalize="none" autocorrect="off">
+                <input autofocus type="email" id="emailInput" name="email" required maxlength="50" autocapitalize="none" autocorrect="off">
                 <span class="sendmail-result"></span>
             </div>
-            <div class="sendcode hide">
+        </article>
+        <footer>
+            <menu class="flex-items">
+                <button class="button sendmail-magic" type="button">Send Magic Link</button>
+                <button class="button sendmail-passcode" type="button">Send 6-digit passcode</button>
+            </menu>
+        </footer>
+    </form>
+ </dialog>
+ <dialog class="login-passcode">
+    <form class="flow">
+        <header class="flex-items space-between">
+            <h2>Validate Passcode</h2>
+            <button class="button" data-button-variant="round-icon" onclick="this.closest('dialog').close('close')">
+                <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
+                    <use href="#cross"></use>
+                </svg>
+            </button>
+        </header>
+        <article>
+            <div class="sendcode">
                 <label for="passcodeInput">Enter the 6 digit Passcode sent to your inbox</label>
                 <input type="text" id="passcodeInput" name="passcode" required pattern="\d{6}" title="6 digit passcode">
                 <span class="sendcode-result"></span>
             </div>
         </article>
         <footer>
-            <menu class="flex-items space-between no-padding">
-                <button class="button sendmail-magic" type="button">Send me a Magic Link</button>
-                <button class="button sendmail-passcode" type="button">Send me a 6-digit passcode</button>
-                <button class="button validate-passcode hide" type="button">LOGIN</button>
+            <menu>
+                <button class="button validate-passcode" type="button">LOGIN</button>
             </menu>
         </footer>
     </form>
  </dialog>}');
     END;
 
-    FUNCTION buildNavLabels(pArticleId IN article.id%type, pLoginForm IN VARCHAR2) RETURN VARCHAR2 IS
+    FUNCTION buildNavLabels(pArticleId IN article.id%type) RETURN VARCHAR2 IS
         l_nav_labels LONG;
     BEGIN
-        l_nav_labels:=l_nav_labels ||
-        '<nav aria-label="Main Navigation" class="content-grid">' || 
-            CASE WHEN pLoginForm='YES' THEN 
-            '<div class="flex-items full-width"><button type="button" class="button login-btn">Login</button></div>' 
-            END;
-
         IF (g_nav_labels.COUNT>1) THEN
             FOR i IN 1..g_nav_labels.COUNT LOOP
                 IF (i=1) THEN
-                    l_nav_labels:=l_nav_labels || '<div class="flex-items">';
+                    l_nav_labels:=
+                    '<nav aria-label="Main Navigation" class="content-grid">';
+                    l_nav_labels:=l_nav_labels || 
+                        '<div class="flex-items">';
                 END IF;
                 l_nav_labels:=l_nav_labels || 
-                    '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="nav-label"' || 
+                    '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="button"' || 
                         CASE WHEN g_nav_labels(i).article_id=pArticleId THEN ' aria-current="page"' END  || 
                         ' data-id="' || g_nav_labels(i).article_id || '">' || g_nav_labels(i).navigation_label || '</a>';
                 IF (i=g_nav_labels.COUNT) THEN
-                    l_nav_labels:=l_nav_labels || '</div>';
+                    l_nav_labels:=l_nav_labels || '</div></nav>';
                 END IF;
             END LOOP;
         END IF;
-        
-        l_nav_labels:=l_nav_labels || '</nav>';
 
         RETURN (l_nav_labels);
     END;
@@ -136,6 +151,7 @@ q'{<dialog>
     ** <nav>
     ** <main>
     ** <footer>
+    ** <dialog>
     ** <svg>
     */
 
@@ -153,6 +169,8 @@ q'{<dialog>
         pFooter IN CLOB, 
         pHtml IN OUt NOCOPY CLOB) 
     IS
+        l_header CLOB;
+        l_footer CLOB;
         l_featured_id VARCHAR2(10);
         l_featured_ids apex_t_varchar2:=apex_t_varchar2();
         l_featured_regex VARCHAR2(200);
@@ -254,13 +272,28 @@ q'{<dialog>
 
         nb_articles:=MOD(regexp_count(pHtml,'<article'),2);
 
-        /* Assemble document */
-        pHtml:=NVL(pHeader,'<header></header>') || 
-               buildNavLabels(pArticleId,pLoginForm) || 
+        /* 
+        ** Build website header 
+        */
+        l_header:=CASE WHEN pLoginForm='YES' THEN '<div class="align-end"><button type="button" class="button login-btn">Login</button></div>' END || pHeader;
+        IF (l_header IS NOT NULL) THEN
+            l_header:= '<header class="website full-width">' || l_header || '</header>';
+        END IF;
+
+        /* 
+        ** Build website footer 
+        */
+        l_footer:='<footer class="website full-width">' || pFooter || '<small></small></footer>'; -- OCNGA
+
+        /* 
+        ** Assemble content part of document 
+        */
+        pHtml:=l_header || 
+               buildNavLabels(pArticleId) || 
                '<main class="content-grid">' || 
                     pHtml  || CASE WHEN nb_articles=1 THEN g_curve ELSE REPLACE(g_curve,'full-width','full-width height-2x') END || 
                 '</main>' || 
-               NVL(pFooter,'<footer></footer>');
+               l_footer;
 
         /* 
         ** Append any Dialog elements
@@ -268,8 +301,9 @@ q'{<dialog>
         IF (pLoginForm='YES') THEN 
             pHtml:=pHtml || buildLoginForm;
         END IF;
+
         /* 
-        ** Append all referenced svg symbols 
+        ** Append any referenced svg as symbols 
         */
         n:=regexp_count(pHtml,'<use href="#([^"]+)');
         FOR i IN 1..n 
@@ -288,7 +322,7 @@ q'{<dialog>
         END IF;
 
         /*
-        ** Return complete <body> element with identifying attributes 
+        ** Return complete <body> element with data attributes identifying internal id of website and article
         */
         pHtml:='<body data-websiteid="' || pWebsiteId || '" data-articleid="' || pArticleId || '" data-resturl="' || pRestUrl || '">' || pHtml || '</body>';
 
@@ -331,7 +365,7 @@ q'{<dialog>
 
         /* Get id of website owning the article because we need to build navigation labels as would appear in the deployed site */
 
-        FOR C IN (SELECT website_id, display_order FROM website_article WHERE article_id=pArticleId AND user_id=l_session_data.user_id) LOOP
+        FOR C IN (SELECT website_id FROM website_article WHERE article_id=pArticleId AND user_id=l_session_data.user_id) LOOP
             l_website_id:=C.website_id;
         END LOOP;
 
@@ -370,7 +404,7 @@ q'{<dialog>
         buildBodyHtml(
             l_session_data.user_id, 
             l_website_id,
-            'TEST', 
+            'TEST', /* TEST environemt for Codepen */
             pck_core.getresturl(),
             pArticleId, 
             l_collection_type, 
@@ -483,7 +517,8 @@ q'{<dialog>
             ** header and footer are the first and last elements of their type in l_body_html
             */
 
-            l_header:=regexp_substr(l_body_html,'<header.+?</header>');
+            l_header:=regexp_substr(l_body_html,'<header class="website.+?>(.+?)</header>',1,1,'n',1);
+            l_header:=replace(l_header,'');
             IF (l_header IS NULL AND C.header IS NOT NULL) THEN
                 apex_string.push(l_updated_columns,'HEADER');
                 apex_string.push(l_updated_files,l_header);
@@ -492,7 +527,7 @@ q'{<dialog>
                 apex_string.push(l_updated_files,l_header);
             END IF;
 
-            l_footer:=regexp_substr(l_body_html,'<footer.+?</footer>');
+            l_footer:=regexp_substr(l_body_html,'<footer class="website.+?>(.+?)</footer>',1,1,'n',1);
             IF (l_footer IS NULL AND C.footer IS NOT NULL) THEN
                 apex_string.push(l_updated_columns,'FOOTER');
                 apex_string.push(l_updated_files,l_footer);
@@ -535,9 +570,8 @@ q'{<dialog>
         END IF;
         
         /* Remove elements added in getCodepen procedure */
-        l_main:=regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(l_main,
+        l_main:=regexp_replace(regexp_replace(regexp_replace(regexp_replace(l_main,
             '<ol class="featured.+?</ol>'),
-            '<form.+?</form>'),
             '<svg.+?</svg>'),
             '<main.+?>'),
             '</main>');
