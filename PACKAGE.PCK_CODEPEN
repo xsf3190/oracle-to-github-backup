@@ -23,6 +23,9 @@ end;
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
     g_curve CONSTANT VARCHAR2(100):='<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
+
+    g_LOGIN CONSTANT VARCHAR2(100):='<div class="align-end"><button type="button" class="button login-btn">Login</button></div>';
+    g_FOOTER CONSTANT VARCHAR2(100):='<small>Built with Oracle Netlify Cloudinary Google</small>';
     
     TYPE tt_nav_labels IS RECORD (
         article_id website_article.article_id%type,
@@ -275,15 +278,15 @@ q'{<dialog class="login-email">
         /* 
         ** Build website header 
         */
-        l_header:=CASE WHEN pLoginForm='YES' THEN '<div class="align-end"><button type="button" class="button login-btn">Login</button></div>' END || pHeader;
+        l_header:=CASE WHEN pLoginForm='YES' THEN g_LOGIN END || pHeader;
         IF (l_header IS NOT NULL) THEN
-            l_header:= '<header class="website full-width">' || l_header || '</header>';
+            l_header:= '<header class="website">' || l_header || '</header>';
         END IF;
 
         /* 
         ** Build website footer 
         */
-        l_footer:='<footer class="website full-width">' || pFooter || '<small></small></footer>'; -- OCNGA
+        l_footer:='<footer class="website">' || pFooter || g_FOOTER || '</footer>';
 
         /* 
         ** Assemble content part of document 
@@ -518,7 +521,7 @@ q'{<dialog class="login-email">
             */
 
             l_header:=regexp_substr(l_body_html,'<header class="website.+?>(.+?)</header>',1,1,'n',1);
-            l_header:=replace(l_header,'');
+            l_header:=trim(replace(l_header,g_LOGIN));
             IF (l_header IS NULL AND C.header IS NOT NULL) THEN
                 apex_string.push(l_updated_columns,'HEADER');
                 apex_string.push(l_updated_files,l_header);
@@ -528,6 +531,7 @@ q'{<dialog class="login-email">
             END IF;
 
             l_footer:=regexp_substr(l_body_html,'<footer class="website.+?>(.+?)</footer>',1,1,'n',1);
+            l_footer:=trim(replace(l_footer,g_FOOTER));
             IF (l_footer IS NULL AND C.footer IS NOT NULL) THEN
                 apex_string.push(l_updated_columns,'FOOTER');
                 apex_string.push(l_updated_files,l_footer);
