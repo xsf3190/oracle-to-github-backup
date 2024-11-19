@@ -1,8 +1,8 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS 
     --
-    PROCEDURE createAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB);
+    PROCEDURE createAuthRequest(pWebsiteId IN website.id%type, pBodyText IN CLOB);
     --
-    PROCEDURE verifyAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB);
+    PROCEDURE verifyAuthRequest(pWebsiteId IN website.id%type, pRequestType IN VARCHAR2, pUserId IN INTEGER, pVerifyData IN VARCHAR2);
     --
     PROCEDURE makeAuthRequest(pWebsiteId IN website.id%type);
     --
@@ -45,56 +45,92 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     ** - SEND TO EMAIL ADDRESS
     */
 
-    PROCEDURE createAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
+    PROCEDURE createAuthRequest(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
         l_email users.email%type;
         l_url varchar2(100);
+        l_request_type VARCHAR2(10);
         l_user_id users.id%type;
+        l_jwt_enc_key website.jwt_enc_key%type;
+        l_token VARCHAR2(4000);
         l_digits   CONSTANT VARCHAR2(10) := '0123456789';
         l_passcode VARCHAR2(6);
         l_passcode_hash raw(32);
+        l_token_hash raw(32);
         l_json JSON_OBJECT_T;
         l_email_payload CLOB;
         l_favicon_url VARCHAR2(200);
+        l_sendmail_subject VARCHAR2(200);
+        l_sendmail_body VARCHAR2(500);
         l_clob CLOB;
     BEGIN
-        FOR C IN (SELECT j.email, j.url, NVL(u.id,0) user_id, a.cld_cloud_name, a.resource_type, a.public_id, a.format--, w.color_primary
-                    FROM asset a, website w, users u, JSON_TABLE(pBodyText, '$' COLUMNS email, url) j
+        FOR C IN (SELECT w.jwt_enc_key, j.email, j.url, j.request_type, NVL(u.id,0) user_id, a.cld_cloud_name, a.resource_type, a.public_id, a.format--, w.color_primary
+                    FROM asset a, website w, users u, JSON_TABLE(pBodyText, '$' COLUMNS email, url, request_type) j
                    WHERE w.id=pWebsiteId
                      AND u.email(+)=j.email
                      AND a.id(+)=w.favicon_asset_id) 
         LOOP
             l_email:=C.email;
             l_url:=C.url;
+            l_request_type:=C.request_type;
             l_user_id:=C.user_id;
+            l_jwt_enc_key:=C.jwt_enc_key;
             IF (C.cld_cloud_name IS NOT NULL) THEN
                 l_favicon_url:=pck_media.getCloudinaryUrl(C.cld_cloud_name,C.resource_type,C.public_id,C.format, 96) || '.png';
                 l_favicon_url:=REPLACE(l_favicon_url,'q_auto,f_auto','f_auto,w_96,h_96');
             END IF;
         END LOOP;
 
-        FoR i IN 1..6 LOOP
-            l_passcode:=l_passcode || SUBSTR(l_digits,FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(l_digits) + 1)),1);
-        END LOOP;
+        CASE l_request_type
+            WHEN 'magic' THEN
+                l_token:=apex_jwt.ENCODE (
+                    p_iss       => 'ORDS',
+                    p_sub       => l_email,
+                    p_aud       => 'xxx',
+                    p_iat_ts    => current_timestamp,
+                    p_exp_sec   => ACCESS_TOKEN_EXP,
+                    p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
+                );
+                l_token_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
 
-        /* Store passcode as hash for later comparison with user-entered value */
-        l_passcode_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_passcode,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
 
-        IF (l_user_id=0) THEN
-            INSERT INTO users (email, passcode) VALUES (l_email, l_passcode_hash);
-        ELSE
-            UPDATE users SET passcode=l_passcode_hash WHERE id=l_user_id;
-        END IF;
+
+                IF (l_user_id=0) THEN
+                    INSERT INTO users (email, token) VALUES (l_email, l_token_hash);
+                ELSE
+                    UPDATE users SET token=l_token_hash WHERE id=l_user_id;
+                END IF;
+
+                l_sendmail_subject:='Authenticate on ' || l_url;
+                l_sendmail_body:='<a href="' || pck_core.getRestUrl || 'authenticate/' || pWebsiteId || '?request_type=magic&user_id='||l_user_id||'&verify_data=' || utl_url.escape(l_token,TRUE,'UTF-8') || '">Login to ' || l_url || '</a>';
+
+            WHEN 'passcode' THEN
+                FOR i IN 1..6 LOOP
+                    l_passcode:=l_passcode || SUBSTR(l_digits,FLOOR(DBMS_RANDOM.VALUE(1, LENGTH(l_digits) + 1)),1);
+                END LOOP;
+
+                /* Store passcode as hash for later comparison with user-entered value */
+                l_passcode_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_passcode,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+
+                IF (l_user_id=0) THEN
+                    INSERT INTO users (email, passcode) VALUES (l_email, l_passcode_hash);
+                ELSE
+                    UPDATE users SET passcode=l_passcode_hash WHERE id=l_user_id;
+                END IF;
+
+                l_sendmail_subject:='Passcode '||l_passcode||' authenticates you on ' || l_url;
+                l_sendmail_body:='<h1>Passcode is ' || l_passcode || '</h1>';
+            END CASE;
 
         /* Send mail to email address with passcode */
         l_json:=new JSON_OBJECT_T;
         l_json.put('contactEmail',l_email);
-        l_json.put('subject','Passcode '||l_passcode||' will authenticate you on ' || l_url);
-        l_json.put('body', '<html><body>' || CASE WHEN l_favicon_url IS NOT NULL THEN '<img src="'||l_favicon_url||'">' END|| '<h1>Passcode is ' || l_passcode || '</h1></body></html>');
+        l_json.put('subject',l_sendmail_subject);
+        l_json.put('body', '<html><body>' || CASE WHEN l_favicon_url IS NOT NULL THEN '<img src="'||l_favicon_url||'">' END || l_sendmail_body || '</body></html>');
         l_json.put('sourceEmail','authenticate@adfreesites.com');
         l_email_payload:=l_json.stringify;
         pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_email_payload, pData=>l_clob);
 
-        sendMessage(TRUE,'Passcode was sent to your inbox from authenticate@adfreesites.com');
+        sendMessage(TRUE,CASE l_request_type WHEN 'magic' THEN 'Magic link sent' ELSE 'Passcode sent to inbox from authenticate@adfreesites.com' END);
 
         EXCEPTION WHEN OTHERS THEN
             pck_core.log_error;
@@ -131,40 +167,35 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     END;
 
     /*
-    ** VERIFY PASSCODE ENTERED BY USER MATCHES
-    ** RETURN JWT ACCESS AND REFRESH TOKENS IF PASSCODES MATCH
+    ** VERIFY PASSCODE OR TOKEN ENTERED BY USER MATCHES DATA ORIGINALLY SENT BY EMAIL
+    ** RETURN JWT ACCESS AND REFRESH TOKENS IF VERIFIED
     */
-    PROCEDURE verifyAuthPasscode(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
+    PROCEDURE verifyAuthRequest(pWebsiteId IN website.id%type, pRequestType IN VARCHAR2, pUserId IN INTEGER, pVerifyData IN VARCHAR2) IS
         l_email users.email%type;
         l_user_id users.id%type;
         l_jwt_enc_key website.jwt_enc_key%type;
-        l_passcode VARCHAR2(6);
-        l_passcode_hash raw(32);
+        l_verify_data_hash raw(32);
         l_token VARCHAR2 (4000);
         l_refresh VARCHAR2 (4000);
         l_scope VARCHAR2 (5);
     BEGIN
-        FOR C IN (SELECT j.email, j.passcode passcode_entered, u.passcode passcode_emailed, u.id user_id
-                    FROM users u, JSON_TABLE(pBodyText, '$' COLUMNS email, passcode) j
-                   WHERE u.email=j.email) 
+        FOR C IN (SELECT email, DECODE(pRequestType,'magic',token,'passcode',passcode) original_data_hash FROM users WHERE id=pUserId) 
         LOOP
+            pck_core.log(pRequestType);
+            pck_core.log(pUserId);
+            pck_core.log(pVerifyData);
+
             l_email:=C.email;
-            l_user_id:=C.user_id;
-            l_passcode_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(C.passcode_entered,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
-            IF (l_passcode_hash<>C.passcode_emailed) THEN
+            l_verify_data_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(pVerifyData,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+            IF (l_verify_data_hash<>C.original_data_hash) THEN
                 sendMessage(FALSE,'Passcodes do not match. Check your inbox and try again.');
                 RETURN;
             END IF;
         END LOOP;
 
-        IF (l_email IS NULL) THEN
-            sendMessage(FALSE,'Something not right. Either email not sent or user not created.');
-            RETURN;
-        END IF;
-
         getKeyAndScope(pWebsiteId, l_email, l_jwt_enc_key, l_scope);
         /*
-        ** Set website JWT encryption key on first  use. 
+        ** Set website JWT encryption key on first use. 
         ** Have to move this to OCI Vault later
         */
         IF (l_jwt_enc_key IS NULL) THEN
