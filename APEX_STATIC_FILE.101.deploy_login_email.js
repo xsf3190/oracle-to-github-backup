@@ -1,20 +1,20 @@
 /*
-** LOGIN WITH EMAIL FORM SUBMISSION
+** LOGIN THROUGH EMAIL. PASSCODE AND MAGIC LINK SUPPORTED.
 */
 
-const callAPI = async (endpoint, method, token) => {
+const callAPI = async (endpoint, method = "GET", token, data) => {
     
     const url = bodydata.resturl + endpoint + "/" +bodydata.websiteid;
 
     let headers = new Headers();
+    headers.append("Content-Type", "application/json");
     if (token) {
         headers.append("Authorization","Bearer " + token);
     }
 
     let config = {method: method, headers: headers};
     if (method==="POST" || method==="PUT") {
-        const formData = new FormData(form);
-        config["body"] = JSON.stringify(Object.fromEntries(formData));
+        config["body"] = JSON.stringify(data);
     }
 
     const response = await fetch(url, config);
@@ -23,22 +23,22 @@ const callAPI = async (endpoint, method, token) => {
         throw Error(`System Error: ${response.status} - ${response.message}}`);
     }
 
-    const data = await response.json();
-    if (!data.success) {
-        if (data.sqlcode) {
-            throw Error(`Database error: ${data.sqlcode} - ${data.sqlerrm}`);
+    const result = await response.json();
+    if (!result.success) {
+        if (result.sqlcode) {
+            throw Error(`Database error: ${result.sqlcode} - ${result.sqlerrm}`);
         } else {
-            throw Error(data.message);
+            throw Error(result.message);
         }
     }
-    return(data);
+    return(result);
 }
 
 
 const bodydata = document.body.dataset;
 const login = document.querySelector(".login-btn");
 const dialog = document.querySelector("dialog");
-const form = dialog.querySelector("form.login");
+const form = dialog.querySelector("form");
 
 /* CHECK IF USER ALREADY LOGGED IN. REFRESH TOKEN IF EXPIRED */
 
@@ -59,18 +59,14 @@ const sendmail_magic = form.querySelector(".sendmail-magic"),
       sendmail_passcode = form.querySelector(".sendmail-passcode"),
       sendmail_msg = form.querySelector(".sendmail-result");
 
-const validate_passcode =  form.querySelector(".validate-passcode"),
-      validate_msg = form.querySelector(".sendcode-result");
-
-/* Include website url in submitted form data */
-form.querySelector("[name='url']").value = window.location.hostname; 
-
-sendmail_magic.addEventListener("click", () => {
-    callAPI("authenticate-magic", "POST")
+sendmail_magic.addEventListener("click", (e) => {
+    e.preventDefault();
+    form.querySelector("[name='url']").value = window.location.hostname;
+    form.querySelector("[name='request_type']").value = "magic";
+    const formData = new FormData(form);
+    callAPI("authenticate", "POST", null, Object.fromEntries(formData))
         .then((data) => {
             sendmail_msg.textContent = data.message;
-            sendmail_passcode.classList.add("hide");
-            sendmail_magic.classList.add("hide");
         })
         .catch((error) => {
             sendmail_msg.textContent = error;
@@ -79,12 +75,17 @@ sendmail_magic.addEventListener("click", () => {
 });
 
 /* Submit email address - hide send email buttons and display elements to enter and validate passcode */
-sendmail_passcode.addEventListener("click", () => {
-    callAPI("authenticate", "POST")
+sendmail_passcode.addEventListener("click", (e) => {
+    e.preventDefault();
+    form.querySelector("[name='url']").value = window.location.hostname;
+    form.querySelector("[name='request_type']").value = "passcode";
+    const formData = new FormData(form);
+    callAPI("authenticate", "POST", null, Object.fromEntries(formData))
         .then((data) => {
             sendmail_msg.textContent = data.message;
-            sendmail_passcode.classList.add("hide");
-            sendmail_magic.classList.add("hide");
+            form.querySelectorAll(".visually-hidden").forEach((ele) => {
+                ele.classList.remove("visually-hidden");
+            });
         })
         .catch((error) => {
             sendmail_msg.textContent = error;
@@ -92,8 +93,13 @@ sendmail_passcode.addEventListener("click", () => {
         });
 });
 
-validate_passcode.addEventListener("click", () => {
-    callAPI("authenticate", "PUT")
+const validate_passcode =  form.querySelector(".validate-passcode"),
+      validate_msg = form.querySelector(".sendcode-result");
+
+validate_passcode.addEventListener("click", (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    callAPI("authenticate", "PUT", null, Object.fromEntries(formData))
         .then((data) => {
             sessionStorage.setItem("token",data.token);
             localStorage.setItem("refresh",data.refresh);
