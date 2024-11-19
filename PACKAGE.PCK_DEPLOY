@@ -271,6 +271,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             apex_string.push(l_labels(i).modules,'web-vitals.js'); /* already inified from google download */
             apex_string.push(l_labels(i).modules,'deploy_metric.min.js');
 
+            IF (l_login_form='YES') THEN
+                apex_string.push(l_labels(i).modules,'deploy_login_email.min.js');
+            END IF;
+
             IF (l_labels(i).collection_type='BLOG') THEN
                 l_is_blog:=TRUE;
                 l_is_media:=FALSE;
@@ -287,6 +291,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             IF (l_labels(i).contact_form='YES') THEN
                 apex_string.push(l_labels(i).modules,'deploy_contact.min.js');
             END IF;
+
+            
 
             pck_codepen.buildBodyHtml(
                 pUserId, 
