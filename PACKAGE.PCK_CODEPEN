@@ -43,6 +43,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 q'{<dialog class="login-email">
     <form class="flow">
         <input type="hidden" name="url" value="">
+        <input type="hidden" name="request_type" value="">
         <header class="flex-items space-between">
             <h2>Sign up or log in</h2>
             <button class="button" data-button-variant="round-icon" onclick="this.closest('dialog').close('close')">
@@ -57,35 +58,17 @@ q'{<dialog class="login-email">
                 <input autofocus type="email" id="emailInput" name="email" required maxlength="50" autocapitalize="none" autocorrect="off">
                 <span class="sendmail-result"></span>
             </div>
+            <div class="visually-hidden">
+                <label for="passcodeInput">Enter Passcode</label>
+                <input type="text" id="passcodeInput" name="passcode" pattern="\d{6}" title="6 digit passcode">
+                <span class="passcode-result"></span>
+            </div>
         </article>
         <footer>
             <menu class="flex-items">
                 <button class="button sendmail-magic" type="button">Send Magic Link</button>
-                <button class="button sendmail-passcode" type="button">Send 6-digit passcode</button>
-            </menu>
-        </footer>
-    </form>
- </dialog>
- <dialog class="login-passcode">
-    <form class="flow">
-        <header class="flex-items space-between">
-            <h2>Validate Passcode</h2>
-            <button class="button" data-button-variant="round-icon" onclick="this.closest('dialog').close('close')">
-                <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
-                    <use href="#cross"></use>
-                </svg>
-            </button>
-        </header>
-        <article>
-            <div class="sendcode">
-                <label for="passcodeInput">Enter the 6 digit Passcode sent to your inbox</label>
-                <input type="text" id="passcodeInput" name="passcode" required pattern="\d{6}" title="6 digit passcode">
-                <span class="sendcode-result"></span>
-            </div>
-        </article>
-        <footer>
-            <menu>
-                <button class="button validate-passcode" type="button">LOGIN</button>
+                <button class="button sendmail-passcode" type="button">Send Passcode</button>
+                <button class="button validate-passcode visually-hidden" type="button">Login</button>
             </menu>
         </footer>
     </form>
