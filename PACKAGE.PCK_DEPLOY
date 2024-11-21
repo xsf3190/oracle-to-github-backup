@@ -158,6 +158,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_favicon_asset_id website.favicon_asset_id%type;
         l_login_form website.login_form%type;
         l_favicon_url VARCHAR2(250);
+        l_favicon_download BLOB;
         l_text CLOB;
         l_chars VARCHAR2(256):=' ';
         l_char VARCHAR2(4);
@@ -457,6 +458,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_files.put(l_jscode(i), l_sha1);
             END LOOP;
         END LOOP;
+
+        logDeployment(pWebsiteId, pSiteId, 'Building FAVICON');
+        apex_web_service.clear_request_headers;
+        l_favicon_download:=apex_web_service.make_rest_request_b(p_url=>REPLACE(l_favicon_url,'.svg','.png'), p_http_method=>'GET');
+        l_sha1:=LOWER(dbms_crypto.hash(src => l_favicon_download, typ => dbms_crypto.hash_sh1));
+        l_deploy_files(l_sha1).file_name:='favicon.png';
+        l_deploy_files(l_sha1).file_content_b:=l_favicon_download;
+        l_files.put('favicon.png', l_sha1);
 
         logDeployment(pWebsiteId, pSiteId, 'Building FONT ' || l_font_filename || ' (' || LENGTH(l_chars) || ' distinct characters)');
         apex_web_service.clear_request_headers;
