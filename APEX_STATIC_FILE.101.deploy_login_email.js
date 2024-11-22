@@ -4,7 +4,11 @@
 
 const callAPI = async (endpoint, method = "GET", token, data) => {
     
-    const url = bodydata.resturl + endpoint + "/" +bodydata.websiteid;
+    let url = bodydata.resturl + endpoint + "/" + bodydata.websiteid;
+    if (method==="GET") {
+      url+=data;
+      console.log(url);
+    }
 
     let headers = new Headers();
     headers.append("Content-Type", "application/json");
@@ -49,15 +53,17 @@ if (token) {
     const arrayToken = token.split(".");
     const tokenPayload = JSON.parse(atob(arrayToken[1]));
     login.textContent = tokenPayload.sub;
+} else {
+    login.addEventListener("click", () => {
+      dialog.showModal();
+    });
 }
-
-login.addEventListener("click", () => {
-    dialog.showModal();
-});
 
 const sendmail_magic = form.querySelector(".sendmail-magic"),
       sendmail_passcode = form.querySelector(".sendmail-passcode"),
       sendmail_msg = form.querySelector(".sendmail-result");
+
+let gIntervalId;
 
 sendmail_magic.addEventListener("click", (e) => {
     e.preventDefault();
@@ -67,12 +73,40 @@ sendmail_magic.addEventListener("click", (e) => {
     callAPI("authenticate", "POST", null, Object.fromEntries(formData))
         .then((data) => {
             sendmail_msg.textContent = data.message;
+            clearInterval(gIntervalId);
+            gIntervalId = setInterval(checkAuthStatus,3000);
         })
         .catch((error) => {
             sendmail_msg.textContent = error;
             sendmail_msg.style.color = "red";
         });
 });
+
+const checkAuthStatus = () => {
+    const formData = new FormData(form);
+    callAPI("authenticate", "PUT", null, Object.fromEntries(formData))
+        .then((data) => {
+            if (data.token) {
+              sessionStorage.setItem("token",data.token);
+              localStorage.setItem("refresh",data.refresh);
+              sendmail_msg.textContent = "Logged on!";
+              sendmail_msg.style.color = "green";
+              clearInterval(gIntervalId);
+            } else if (data.expired) {
+              sendmail_msg.textContent = "Expired";
+              sendmail_msg.style.color = "red";
+              clearInterval(gIntervalId);
+            }
+        })
+        .catch((error) => {
+            sendmail_msg.textContent = error;
+            sendmail_msg.style.color = "red";
+            clearInterval(gIntervalId);
+        });
+}
+
+const validate_passcode =  form.querySelector(".validate-passcode"),
+      validate_msg = form.querySelector(".passcode-result");
 
 /* Submit email address - hide send email buttons and display elements to enter and validate passcode */
 sendmail_passcode.addEventListener("click", (e) => {
@@ -83,6 +117,9 @@ sendmail_passcode.addEventListener("click", (e) => {
     callAPI("authenticate", "POST", null, Object.fromEntries(formData))
         .then((data) => {
             sendmail_msg.textContent = data.message;
+            sendmail_magic.classList.add("visually-hidden");
+            sendmail_passcode.classList.add("visually-hidden");
+            validate_passcode.dataset.userid = data.userid;
             form.querySelectorAll(".visually-hidden").forEach((ele) => {
                 ele.classList.remove("visually-hidden");
             });
@@ -93,13 +130,10 @@ sendmail_passcode.addEventListener("click", (e) => {
         });
 });
 
-const validate_passcode =  form.querySelector(".validate-passcode"),
-      validate_msg = form.querySelector(".sendcode-result");
+
 
 validate_passcode.addEventListener("click", (e) => {
-    e.preventDefault();
-    const formData = new FormData(form);
-    callAPI("authenticate", "PUT", null, Object.fromEntries(formData))
+    callAPI("authenticate", "GET", null, "?request=passcode&user=" + e.target.dataset.userid + "&verify=" + form.querySelector("[name='passcode']").value)
         .then((data) => {
             sessionStorage.setItem("token",data.token);
             localStorage.setItem("refresh",data.refresh);
