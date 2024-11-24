@@ -197,6 +197,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         RETURN (l_html);
     END;
 
+    /*
+    ** RETURNS DROPDOWN HTML TO LOGGED ON USER
+    */
+    FUNCTION dropdownHTML(pUserId IN users.id%type) RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+'<div class="dropdown">
+    <details>
+      <summary aria-haspopup="true" aria-expanded="false" aria-controls="topnav-menu" aria-expanded="false">
+        <span>mark.russellbrown@gmail.com</span>
+        <svg height="1em" viewBox="0 0 32 32" preserveAspectRatio="none">
+          <rect class="top" x="0" y="0" width="32" height="6" fill="currentColor" />
+          <rect class="middle" x="0" y="13" width="32" height="6" fill="currentColor" />
+          <rect class="bottom" x="0" y="26" width="32" height="6" fill="currentColor" />
+        </svg>
+      </summary>
+      <div class="dropdown-content">
+        <ul id="topnav-menu" role="menu" aria-hidden="true">
+          <li role="menuitem"><button type="button" class="button button-1">Visit details</button></li>
+          <li role="menuitem"><button type="button" class="button button-2">Blog details</button></li>
+          <li role="menuitem"><button type="button" class="button button-3">Log out</button></li>
+        </ul
+      </div>
+    </details>
+ </div>');
+    END;
+
     PROCEDURE sendMessage(pSuccess IN BOOLEAN, pMessage IN VARCHAR2) IS
     BEGIN
         APEX_JSON.open_object;
@@ -392,6 +419,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('token', l_new_token);
         APEX_JSON.write ('refresh', l_new_refresh);
+        APEX_JSON.write ('dropdown', dropdownHTML(l_user_id));
         APEX_JSON.close_object;
     END;
 
