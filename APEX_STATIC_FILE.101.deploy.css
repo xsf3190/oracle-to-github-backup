@@ -3,6 +3,7 @@
 ::before {
   box-sizing: border-box;
 }
+
 body {
   font-family: var(--font-family);
   font-size: var(--step-0);
@@ -15,10 +16,11 @@ h1,
 h2,
 h3,
 h4,
-p {
+p,
+menu {
   margin: 0;
 }
-[role="list"] {
+[role="list"], menu {
   padding: 0;
   list-style: none;
 }
@@ -96,13 +98,16 @@ body>nav {
 .align-center {
   text-align: center;
 }
-header > * {
-  margin-block-start: 1em;
+.align-end {
+  text-align: end;
+}
+body>header > * {
+  padding: 0.5em 0.5em;
 }
 article {
   padding-block: 1em;
 }
-footer {
+body>footer {
   padding-block-start: 1em;
 }
 .stick-top {
@@ -143,48 +148,20 @@ p {
   font-size: var(--step-0);
   text-wrap: pretty;
 }
+small {
+  font-size:var(--step--2);
+}
 h1,
 h2,
 h3,
 h4 {
   text-wrap: balance;
 }
-
 a {
   text-decoration: none;
   color: inherit;
 }
 
-/* VISUALLY-HIDDEN CAN'T BE SEEN EXCEPT TO ASSISTIVE TECHNOLOGY */
-.visually-hidden {
-  border: 0;
-  clip: rect(0 0 0 0);
-  height: auto;
-  margin: 0;
-  overflow: hidden;
-  padding: 0;
-  position: absolute;
-  width: 1px;
-  white-space: nowrap;
-}
-
-.flex-items {
-  --justify-content: space-around;
-  --align-items: center;
-  --padding: 1em;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: var(--justify-content);
-  align-items: var(--align-items);
-  gap: 1em;
-  padding: var(--padding);
-}
-.space-between {
-  --justify-content: space-between;
-}
-.flex-start {
-  --align-items: flex-start;
-}
 .no-padding {
   --padding: 0;
 }
@@ -292,6 +269,21 @@ footer :is(p) {
 .icon:has(+ .condensed) {
   align-self: flex-start;
 }
+
+/* VISUALLY-HIDDEN CAN'T BE SEEN EXCEPT TO ASSISTIVE TECHNOLOGY */
+
+.visually-hidden {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: auto;
+  margin: 0;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+  white-space: nowrap;
+}
+
 form,
 pre {
   padding: 1em;
@@ -321,14 +313,111 @@ form textarea {
   resize: vertical;
   min-block-size: 5rem;
 }
-form button {
-  border-radius: 1.5em;
-  padding: 1rem 1.5em;
-  letter-spacing: 0.2em;
-  background-color: var(--color-primary);
-  color: #fff;
-  border: solid 1px #fff;
+
+/* FLEX ITEMS */
+
+.flex-items {
+  display: flex;
+  flex-direction: var(--flex-direction, row);
+  flex-wrap: var(--flex-wrap, wrap);
+  gap: var(--flex-gap, var(--gutter, var(--space-m)));
+  justify-content: var(--flex-horizontal-alignment, flex-start);
+  align-items: var(--flex-vertical-alignment, center);
+}
+
+.space-between {
+  --flex-horizontal-alignment: space-between;
+}
+.justify-end {
+  --flex-horizontal-alignment: flex-end;
+}
+.no-gap {
+  --flex-gap: 0;
+}
+
+/* BUTTON STYLES */
+
+.button {
+
+  /* Configuration */
+  --button-padding: 0.7em 1.2em;
+  --button-gap: 0.5em;
+  --button-bg: #342a21;
+  --button-color: #ffffff;
+  --button-hover-bg: #4b4b4a;
+  --button-hover-color: #ffffff;
+  --button-border-width: 3px;
+  --button-border-style: solid;
+  --button-border-color: var(--button-bg);
+  --button-radius: 0.5em;
+
+  /* Layout and spacing */
+  display: inline-flex;
+  align-items: center;
+  gap: var(--button-gap);
+  padding: var(--button-padding);
+
+  /* Colours */
+  background: var(--button-bg);
+  color: var(--button-color);
+
+  /* Stroke and radius */
+  border-width: var(--button-border-width);
+  border-style: var(--button-border-style);
+  border-color: var(--button-border-color);
+  border-radius: var(--button-radius);
+
+  /* Typography */
+  text-decoration: none;
+  font-weight: var(--button-font-weight, 700);
+  font-size: var(--button-font-size, 1em);
+  letter-spacing: 0.05ch;
+  font-family: sans-serif;
+  line-height: 1.1;
+
+  /* Interactive */
   cursor: pointer;
+}
+
+.button svg {
+  height: var(--button-icon-size, 1.2cap);
+  width: auto;   
+  flex: none; 
+}
+
+
+.button:hover {
+  background: var(--button-hover-bg);
+  color: var(--button-hover-color);
+}
+
+
+.button:not(.no-focus):focus {
+  outline-width: var(--button-outline-width, var(--button-border-width));
+  outline-style: var(--button-outline-style, var(--button-border-style));
+  outline-color: var(--button-outline-color, var(--button-border-color));
+  outline-offset: var(
+    --button-outline-offset,
+    calc(var(--button-border-width) * 2)
+  );
+}
+
+
+.button:active {
+  transform: scale(99%);
+}
+
+.button[data-button-variant="round-icon"] {
+    --button-padding: 0.25em;
+    --button-bg: transparent;
+    --button-color: currentColor;
+    --button-radius: 50%;
+    --button-border-color: currentColor;
+}
+
+.button[data-button-variant="round-icon"] svg {
+    stroke: currentColor;
+    stroke-width: 3px;
 }
 
 /* DIALOG STYLES */
@@ -356,21 +445,25 @@ dialog > form {
 }
 
 dialog > form > header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      border-block-end: 1px solid black;
+    border-block-end: 3px solid black;
 }
 
 dialog > form > article {
-  overflow-y: auto; 
-      max-block-size: 100%; /* safari */
-      overscroll-behavior-y: contain;
+    overflow-y: auto; 
+    max-block-size: 100%; /* safari */
+    overscroll-behavior-y: contain;
+}
+
+dialog > form > footer {
+    padding-block-end: var(--space-s);
 }
 
 .no-border {
   --border: none;
 }
+
+
+/* STYLES FOR PREFORMATTED CODE BLOCKS */
 
 pre {
   background: rgba(199, 199, 199, 0.3);
@@ -410,4 +503,81 @@ pre:has(.language-plsql)::after {
 }
 pre:has(.language-sql)::after {
   content: "SQL";
+}
+
+
+/* DROPDOWN STYLES */
+
+.dropdown {
+  display: inline-block;
+  position: relative;
+}
+
+/* Hiding The disclosure widget */
+.dropdown summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 1em;
+  font-size: var(--step--1);
+}
+
+.dropdown summary::-webkit-details-marker {
+  display: none; 
+}
+
+/* Detaching details content */
+.dropdown .dropdown-content {
+  position: absolute;
+  min-inline-size: max-content;
+  background-color: white;
+  color: var(--color-primary);
+  border: 1px solid #9b7aba;
+  border-radius: 0.5em;
+  right: 0;
+  top: 2em;
+  z-index: 1;
+  list-style: none;
+  margin: 0;
+  padding: 0.75em 0.25em;
+}
+
+.dropdown button {
+  display: block;
+  color: var(--color-primary);
+  background-color: transparent;
+  padding: 0.5em 1.5em;
+  border: none;
+  inline-size: 100%;
+  font-size: var(--step--1);
+}
+
+.dropdown button:hover, .dropdown button:focus {
+  background-color: #9b7aba;
+  color: white;
+}
+
+/* Closing the detail content on clicking anywhere else */
+.dropdown details[open] summary::before {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  content: "";
+  cursor: default;
+}
+
+.dropdown details summary rect {
+  transition: transform 0.5s ease, opacity 0.5s ease;
+}
+.dropdown details[open] summary .top {
+  transform: rotate(45deg) translate(7px, -3px);
+}
+.dropdown details[open] summary .middle {
+  opacity: 0;
+}
+.dropdown details[open] summary .bottom {
+  transform: rotate(-45deg) translate(-16px, -6px);
 }
