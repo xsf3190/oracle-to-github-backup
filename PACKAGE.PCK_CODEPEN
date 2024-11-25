@@ -34,8 +34,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     TYPE t_nav_labels IS TABLE OF tt_nav_labels;
     g_nav_labels t_nav_labels;
 
-        /*
-     **  Build Contact Form
+    /*
+     **  Build Login Aside
+     */
+    FUNCTION buildLoginAside RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+'<aside class="login flex-items justify-end no-gap">
+    <button type="button" class="button">Login</button>
+    <section class="dropdown visually-hidden">
+        <details>
+            <summary>
+                <span></span>
+                <svg height="1em" viewBox="0 0 32 32" preserveAspectRatio="none">
+                  <rect class="top" x="0" y="0" width="32" height="6" fill="currentColor" />
+                  <rect class="middle" x="0" y="13" width="32" height="6" fill="currentColor" />
+                  <rect class="bottom" x="0" y="26" width="32" height="6" fill="currentColor" />
+                </svg>
+            </summary>
+            <ul class="dropdown-content">
+                <li><button type="button" class="button" data-endpoint="visits">Visit details</button></li>
+                <li><button type="button" class="button" data-endpoint="visits">Blog details</button></li>
+                <li><button type="button" class="button log-out">Log out</button></li>
+            </ul>
+        </details>
+    </section>
+ </aside>'
+        );
+    END;
+
+    /*
+     **  Build Login Form
      */
     FUNCTION buildLoginForm RETURN VARCHAR2 IS
     BEGIN
@@ -72,6 +101,28 @@ q'{<dialog class="login-email">
             </menu>
         </footer>
     </form>
+ </dialog>}');
+    END;
+
+    /*
+     **  Build Content Dialog - here is where we show output from calling API
+     */
+    FUNCTION buildContentDialog RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+q'{<dialog class="output">
+    <header class="flex-items space-between">
+        <h2></h2>
+        <button class="button no-focus" data-button-variant="round-icon" onclick="this.closest('dialog').close('close')">
+            <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
+                <use href="#cross"></use>
+            </svg>
+        </button>
+    </header>
+    <article></article>
+    <footer>
+        <hr>
+    </footer>
  </dialog>}');
     END;
 
@@ -261,7 +312,7 @@ q'{<dialog class="login-email">
         /* 
         ** Build website header 
         */
-        l_header:=CASE WHEN pLoginForm='YES' THEN g_LOGIN END || pHeader;
+        l_header:=CASE WHEN pLoginForm='YES' THEN buildLoginAside END || pHeader;
         IF (l_header IS NOT NULL) THEN
             l_header:= '<header class="website">' || l_header || '</header>';
         END IF;
@@ -286,6 +337,7 @@ q'{<dialog class="login-email">
         */
         IF (pLoginForm='YES') THEN 
             pHtml:=pHtml || buildLoginForm;
+            pHtml:=pHtml || buildContentDialog;
         END IF;
 
         /* 
@@ -504,7 +556,7 @@ q'{<dialog class="login-email">
             */
 
             l_header:=regexp_substr(l_body_html,'<header class="website.+?>(.+?)</header>',1,1,'n',1);
-            l_header:=trim(replace(l_header,g_LOGIN));
+            l_header:=regexp_replace(l_header,'<aside class="login.+?</aside>');
             IF (l_header IS NULL AND C.header IS NOT NULL) THEN
                 apex_string.push(l_updated_columns,'HEADER');
                 apex_string.push(l_updated_files,l_header);
