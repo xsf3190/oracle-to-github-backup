@@ -1,13 +1,12 @@
 /*
-** LOGIN THROUGH EMAIL. PASSCODE AND MAGIC LINK SUPPORTED.
+** LOGIN THROUGH EMAIL. REQUESTS FOR PASSCODE AND MAGIC LINK SUPPORTED.
 */
 
 const callAPI = async (endpoint, method = "GET", token, data) => {
     
     let url = bodydata.resturl + endpoint + "/" + bodydata.websiteid;
-    if (method==="GET") {
+    if (method==="GET" && data) {
       url+=data;
-      console.log(url);
     }
 
     let headers = new Headers();
@@ -40,24 +39,58 @@ const callAPI = async (endpoint, method = "GET", token, data) => {
 
 
 const bodydata = document.body.dataset;
-const login = document.querySelector(".login-btn");
-const dialog = document.querySelector("dialog");
+const login = document.querySelector(".login");
+const dialog = document.querySelector("dialog.login-email");
+const output = document.querySelector("dialog.output");
 const form = dialog.querySelector("form");
+
+
+const toggleVisibility = () => {
+  login.querySelector("section.dropdown").classList.toggle("visually-hidden");
+  login.querySelector("button").classList.toggle("visually-hidden");
+}
+
+login.querySelector("button").addEventListener("click", () => {
+  dialog.showModal();
+});
+
 
 /* CHECK IF USER ALREADY LOGGED IN. REFRESH TOKEN IF EXPIRED */
 
 const token = sessionStorage.getItem("token") || localStorage.getItem("refresh");
-
-/* Show user's email address if token exists */
 if (token) {
     const arrayToken = token.split(".");
     const tokenPayload = JSON.parse(atob(arrayToken[1]));
-    login.textContent = tokenPayload.sub;
-} else {
-    login.addEventListener("click", () => {
-      dialog.showModal();
-    });
+    login.querySelector("span").textContent = tokenPayload.sub;
+    toggleVisibility();
 }
+
+/* RESPOND TO MENU REQUESTS */
+
+document.querySelectorAll(".dropdown-content button").forEach((button) => {
+  button.addEventListener("click", (e) => {
+      if (e.target.matches(".log-out")) {
+        sessionStorage.removeItem("token");
+        localStorage.removeItem("refresh");
+        toggleVisibility();
+      } else {
+        const content = output.querySelector("article");
+        callAPI(e.target.dataset.endpoint, "GET", token, null)
+        .then((data) => {
+            content.replaceChildren();
+            content.insertAdjacentHTML('afterbegin',data.content);
+            output.showModal();
+        })
+        .catch((error) => {
+            content.replaceChildren();
+            content.insertAdjacentHTML('afterbegin',error);
+            content.style.color = "red";
+            output.showModal();
+        });
+      }
+      e.target.closest("details").removeAttribute("open");
+    });
+})
 
 const sendmail_magic = form.querySelector(".sendmail-magic"),
       sendmail_passcode = form.querySelector(".sendmail-passcode"),
@@ -65,6 +98,11 @@ const sendmail_magic = form.querySelector(".sendmail-magic"),
 
 let gIntervalId;
 
+/*
+** USER REQUESTS MAGIC LINK TO BE EMAILED. 
+** WHEN USER CLICKS MAGIC LINK THEIR USER RECORD IN DATABASE IS UPDATED
+** POLL DATABASE FOR SUCCESSFUL AUTHENTICATION
+*/
 sendmail_magic.addEventListener("click", (e) => {
     e.preventDefault();
     form.querySelector("[name='url']").value = window.location.hostname;
@@ -73,6 +111,7 @@ sendmail_magic.addEventListener("click", (e) => {
     callAPI("authenticate", "POST", null, Object.fromEntries(formData))
         .then((data) => {
             sendmail_msg.textContent = data.message;
+            sendmail_msg.style.color = "green";
             clearInterval(gIntervalId);
             gIntervalId = setInterval(checkAuthStatus,3000);
         })
@@ -133,16 +172,17 @@ sendmail_passcode.addEventListener("click", (e) => {
 
 
 validate_passcode.addEventListener("click", (e) => {
-    callAPI("authenticate", "GET", null, "?request=passcode&user=" + e.target.dataset.userid + "&verify=" + form.querySelector("[name='passcode']").value)
+    const query = "?request=passcode&user=" + e.target.dataset.userid + "&verify=" + form.querySelector("[name='passcode']").value;
+    callAPI("authenticate", "GET", null, query)
         .then((data) => {
             sessionStorage.setItem("token",data.token);
             localStorage.setItem("refresh",data.refresh);
             validate_msg.textContent = data.message;
             validate_msg.style.color = "green";
-            sendcode_btn.style.display = "none";
         })
         .catch((error) => {
             validate_msg.textContent = error;
             validate_msg.style.color = "red";
         });
 });
+
