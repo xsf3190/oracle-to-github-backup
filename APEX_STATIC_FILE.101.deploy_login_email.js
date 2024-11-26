@@ -11,6 +11,8 @@ const callAPI = async (endpoint, method = "GET", token, data) => {
 
     let headers = new Headers();
     headers.append("Content-Type", "application/json");
+    headers.append("url", window.location.hostname);
+    headers.append("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
     if (token) {
         headers.append("Authorization","Bearer " + token);
     }
@@ -54,19 +56,39 @@ login.querySelector("button").addEventListener("click", () => {
   dialog.showModal();
 });
 
+/* CLOSE ALL DIALOGS CONSISTENTLY */
+document.querySelectorAll("dialog button.close").forEach((button) => {
+    button.addEventListener("click", (e) => {
+        e.target.closest("dialog").close();
+    });
+});
 
-/* CHECK IF USER ALREADY LOGGED IN. REFRESH TOKEN IF EXPIRED */
 
-const token = sessionStorage.getItem("token") || localStorage.getItem("refresh");
+/* IF USER HAS PREVIOUSLY LOGGED IN SHOW THEIR EMAIL IN PLACE OF LOGIN BUtTON */
+let token = sessionStorage.getItem("token") || localStorage.getItem("refresh");
 if (token) {
     const arrayToken = token.split(".");
     const tokenPayload = JSON.parse(atob(arrayToken[1]));
-    login.querySelector("span").textContent = tokenPayload.sub;
-    toggleVisibility();
+    if (Math.floor(new Date().getTime() / 1000) < tokenPayload?.iat) {
+        const expires = (tokenPayload.iat * 1000).toString();
+        login.querySelector("span").textContent = expires + ": " + tokenPayload.sub;
+        console.log("jti",tokenPayload.jti);
+        console.log("iat",tokenPayload.iat);
+        toggleVisibility();
+    }
+}
+
+/* REFRESH TOKENS IF SESSION TOKEN EXPIRED */
+const checkToken = () => {
+    const arrayToken = sessionStorage.getItem("token").split(".");
+    const tokenPayload = JSON.parse(atob(arrayToken[1]));
+    if (Math.floor(new Date().getTime() / 1000) >= tokenPayload?.iat) {
+        console.log("session token expired");
+
+    }
 }
 
 /* RESPOND TO MENU REQUESTS */
-
 document.querySelectorAll(".dropdown-content button").forEach((button) => {
   button.addEventListener("click", (e) => {
       if (e.target.matches(".log-out")) {
@@ -168,8 +190,6 @@ sendmail_passcode.addEventListener("click", (e) => {
             sendmail_msg.style.color = "red";
         });
 });
-
-
 
 validate_passcode.addEventListener("click", (e) => {
     const query = "?request=passcode&user=" + e.target.dataset.userid + "&verify=" + form.querySelector("[name='passcode']").value;
