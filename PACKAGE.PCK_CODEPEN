@@ -75,7 +75,7 @@ q'{<dialog class="login-email">
         <input type="hidden" name="request_type" value="">
         <header class="flex-items space-between">
             <h2>Sign up or log in</h2>
-            <button class="button no-focus" data-button-variant="round-icon" onclick="this.closest('dialog').close('close')">
+            <button class="button close no-focus" data-button-variant="round-icon">
                 <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
                     <use href="#cross"></use>
                 </svg>
@@ -113,7 +113,7 @@ q'{<dialog class="login-email">
 q'{<dialog class="output">
     <header class="flex-items space-between">
         <h2></h2>
-        <button class="button no-focus" data-button-variant="round-icon" onclick="this.closest('dialog').close('close')">
+        <button class="button close no-focus" data-button-variant="round-icon">
             <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
                 <use href="#cross"></use>
             </svg>
