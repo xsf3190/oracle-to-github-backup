@@ -412,11 +412,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_time_zone varchar2(20):='Europe/London';
         l_id_parts apex_t_varchar2;
     BEGIN
-        IF (NOT pEmail) THEN
-            l_session_data:=pck_core.getSessionData();
-            l_time_zone:=l_session_data.timezone;
-        END IF;
-
         l_id_parts:=apex_string.split(pId,',');
         FOR i IN l_id_parts.FIRST..l_id_parts.LAST LOOP
             CASE i
@@ -425,6 +420,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 WHEN 3 THEN l_offset:=l_id_parts(i);
             END CASE;
         END LOOP;
+
+        IF (NOT pEmail) THEN
+            l_session_data:=pck_core.getSessionData(l_website_id);
+            pck_core.log(l_session_data.timezone || ':' || l_session_data.url || '' || l_session_data.user_id);
+            l_time_zone:=l_session_data.timezone;
+        END IF;
         
         --l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
         --l_netlify_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
