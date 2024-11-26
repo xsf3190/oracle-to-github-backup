@@ -5,6 +5,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
         session_id NUMBER,
         page_id NUMBER,
         maxtouchpoints NUMBER,
+        url VARCHAR2(100),
         timezone VARCHAR2(30),
         canuse_popover BOOLEAN,
         canuse_eyedropper BOOLEAN,
@@ -37,7 +38,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION getRestUrl RETURN VARCHAR2;
     --
-    FUNCTION getSessionData RETURN session_data_rt;
+    FUNCTION getSessionData(pWebsiteId IN website.id%type DEFAULT NULL) RETURN session_data_rt;
     --
     PROCEDURE loadGoogleFonts;
     --
@@ -127,11 +128,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN l_fluid_type;
     END;
 
-    FUNCTION getSessionData RETURN session_data_rt IS
+    /*
+    ** MIGRATING API FROM APEX SESSION TO CONVENTIONAL OAUTH2
+    */
+    FUNCTION getSessionData(pWebsiteId IN website.id%type) RETURN session_data_rt IS
         l_apex_session VARCHAR2(50);
         l_parts apex_t_varchar2;
         l_session_data session_data_rt;
+        l_auth_header VARCHAR2(1000);
+        l_bearer_token VARCHAR2(1000);
+        l_token APEX_JWT.T_TOKEN;
+        l_jwt_enc_key website.jwt_enc_key%type;
     BEGIN
+        l_auth_header := OWA_UTIL.get_cgi_env('Authorization');
+        IF (INSTR(l_auth_header, 'Bearer')=1) THEN
+            l_bearer_token := SUBSTR(l_auth_header, 8);
+            SELECT jwt_enc_key INTO l_jwt_enc_key FROM website WHERE id=pWebsiteId;
+            l_token:=apex_jwt.DECODE(p_value => l_bearer_token, p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key));
+            BEGIN
+                apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
+                EXCEPTION WHEN VALUE_ERROR THEN
+                    RAISE_APPLICATION_ERROR(-20000,'JWT token invalid');
+            END;
+            SELECT jit INTO l_session_data.user_id FROM JSON_TABLE(l_token.payload, '$' COLUMNS jit, aud);
+            l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
+            l_session_data.url:=OWA_UTIL.get_cgi_env('url');
+             RETURN l_session_data;
+        END IF;
+
         l_apex_session:=OWA_UTIL.get_cgi_env('Apex-Session');
         IF (l_apex_session IS NULL) THEN
             l_session_data.app_id:=apex_application.g_flow_id;
@@ -164,6 +188,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END IF;
 
         RETURN l_session_data;
+
         EXCEPTION WHEN VALUE_ERROR THEN RETURN l_session_data;
     END;
 
@@ -206,11 +231,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         ROLLBACK;
 
         /* Format call stack which includes procedure names */
-        l_depth:=UTL_CALL_STACK.dynamic_depth;
+        
+        l_depth:=UTL_CALL_STACK.backtrace_depth;
         l_stack:='CALL STACK'||chr(10);
         FOR i IN 1..l_depth LOOP
-            l_stack:=l_stack || 'Line: ' || UTL_CALL_STACK.unit_line(i) || ' ' || UTL_CALL_STACK.owner(i)||'.'||UTL_CALL_STACK.concatenate_subprogram(UTL_CALL_STACK.subprogram(i)) || chr(10);
+            l_stack:=l_stack || 'Line: ' || UTL_CALL_STACK.backtrace_line(i) || ' ' || UTL_CALL_STACK.backtrace_unit(i) || chr(10); --UTL_CALL_STACK.owner(i)||'.'||UTL_CALL_STACK.concatenate_subprogram(UTL_CALL_STACK.subprogram(i)) || chr(10);
         END LOOP;
+        
 
         /* Format error backtrace */
         l_stack:=l_stack || 'ERROR BACKTRACE'||chr(10);
