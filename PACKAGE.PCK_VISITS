@@ -430,10 +430,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         --l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
         --l_netlify_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
 
-        SELECT CASE WHEN l_env='TEST' THEN REPLACE(domain_name,'.','-') || '.netlify.app' ELSE domain_name END
-          INTO l_url
-          FROM website
-         WHERE id=l_website_id;
+        IF (l_session_data.url IS NOT NULL) THEN
+            l_url:=l_session_data.url;
+        eLSE
+            SELECT CASE WHEN l_env='TEST' THEN REPLACE(domain_name,'.','-') || '.netlify.app' ELSE domain_name END
+              INTO l_url
+              FROM website
+             WHERE id=l_website_id;
+        END IF;
 
         IF (l_offset=0) THEN
             pck_visits.uploadPageHits(l_website_id);
