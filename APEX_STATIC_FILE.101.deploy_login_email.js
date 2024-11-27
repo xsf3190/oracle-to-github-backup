@@ -5,7 +5,7 @@
 const callAPI = async (endpoint, method = "GET", token, data) => {
     
     let url = bodydata.resturl + endpoint + "/" + bodydata.websiteid;
-    if (method==="GET" && data) {
+    if (endpoint==="authenticate" && method==="GET" && data) {
       url+=data;
     }
 
@@ -13,6 +13,7 @@ const callAPI = async (endpoint, method = "GET", token, data) => {
     headers.append("Content-Type", "application/json");
     headers.append("url", window.location.hostname);
     headers.append("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
+    headers.append("email", login.querySelector("span.email").textContent);
     if (token) {
         headers.append("Authorization","Bearer " + token);
     }
@@ -46,12 +47,13 @@ const dialog = document.querySelector("dialog.login-email");
 const output = document.querySelector("dialog.output");
 const form = dialog.querySelector("form");
 
-
+/* SHOW LOGIN BUTTON OR EMAIL AND DROPDOWN */
 const toggleVisibility = () => {
   login.querySelector("section.dropdown").classList.toggle("visually-hidden");
   login.querySelector("button").classList.toggle("visually-hidden");
 }
 
+/* SHOW LOGIN FORM IF BUTTON CLICKED */
 login.querySelector("button").addEventListener("click", () => {
   dialog.showModal();
 });
@@ -63,41 +65,84 @@ document.querySelectorAll("dialog button.close").forEach((button) => {
     });
 });
 
-
-/* IF USER HAS PREVIOUSLY LOGGED IN SHOW THEIR EMAIL IN PLACE OF LOGIN BUtTON */
-let token = sessionStorage.getItem("token") || localStorage.getItem("refresh");
-if (token) {
+/* CHECK IF TOKEN EXPIRED */
+const expiredToken = (token) => {
+    const now = Math.floor(new Date().getTime() / 1000);
     const arrayToken = token.split(".");
-    const tokenPayload = JSON.parse(atob(arrayToken[1]));
-    if (Math.floor(new Date().getTime() / 1000) < tokenPayload?.iat) {
-        const expires = (tokenPayload.iat * 1000).toString();
-        login.querySelector("span").textContent = expires + ": " + tokenPayload.sub;
-        console.log("jti",tokenPayload.jti);
-        console.log("iat",tokenPayload.iat);
+    const parsedToken = JSON.parse(atob(arrayToken[1]));
+    if (parsedToken.exp > now) {
+        login.querySelector("span.email").textContent = parsedToken.sub;
+        login.querySelector("span.expires").textContent = new Date(parsedToken.exp*1000).toLocaleString();
+    }
+    return parsedToken.exp <= now;
+}
+
+
+/* SET VARIABLES WITH ACCESS AND REFRESH TOKENS ON PAGE LOAD */
+let access_token = sessionStorage.getItem("token");
+let refresh_token = localStorage.getItem("refresh");
+
+if (refresh_token) {
+    if (expiredToken(refresh_token)) {
+        sessionStorage.removeItem("token");
+        localStorage.removeItem("refresh");
+    } else {
         toggleVisibility();
     }
 }
 
-/* REFRESH TOKENS IF SESSION TOKEN EXPIRED */
-const checkToken = () => {
-    const arrayToken = sessionStorage.getItem("token").split(".");
-    const tokenPayload = JSON.parse(atob(arrayToken[1]));
-    if (Math.floor(new Date().getTime() / 1000) >= tokenPayload?.iat) {
-        console.log("session token expired");
+const replaceTokens = (data) => {
+    sessionStorage.setItem("token",data.token);
+    access_token = data.token;
+    localStorage.setItem("refresh",data.refresh);
+    refresh_token = data.refresh;
+}
 
+/* REFRESH TOKENS IF SESSION TOKEN HAS EXPIRED OR NOT YET SET
+** FORCE LOG OUT IF REFRESH TOKEN HAS ALSO EXPIRED 
+*/
+const checkToken = async () => {
+    let doRefresh = false;
+    if (access_token) {
+        if (expiredToken(access_token)) {
+            doRefresh = true;
+        }
+    } else {
+        doRefresh = true;
     }
+    if (!doRefresh) {
+        return;
+    }
+  
+    if (expiredToken(refresh_token)) {
+        sessionStorage.removeItem("token");
+        localStorage.removeItem("refresh");
+        toggleVisibility();
+    }
+
+    await callAPI("refresh-token", "GET", refresh_token, null)
+    .then((data) => {
+        replaceTokens(data);
+    })
+    .catch((error) => {
+        content.replaceChildren();
+        content.insertAdjacentHTML('afterbegin',error);
+        content.style.color = "red";
+        output.showModal();
+    });
 }
 
 /* RESPOND TO MENU REQUESTS */
 document.querySelectorAll(".dropdown-content button").forEach((button) => {
-  button.addEventListener("click", (e) => {
+  button.addEventListener("click", async (e) => {
       if (e.target.matches(".log-out")) {
         sessionStorage.removeItem("token");
         localStorage.removeItem("refresh");
         toggleVisibility();
       } else {
+        await checkToken();
         const content = output.querySelector("article");
-        callAPI(e.target.dataset.endpoint, "GET", token, null)
+        callAPI(e.target.dataset.endpoint, "GET", access_token, null)
         .then((data) => {
             content.replaceChildren();
             content.insertAdjacentHTML('afterbegin',data.content);
@@ -148,8 +193,7 @@ const checkAuthStatus = () => {
     callAPI("authenticate", "PUT", null, Object.fromEntries(formData))
         .then((data) => {
             if (data.token) {
-              sessionStorage.setItem("token",data.token);
-              localStorage.setItem("refresh",data.refresh);
+              replaceTokens(data);
               sendmail_msg.textContent = "Logged on!";
               sendmail_msg.style.color = "green";
               clearInterval(gIntervalId);
@@ -195,8 +239,7 @@ validate_passcode.addEventListener("click", (e) => {
     const query = "?request=passcode&user=" + e.target.dataset.userid + "&verify=" + form.querySelector("[name='passcode']").value;
     callAPI("authenticate", "GET", null, query)
         .then((data) => {
-            sessionStorage.setItem("token",data.token);
-            localStorage.setItem("refresh",data.refresh);
+            replaceTokens(data);
             validate_msg.textContent = data.message;
             validate_msg.style.color = "green";
         })
@@ -205,4 +248,3 @@ validate_passcode.addEventListener("click", (e) => {
             validate_msg.style.color = "red";
         });
 });
-
