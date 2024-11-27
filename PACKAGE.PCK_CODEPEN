@@ -45,7 +45,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     <section class="dropdown visually-hidden">
         <details>
             <summary>
-                <span></span>
+                <span class="expires"></span>
+                <span class="email"></span>
                 <svg height="1em" viewBox="0 0 32 32" preserveAspectRatio="none">
                   <rect class="top" x="0" y="0" width="32" height="6" fill="currentColor" />
                   <rect class="middle" x="0" y="13" width="32" height="6" fill="currentColor" />
@@ -111,18 +112,20 @@ q'{<dialog class="login-email">
     BEGIN
         RETURN(
 q'{<dialog class="output">
-    <header class="flex-items space-between">
-        <h2></h2>
-        <button class="button close no-focus" data-button-variant="round-icon">
-            <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
-                <use href="#cross"></use>
-            </svg>
-        </button>
-    </header>
-    <article></article>
-    <footer>
-        <hr>
-    </footer>
+    <form>
+        <header class="flex-items space-between">
+            <h2></h2>
+            <button class="button close no-focus" data-button-variant="round-icon">
+                <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
+                    <use href="#cross"></use>
+                </svg>
+            </button>
+        </header>
+        <article></article>
+        <footer>
+            <hr>
+        </footer>
+    </form>
  </dialog>}');
     END;
 
