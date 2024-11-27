@@ -197,33 +197,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         RETURN (l_html);
     END;
 
-    /*
-    ** RETURNS DROPDOWN HTML TO LOGGED ON USER
-    */
-    FUNCTION dropdownHTML(pUserId IN users.id%type) RETURN VARCHAR2 IS
-    BEGIN
-        RETURN(
-'<div class="dropdown">
-    <details>
-      <summary aria-haspopup="true" aria-expanded="false" aria-controls="topnav-menu" aria-expanded="false">
-        <span>mark.russellbrown@gmail.com</span>
-        <svg height="1em" viewBox="0 0 32 32" preserveAspectRatio="none">
-          <rect class="top" x="0" y="0" width="32" height="6" fill="currentColor" />
-          <rect class="middle" x="0" y="13" width="32" height="6" fill="currentColor" />
-          <rect class="bottom" x="0" y="26" width="32" height="6" fill="currentColor" />
-        </svg>
-      </summary>
-      <div class="dropdown-content">
-        <ul id="topnav-menu" role="menu" aria-hidden="true">
-          <li role="menuitem"><button type="button" class="button button-1">Visit details</button></li>
-          <li role="menuitem"><button type="button" class="button button-2">Blog details</button></li>
-          <li role="menuitem"><button type="button" class="button button-3">Log out</button></li>
-        </ul
-      </div>
-    </details>
- </div>');
-    END;
-
     PROCEDURE sendMessage(pSuccess IN BOOLEAN, pMessage IN VARCHAR2) IS
     BEGIN
         APEX_JSON.open_object;
@@ -242,7 +215,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_url varchar2(100);
         l_request_type VARCHAR2(10);
         l_user_id users.id%type;
-        l_jwt_enc_key website.jwt_enc_key%type;
+        l_ords_user_id user_ords_clients.id%type;
+        l_jwt_enc_key user_ords_clients.client_secret%type;
         l_token VARCHAR2(4000);
         l_digits   CONSTANT VARCHAR2(10) := '0123456789';
         l_passcode VARCHAR2(6);
@@ -250,37 +224,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_token_hash raw(32);
         l_json JSON_OBJECT_T;
         l_email_payload CLOB;
-        l_favicon_url VARCHAR2(200);
         l_sendmail_subject VARCHAR2(200);
         l_sendmail_body LONG;
         l_sendmail_link VARCHAR2(500);
         l_clob CLOB;
     BEGIN
-        FOR C IN (SELECT w.jwt_enc_key, j.email, j.url, j.request_type, NVL(u.id,0) user_id, a.cld_cloud_name, a.resource_type, a.public_id, a.format--, w.color_primary
-                    FROM asset a, website w, users u, JSON_TABLE(pBodyText, '$' COLUMNS email, url, request_type) j
-                   WHERE w.id=pWebsiteId
-                     AND u.email(+)=j.email
-                     AND a.id(+)=w.favicon_asset_id) 
+        FOR C IN (SELECT o.client_secret, j.email, j.url, j.request_type, NVL(u.id,0) user_id, NVL(o.id,0) ords_user_id
+                    FROM user_ords_clients o, users u, JSON_TABLE(pBodyText, '$' COLUMNS email, url, request_type) j
+                   WHERE o.name(+)=j.email
+                     AND u.email(+)=j.email)
         LOOP
             l_email:=C.email;
             l_url:=C.url;
             l_request_type:=C.request_type;
             l_user_id:=C.user_id;
-            l_jwt_enc_key:=C.jwt_enc_key;
-            IF (C.cld_cloud_name IS NOT NULL) THEN
-                l_favicon_url:=pck_media.getCloudinaryUrl(C.cld_cloud_name,C.resource_type,C.public_id,C.format, 96) || '.png';
-                l_favicon_url:=REPLACE(l_favicon_url,'q_auto,f_auto','f_auto,w_96,h_96');
-            END IF;
+            l_ords_user_id:=C.ords_user_id;
+            l_jwt_enc_key:=C.client_secret;
         END LOOP;
 
-        /*
-        ** Set website JWT encryption key on first use. 
-        ** Have to move this to OCI Vault later
-        */
-        IF (l_jwt_enc_key IS NULL) THEN
-            l_jwt_enc_key:=pck_core.password;
-            UPDATE website SET jwt_enc_key=l_jwt_enc_key WHERE id=pWebsiteId;
+        IF (l_ords_user_id=0) THEN
+            OAUTH.create_client(
+                p_name            => l_email,
+                p_grant_type      => 'client_credentials',
+                p_owner           => 'mark.russellbrown@gmail.com',
+                p_support_email   => 'mark.russellbrown@gmail.com',
+                p_description     => 'Provide secure secret in order to encrypt JWT tokens',
+                p_privilege_names => 'api_priv'
+            );
+            SELECT client_secret INTO l_jwt_enc_key FROM user_ords_clients WHERE name=l_email;
         END IF;
+        
 
         CASE l_request_type
             WHEN 'magic' THEN
@@ -303,7 +276,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 l_sendmail_subject:='Login to ' || l_url;
                 --l_sendmail_link:=pck_core.getRestUrl || 'authenticate/' || pWebsiteId || utl_url.escape('?request=magic&user='||l_user_id||'&verify=' ||l_token,TRUE,'UTF-8');
                 l_sendmail_link:=pck_core.getRestUrl || 'authenticate/' || pWebsiteId || '?request=magic&user='||l_user_id||'&verify=' ||l_token;
-                l_sendmail_body:=emailTemplate(l_url, l_favicon_url, l_sendmail_link);
+                l_sendmail_body:=emailTemplate(l_url, 'placeholder', l_sendmail_link);
 
             WHEN 'passcode' THEN
                 FOR i IN 1..6 LOOP
@@ -346,17 +319,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             pck_core.log_error;
     END;
 
-    PROCEDURE getKeyAndScope(pWebsiteId IN website.id%type, pEmail IN VARCHAR2, pJwtEncKey IN OUT website.jwt_enc_key%type, pUserId IN OUT users.id%type, pScope IN OUT VARCHAR2) 
+    PROCEDURE getKeyAndScope(pWebsiteId IN website.id%type, pEmail IN VARCHAR2, pJwtEncKey IN OUT user_ords_clients.client_secret%type, pUserId IN OUT users.id%type, pScope IN OUT VARCHAR2) 
     IS
         l_scope VARCHAR2(7);
-        l_jwt_enc_key website.jwt_enc_key%type;
+        l_jwt_enc_key user_ords_clients.client_secret%type;
         l_user_id users.id%type;
         l_contact_email website.contact_email%type;
     BEGIN
-        SELECT jwt_enc_key, contact_email 
-          INTO pJwtEncKey, l_contact_email
-          FROM website
-         WHERE id=pWebsiteId;
+        SELECT w.contact_email, o.client_secret
+          INTO l_contact_email, l_jwt_enc_key
+          FROM website w, user_ords_clients o
+         WHERE w.id=pWebsiteId
+           AND o.name=pEmail;
+
+        pJwtEncKey:=l_jwt_enc_key;
         
         IF (l_contact_email=pEmail) THEN 
             l_scope:='contact';
@@ -376,20 +352,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
     END;
 
-    FUNCTION getEncKey(pWebsiteId IN website.id%type) RETURN VARCHAR2 IS
-        l_jwt_enc_key website.jwt_enc_key%type;
-    BEGIN
-        SELECT jwt_enc_key INTO l_jwt_enc_key FROM website WHERE id=pWebsiteId;
-        RETURN (l_jwt_enc_key);
-    END;
-
     /*
     ** ISSUE NEW PAIR OF TOKENS AND RETURN TO CLIENT
     */
     PROCEDURE issueJWTTokens(pWebsiteId IN website.id%type, pEmail IN users.email%type) IS 
         l_new_token VARCHAR2 (4000);
         l_new_refresh VARCHAR2 (4000);
-        l_jwt_enc_key website.jwt_enc_key%type;
+        l_jwt_enc_key user_ords_clients.client_secret%type;
         l_user_id users.id%type;
         l_scope VARCHAR2(7);
     BEGIN
@@ -419,7 +388,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('token', l_new_token);
         APEX_JSON.write ('refresh', l_new_refresh);
-        APEX_JSON.write ('dropdown', dropdownHTML(l_user_id));
         APEX_JSON.close_object;
     END;
 
@@ -430,7 +398,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     PROCEDURE verifyAuthRequest(pWebsiteId IN website.id%type, pRequestType IN VARCHAR2, pUserId IN NUMBER, pVerifyData IN VARCHAR2) IS
         l_email users.email%type;
         l_user_id users.id%type;
-        l_jwt_enc_key website.jwt_enc_key%type;
+        l_jwt_enc_key user_ords_clients.client_secret%type;
         l_verify_data_hash RAW(32);
         l_token APEX_JWT.T_TOKEN;
         l_scope VARCHAR2 (5);
@@ -515,13 +483,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
     /*
     ** CREATE AND RETURN NEW ACCESS / REFRESH TOKEN PAIR
-    ** CALLED WHEN ACCESS TOKEN HAS EXPIRED
+    ** CALLED WHEN CLIENT'S ACCESS TOKEN HAS EXPIRED
     */
     PROCEDURE refreshAuthToken(pWebsiteId IN website.id%type) IS
         l_header_value VARCHAR2(4000);
-        l_bearer_token VARCHAR2(4000);
+        l_refresh_token VARCHAR2(4000);
         l_token APEX_JWT.T_TOKEN;
-        l_jwt_enc_key website.jwt_enc_key%type;
+        l_jwt_enc_key user_ords_clients.client_secret%type;
         l_user_object APEX_JSON.T_VALUES;
         l_scope VARCHAR2(7);
         l_email users.email%type;
@@ -529,142 +497,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_new_token VARCHAR2 (4000);
         l_new_refresh VARCHAR2 (4000);
     BEGIN
-        /* 
-        ** Client authenticates with Refresh token in order to obtain a new Access token
-        */
-        l_header_value := OWA_UTIL.get_cgi_env('Authorization');
+        l_header_value:=OWA_UTIL.get_cgi_env('Authorization');
         
         -- Check if the Authorization header exists and starts with 'Bearer '
         IF (l_header_value IS NULL OR INSTR(l_header_value, 'Bearer ') <> 1) THEN
-            sendMessage(FALSE,'No bearer token in Authorization header');
-            RETURN;
+            RAISE_APPLICATION_ERROR(-20000,'No bearer token in Authorization header');
         END IF;
 
-        l_bearer_token := SUBSTR(l_header_value, 8);
+        l_refresh_token:=SUBSTR(l_header_value, 8);
+        l_email:=OWA_UTIL.get_cgi_env('email');
 
-        /*
-        ** Refresh token can only be used once. Access Denied otherwise.
-        */
-        INSERT INTO jwt_refresh_token (website_id, token) VALUES (pWebsiteId, l_bearer_token);
+        getKeyAndScope(pWebsiteId, l_email, l_jwt_enc_key, l_user_id, l_scope);
 
-        --getKeyAndScope(pWebsiteId, l_email, l_jwt_enc_key, l_scope);
-        l_jwt_enc_key:=getEncKey(pWebsiteId);
-        
-        l_token:=apex_jwt.DECODE (
-            p_value   => l_bearer_token,
-            p_signature_key   => UTL_RAW.cast_to_raw (l_jwt_enc_key));
+        l_token:=apex_jwt.DECODE (p_value   => l_refresh_token, p_signature_key   => UTL_RAW.cast_to_raw (l_jwt_enc_key));
 
-        /* 
-        ** if refresh token has expired means user hasn't logged on for long time 
-        */
-        BEGIN
-            apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
-            EXCEPTION WHEN VALUE_ERROR THEN
-                sendMessage(TRUE,'login');
-                RETURN;
-        END;
+        apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
 
-        /* 
-        ** Parse the received token payload and extract relevant properties 
-        */
-        apex_json.parse (l_user_object, l_token.payload);
-        l_email:=apex_json.get_varchar2 (p_path => 'sub', p_values => l_user_object);
-        l_scope:=apex_json.get_varchar2 (p_path => 'aud', p_values => l_user_object);
-        l_user_id:=apex_json.get_varchar2 (p_path => 'jti', p_values => l_user_object);
-
-        l_new_token:=apex_jwt.ENCODE (
-            p_iss       => 'ORDS',
-            p_sub       => l_email,
-            p_aud       => l_scope,
-            p_jti       => l_user_id,
-            p_iat_ts    => current_timestamp,
-            p_exp_sec   => ACCESS_TOKEN_EXP,
-            p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
-        );
-
-        l_new_refresh:=apex_jwt.ENCODE (
-            p_iss       => 'ORDS',
-            p_sub       => l_email,
-            p_aud       => l_scope,
-            p_jti       => l_user_id,
-            p_iat_ts    => current_timestamp,
-            p_exp_sec   => REFRESH_TOKEN_EXP,
-            p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
-        );
-
-        APEX_JSON.open_object;
-        APEX_JSON.write ('success', TRUE);
-        APEX_JSON.write ('token', l_new_token);
-        APEX_JSON.write ('refresh', l_new_refresh);
-        APEX_JSON.write ('message', 'Successful token refresh');
-        APEX_JSON.close_object;
+        issueJWTTokens(pWebsiteId, l_email);
 
         EXCEPTION WHEN OTHERS THEN
             pck_core.log_error;
     END;
-
-    /*
-    ** USER MAKES AUTHENTICATED REQUEST USING THEIR JWT TOKEN
-    */
-    /*
-    PROCEDURE makeAuthRequest(pWebsiteId IN website.id%type) IS
-        l_header_value     VARCHAR2(4000);
-        l_bearer_token     VARCHAR2(4000);
-        l_token            APEX_JWT.T_TOKEN;
-        l_user_object      APEX_JSON.T_VALUES;
-        l_jwt_enc_key website.jwt_enc_key%type;
-        l_scope            VARCHAR2(200);
-        l_email            users.email%type;
-    BEGIN
-        --get the authorization header value from the request
-        l_header_value := OWA_UTIL.get_cgi_env('Authorization');
-        
-        -- Check if the Authorization header exists and starts with 'Bearer '
-        IF (l_header_value IS NULL OR INSTR(l_header_value, 'Bearer ') <> 1) THEN
-            sendMessage(FALSE,'Error - no bearer token in Authorization header');
-            RETURN;
-        END IF;
-
-        l_bearer_token := SUBSTR(l_header_value, 8);
-
-        getKeyAndScope(pWebsiteId, l_email, l_jwt_enc_key, l_scope);
-
-        --pck_core.log('DECODE');
-        l_token:=apex_jwt.DECODE (
-            p_value   => l_bearer_token,
-            p_signature_key   => UTL_RAW.cast_to_raw (l_jwt_enc_key));
-
-        --pck_core.log('VALIDATE');
-        BEGIN
-            apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
-            EXCEPTION WHEN VALUE_ERROR THEN
-                sendMessage(TRUE,'expired');
-                RETURN;
-        END;
-
-        apex_json.parse (l_user_object, l_token.payload);
-
-        IF NOT apex_json.does_exist (p_path => 'sub', p_values => l_user_object) THEN
-            sendMessage(FALSE,'No user found in JWT Token');
-            RETURN;
-        ELSIF NOT apex_json.does_exist (p_path => 'aud', p_values => l_user_object) THEN
-            sendMessage(FALSE,'No scope found in JWT Token');
-            RETURN;
-        END IF;
-
-        l_scope:=apex_json.get_varchar2 (p_path => 'aud', p_values => l_user_object);
-        l_email:=apex_json.get_varchar2 (p_path => 'sub', p_values => l_user_object);
-
-        pck_core.log(l_scope||':'||l_email);
-        APEX_JSON.open_object;
-        APEX_JSON.write ('success', TRUE);
-        APEX_JSON.write ('email', l_email);
-        APEX_JSON.write ('scope', l_scope);
-        APEX_JSON.close_object;
-
-        EXCEPTION WHEN OTHERS THEN
-            pck_core.log_error;
-    END;*/
 
     FUNCTION BASE64URL_DECODE(p_input IN varchar2) RETURN RAW DETERMINISTIC PARALLEL_ENABLE AS
         PRAGMA UDF;
