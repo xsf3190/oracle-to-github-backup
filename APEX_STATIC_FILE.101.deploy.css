@@ -581,3 +581,42 @@ pre:has(.language-sql)::after {
 .dropdown details[open] summary .bottom {
   transform: rotate(-45deg) translate(-16px, -6px);
 }
+
+/* TABLE STYLES */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--step--1);
+}
+caption {
+  padding: 0.5em;
+}
+thead {
+  background-color: var(--color-primary);
+  color: white;
+  font-weight: 600;
+}
+th, td {
+  border: 1px solid var(--color-primary);
+  padding: var(--space-3xs);
+}
+td.centered {
+  text-align: center;
+  font-weight: 900;
+}
+td.centered span {
+  display; inline-block;
+  padding: 0.5ch;
+  border-radius: 0.5ch;
+}
+.good {
+  background: chartreuse;
+}
+.needs-improvement {
+  background: orange;
+}
+.poor {
+  background: red;
+  color: white;
+}
