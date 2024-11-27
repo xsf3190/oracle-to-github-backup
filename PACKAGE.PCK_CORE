@@ -138,12 +138,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_auth_header VARCHAR2(1000);
         l_bearer_token VARCHAR2(1000);
         l_token APEX_JWT.T_TOKEN;
-        l_jwt_enc_key website.jwt_enc_key%type;
+        l_email users.email%type;
+        l_jwt_enc_key user_ords_clients.client_secret%type;
     BEGIN
         l_auth_header := OWA_UTIL.get_cgi_env('Authorization');
+        l_email := OWA_UTIL.get_cgi_env('email');
         IF (INSTR(l_auth_header, 'Bearer')=1) THEN
             l_bearer_token := SUBSTR(l_auth_header, 8);
-            SELECT jwt_enc_key INTO l_jwt_enc_key FROM website WHERE id=pWebsiteId;
+            SELECT client_secret INTO l_jwt_enc_key FROM user_ords_clients WHERE name=l_email;
             l_token:=apex_jwt.DECODE(p_value => l_bearer_token, p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key));
             BEGIN
                 apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
