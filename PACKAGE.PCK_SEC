@@ -192,7 +192,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 </html>';
     BEGIN
         l_html:=REPLACE(l_html,'#WEBSITE#',pWebsite);
-        l_html:=REPLACE(l_html,'#FAVICON#','https://adfreesites.com/favicon.png');
+        l_html:=REPLACE(l_html,'#FAVICON#',pFavicon);
         l_html:=REPLACE(l_html,'#HREF#',pHref);
         RETURN (l_html);
     END;
@@ -274,9 +274,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 END IF;
 
                 l_sendmail_subject:='Login to ' || l_url;
-                --l_sendmail_link:=pck_core.getRestUrl || 'authenticate/' || pWebsiteId || utl_url.escape('?request=magic&user='||l_user_id||'&verify=' ||l_token,TRUE,'UTF-8');
                 l_sendmail_link:=pck_core.getRestUrl || 'authenticate/' || pWebsiteId || '?request=magic&user='||l_user_id||'&verify=' ||l_token;
-                l_sendmail_body:=emailTemplate(l_url, 'placeholder', l_sendmail_link);
+                l_sendmail_body:=emailTemplate(l_url, 'https://adfreesites.com/favicon.' || pWebsiteId || '.png', l_sendmail_link);
 
             WHEN 'passcode' THEN
                 FOR i IN 1..6 LOOP
