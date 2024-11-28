@@ -367,7 +367,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_module_html:=NULL;
             l_script_html:=NULL;
 
-            FOR C IN (SELECT column_value FROM TABLE(l_labels(i).modules)) LOOP
+            FOR C IN (SELECT column_value FROM TABLE(l_labels(i).modules) ORDER BY DECODE(column_value,'deploy_login_email.min.js',1,'web-vitals',2,3)) LOOP
                 l_module_html:=l_module_html || '<link rel="modulepreload" href="/' || C.column_value || '">' || chr(10);
                 l_script_html:=l_script_html || '<script src="/' || C.column_value || '" type="module"></script>' || chr(10);
                 IF (C.column_value NOT MEMBER OF l_jscode) THEN
@@ -458,15 +458,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_files.put(l_jscode(i), l_sha1);
             END LOOP;
         END LOOP;
-
-        logDeployment(pWebsiteId, pSiteId, 'Building FAVICON');
-        apex_web_service.clear_request_headers;
-        l_favicon_download:=apex_web_service.make_rest_request_b(p_url=>REPLACE(l_favicon_url,'.svg','.png'), p_http_method=>'GET');
-        l_sha1:=LOWER(dbms_crypto.hash(src => l_favicon_download, typ => dbms_crypto.hash_sh1));
-        l_deploy_files(l_sha1).file_name:='favicon.png';
-        l_deploy_files(l_sha1).file_content_b:=l_favicon_download;
-        l_files.put('favicon.png', l_sha1);
-
+        
         logDeployment(pWebsiteId, pSiteId, 'Building FONT ' || l_font_filename || ' (' || LENGTH(l_chars) || ' distinct characters)');
         apex_web_service.clear_request_headers;
         apex_web_service.g_request_headers(1).name := 'User-Agent';
@@ -483,6 +475,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_name:=l_font_filename;
         l_deploy_files(l_sha1).file_content_b:=l_font_download;
         l_files.put(l_font_filename, l_sha1);
+
+        /* adfreesites.com is the domain registered with AWS  SES for sending emails to website clients. All favicons included in emails must be hosted at adfreesites to avoid rejections */
+        IF (INSTR(l_ssl_url,'adfreesites')>0) THEN
+            logDeployment(pWebsiteId, pSiteId, 'Building website favicons to be sent in branded emails from adfreesites.com');
+            FOR C IN (SELECT w.id, w.domain_name, a.cld_cloud_name, a.resource_type, a.public_id, a.format 
+                        FROM website w, asset a
+                       WHERE w.favicon_asset_id=a.id) 
+            LOOP
+                logDeployment(pWebsiteId, pSiteId, 'Building favicon for ' || C.domain_name);
+                l_favicon_url:=pck_media.getCloudinaryUrl(C.cld_cloud_name,C.resource_type,C.public_id,C.format, 96) || '.png';
+                apex_web_service.clear_request_headers;
+                l_favicon_download:=apex_web_service.make_rest_request_b(p_url=>l_favicon_url, p_http_method=>'GET');
+                l_sha1:=LOWER(dbms_crypto.hash(src => l_favicon_download, typ => dbms_crypto.hash_sh1));
+                l_deploy_files(l_sha1).file_name:='favicon.' || C.id || '.png';
+                l_deploy_files(l_sha1).file_content_b:=l_favicon_download;
+                l_files.put('favicon.' || C.id || '.png', l_sha1);
+            END LOOP;
+        END IF;
 
         l_json.put('files',l_files);
 
