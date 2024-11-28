@@ -423,7 +423,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
         IF (NOT pEmail) THEN
             l_session_data:=pck_core.getSessionData(l_website_id);
-            pck_core.log(l_session_data.timezone || ':' || l_session_data.url || '' || l_session_data.user_id);
+            pck_core.log(l_session_data.timezone || ':' || l_session_data.url || ':' || l_session_data.user_id);
             l_time_zone:=l_session_data.timezone;
         END IF;
         
@@ -521,8 +521,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     l_content:=l_content || '<button type="button" class="more-visits" data-total="' || l_nb_visit || '" data-offset="' || l_offset || '" data-rows="' || l_rows || '">More >></button>';
                 END IF;
             END IF;
-            l_content:=l_content || '</p>';
-            l_content:=l_content || '<hr>';
         ELSE
             apex_json.open_object; 
             apex_json.write('success', TRUE);
@@ -530,44 +528,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             apex_json.write('progress', 'Showing last ' || TO_CHAR(l_offset+n) || ' visits');
             apex_json.close_object;
             RETURN;
-        END IF;
-
-        /* 
-        ** Create page analysis report if multi-page website
-        */
-        n:=0;
-        l_sql:='SELECT TO_CHAR(visit_date at time zone ''' || l_time_zone || ''',''dd Mon yyyy fmhh24:fmmi'') "Page Views per Visit",';
-        FOR C1 IN (SELECT navigation_label FROM website_article WHERE website_id=l_website_id ORDER BY display_order) LOOP
-            n:=n+1;
-            l_sql:=l_sql || 'MAX(DECODE(navigation_label,''' || C1.navigation_label || ''',duration_visible)) "' || C1.navigation_label || '",';
-        END LOOP;
-        IF (n>1) THEN
-            l_sql:=RTRIM(l_sql,',') ||
-            'FROM 
-                (
-                WITH articles AS
-                    (
-                    SELECT navigation_label, article_id 
-                    FROM website_article WHERE website_id=:B1
-                    UNION ALL
-                    SELECT wa.navigation_label, a.id 
-                    FROM website_article wa, article a
-                    WHERE a.parent_id=wa.article_id
-                    AND wa.website_id=:B1
-                    )
-                SELECT ph.visit_date, ph.ip_address, a.navigation_label, SUM(ph.duration_visible) duration_visible
-                  FROM articles a, page_hit ph
-                 WHERE ph.website_id=:B1
-                   AND ph.url=''' || l_url || '''
-                   AND ph.article_id=a.article_id
-                 GROUP BY ph.visit_date, ph.ip_address, a.navigation_label
-                )
-            GROUP  BY visit_date
-            ORDER BY visit_date DESC
-            OFFSET :B2 ROWS
-            FETCH FIRST '|| l_rows || ' ROWS ONLY';
-
-            l_content:=l_content || sql2Html(l_sql, l_website_id, l_offset);
         END IF;
 
         IF (pEmail) THEN
@@ -580,6 +540,67 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         END IF;
 
         EXCEPTION WHEN OTHERS THEN pck_core.log_error;
+    END;
+
+    /* 
+    ** Create page analysis report if multi-page website
+    */
+    PROCEDURE getPageVisits(pWebsiteId IN website.id%type) IS
+        n PLS_INTEGER;
+        l_sql LONG;
+        l_session_data pck_core.session_data_rt;
+        l_rows CONSTANT PLS_INTEGER:=10;
+        l_offset PLS_INTEGER:=0;
+    BEGIN
+        l_session_data:=pck_core.getSessionData(pWebsiteId);
+        pck_core.log(l_session_data.timezone || ':' || l_session_data.url || ':' || l_session_data.user_id);
+
+        n:=0;
+        l_sql:='SELECT TO_CHAR(visit_date at time zone ''' || l_session_data.timezone || ''',''dd Mon yyyy fmhh24:fmmi'') "Page Views per Visit",';
+        FOR C IN (SELECT navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
+            n:=n+1;
+            l_sql:=l_sql || 'MAX(DECODE(navigation_label,''' || C.navigation_label || ''',duration_visible)) "' || C.navigation_label || '",';
+        END LOOP;
+
+        IF (n=0) THEN
+            apex_json.open_object; 
+            apex_json.write('success', TRUE);
+            apex_json.write('heading', '<p>This Website only has one page</p>');
+            apex_json.close_object;
+            RETURN;
+        END IF;
+
+        l_sql:=RTRIM(l_sql,',') ||
+        'FROM 
+            (
+            WITH articles AS
+                (
+                SELECT navigation_label, article_id 
+                FROM website_article WHERE website_id=:B1
+                UNION ALL
+                SELECT wa.navigation_label, a.id 
+                FROM website_article wa, article a
+                WHERE a.parent_id=wa.article_id
+                AND wa.website_id=:B1
+                )
+            SELECT ph.visit_date, ph.ip_address, a.navigation_label, SUM(ph.duration_visible) duration_visible
+              FROM articles a, page_hit ph
+             WHERE ph.website_id=:B1
+               AND ph.url=''' || l_session_data.url || '''
+               AND ph.article_id=a.article_id
+             GROUP BY ph.visit_date, ph.ip_address, a.navigation_label
+            )
+        GROUP  BY visit_date
+        ORDER BY visit_date DESC
+        OFFSET :B2 ROWS
+        FETCH FIRST '|| l_rows || ' ROWS ONLY';
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('heading', '<p>This Website only has one page</p>');
+        apex_json.write('article', sql2Html(l_sql, pWebsiteId, l_offset));
+        apex_json.close_object;
+
     END;
 
     /*
