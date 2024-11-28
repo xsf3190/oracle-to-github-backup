@@ -138,8 +138,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_auth_header VARCHAR2(1000);
         l_bearer_token VARCHAR2(1000);
         l_token APEX_JWT.T_TOKEN;
+        l_token_object APEX_JSON.T_VALUES;
         l_email users.email%type;
         l_jwt_enc_key user_ords_clients.client_secret%type;
+        
     BEGIN
         l_auth_header := OWA_UTIL.get_cgi_env('Authorization');
         l_email := OWA_UTIL.get_cgi_env('email');
@@ -152,7 +154,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 EXCEPTION WHEN VALUE_ERROR THEN
                     RAISE_APPLICATION_ERROR(-20000,'JWT token invalid');
             END;
-            SELECT jit INTO l_session_data.user_id FROM JSON_TABLE(l_token.payload, '$' COLUMNS jit, aud);
+
+            apex_json.parse(l_token_object, l_token.payload);
+            l_session_data.user_id:=apex_json.get_number (p_path => 'jti', p_values => l_token_object);
             l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
             l_session_data.url:=OWA_UTIL.get_cgi_env('url');
              RETURN l_session_data;
@@ -343,6 +347,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     */ 
     FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pDeploy IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2 IS
         l_fluid_types fluid_type_t;
+
+        TYPE t_rgb_arr IS VARRAY(3) OF PLS_INTEGER;
+        l_rgb_arr t_rgb_arr:=t_rgb_arr();
+
+        TYPE t_rgb_tint_arr IS VARRAY(3) OF VARCHAR2(6);
+        l_rgb_light VARCHAR2(6);
+        l_rgb_lighter VARCHAR2(6);
+        l_rgb_lightest VARCHAR2(6);
+        
         l_css_file apex_application_static_files.file_name%type;
         l_root_css LONG;
         l_deploy_css CLOB;
@@ -367,7 +380,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             '--max-width: ' || C.max_width_px || 'px;' || 
             '--color-text: ' || C.color_text || ';' || 
             '--color-background: ' || C.color_background || ';' || 
-            '--color-primary: ' || C.color_primary || ';' ||
+            '--color-primary: ' || C.color_primary || ';';
+
+            FOR i IN 1..3 LOOP
+                l_rgb_arr.EXTEND;
+                l_rgb_arr(l_rgb_arr.LAST):=TO_NUMBER(SUBSTR(SUBSTR(C.color_primary,2),i+(i-1),2),'xx');
+            END LOOP;
+
+            FOR i IN l_rgb_arr.FIRST .. l_rgb_arr.LAST LOOP
+                l_rgb_light:=l_rgb_light|| TO_CHAR(l_rgb_arr(i) + (0.25 * (255 - l_rgb_arr(i))),'fmxx');
+            END LOOP;
+            
+            FOR i IN l_rgb_arr.FIRST .. l_rgb_arr.LAST LOOP
+                l_rgb_lighter:=l_rgb_lighter|| TO_CHAR(l_rgb_arr(i) + (0.5 * (255 - l_rgb_arr(i))),'fmxx');
+            END LOOP;
+
+            FOR i IN l_rgb_arr.FIRST .. l_rgb_arr.LAST LOOP
+                l_rgb_lightest:=l_rgb_lightest|| TO_CHAR(l_rgb_arr(i) + (0.75 * (255 - l_rgb_arr(i))),'fmxx');
+            END LOOP;
+
+            l_root_css:=l_root_css || 
+            '--color-primary-light: #' || l_rgb_light || ';' ||
+            '--color-primary-lighter: #' || l_rgb_lighter || ';' ||
+            '--color-primary-lightest: #' || l_rgb_lightest || ';' || 
             '}';
 
             IF (C.css IS NULL) THEN
