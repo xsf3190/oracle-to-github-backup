@@ -2,8 +2,20 @@
 ** LOGIN THROUGH EMAIL. REQUESTS FOR PASSCODE AND MAGIC LINK SUPPORTED.
 */
 
-const callAPI = async (endpoint, method = "GET", token, data) => {
-    
+/* SECURE ACCESS IS HANDLED USING JWT TOKENS */
+let access_token = sessionStorage.getItem("token");
+let refresh_token = localStorage.getItem("refresh");
+
+const bodydata = document.body.dataset;
+const dialog = document.querySelector("dialog.login-email");
+const output = document.querySelector("dialog.output");
+const form = dialog.querySelector("form");
+const email = document.querySelector(".login .email");
+const expires = document.querySelector(".login .expires");
+const login = document.querySelector(".dropdown button.log-in");
+
+
+const callAPI = async (endpoint, method = "GET", token, data) => {    
     let url = bodydata.resturl + endpoint + "/" + bodydata.websiteid;
     if (endpoint==="authenticate" && method==="GET" && data) {
       url+=data;
@@ -13,7 +25,7 @@ const callAPI = async (endpoint, method = "GET", token, data) => {
     headers.append("Content-Type", "application/json");
     headers.append("url", window.location.hostname);
     headers.append("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
-    headers.append("email", login.querySelector("span.email").textContent);
+    headers.append("email", email.textContent);
     if (token) {
         headers.append("Authorization","Bearer " + token);
     }
@@ -40,24 +52,6 @@ const callAPI = async (endpoint, method = "GET", token, data) => {
     return(result);
 }
 
-
-const bodydata = document.body.dataset;
-const login = document.querySelector(".login");
-const dialog = document.querySelector("dialog.login-email");
-const output = document.querySelector("dialog.output");
-const form = dialog.querySelector("form");
-
-/* SHOW LOGIN BUTTON OR EMAIL AND DROPDOWN */
-const toggleVisibility = () => {
-  login.querySelector("section.dropdown").classList.toggle("visually-hidden");
-  login.querySelector("button").classList.toggle("visually-hidden");
-}
-
-/* SHOW LOGIN FORM IF BUTTON CLICKED */
-login.querySelector("button").addEventListener("click", () => {
-  dialog.showModal();
-});
-
 /* CLOSE ALL DIALOGS CONSISTENTLY */
 document.querySelectorAll("dialog button.close").forEach((button) => {
     button.addEventListener("click", (e) => {
@@ -67,57 +61,47 @@ document.querySelectorAll("dialog button.close").forEach((button) => {
 
 /* CHECK IF TOKEN EXPIRED */
 const expiredToken = (token) => {
+    if (!token) {
+        return true;
+    }
     const now = Math.floor(new Date().getTime() / 1000);
     const arrayToken = token.split(".");
     const parsedToken = JSON.parse(atob(arrayToken[1]));
-    if (parsedToken.exp > now) {
-        login.querySelector("span.email").textContent = parsedToken.sub;
-        login.querySelector("span.expires").textContent = new Date(parsedToken.exp*1000).toLocaleString();
-    }
     return parsedToken.exp <= now;
 }
 
-
-/* SET VARIABLES WITH ACCESS AND REFRESH TOKENS ON PAGE LOAD */
-let access_token = sessionStorage.getItem("token");
-let refresh_token = localStorage.getItem("refresh");
-
-if (refresh_token) {
-    if (expiredToken(refresh_token)) {
-        sessionStorage.removeItem("token");
-        localStorage.removeItem("refresh");
-    } else {
-        toggleVisibility();
-    }
-}
-
+/* 
+** REPLACE NEW TOKENS IN STORAGE AND MEMORY. UPDATE UI
+*/
 const replaceTokens = (data) => {
     sessionStorage.setItem("token",data.token);
     access_token = data.token;
     localStorage.setItem("refresh",data.refresh);
     refresh_token = data.refresh;
+  
+    const arrayToken = refresh_token.split(".");
+    const parsedToken = JSON.parse(atob(arrayToken[1]));
+    email.textContent = parsedToken.sub;
+    expires.textContent = new Date(parsedToken.exp*1000).toLocaleString();
+  
+    if (login) {
+        login.classList.toggle("log-in");
+        login.classList.toggle("log-out");
+        login.textContent = "Log Out";
+    }
 }
 
-/* REFRESH TOKENS IF SESSION TOKEN HAS EXPIRED OR NOT YET SET
-** FORCE LOG OUT IF REFRESH TOKEN HAS ALSO EXPIRED 
+/* 
+** CHECK IF TOKEN HAS EXPIRED
 */
 const checkToken = async () => {
-    let doRefresh = false;
-    if (access_token) {
-        if (expiredToken(access_token)) {
-            doRefresh = true;
-        }
-    } else {
-        doRefresh = true;
-    }
-    if (!doRefresh) {
+    if (!expiredToken(access_token)) {
         return;
     }
   
     if (expiredToken(refresh_token)) {
-        sessionStorage.removeItem("token");
-        localStorage.removeItem("refresh");
-        toggleVisibility();
+        document.querySelector(".log-out").click();
+        return;
     }
 
     await callAPI("refresh-token", "GET", refresh_token, null)
@@ -132,20 +116,38 @@ const checkToken = async () => {
     });
 }
 
-/* RESPOND TO MENU REQUESTS */
+/* 
+** RESPOND TO DROPDOWN MENU REQUESTS
+*/
 document.querySelectorAll(".dropdown-content button").forEach((button) => {
   button.addEventListener("click", async (e) => {
-      if (e.target.matches(".log-out")) {
+      if (e.target.matches(".log-in")) {
+        dialog.showModal();
+      } else if (e.target.matches(".log-out")) {
         sessionStorage.removeItem("token");
         localStorage.removeItem("refresh");
-        toggleVisibility();
+        email.textContent = "";
+        expires.textContent = "";
+        e.target.classList.toggle("log-in");
+        e.target.classList.toggle("log-out");
+        e.target.textContent = "Log In";
       } else {
+        if (login.matches(".log-in")) {
+            dialog.showModal();
+            return;
+        }
         await checkToken();
-        const content = output.querySelector("article");
+        const header = output.querySelector("header>h2");
+        const article = output.querySelector("article");
+        const footer = output.querySelector("footer");
         callAPI(e.target.dataset.endpoint, "GET", access_token, null)
         .then((data) => {
-            content.replaceChildren();
-            content.insertAdjacentHTML('afterbegin',data.content);
+            header.replaceChildren();
+            header.insertAdjacentHTML('afterbegin',data.header);
+            article.replaceChildren();
+            article.insertAdjacentHTML('afterbegin',data.article);
+            footer.replaceChildren();
+            footer.insertAdjacentHTML('afterbegin',data.footer);
             output.showModal();
         })
         .catch((error) => {
@@ -159,28 +161,85 @@ document.querySelectorAll(".dropdown-content button").forEach((button) => {
     });
 })
 
+/*
+** VALIDATE EMAIL INPUT BY USER
+*/
 const sendmail_magic = form.querySelector(".sendmail-magic"),
       sendmail_passcode = form.querySelector(".sendmail-passcode"),
       sendmail_msg = form.querySelector(".sendmail-result");
 
 let gIntervalId;
 
+const emailInput = document.getElementById("emailInput");
+const emailError = document.querySelector("#emailInput + span");
+
+emailInput.addEventListener("input", (event) => {
+  if (emailInput.validity.valid) {
+    emailError.textContent = ""; // Remove the message content
+  } else {
+    // If there is still an error, show the correct error
+    showError();
+  }
+});
+
 /*
-** USER REQUESTS MAGIC LINK TO BE EMAILED. 
+** VALIDATE PASSCODE INPUT BY USER
+*/
+const passcodeInput = document.getElementById("passcodeInput");
+const passcodeError = document.querySelector("#passcodeInput + span");
+
+passcodeInput.addEventListener("input", (event) => {
+  if (passcodeInput.validity.valid) {
+    passcodeInput.textContent = ""; // Remove the message content
+  } else {
+    // If there is still an error, show the correct error
+    showError();
+  }
+});
+
+
+const showError = () => {
+    let errors = false;
+    if (emailInput.validity.valueMissing) {
+        emailError.textContent = "You need to enter an email address.";
+        errors = true;
+    } else if (emailInput.validity.typeMismatch) {
+        emailError.textContent = "Entered value needs to be an email address.";
+        errors = true;
+    }
+
+    emailError.style.color = errors ? "red" : "green";
+  
+    errors = false;
+      
+    if (passcodeInput.validity.patternMismatch) {
+        passcodeError.textContent = "Passcode is 6-digits.";
+        errors = true;
+    }
+    
+    passcodeError.style.color = errors ? "red" : "green";
+}
+
+/*
+** USER REQUESTS MAGIC LINK TO BE EMAILED TO THEIR INBOX.
 ** WHEN USER CLICKS MAGIC LINK THEIR USER RECORD IN DATABASE IS UPDATED
-** POLL DATABASE FOR SUCCESSFUL AUTHENTICATION
+** WE POLL DATABASE FOR SUCCESSFUL AUTHENTICATION
 */
 sendmail_magic.addEventListener("click", (e) => {
-    e.preventDefault();
+    if (!emailInput.validity.valid) {
+        showError();
+        return;
+    }
     form.querySelector("[name='url']").value = window.location.hostname;
     form.querySelector("[name='request_type']").value = "magic";
     const formData = new FormData(form);
-    callAPI("authenticate", "POST", null, Object.fromEntries(formData))
+    const formObj = Object.fromEntries(formData);
+    callAPI("authenticate", "POST", null, formObj)
         .then((data) => {
             sendmail_msg.textContent = data.message;
             sendmail_msg.style.color = "green";
             clearInterval(gIntervalId);
-            gIntervalId = setInterval(checkAuthStatus,3000);
+            gIntervalId = setInterval(checkAuthStatus,3000, formObj);
         })
         .catch((error) => {
             sendmail_msg.textContent = error;
@@ -188,15 +247,16 @@ sendmail_magic.addEventListener("click", (e) => {
         });
 });
 
-const checkAuthStatus = () => {
-    const formData = new FormData(form);
-    callAPI("authenticate", "PUT", null, Object.fromEntries(formData))
+const checkAuthStatus = (formObj) => {
+    callAPI("authenticate", "PUT", null, formObj)
         .then((data) => {
             if (data.token) {
               replaceTokens(data);
               sendmail_msg.textContent = "Logged on!";
               sendmail_msg.style.color = "green";
               clearInterval(gIntervalId);
+              sendmail_magic.classList.add("visually-hidden");
+              sendmail_passcode.classList.add("visually-hidden");
             } else if (data.expired) {
               sendmail_msg.textContent = "Expired";
               sendmail_msg.style.color = "red";
@@ -210,24 +270,29 @@ const checkAuthStatus = () => {
         });
 }
 
+/* 
+**  USER REQUESTS 6-DIGIT PASSCODE TO BE SENT TO THEIR iNBOX
+*/
 const validate_passcode =  form.querySelector(".validate-passcode"),
       validate_msg = form.querySelector(".passcode-result");
 
-/* Submit email address - hide send email buttons and display elements to enter and validate passcode */
 sendmail_passcode.addEventListener("click", (e) => {
-    e.preventDefault();
+    if (!emailInput.validity.valid) {
+        showError();
+        return;
+    }
     form.querySelector("[name='url']").value = window.location.hostname;
     form.querySelector("[name='request_type']").value = "passcode";
     const formData = new FormData(form);
     callAPI("authenticate", "POST", null, Object.fromEntries(formData))
         .then((data) => {
             sendmail_msg.textContent = data.message;
-            sendmail_magic.classList.add("visually-hidden");
-            sendmail_passcode.classList.add("visually-hidden");
-            validate_passcode.dataset.userid = data.userid;
             form.querySelectorAll(".visually-hidden").forEach((ele) => {
                 ele.classList.remove("visually-hidden");
             });
+            sendmail_magic.classList.add("visually-hidden");
+            sendmail_passcode.classList.add("visually-hidden");
+            validate_passcode.dataset.userid = data.userid;
         })
         .catch((error) => {
             sendmail_msg.textContent = error;
@@ -235,16 +300,40 @@ sendmail_passcode.addEventListener("click", (e) => {
         });
 });
 
+/* 
+**  CHECK PASSCODE ENTERED BY USER MATCHES PASSCODE SENT TO THEIR INBOX
+*/
 validate_passcode.addEventListener("click", (e) => {
+    if (!emailInput.validity.valid || !passcodeInput.validity.valid) {
+        showError();
+        return;
+    }
+  
     const query = "?request=passcode&user=" + e.target.dataset.userid + "&verify=" + form.querySelector("[name='passcode']").value;
     callAPI("authenticate", "GET", null, query)
         .then((data) => {
             replaceTokens(data);
-            validate_msg.textContent = data.message;
+            validate_msg.textContent = "Logged In!";
             validate_msg.style.color = "green";
+            validate_passcode.classList.add("visually-hidden");
         })
         .catch((error) => {
             validate_msg.textContent = error;
             validate_msg.style.color = "red";
         });
 });
+
+/* 
+** CHECK REFRESH TOKEN ON PAGE LOAD
+*/
+if (expiredToken(refresh_token)) {
+    console.log("Not logged in or Refresh Token expired");
+} else {
+    const arrayToken = refresh_token.split(".");
+    const parsedToken = JSON.parse(atob(arrayToken[1]));
+    email.textContent = parsedToken.sub;
+    expires.textContent = new Date(parsedToken.exp*1000).toLocaleString();
+    login.classList.toggle("log-in");
+    login.classList.toggle("log-out");
+    login.textContent = "Log Out";
+}
