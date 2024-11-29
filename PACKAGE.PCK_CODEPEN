@@ -41,27 +41,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     BEGIN
         RETURN(
 '<aside class="login flex-items justify-end no-gap">
-    <button type="button" class="button">Login</button>
-    <section class="dropdown visually-hidden">
-        <details>
-            <summary>
-                <span class="expires"></span>
-                <span class="email"></span>
-                <svg height="1em" viewBox="0 0 32 32" preserveAspectRatio="none">
-                  <rect class="top" x="0" y="0" width="32" height="6" fill="currentColor" />
-                  <rect class="middle" x="0" y="13" width="32" height="6" fill="currentColor" />
-                  <rect class="bottom" x="0" y="26" width="32" height="6" fill="currentColor" />
-                </svg>
-            </summary>
-            <ul class="dropdown-content">
-                <li><button type="button" class="button" data-endpoint="visits">Visit details</button></li>
-                <li><button type="button" class="button" data-endpoint="visits">Blog details</button></li>
-                <li><button type="button" class="button log-out">Log out</button></li>
-            </ul>
-        </details>
-    </section>
- </aside>'
-        );
+  <section  class="dropdown">
+    <details>
+      <summary>
+        <svg height="1em" viewBox="0 0 32 32" preserveAspectRatio="none">
+          <rect class="top" x="0" y="0" width="32" height="6" fill="currentColor" />
+          <rect class="middle" x="0" y="13" width="32" height="6" fill="currentColor" />
+          <rect class="bottom" x="0" y="26" width="32" height="6" fill="currentColor" />
+        </svg>
+      </summary>
+      <ul class="dropdown-content">
+        <li><small class="email"></small></li>
+        <li class="align-center"><small class="expires"></small></li>
+        <li><button type="button" class="button" data-endpoint="visits">Website Visits</button></li>
+        <li><button type="button" class="button" data-endpoint="visits" data-query="?report=page">Page Visits</button></li>
+        <li><button type="button" class="button" data-endpoint="visits">Blog Visits</button></li>
+        <li><button type="button" class="button log-in">Log In</button></li>
+      </ul>
+    </details>
+  </section>
+</aside>');
     END;
 
     /*
@@ -98,7 +97,7 @@ q'{<dialog class="login-email">
             <menu class="flex-items">
                 <button class="button sendmail-magic" type="button">Send Magic Link</button>
                 <button class="button sendmail-passcode" type="button">Send Passcode</button>
-                <button class="button validate-passcode visually-hidden" type="button">Login</button>
+                <button class="button validate-passcode visually-hidden" type="button">Submit Passcode</button>
             </menu>
         </footer>
     </form>
@@ -122,8 +121,7 @@ q'{<dialog class="output">
             </button>
         </header>
         <article></article>
-        <footer>
-            <hr>
+        <footer class="flex-items space-between">
         </footer>
     </form>
  </dialog>}');
@@ -138,7 +136,7 @@ q'{<dialog class="output">
                     l_nav_labels:=
                     '<nav aria-label="Main Navigation" class="content-grid">';
                     l_nav_labels:=l_nav_labels || 
-                        '<div class="flex-items">';
+                        '<div class="flex-items space-around">';
                 END IF;
                 l_nav_labels:=l_nav_labels || 
                     '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="button"' || 
