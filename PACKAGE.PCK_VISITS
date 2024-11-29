@@ -4,6 +4,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE getVisits(pId IN VARCHAR2, pEmail IN BOOLEAN DEFAULT FALSE);
     --
+    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2);
+    --
     PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB);
     --
     PROCEDURE uploadIpLookup;
@@ -402,6 +404,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_env VARCHAR2(4);
         l_url page_hit.url%type;
         l_content CLOB;
+        l_header VARCHAR2(1000);
+        l_footer VARCHAR2(1000);
         l_rating VARCHAR2(100);
         l_sql LONG;
         l_session_data pck_core.session_data_rt;
@@ -449,14 +453,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                    AND url=l_url
             ) LOOP
                 l_nb_visit:=C.nb_visit;
-                l_content:='<p>Received <strong>' || C.nb_visit || '</strong> visits from <strong>' || C.nb_distinct_ip || '</strong> distinct IP';
-                IF (C.last_hit>C.first_hit+1) THEN
-                    l_content:=l_content || ' between <strong>' || TO_CHAR(C.first_hit,'dd Mon yyyy') || '</strong> and <strong>' || TO_CHAR(C.last_hit,'dd Mon yyyy') || '</strong>';
-                END IF;
-                l_content:=l_content || '</p>';
+                l_header:='<strong>' || C.nb_visit || '</strong> visits from <strong>' || C.nb_distinct_ip || '</strong> distinct IP';
             END LOOP;
 
-            l_content:=l_content ||
+            l_content:=
             '<table role="presentation">
                 <thead>
                     <tr>
@@ -514,28 +514,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         END LOOP;
 
         IF (l_offset=0) THEN
-            l_content:=l_content || '</tbody></table><p class="button-container">';
+            l_content:=l_content || '</tbody></table>';
             If (n=l_rows) THEN
-                l_content:=l_content || '<span>Showing last ' || n || ' visits</span>';
+                l_footer:='<span>Showing last ' || n || ' visits</span>';
                 IF (NOT pEmail AND l_nb_visit>l_rows) THEN 
-                    l_content:=l_content || '<button type="button" class="more-visits" data-total="' || l_nb_visit || '" data-offset="' || l_offset || '" data-rows="' || l_rows || '">More >></button>';
+                    l_footer:=l_footer || '<button type="button" class="more-visits" data-total="' || l_nb_visit || '" data-offset="' || l_offset || '" data-rows="' || l_rows || '">More >></button>';
                 END IF;
             END IF;
         ELSE
             apex_json.open_object; 
             apex_json.write('success', TRUE);
-            apex_json.write('visits', l_content);
+            apex_json.write('visits', l_header || l_content || l_footer);
             apex_json.write('progress', 'Showing last ' || TO_CHAR(l_offset+n) || ' visits');
             apex_json.close_object;
             RETURN;
         END IF;
 
         IF (pEmail) THEN
+            l_content:=l_header || l_content || l_footer;
             sendmail(l_website_id, l_content);
         ELSE
             apex_json.open_object; 
             apex_json.write('success', TRUE);
             apex_json.write('content', l_content);
+            apex_json.write('header', l_header);
+            apex_json.write('article', l_content);
+            apex_json.write('footer', l_footer);
             apex_json.close_object;
         END IF;
 
@@ -545,7 +549,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     /* 
     ** Create page analysis report if multi-page website
     */
-    PROCEDURE getPageVisits(pWebsiteId IN website.id%type) IS
+    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2) IS
         n PLS_INTEGER;
         l_sql LONG;
         l_session_data pck_core.session_data_rt;
@@ -597,8 +601,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
-        apex_json.write('heading', '<p>This Website only has one page</p>');
+        apex_json.write('heading', 'This Website only has one page');
         apex_json.write('article', sql2Html(l_sql, pWebsiteId, l_offset));
+        apex_json.write('footer', 'coucou');
         apex_json.close_object;
 
     END;
