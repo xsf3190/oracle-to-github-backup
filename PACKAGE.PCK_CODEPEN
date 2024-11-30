@@ -53,9 +53,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
       <ul class="dropdown-content">
         <li><small class="email"></small></li>
         <li class="align-center"><small class="expires"></small></li>
-        <li><button type="button" class="button" data-endpoint="visits">Website Visits</button></li>
-        <li><button type="button" class="button" data-endpoint="visits" data-query="?report=page">Page Visits</button></li>
-        <li><button type="button" class="button" data-endpoint="visits">Blog Visits</button></li>
+        <li><button type="button" class="button" data-endpoint="visits" data-report="website">Website Visits</button></li>
+        <li><button type="button" class="button" data-endpoint="visits" data-report="page">Page Visits</button></li>
+        <li><button type="button" class="button" data-endpoint="visits" data-report="blog">Blog Visits</button></li>
         <li><button type="button" class="button log-in">Log In</button></li>
       </ul>
     </details>
@@ -122,6 +122,8 @@ q'{<dialog class="output">
         </header>
         <article></article>
         <footer class="flex-items space-between">
+            <span></span>
+            <button type="button" class="button show-more" data-button-variant="no-styles">More >></button>
         </footer>
     </form>
  </dialog>}');
