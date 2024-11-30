@@ -9,6 +9,7 @@ let refresh_token = localStorage.getItem("refresh");
 const bodydata = document.body.dataset;
 const dialog = document.querySelector("dialog.login-email");
 const output = document.querySelector("dialog.output");
+const showmore = output.querySelector(".show-more");
 const form = dialog.querySelector("form");
 const email = document.querySelector(".login .email");
 const expires = document.querySelector(".login .expires");
@@ -17,7 +18,8 @@ const login = document.querySelector(".dropdown button.log-in");
 
 const callAPI = async (endpoint, method = "GET", token, data) => {    
     let url = bodydata.resturl + endpoint + "/" + bodydata.websiteid;
-    if (endpoint==="authenticate" && method==="GET" && data) {
+    // Append any query parameters to url for GET requests
+    if (method==="GET" && data) {
       url+=data;
     }
 
@@ -117,48 +119,74 @@ const checkToken = async () => {
 }
 
 /* 
-** RESPOND TO DROPDOWN MENU REQUESTS
+** DROPDOWN MENU LOGIN / LOGOUT EVENT HANDLERS
 */
-document.querySelectorAll(".dropdown-content button").forEach((button) => {
+document.querySelectorAll(".dropdown-content button:not([data-endpoint])").forEach((button) => {
   button.addEventListener("click", async (e) => {
       if (e.target.matches(".log-in")) {
-        dialog.showModal();
-      } else if (e.target.matches(".log-out")) {
-        sessionStorage.removeItem("token");
-        localStorage.removeItem("refresh");
-        email.textContent = "";
-        expires.textContent = "";
-        e.target.classList.toggle("log-in");
-        e.target.classList.toggle("log-out");
-        e.target.textContent = "Log In";
-      } else {
-        if (login.matches(".log-in")) {
             dialog.showModal();
-            return;
-        }
-        await checkToken();
-        const header = output.querySelector("header>h2");
-        const article = output.querySelector("article");
-        const footer = output.querySelector("footer");
-        callAPI(e.target.dataset.endpoint, "GET", access_token, null)
-        .then((data) => {
+      } else if (e.target.matches(".log-out")) {
+            sessionStorage.removeItem("token");
+            localStorage.removeItem("refresh");
+            email.textContent = "";
+            expires.textContent = "";
+            e.target.classList.toggle("log-in");
+            e.target.classList.toggle("log-out");
+            e.target.textContent = "Log In";
+      }
+      e.target.closest("details").removeAttribute("open");
+    });
+})
+
+const getReport = async (e, offset) => {
+    await checkToken();
+    const header = output.querySelector("header>h2");
+    const article = output.querySelector("article");
+    
+    const query = "?report=" + e.target.dataset.report + "&offset=" + offset;
+    callAPI(e.target.dataset.endpoint, "GET", access_token, query)
+    .then((data) => {
+        if (offset===0) {
             header.replaceChildren();
             header.insertAdjacentHTML('afterbegin',data.header);
             article.replaceChildren();
             article.insertAdjacentHTML('afterbegin',data.article);
-            footer.replaceChildren();
-            footer.insertAdjacentHTML('afterbegin',data.footer);
+            showmore.dataset.offset = data.offset;
+            showmore.dataset.endpoint = e.target.dataset.endpoint;
+            showmore.dataset.report = e.target.dataset.report;
             output.showModal();
-        })
-        .catch((error) => {
-            content.replaceChildren();
-            content.insertAdjacentHTML('afterbegin',error);
-            content.style.color = "red";
-            output.showModal();
-        });
-      }
-      e.target.closest("details").removeAttribute("open");
+        } else {
+            article.querySelector("tbody").insertAdjacentHTML('beforeend',data.article);
+            showmore.dataset.offset = data.offset;
+        }
+    })
+    .catch((error) => {
+        header.replaceChildren();
+        header.insertAdjacentHTML('afterbegin',error);
+        header.style.color = "red";
+        output.showModal();
     });
+}
+
+/* 
+** RESPOND TO DROPDOWN MENU REPORT REQUESTS
+*/
+document.querySelectorAll(".dropdown-content button[data-endpoint]").forEach((button) => {
+    button.addEventListener("click", (e) => {
+        if (login.matches(".log-in")) {
+            dialog.showModal();
+            return;
+        }
+        getReport(e, 0);
+        e.target.closest("details").removeAttribute("open");
+    });
+})
+
+/*
+** "SHOW MORE" REPORT BUTTON
+*/
+output.querySelector("button.show-more").addEventListener("click", (e) => {
+    getReport(e, showmore.dataset.offset);
 })
 
 /*
