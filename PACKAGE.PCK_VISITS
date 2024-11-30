@@ -2,9 +2,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE getPerformance(pId IN VARCHAR2);
     --
-    PROCEDURE getVisits(pId IN VARCHAR2, pEmail IN BOOLEAN DEFAULT FALSE);
-    --
-    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2);
+    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER);
     --
     PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB);
     --
@@ -20,6 +18,7 @@ END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
+    ROWS_PER_PAGE CONSTANT PLS_INTEGER:=10;
     /*
      **  Procedure invoked by POST to REST end point "page-visit".
      **  Upload page visit details sent by javascript from deployed website pages
@@ -203,7 +202,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     END;
 
     
-    FUNCTION sql2Html (pSql IN VARCHAR2, pWebsiteId IN website.id%type, pOffset IN NUMBER) RETURN CLOB
+    FUNCTION sql2Html (pSql IN VARCHAR2, pWebsiteId IN website.id%type, pUrl IN VARCHAR2, pOffset IN NUMBER) RETURN CLOB
     IS
         l_cur       NUMBER:=dbms_sql.open_cursor;
         l_execute   NUMBER;
@@ -219,7 +218,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         dbms_sql.parse(l_cur,pSql,dbms_sql.native);
 
         dbms_sql.bind_variable(l_cur,':B1',pWebsiteId);
-        dbms_sql.bind_variable(l_cur,':B2',pOffset);
+        dbms_sql.bind_variable(l_cur,':B2',pUrl);
+        dbms_sql.bind_variable(l_cur,':B3',pOffset);
+
 
         -- define columns
         
@@ -238,21 +239,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
               END CASE;
         END LOOP;
 
-        l_html:='<table role="presentation">';
-        
-       -- Print column names of dynamic sql
-       l_html:=l_html || '<thead><tr>';
-       FOR i IN 1 .. l_col_cnt
-       LOOP
-          l_html:=l_html || '<th>' || rec_tab (i).col_name || '</th>';
-       END LOOP;
-       l_html:=l_html || '</tr></thead>';
-
+        IF (pOffset=0) THEN
+            l_html:=
+            '<table role="presentation">' ||
+            '<thead><tr>';
+           FOR i IN 1 .. l_col_cnt
+           LOOP
+              l_html:=l_html || '<th>' || rec_tab (i).col_name || '</th>';
+           END LOOP;
+           l_html:=l_html || '</tr></thead><tbody>';
+        END IF;
 
         l_execute:=dbms_sql.execute(l_cur);
         
        -- Print data fetched by query
-       l_html:=l_html || '<tbody>';
        LOOP
           l_flag := dbms_sql.fetch_rows (l_cur);
           EXIT WHEN l_flag = 0;
@@ -276,7 +276,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
           END LOOP;
           l_html:=l_html || '</tr>';
        END LOOP;
-       l_html:=l_html || '</tbody></table>';
+
+        IF (pOffset=0) THEN
+            l_html:=l_html || '</tbody></table>';
+        END IF;
 
        dbms_sql.close_cursor (l_cur);
 
@@ -399,58 +402,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     /*
     **  Return log of all visits to website
     */
-    PROCEDURE getVisits(pId IN VARCHAR2, pEmail IN BOOLEAN DEFAULT FALSE) IS
-        l_website_id website.id%type;
-        l_env VARCHAR2(4);
-        l_url page_hit.url%type;
+    PROCEDURE getWebsiteVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pHtml IN OUT NOCOPY CLOB) IS
         l_content CLOB;
         l_header VARCHAR2(1000);
         l_footer VARCHAR2(1000);
         l_rating VARCHAR2(100);
         l_sql LONG;
-        l_session_data pck_core.session_data_rt;
         n PLS_INTEGER;
         l_nb_visit PLS_INTEGER;
-        l_offset PLS_INTEGER:=0;
-        l_rows CONSTANT PLS_INTEGER:=10;
-        l_time_zone varchar2(20):='Europe/London';
-        l_id_parts apex_t_varchar2;
     BEGIN
-        l_id_parts:=apex_string.split(pId,',');
-        FOR i IN l_id_parts.FIRST..l_id_parts.LAST LOOP
-            CASE i
-                WHEN 1 THEN l_website_id:=l_id_parts(i);
-                WHEN 2 THEN l_env:=l_id_parts(i);
-                WHEN 3 THEN l_offset:=l_id_parts(i);
-            END CASE;
-        END LOOP;
-
-        IF (NOT pEmail) THEN
-            l_session_data:=pck_core.getSessionData(l_website_id);
-            pck_core.log(l_session_data.timezone || ':' || l_session_data.url || ':' || l_session_data.user_id);
-            l_time_zone:=l_session_data.timezone;
-        END IF;
-        
-        --l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
-        --l_netlify_site_id:=SUBSTR(pId,INSTR(pId,',')+1);
-
-        IF (l_session_data.url IS NOT NULL) THEN
-            l_url:=l_session_data.url;
-        eLSE
-            SELECT CASE WHEN l_env='TEST' THEN REPLACE(domain_name,'.','-') || '.netlify.app' ELSE domain_name END
-              INTO l_url
-              FROM website
-             WHERE id=l_website_id;
-        END IF;
-
-        IF (l_offset=0) THEN
-            pck_visits.uploadPageHits(l_website_id);
+        IF (pOffset=0) THEN
 
             FOR C IN (
                 SELECT COUNT(DISTINCT website_loaded||ip_address) nb_visit, COUNT(DISTINCT ip_address) nb_distinct_ip, MIN(visit_date) first_hit, MAX(visit_date) last_hit
                   FROM page_hit
-                 WHERE website_id=l_website_id
-                   AND url=l_url
+                 WHERE website_id=pWebsiteId
+                   AND url=pUrl
             ) LOOP
                 l_nb_visit:=C.nb_visit;
                 l_header:='<strong>' || C.nb_visit || '</strong> visits from <strong>' || C.nb_distinct_ip || '</strong> distinct IP';
@@ -483,13 +450,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                         MAX(p.lcp_rating) lcp_rating, MAX(p.cls_rating) cls_rating, MAX(p.inp_rating) inp_rating, 
                         SUM(p.duration_visible) duration_visible, MAX(p.browser) browser, MAX(p.connection) connection, MAX(p.mobile) mobile
                   FROM website w, page_hit p
-                 WHERE w.id=l_website_id
+                 WHERE w.id=pWebsiteId
                    AND p.website_id=w.id
-                   AND p.url=l_url
+                   AND p.url=pUrl
                  GROUP BY p.website_id, p.ip_address, p.visit_date
                  ORDER BY p.visit_date DESC
-                 OFFSET l_offset ROWS
-                 FETCH FIRST l_rows ROWS ONLY
+                 OFFSET pOffset ROWS
+                 FETCH FIRST ROWS_PER_PAGE ROWS ONLY
             )
             SELECT wh.visit_date, wh.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
                     wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating
@@ -501,7 +468,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             l_rating:=cwvRatingOverall(C.lcp_rating, C.cls_rating, C.inp_rating);
             l_content:=l_content ||
                 '<tr>
-                    <td rowspan="2">' || TO_CHAR(C.visit_date at time zone l_time_zone, 'dd Mon yyyy fmhh24:fmmi')  || '</td>
+                    <td rowspan="2">' || TO_CHAR(C.visit_date at time zone pTimeZone, 'dd Mon yyyy fmhh24:fmmi')  || '</td>
                     <td>' || LTRIM(RTRIM(C.location,','),',') || '</td>
                     <td rowspan="2">' || CASE WHEN C.duration_visible IS NOT NULL THEN TO_CHAR(C.duration_visible) || ' seconds' END || '</td>
                     <td>' || C.browser || '</td>
@@ -513,68 +480,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 </tr>';
         END LOOP;
 
-        IF (l_offset=0) THEN
+        IF (pOffset=0) THEN
             l_content:=l_content || '</tbody></table>';
-            If (n=l_rows) THEN
-                l_footer:='<span>Showing last ' || n || ' visits</span>';
-                IF (NOT pEmail AND l_nb_visit>l_rows) THEN 
-                    l_footer:=l_footer || '<button type="button" class="more-visits" data-total="' || l_nb_visit || '" data-offset="' || l_offset || '" data-rows="' || l_rows || '">More >></button>';
-                END IF;
-            END IF;
-        ELSE
-            apex_json.open_object; 
-            apex_json.write('success', TRUE);
-            apex_json.write('visits', l_header || l_content || l_footer);
-            apex_json.write('progress', 'Showing last ' || TO_CHAR(l_offset+n) || ' visits');
-            apex_json.close_object;
-            RETURN;
         END IF;
 
-        IF (pEmail) THEN
-            l_content:=l_header || l_content || l_footer;
-            sendmail(l_website_id, l_content);
-        ELSE
-            apex_json.open_object; 
-            apex_json.write('success', TRUE);
-            apex_json.write('content', l_content);
-            apex_json.write('header', l_header);
-            apex_json.write('article', l_content);
-            apex_json.write('footer', l_footer);
-            apex_json.close_object;
-        END IF;
+        pHtml:=l_content;
 
         EXCEPTION WHEN OTHERS THEN pck_core.log_error;
     END;
 
-    /* 
-    ** Create page analysis report if multi-page website
-    */
-    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2) IS
-        n PLS_INTEGER;
-        l_sql LONG;
-        l_session_data pck_core.session_data_rt;
-        l_rows CONSTANT PLS_INTEGER:=10;
-        l_offset PLS_INTEGER:=0;
-    BEGIN
-        l_session_data:=pck_core.getSessionData(pWebsiteId);
-        pck_core.log(l_session_data.timezone || ':' || l_session_data.url || ':' || l_session_data.user_id);
 
-        n:=0;
-        l_sql:='SELECT TO_CHAR(visit_date at time zone ''' || l_session_data.timezone || ''',''dd Mon yyyy fmhh24:fmmi'') "Page Views per Visit",';
+    PROCEDURE getPageVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pHtml IN OUT NOCOPY CLOB)  IS
+        l_sql LONG;
+    BEGIN
+        l_sql:='SELECT TO_CHAR(visit_date at time zone ''' || pTimeZone || ''',''dd Mon yyyy fmhh24:fmmi'') "Visit Date"';
         FOR C IN (SELECT navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
-            n:=n+1;
-            l_sql:=l_sql || 'MAX(DECODE(navigation_label,''' || C.navigation_label || ''',duration_visible)) "' || C.navigation_label || '",';
+            l_sql:=l_sql || ',MAX(DECODE(navigation_label,''' || C.navigation_label || ''',duration_visible)) "' || C.navigation_label || '"';
         END LOOP;
 
-        IF (n=0) THEN
-            apex_json.open_object; 
-            apex_json.write('success', TRUE);
-            apex_json.write('heading', '<p>This Website only has one page</p>');
-            apex_json.close_object;
-            RETURN;
-        END IF;
-
-        l_sql:=RTRIM(l_sql,',') ||
+        l_sql:=l_sql ||
         'FROM 
             (
             WITH articles AS
@@ -590,20 +514,39 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             SELECT ph.visit_date, ph.ip_address, a.navigation_label, SUM(ph.duration_visible) duration_visible
               FROM articles a, page_hit ph
              WHERE ph.website_id=:B1
-               AND ph.url=''' || l_session_data.url || '''
+               AND ph.url=:B2
                AND ph.article_id=a.article_id
              GROUP BY ph.visit_date, ph.ip_address, a.navigation_label
             )
         GROUP  BY visit_date
         ORDER BY visit_date DESC
-        OFFSET :B2 ROWS
-        FETCH FIRST '|| l_rows || ' ROWS ONLY';
+        OFFSET :B3 ROWS
+        FETCH FIRST '|| ROWS_PER_PAGE || ' ROWS ONLY'; 
 
+        pHtml:=sql2Html(l_sql, pWebsiteId, pUrl, pOffset);
+
+    END;
+
+    /* 
+    ** Create page analysis report if multi-page website
+    */
+    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER) IS
+        l_session_data pck_core.session_data_rt;
+        l_html CLOB;
+    BEGIN
+        l_session_data:=pck_core.getSessionData(pWebsiteId);
+        --pck_core.log(l_session_data.timezone || ':' || l_session_data.url || ':' || l_session_data.user_id || ':' || pWebsiteId || ':' || pReport || ':' || pOffset);
+
+        CASE pReport
+            WHEN 'website' THEN getWebsiteVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_html);
+            WHEN 'page' THEN getPageVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_html);
+        END CASE;
+        
         apex_json.open_object; 
         apex_json.write('success', TRUE);
-        apex_json.write('heading', 'This Website only has one page');
-        apex_json.write('article', sql2Html(l_sql, pWebsiteId, l_offset));
-        apex_json.write('footer', 'coucou');
+        apex_json.write('header', 'Page Views per Visit');
+        apex_json.write('article', l_html);
+        apex_json.write('offset', pOffset + ROWS_PER_PAGE);
         apex_json.close_object;
 
     END;
@@ -752,9 +695,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     END;
 
     PROCEDURE daily_job IS
+        l_content CLOB:=
+        '<h1></h1><p>Visit details in future will be a feature offered on your website.</p><p>This is to avoid repeatedly sending large amounts of data</p>';
     BEGIN
-        FOR C IN (SELECT id||',LIVE' id FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
-            getVisits(C.id, TRUE);
+        FOR C IN (SELECT id FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
+            sendmail(C.id, l_content);
         END LOOP;
     END;
     
