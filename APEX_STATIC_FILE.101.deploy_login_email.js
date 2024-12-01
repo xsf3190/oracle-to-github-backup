@@ -138,27 +138,41 @@ document.querySelectorAll(".dropdown-content button:not([data-endpoint])").forEa
     });
 })
 
+/*
+** EACH REPORT RETURNS TOTAL ROWS INTO THIS VARIABLE WHEN offset=0
+*/
+let gCount;
+let gEndpoint;
+let gReport;
+let gParentId;
+
 const getReport = async (e, offset) => {
     await checkToken();
-    const header = output.querySelector("header>h2");
+
+    const header = output.querySelector("header>*:first-child");
     const article = output.querySelector("article");
+    const status = output.querySelector("footer>*:first-child");
+
+    const query = "?report=" + gReport + "&offset=" + offset + "&parentid=" + gParentId;
     
-    const query = "?report=" + e.target.dataset.report + "&offset=" + offset;
-    callAPI(e.target.dataset.endpoint, "GET", access_token, query)
+    callAPI(gEndpoint, "GET", access_token, query)
     .then((data) => {
         if (offset===0) {
-            header.replaceChildren();
+            gCount = data.count;
             header.insertAdjacentHTML('afterbegin',data.header);
-            article.replaceChildren();
             article.insertAdjacentHTML('afterbegin',data.article);
-            showmore.dataset.offset = data.offset;
-            showmore.dataset.endpoint = e.target.dataset.endpoint;
-            showmore.dataset.report = e.target.dataset.report;
             output.showModal();
-        } else {
+        } else if (data.article) {            
             article.querySelector("tbody").insertAdjacentHTML('beforeend',data.article);
+        }
+
+        const tbody = article.querySelector("tbody");
+        if (gCount===tbody.childElementCount) {
+            showmore.classList.add("visually-hidden");
+        } else {
             showmore.dataset.offset = data.offset;
         }
+        status.textContent = tbody.childElementCount + "/" + gCount;
     })
     .catch((error) => {
         header.replaceChildren();
@@ -177,6 +191,9 @@ document.querySelectorAll(".dropdown-content button[data-endpoint]").forEach((bu
             dialog.showModal();
             return;
         }
+        gEndpoint = e.target.dataset.endpoint;
+        gReport = e.target.dataset.report;
+        gParentId = e.target.dataset.parentid ? e.target.dataset.parentid : 0;
         getReport(e, 0);
         e.target.closest("details").removeAttribute("open");
     });
