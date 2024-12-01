@@ -2,7 +2,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE getPerformance(pId IN VARCHAR2);
     --
-    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER);
+    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pParentId IN article.id%type);
     --
     PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB);
     --
@@ -402,24 +402,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     /*
     **  Return log of all visits to website
     */
-    PROCEDURE getWebsiteVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pHtml IN OUT NOCOPY CLOB) IS
+    PROCEDURE getWebsiteVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB) IS
         l_content CLOB;
         l_header VARCHAR2(1000);
         l_footer VARCHAR2(1000);
         l_rating VARCHAR2(100);
-        l_sql LONG;
-        n PLS_INTEGER;
-        l_nb_visit PLS_INTEGER;
     BEGIN
         IF (pOffset=0) THEN
-
             FOR C IN (
                 SELECT COUNT(DISTINCT website_loaded||ip_address) nb_visit, COUNT(DISTINCT ip_address) nb_distinct_ip, MIN(visit_date) first_hit, MAX(visit_date) last_hit
                   FROM page_hit
                  WHERE website_id=pWebsiteId
                    AND url=pUrl
             ) LOOP
-                l_nb_visit:=C.nb_visit;
+                pCount:=C.nb_visit;
                 l_header:='<strong>' || C.nb_visit || '</strong> visits from <strong>' || C.nb_distinct_ip || '</strong> distinct IP';
             END LOOP;
 
@@ -427,7 +423,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             '<table role="presentation">
                 <thead>
                     <tr>
-                        <th rowspan="2">Website Visit</th>
+                        <th rowspan="2">Date</th>
                         <th>Location</th>
                         <th rowspan="2">Viewing time</th>
                         <th>Browser</th>
@@ -441,7 +437,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 <tbody>';
         END IF;
 
-        n:=0;
         FOR C IN (
             WITH website_hits as 
             (
@@ -464,7 +459,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
              WHERE ip.ip=wh.ip_address
         ) 
         LOOP
-            n:=n+1;
             l_rating:=cwvRatingOverall(C.lcp_rating, C.cls_rating, C.inp_rating);
             l_content:=l_content ||
                 '<tr>
@@ -490,9 +484,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     END;
 
 
-    PROCEDURE getPageVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pHtml IN OUT NOCOPY CLOB)  IS
+    PROCEDURE getPageVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB)  IS
         l_sql LONG;
     BEGIN
+        IF (pOffset=0) THEN
+            SELECT COUNT(DISTINCT visit_date)
+              INTO pCount
+              FROM page_hit
+             WHERE website_id=pWebsiteId
+               AND url=pUrl;
+        END IF;
+
         l_sql:='SELECT TO_CHAR(visit_date at time zone ''' || pTimeZone || ''',''dd Mon yyyy fmhh24:fmmi'') "Visit Date"';
         FOR C IN (SELECT navigation_label FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order) LOOP
             l_sql:=l_sql || ',MAX(DECODE(navigation_label,''' || C.navigation_label || ''',duration_visible)) "' || C.navigation_label || '"';
@@ -527,24 +529,93 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
     END;
 
+     PROCEDURE getBlogVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pParentId IN article.id%type, pCount IN OUT NUMBER, pHeader IN OUT VARCHAR2, pHtml IN OUT NOCOPY CLOB)  IS
+        l_content CLOB;
+    BEGIN
+        IF (pOffset=0) THEN
+            SELECT COUNT(DISTINCT title) 
+              INTO pCount
+              FROM article a, page_hit p
+             WHERE a.parent_id=pParentId
+               AND a.id=p.article_id
+               AND p.url=pUrl;
+
+            SELECT navigation_label INTO pHeader FROM website_article WHERE website_id=pWebsiteId AND article_id=pParentId;
+            l_content:=
+            '<table role="presentation">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Total Viewing time</th>
+                        <th>No. Views</th>
+                        <th>Average Viewing time</th>
+                         <th>No. Distinct Visitors</th>
+                    </tr>
+                </thead>
+                <tbody>';
+        END IF;
+
+        FOR C IN (SELECT a.title, 
+                            SUM(p.duration_visible) total_viewing_time, 
+                            COUNT(*) nb_views, 
+                            ROUND(AVG(p.duration_visible),0) avg_viewing_time,
+                            COUNT(DISTINCT p.ip_address) nb_distinct_visitors
+                    FROM article a, page_hit p
+                   WHERE a.parent_id=pParentId
+                     AND a.id=p.article_id
+                     AND p.url=pUrl
+                   GROUP BY a.title
+                   ORDER BY total_viewing_time DESC
+                  OFFSET pOffset ROWS
+                   FETCH FIRST ROWS_PER_PAGE ROWS ONLY) 
+        LOOP
+            l_content:=l_content ||
+            '<tr><td>' 
+                || C.title || '</td><td>' 
+                || C.total_viewing_time || '</td><td>' 
+                || C.nb_views || '</td><td>' 
+                || C.avg_viewing_time || '</td><td>'
+                || C.nb_distinct_visitors || '</td>' ||
+            '</tr>';
+        END LOOP;
+
+        IF (pOffset=0) THEN
+            l_content:=l_content || 
+            '</tbody></table>';
+        END IF;
+
+        pHtml:=l_content;
+    END;
+
     /* 
-    ** Create page analysis report if multi-page website
+    **  ENTRY POINT FOR ALL VISIT REPORTS
     */
-    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER) IS
+    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pParentId IN article.id%type) IS
         l_session_data pck_core.session_data_rt;
         l_html CLOB;
+        l_header VARCHAR2(200);
+        l_count NUMBER;
+        TYPE t_title IS TABLE OF VARCHAR2(100) INDEX BY VARCHAR2(7);
+        l_titles t_title:=t_title(
+            'website' => 'Website Visits',
+            'page' => 'Page Visits',
+            'blog' => 'Visit Details for ');
     BEGIN
         l_session_data:=pck_core.getSessionData(pWebsiteId);
-        --pck_core.log(l_session_data.timezone || ':' || l_session_data.url || ':' || l_session_data.user_id || ':' || pWebsiteId || ':' || pReport || ':' || pOffset);
+        --pck_core.log(l_session_data.timezone || ':' || l_session_data.url || ':' || l_session_data.user_id || ':' || pWebsiteId || ':' || pReport || ':' || pOffset || ':' || pParentId);
 
         CASE pReport
-            WHEN 'website' THEN getWebsiteVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_html);
-            WHEN 'page' THEN getPageVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_html);
+            WHEN 'website' THEN getWebsiteVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
+            WHEN 'page' THEN getPageVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
+            WHEN 'blog' THEN getBlogVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, pParentId, l_count, l_header, l_html);
         END CASE;
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
-        apex_json.write('header', 'Page Views per Visit');
+        IF (pOffset=0) THEN
+            apex_json.write('count', l_count);
+            apex_json.write('header', l_titles(pReport) || l_header);
+        END IF;
         apex_json.write('article', l_html);
         apex_json.write('offset', pOffset + ROWS_PER_PAGE);
         apex_json.close_object;
