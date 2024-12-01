@@ -29,7 +29,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     
     TYPE tt_nav_labels IS RECORD (
         article_id website_article.article_id%type,
-        navigation_label website_article.navigation_label%type
+        navigation_label website_article.navigation_label%type,
+        collection_type website_article.collection_type%type
     );
     TYPE t_nav_labels IS TABLE OF tt_nav_labels;
     g_nav_labels t_nav_labels;
@@ -37,9 +38,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     /*
      **  Build Login Aside
      */
-    FUNCTION buildLoginAside RETURN VARCHAR2 IS
+    FUNCTION buildLoginAside(pWebsiteId IN website.id%type) RETURN VARCHAR2 IS
+        l_html LONG;
     BEGIN
-        RETURN(
+       l_html:=
 '<aside class="login flex-items justify-end no-gap">
   <section  class="dropdown">
     <details>
@@ -53,14 +55,30 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
       <ul class="dropdown-content">
         <li><small class="email"></small></li>
         <li class="align-center"><small class="expires"></small></li>
-        <li><button type="button" class="button" data-endpoint="visits" data-report="website">Website Visits</button></li>
-        <li><button type="button" class="button" data-endpoint="visits" data-report="page">Page Visits</button></li>
-        <li><button type="button" class="button" data-endpoint="visits" data-report="blog">Blog Visits</button></li>
-        <li><button type="button" class="button log-in">Log In</button></li>
+        <li><button type="button" class="button" data-endpoint="visits" data-report="website">Website Visits</button></li>';
+        
+        IF (g_nav_labels.COUNT>1) THEN
+            l_html:=l_html || 
+            '<li><button type="button" class="button" data-endpoint="visits" data-report="page">Page Visits</button></li>';
+        END IF;
+
+        FOR i IN 1..g_nav_labels.COUNT LOOP
+            IF (g_nav_labels(i).collection_type<>'N/A') THEN
+                l_html:=l_html || 
+                '<li><button type="button" class="button" data-endpoint="visits" ' || 
+                    'data-report="' || LOWER(g_nav_labels(i).collection_type) || '"' ||
+                    'data-parentid="' || g_nav_labels(i).article_id || '">' ||
+                    g_nav_labels(i).navigation_label || ' Viewed</button></li>';
+            END IF;
+        END LOOP;
+        
+        l_html:=l_html || 
+        '<li><button type="button" class="button log-in">Log In</button></li>
       </ul>
     </details>
   </section>
-</aside>');
+</aside>';
+        RETURN(l_html);
     END;
 
     /*
@@ -226,7 +244,7 @@ q'{<dialog class="output">
     BEGIN
         /* Build navigation label collection once */
         IF (g_nav_labels IS NULL) THEN
-            SELECT wa.article_id, wa.navigation_label
+            SELECT wa.article_id, wa.navigation_label, wa.collection_type
               BULK COLLECT INTO g_nav_labels
               FROM website w, website_article wa
              WHERE w.id=pWebsiteId
@@ -315,7 +333,7 @@ q'{<dialog class="output">
         /* 
         ** Build website header 
         */
-        l_header:=CASE WHEN pLoginForm='YES' THEN buildLoginAside END || pHeader;
+        l_header:=CASE WHEN pLoginForm='YES' THEN buildLoginAside(pWebsiteId) END || pHeader;
         IF (l_header IS NOT NULL) THEN
             l_header:= '<header class="website">' || l_header || '</header>';
         END IF;
