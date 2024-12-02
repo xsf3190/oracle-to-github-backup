@@ -167,8 +167,9 @@ const getReport = async (e, offset) => {
         }
 
         const tbody = article.querySelector("tbody");
-        if (gCount===tbody.childElementCount) {
+        if (tbody.childElementCount >= gCount) {
             showmore.classList.add("visually-hidden");
+            showmore.disabled = true;
         } else {
             showmore.dataset.offset = data.offset;
         }
@@ -200,10 +201,12 @@ document.querySelectorAll(".dropdown-content button[data-endpoint]").forEach((bu
 })
 
 /*
-** "SHOW MORE" REPORT BUTTON
+** "SHOW MORE" REPORT BUTTON. PREEVENT DOUBLE CLICKS
 */
 output.querySelector("button.show-more").addEventListener("click", (e) => {
-    getReport(e, showmore.dataset.offset);
+    if (e.detail===1) {
+        getReport(e, showmore.dataset.offset);
+    }
 })
 
 /*
