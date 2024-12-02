@@ -25,7 +25,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     g_curve CONSTANT VARCHAR2(100):='<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
 
     g_LOGIN CONSTANT VARCHAR2(100):='<div class="align-end"><button type="button" class="button login-btn">Login</button></div>';
-    g_FOOTER CONSTANT VARCHAR2(100):='<small>Built with Oracle Netlify Cloudinary Google</small>';
     
     TYPE tt_nav_labels IS RECORD (
         article_id website_article.article_id%type,
@@ -333,15 +332,16 @@ q'{<dialog class="output">
         /* 
         ** Build website header 
         */
-        l_header:=CASE WHEN pLoginForm='YES' THEN buildLoginAside(pWebsiteId) END || pHeader;
-        IF (l_header IS NOT NULL) THEN
-            l_header:= '<header class="website">' || l_header || '</header>';
+        l_header:='<header id="main-header" class="content-grid bg-color">';
+        IF (pLoginForm='YES') THEN 
+            l_header:=l_header || buildLoginAside(pWebsiteId);
         END IF;
+        l_header:=l_header || pHeader || '</header>';
 
         /* 
         ** Build website footer 
         */
-        l_footer:='<footer class="website">' || pFooter || g_FOOTER || '</footer>';
+        l_footer:='<footer id="main-footer" class="content-grid">' || pFooter || '</footer>';
 
         /* 
         ** Assemble content part of document 
@@ -576,7 +576,7 @@ q'{<dialog class="output">
             ** header and footer are the first and last elements of their type in l_body_html
             */
 
-            l_header:=regexp_substr(l_body_html,'<header class="website.+?>(.+?)</header>',1,1,'n',1);
+            l_header:=regexp_substr(l_body_html,'<header id="main-header.+?>(.+?)</header>',1,1,'n',1);
             l_header:=regexp_replace(l_header,'<aside class="login.+?</aside>');
             IF (l_header IS NULL AND C.header IS NOT NULL) THEN
                 apex_string.push(l_updated_columns,'HEADER');
@@ -586,8 +586,7 @@ q'{<dialog class="output">
                 apex_string.push(l_updated_files,l_header);
             END IF;
 
-            l_footer:=regexp_substr(l_body_html,'<footer class="website.+?>(.+?)</footer>',1,1,'n',1);
-            l_footer:=trim(replace(l_footer,g_FOOTER));
+            l_footer:=regexp_substr(l_body_html,'<footer id="main-footer.+?>(.+?)</footer>',1,1,'n',1);
             IF (l_footer IS NULL AND C.footer IS NOT NULL) THEN
                 apex_string.push(l_updated_columns,'FOOTER');
                 apex_string.push(l_updated_files,l_footer);
