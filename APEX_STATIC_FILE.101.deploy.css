@@ -95,6 +95,9 @@ body>nav {
   background-color: var(--color-primary);
   color: #fff;
 }
+body>nav {
+  padding-block: 1em;
+}
 .align-center {
   text-align: center;
 }
@@ -150,6 +153,7 @@ p {
 }
 small {
   font-size:var(--step--2);
+  font-family: system-ui;
 }
 h1,
 h2,
@@ -328,6 +332,9 @@ form textarea {
 .space-between {
   --flex-horizontal-alignment: space-between;
 }
+.space-around {
+  --flex-horizontal-alignment: space-around;
+}
 .justify-end {
   --flex-horizontal-alignment: flex-end;
 }
@@ -418,6 +425,16 @@ form textarea {
 .button[data-button-variant="round-icon"] svg {
     stroke: currentColor;
     stroke-width: 3px;
+}
+
+.button[data-button-variant="no-styles"] {
+    --button-border-width: 0;
+    --button-padding: 0;
+    --button-bg: transparent;
+    --button-color: currentColor;
+    --button-hover-bg: var(--button-bg);
+    --button-hover-color: var(--color-primary);
+    --border-radius: 0;
 }
 
 /* DIALOG STYLES */
@@ -540,7 +557,7 @@ pre:has(.language-sql)::after {
   z-index: 1;
   list-style: none;
   margin: 0;
-  padding: 0.75em 0.25em;
+  padding: 0.25em 0.5em;
 }
 
 .dropdown button {
@@ -551,11 +568,18 @@ pre:has(.language-sql)::after {
   border: none;
   inline-size: 100%;
   font-size: var(--step--1);
+  min-height: 44px;
 }
 
 .dropdown button:hover, .dropdown button:focus {
-  background-color: var(--color-primary-light);
+  background-color: var(--color-primary-lighter);
   color: white;
+}
+
+.dropdown button:disabled {
+  color: var(--color-primary-lighter);
+  background-color: transparent;
+  cursor: not-allowed;
 }
 
 /* Closing the detail content on clicking anywhere else */
@@ -580,6 +604,10 @@ pre:has(.language-sql)::after {
 }
 .dropdown details[open] summary .bottom {
   transform: rotate(-45deg) translate(-16px, -6px);
+}
+
+.dropdown li + li {
+  border-block-start: solid 1px black;
 }
 
 /* TABLE STYLES */
