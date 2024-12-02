@@ -143,7 +143,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 t.cls=CASE WHEN t.cls IS NOT NULL AND s.cls IS NOT NULL THEN GREATEST(s.cls,t.cls) ELSE COALESCE(s.cls,t.cls) END,
                 t.cls_rating=CASE WHEN t.cls_rating IS NOT NULL AND s.cls_rating IS NOT NULL THEN GREATEST(s.cls_rating,t.cls_rating) ELSE COALESCE(s.cls_rating,t.cls_rating) END,
                 t.inp=CASE WHEN t.inp IS NOT NULL AND s.inp IS NOT NULL THEN GREATEST(s.inp,t.inp) ELSE COALESCE(s.inp,t.inp) END,
-                t.inp_rating=CASE WHEN t.inp_rating IS NOT NULL AND s.inp_rating IS NOT NULL THEN GREATEST(s.inp_rating,t.inp_rating) ELSE COALESCE(s.inp_rating,t.inp_rating) END   
+                t.inp_rating=CASE WHEN t.inp_rating IS NOT NULL AND s.inp_rating IS NOT NULL THEN GREATEST(s.inp_rating,t.inp_rating) ELSE COALESCE(s.inp_rating,t.inp_rating) END,
+                t.url=COALESCE(t.url,s.url) 
                 ;
         n:=SQL%ROWCOUNT;
         IF (n>0) THEN
@@ -488,7 +489,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_sql LONG;
     BEGIN
         IF (pOffset=0) THEN
-            SELECT COUNT(DISTINCT visit_date)
+            SELECT COUNT(DISTINCT visit_date||ip_address)
               INTO pCount
               FROM page_hit
              WHERE website_id=pWebsiteId
