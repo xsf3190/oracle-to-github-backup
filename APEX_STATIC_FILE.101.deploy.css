@@ -20,6 +20,7 @@ p,
 menu {
   margin: 0;
 }
+
 [role="list"], menu {
   padding: 0;
   list-style: none;
@@ -166,6 +167,15 @@ a {
   color: inherit;
 }
 
+.metrics > span + span::before {
+  content: "|";
+  color: red;
+  font-weight: 900;
+  margin-inline: 0.5ch;
+}
+.metrics + .metrics {
+  border-block-start: solid 1px red;
+}
 .no-padding {
   --padding: 0;
 }
@@ -444,10 +454,10 @@ html:has(dialog[open]) {
 }
 
 dialog {
-  background-color: var(--color-background);
-  color: var(--color-text);
+/*   background-color: var(--color-background); */
+/*   color: var(--color-text); */
   border-radius: var(--space-s);
-  max-inline-size: min(90vw, 60ch);
+/*   max-inline-size: min(90vw, 60ch); */
   padding: 0;
   inset: 0;
   overflow: hidden;
