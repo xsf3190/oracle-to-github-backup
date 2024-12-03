@@ -24,8 +24,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
     g_curve CONSTANT VARCHAR2(100):='<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
 
-    g_LOGIN CONSTANT VARCHAR2(100):='<div class="align-end"><button type="button" class="button login-btn">Login</button></div>';
-    
     TYPE tt_nav_labels IS RECORD (
         article_id website_article.article_id%type,
         navigation_label website_article.navigation_label%type,
@@ -41,7 +39,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_html LONG;
     BEGIN
        l_html:=
-'<aside class="login flex-items justify-end no-gap">
+'<aside class="login flex-items justify-end no-gap full-width">
   <section  class="dropdown">
     <details>
       <summary>
@@ -54,7 +52,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
       <ul class="dropdown-content">
         <li><small class="email"></small></li>
         <li class="align-center"><small class="expires"></small></li>
-        <li><button type="button" class="button" data-endpoint="visits" data-report="website">Website Visits</button></li>';
+        <li><button type="button" class="button" data-endpoint="visits" data-report="website">Website Visits</button></li>
+        <li><button type="button" class="button" data-endpoint="visits" data-report="location">Top Locations</button></li>';
+        
         
         IF (g_nav_labels.COUNT>1) THEN
             l_html:=l_html || 
