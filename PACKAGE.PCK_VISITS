@@ -105,6 +105,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     PROCEDURE uploadPageHits(pWebsiteId IN website.id%type) IS
         n PLS_INTEGER;
     BEGIN
+        DELETE website_article_cwv WHERE INSTR(UPPER(referrer),UPPER(sys_context('userenv','db_name')))>0;
         DELETE website_article_cwv cwv WHERE cwv.website_id=pWebsiteId AND NOT EXISTS (SELECT null FROM article a WHERE a.id=cwv.article_id);
         n:=SQL%ROWCOUNT;
         IF (n>0) THEN
@@ -405,28 +406,76 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     */
     PROCEDURE getWebsiteVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB) IS
         l_content CLOB;
-        l_header VARCHAR2(1000);
-        l_footer VARCHAR2(1000);
         l_rating VARCHAR2(100);
+        l_total PLS_INTEGER;
     BEGIN
         IF (pOffset=0) THEN
             FOR C IN (
-                SELECT COUNT(DISTINCT website_loaded||ip_address) nb_visit, COUNT(DISTINCT ip_address) nb_distinct_ip, MIN(visit_date) first_hit, MAX(visit_date) last_hit
+                SELECT COUNT(DISTINCT website_loaded||ip_address) nb_visit, COUNT(DISTINCT ip_address) nb_distinct_ip, TRUNC(current_date)-TRUNC(MIN(visit_date)) ela_days, ROUND(AVG(duration_visible),0) viewing_time
                   FROM page_hit
                  WHERE website_id=pWebsiteId
                    AND url=pUrl
             ) LOOP
                 pCount:=C.nb_visit;
-                l_header:='<strong>' || C.nb_visit || '</strong> visits from <strong>' || C.nb_distinct_ip || '</strong> distinct IP';
+                l_content:=
+                    '<p class="metrics">' || 
+                        '<span>' || C.nb_visit  || ' visits in last ' || C.ela_days || ' days</span>' ||
+                        '<span>' || C.nb_distinct_ip || ' distinct visitors</span>' ||
+                        '<span>' || C.viewing_time || ' seconds avg time on site</span>' ||
+                    '</p>';
             END LOOP;
 
-            l_content:=
+            l_total:=0;
+            l_content:=l_content || 
+                    '<p class="metrics">';
+            FOR C IN (
+                SELECT referrer, round(100*ratio_to_report(count(*)) over (), 0) pct
+                  FROM page_hit
+                 WHERE website_id=pWebsiteId
+                   AND url=pUrl
+                GROUP BY referrer
+                ORDER BY 2 DESC
+            ) LOOP
+                IF (l_total>95) THEN
+                    EXIT;
+                END IF;
+                l_content:=l_content || '<span>' || CASE WHEN l_total=0 THEN 'Top referrers: ' END;
+                l_content:=l_content || NVL(C.referrer,'no referrer')  || ' (' || C.pct || '%)</span>';
+                l_total:=l_total+C.pct;
+            END LOOP;
+
+            l_total:=0;
+            l_content:=l_content || 
+                    '<p class="metrics">';
+            FOR C IN (
+                SELECT i.city||','||i.country_code||','||i.postal location, ROUND(pct,1) pct
+                FROM
+                (
+                SELECT ip_address, 100*ratio_to_report(count(*)) over () pct
+                  FROM page_hit
+                 WHERE website_id=pWebsiteId
+                   AND url=pUrl
+                GROUP BY ip_address
+                ORDER BY 2 DESC
+                ) p, ip_lookup i
+                WHERE p.ip_address=i.ip
+                ORDER BY 2 DESC
+            ) LOOP
+                IF (l_total>=3) THEN
+                    EXIT;
+                END IF;
+                l_content:=l_content || '<span>' || CASE WHEN l_total=0 THEN 'Top locations: ' END;
+                l_content:=l_content || NVL(C.location,'-')  || ' (' || C.pct || '%)</span>';
+                l_total:=l_total+1;
+            END LOOP;
+
+            l_content:=l_content ||
             '<table role="presentation">
                 <thead>
                     <tr>
                         <th rowspan="2">Date</th>
                         <th>Location</th>
-                        <th rowspan="2">Viewing time</th>
+                        <th rowspan="2">Time on site</th>
                         <th>Browser</th>
                         <th rowspan="2">Performance</th>
                     </tr>
@@ -530,7 +579,55 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
     END;
 
-     PROCEDURE getBlogVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pParentId IN article.id%type, pCount IN OUT NUMBER, pHeader IN OUT VARCHAR2, pHtml IN OUT NOCOPY CLOB)  IS
+    PROCEDURE getVisitsByLocation(pWebsiteId IN website.id%type, pOffset IN NUMBER, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB)  IS
+        l_content CLOB;
+    BEGIN
+        IF (pOffset=0) THEN
+            SELECT COUNT(DISTINCT i.city||','||i.country_code||','||i.postal)
+              INTO pCount
+              FROM page_hit p, ip_lookup i
+             WHERE p.website_id=pWebsiteId
+               AND p.url=pUrl
+               AND p.ip_address=i.ip;
+            l_content:=
+            '<table role="presentation">
+                <thead>
+                    <tr>
+                        <th>Location</th>
+                        <th>No. Visits</th>
+                    </tr>
+                </thead>
+                <tbody>';
+        END IF;
+
+        FOR C IN (
+                    SELECT location, nb_visits, ROUND((nb_visits/pCount)*100,2) pct
+                    FROM
+                        (
+                        SELECT i.city||','||i.country_code||','||i.postal location, COUNT(*) nb_visits
+                          FROM page_hit p, ip_lookup i
+                         WHERE p.website_id=pWebsiteId
+                           AND p.url=pUrl
+                           AND p.ip_address=i.ip
+                         GROUP BY i.city||','||i.country_code||','||i.postal
+                        )
+                order by nb_visits DESC
+                OFFSET pOffset ROWS
+                FETCH FIRST ROWS_PER_PAGE ROWS ONLY
+            ) LOOP
+            pck_core.log(c.nb_visits||'*'||c.pct||'*');
+                l_content:=l_content || '<tr><td>' || C.location || '</td><td>' || C.nb_visits || ' (' || TO_CHAR(C.pct,'fm990D00') || '%)</td></tr>';
+            END LOOP;
+
+        IF (pOffset=0) THEN
+            l_content:=l_content || 
+            '</tbody></table>';
+        END IF;
+
+        pHtml:=l_content;
+    END;
+
+    PROCEDURE getBlogVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pParentId IN article.id%type, pCount IN OUT NUMBER, pHeader IN OUT VARCHAR2, pHtml IN OUT NOCOPY CLOB)  IS
         l_content CLOB;
     BEGIN
         IF (pOffset=0) THEN
@@ -594,12 +691,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pParentId IN article.id%type) IS
         l_session_data pck_core.session_data_rt;
         l_html CLOB;
-        l_header VARCHAR2(200);
+        l_header VARCHAR2(100);
         l_count NUMBER;
-        TYPE t_title IS TABLE OF VARCHAR2(100) INDEX BY VARCHAR2(7);
+        TYPE t_title IS TABLE OF VARCHAR2(100) INDEX BY VARCHAR2(10);
         l_titles t_title:=t_title(
             'website' => 'Website Visits',
             'page' => 'Page Visits',
+            'location' => 'Top Locations',
             'blog' => 'Visit Details for ');
     BEGIN
         l_session_data:=pck_core.getSessionData(pWebsiteId);
@@ -608,6 +706,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         CASE pReport
             WHEN 'website' THEN getWebsiteVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
             WHEN 'page' THEN getPageVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
+            WHEN 'location' THEN getVisitsByLocation(pWebsiteId, pOffset, l_session_data.url, l_count, l_html);
             WHEN 'blog' THEN getBlogVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, pParentId, l_count, l_header, l_html);
         END CASE;
         
@@ -772,6 +871,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     BEGIN
         FOR C IN (SELECT id FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
             sendmail(C.id, l_content);
+            uploadPageHits(C.id);
         END LOOP;
     END;
     
