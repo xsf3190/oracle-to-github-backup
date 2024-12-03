@@ -152,6 +152,7 @@ const getReport = async (e, offset) => {
     const header = output.querySelector("header>*:first-child");
     const article = output.querySelector("article");
     const status = output.querySelector("footer>*:first-child");
+    let rowSpan=1;
 
     const query = "?report=" + gReport + "&offset=" + offset + "&parentid=" + gParentId;
     
@@ -161,6 +162,13 @@ const getReport = async (e, offset) => {
             gCount = data.count;
             header.insertAdjacentHTML('afterbegin',data.header);
             article.insertAdjacentHTML('afterbegin',data.article);
+            const table = article.querySelector("table");
+            const row = table.rows[0];
+            for(let cell of row.cells) {
+                if (cell.rowSpan > rowSpan) {
+                    rowSpan = cell.rowSpan;
+                }
+            }
             output.showModal();
         } else if (data.article) {            
             article.querySelector("tbody").insertAdjacentHTML('beforeend',data.article);
@@ -173,7 +181,7 @@ const getReport = async (e, offset) => {
         } else {
             showmore.dataset.offset = data.offset;
         }
-        status.textContent = tbody.childElementCount + "/" + gCount;
+        status.textContent = tbody.childElementCount/rowSpan + " / " + gCount;
     })
     .catch((error) => {
         header.replaceChildren();
