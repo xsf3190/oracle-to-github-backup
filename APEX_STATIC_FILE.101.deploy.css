@@ -167,27 +167,13 @@ a {
   color: inherit;
 }
 
-.metrics > span + span::before {
-  content: "|";
-  color: red;
-  font-weight: 900;
-  margin-inline: 0.5ch;
-}
-.metrics + .metrics {
-  border-block-start: solid 1px red;
-}
 .no-padding {
   --padding: 0;
 }
 [data-font="75%"] {
   font-size: 75%;
 }
-[aria-current="page"] {
-  padding-inline: var(--space-xs);
-  background-color: #fff;
-  color: var(--color-primary);
-  border-radius: 0.25em;
-}
+
 .card {
   --card-radius: 0.5em;
   background: var(--color-primary);
@@ -250,6 +236,9 @@ footer :is(p) {
   --grid-placement: auto-fill;
   --grid-min-item-size: clamp(10rem, 25vw, 20rem);
 }
+.grid-repeat-4 {
+    --grid-placement: 4;
+}
 .grid-auto-fit {
   display: grid;
   grid-template-columns: repeat(
@@ -258,6 +247,34 @@ footer :is(p) {
   );
   grid-gap: 1em;
 }
+
+/* SIMPLE EQUAL-SIZED COLuMN GRID */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-columns,2), 1fr);
+  border-block-start: solid 1px var(--color-primary);
+  border-inline-end: solid 1px var(--color-primary);
+  text-align: center;
+  font-size: var(--step--1);
+}
+.grid > span {
+  padding: 0.2em 0.5em;
+  border-inline-start: solid 1px var(--color-primary);
+  border-block-end: solid 1px var(--color-primary);
+}
+.grid > span.grid-heading {
+  background-color: var(--color-primary);
+  color: white;
+  font-weight: 700;
+}
+.grid > span:not(.grid-heading) {
+  color: var(--color-primary);
+  background-color: white;
+}
+.grid[data-grid-columns="4"] {
+  --grid-columns: 4;
+}
+
 .round-border {
   border-radius: 50%;
 }
@@ -445,6 +462,12 @@ form textarea {
     --button-hover-bg: var(--button-bg);
     --button-hover-color: var(--color-primary);
     --border-radius: 0;
+}
+
+/* Use aria property for current selected button */
+[aria-current="page"] {
+  --button-bg: white;
+  --button-color: #342a21;
 }
 
 /* DIALOG STYLES */
