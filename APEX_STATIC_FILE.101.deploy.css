@@ -662,6 +662,9 @@ th, td {
   border: 1px solid var(--color-primary);
   padding: var(--space-3xs);
 }
+td > button {
+    margin-inline-start: 0.25em;
+}
 td.centered {
   text-align: center;
   font-weight: 900;
