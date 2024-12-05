@@ -69,30 +69,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     END;
 
     /*
-     **  Keep IP_LOOKUP table up to date
+     **  Update IP_LOOKUP table with any new IP address details. This procedure does not fail, just reports errors to avoid loss of service (e.g. upgrade to paid plan)
      */
     PROCEDURE uploadIpLookup IS 
         l_clob clob;
         TYPE t_ip_lookup IS TABLE OF ip_lookup%rowtype;
         l_ip_lookup t_ip_lookup:=t_ip_lookup();
-        l_ip_count VARCHAR2(10);
     BEGIN
         FOR C IN (SELECT DISTINCT ip_address FROM page_hit MINUS SELECT ip FROM ip_lookup )
         LOOP
             pck_api.callIpdataAPI(null,C.ip_address,'GET',l_clob);
-            FOR C1 IN (SELECT city,country_code,postal,count FROM JSON_TABLE(l_clob, '$' COLUMNS(city,country_code,postal,count)))
+            FOR C1 IN (SELECT city,country_code,postal,error_code,error_message FROM JSON_TABLE(l_clob, '$' COLUMNS(city,country_code,postal,error_code,error_message)))
             LOOP
                 l_ip_lookup.EXTEND;
                 l_ip_lookup(l_ip_lookup.LAST).ip:=C.ip_address;
                 l_ip_lookup(l_ip_lookup.LAST).city:=C1.city;
                 l_ip_lookup(l_ip_lookup.LAST).country_code:=C1.country_code;
-                l_ip_lookup(l_ip_lookup.LAST).postal:=C1.postal;
-                l_ip_count:=C1.count;
+                l_ip_lookup(l_ip_lookup.LAST).error_code:=C1.error_code;
+                l_ip_lookup(l_ip_lookup.LAST).error_message:=C1.error_message;
             END LOOP;
         END LOOP;
-        IF (l_ip_count IS NOT NULL) THEN
-            pck_core.log('IPDATA API COUNT IS ' || l_ip_count);
-        END IF;
         FORALL i IN l_ip_lookup.FIRST..l_ip_lookup.LAST
             INSERT INTO ip_lookup VALUES l_ip_lookup(i);
     END;
@@ -406,8 +402,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     */
     PROCEDURE getWebsiteVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB) IS
         l_content CLOB;
+        l_popover VARCHAR2(100);
+        t_ela_time apex_t_varchar2;
+        l_ela_time VARCHAR2(11);
         l_rating VARCHAR2(100);
         l_total PLS_INTEGER;
+        n PLS_INTEGER:=0;
     BEGIN
         IF (pOffset=0) THEN
             l_content:='<details><summary>Overview</summary>';
@@ -434,15 +434,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             '<table role="presentation">
                 <thead>
                     <tr>
-                        <th rowspan="2">Date</th>
+                        <th>Date</th>
                         <th>Location</th>
-                        <th rowspan="2">Visit Time</th>
-                        <th>Browser</th>
-                        <th rowspan="2">Performance</th>
-                    </tr>
-                    <tr>
+                        <th>Visit Time</th>
                         <th>Referrer</th>
-                        <th>Connection</th>
+                        <th>Web Vitals</th>
                     </tr>
                 </thead>
                 <tbody>';
@@ -464,24 +460,46 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                  OFFSET pOffset ROWS
                  FETCH FIRST ROWS_PER_PAGE ROWS ONLY
             )
-            SELECT wh.visit_date, wh.referrer, ip.city||','||ip.country_code||','||ip.postal location, 
+            SELECT wh.visit_date, wh.referrer, ip.city||', '||ip.country_code||' '||ip.postal location, CASE WHEN ip.error_message IS NOT NULL THEN ip.ip END ip_address,
                     wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating
               FROM website_hits wh, ip_lookup ip
              WHERE ip.ip=wh.ip_address
         ) 
         LOOP
+            n:=n+1;
+            n:=pOffset+n;
             l_rating:=cwvRatingOverall(C.lcp_rating, C.cls_rating, C.inp_rating);
+            l_popover:=C.browser;
+            t_ela_time:=apex_string.split(TO_CHAR(TO_DATE(C.duration_visible,'sssss'),'fmhh24:mi:ss'),':');
+            l_ela_time:=NULL;
+            IF (t_ela_time(1)<>'0') THEN
+                l_ela_time:=l_ela_time || t_ela_time(1) || 'h';
+            END if;
+            IF (t_ela_time(2)<>'0') THEN
+                l_ela_time:=l_ela_time || t_ela_time(2) || 'm';
+            END if;
+            IF (t_ela_time(3)<>'0') THEN
+                l_ela_time:=l_ela_time || t_ela_time(3) || 's';
+            END if;
+
+            IF (C.connection IS NOT NULL) THEN
+                l_popover:=l_popover || '(' || C.connection;
+                IF ( C.mobile='true') THEN
+                    l_popover:=l_popover || ' Mob';
+                END IF;
+                l_popover:=l_popover || ')';
+            END IF;
+
             l_content:=l_content ||
                 '<tr>
-                    <td rowspan="2">' || TO_CHAR(C.visit_date at time zone pTimeZone, 'dd Mon yyyy fmhh24:fmmi')  || '</td>
-                    <td>' || LTRIM(RTRIM(C.location,','),',') || '</td>
-                    <td rowspan="2">' || CASE WHEN C.duration_visible IS NOT NULL THEN TO_CHAR(C.duration_visible) || ' seconds' END || '</td>
-                    <td>' || C.browser || '</td>
-                    <td  rowspan="2" class="centered">' || l_rating || '</td>
-                </tr>
-                <tr>
+                    <td>' || TO_CHAR(C.visit_date at time zone pTimeZone, 'dd-mm-yy fmhh24:fmmi')  || 
+                    '<button type="button" class="button" data-button-variant="no-styles" popovertarget="popover_' || n || '" id="anchor_' || n || '">&#9432;</button>' ||
+                    '<span id="popover_' || n || '" popover anchor="anchor_' || n || '">' || l_popover || '</span>' ||
+                    '</td>
+                    <td>' || COALESCE(C.ip_address,LTRIM(RTRIM(C.location,','),',')) || '</td>
+                    <td>' || l_ela_time || '</td>
                     <td>' || NVL(REPLACE(C.referrer,'.','&#173;.'),'-') || '</td>
-                    <td>' || C.connection || CASE WHEN C.mobile='true' THEN ' (Mob)' END || '</td>
+                    <td class="centered">' || l_rating || '</td>
                 </tr>';
         END LOOP;
 
@@ -576,7 +594,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                         OFFSET pOffset ROWS
                         FETCH FIRST ROWS_PER_PAGE ROWS ONLY
             ) LOOP
-                l_content:=l_content || '<tr><td>' || C.location || '</td><td>' || C.nb_visits || ' (' || TO_CHAR(C.pct,'fm990D00') || '%)</td></tr>';
+                l_content:=l_content || '<tr><td>' || LTRIM(RTRIM(C.location,','),',') || '</td><td>' || C.nb_visits || ' (' || TO_CHAR(C.pct,'fm990D00') || '%)</td></tr>';
             END LOOP;
 
         IF (pOffset=0) THEN
@@ -827,11 +845,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
     PROCEDURE daily_job IS
         l_content CLOB:=
-        '<h1></h1><p>Visit details in future will be a feature offered on your website.</p><p>This is to avoid repeatedly sending large amounts of data</p>';
+        '<h1></h1><p>This is to avoid repeatedly sending large amounts of data</p>';
     BEGIN
-        FOR C IN (SELECT id FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
-            sendmail(C.id, l_content);
+        FOR C IN (SELECT id, domain_name, login_form FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
+            IF (C.login_form='NO') THEN
+                l_content:='<p>Website Analytics is available directly on ' || C.domain_name || ', providing comprehensive details about your traffic. You should ask the CMS Admin to enable it.</p>';
+                sendmail(C.id, l_content);
+            END IF;
             uploadPageHits(C.id);
+            COMMIT;
         END LOOP;
     END;
     
