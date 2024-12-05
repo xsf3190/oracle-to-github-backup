@@ -583,7 +583,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
     END;    
 
     /*
-    **  IPDATA API
+    **  IPDATA API. MUST NOT FAIL.
     */
     PROCEDURE callIpdataAPI(
         pUserId IN users.id%type, 
@@ -593,7 +593,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
     IS
         l_ipdata_url VARCHAR2(200):='https://api.ipdata.co/';
         l_ipdata_api_key users.ipdata_api_key%type;
-        l_error_message LONG;
+        l_error_message ip_lookup.error_message%type;
+        l_error_code ip_lookup.error_code%type;
     BEGIN
         /* Get user's ipdata api key */
         FOR C IN (SELECT ipdata_api_key FROM users WHERE id=pUserId) LOOP 
@@ -615,8 +616,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         apex_web_service.g_request_headers(1).name := 'Content-Type';
         apex_web_service.g_request_headers(1).value := 'application/json';
 
-        l_ipdata_url:=l_ipdata_url || pEndpoint || '?api-key=' || l_ipdata_api_key;
-        pck_core.log(l_ipdata_url);
+        l_ipdata_url:=l_ipdata_url || pEndpoint || '?api-key=' || l_ipdata_api_key || '&fields=city,country_code,postal,zip';
 
         pData := apex_web_service.make_rest_request(p_url=>l_ipdata_url, p_http_method=>pMethod);
 
@@ -626,8 +626,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
             RETURN;
         END IF;
 
-        l_error_message:=pMethod || ' ' || l_ipdata_url || ' https status:' || apex_web_service.g_status_code;
-        RAISE_APPLICATION_ERROR(-20040,l_error_message);
+
+        /* API Call has failed */
+
+        l_error_code:=apex_web_service.g_status_code;
+
+        FOR C IN (SELECT message FROM JSON_TABLE(pData,'$' COLUMNS (message))) LOOP
+            l_error_message:=C.message;
+        END LOOP;
+
+        IF (l_error_message IS NULL) THEN
+            FOR C IN (SELECT code,type,info FROM JSON_TABLE(pData,'$.error' COLUMNS (code,type,info)) ) LOOP
+                l_error_code:=C.code;
+                l_error_message:=C.type;
+            END LOOP;
+        END IF;
+
+        pck_core.log(l_error_code || ':' || l_error_message);
+        pData:='{"error_code":'||l_error_code||',"error_message":"'||l_error_message||'"}';
     END;
 
     /*
