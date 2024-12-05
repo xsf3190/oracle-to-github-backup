@@ -50,7 +50,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         </svg>
       </summary>
       <ul class="dropdown-content">
-        <li><small class="email"></small></li>
+        <li class="align-center"><small class="email"></small></li>
         <li class="align-center"><small class="expires"></small></li>
         <li><button type="button" class="button" data-endpoint="visits" data-report="website">Website Visits</button></li>
         <li><button type="button" class="button" data-endpoint="visits" data-report="location">Top Locations</button></li>';
@@ -92,7 +92,7 @@ q'{<dialog class="login-email">
         <input type="hidden" name="request_type" value="">
         <header class="flex-items space-between">
             <h2>Sign up or log in</h2>
-            <button class="button close no-focus" data-button-variant="round-icon">
+            <button type="button" class="button close no-focus" data-button-variant="round-icon">
                 <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
                     <use href="#cross"></use>
                 </svg>
