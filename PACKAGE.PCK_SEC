@@ -32,8 +32,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     REFRESH_TOKEN_EXP CONSTANT PLS_INTEGER:=(24*60*60)*90; --90 DAYS
     ACCESS_TOKEN_EXP CONSTANT PLS_INTEGER:=60*5; -- 5 MINUTES
 
-    FUNCTION emailTemplate(pWebsite IN VARCHAR2, pFavicon IN VARCHAR2, pHref  IN VARCHAR2) RETURN VARCHAR2 IS
-        l_html LONG:=
+    FUNCTION emailTemplate(pAuthMethod IN VARCHAR2, pWebsite IN VARCHAR2, pFavicon IN VARCHAR2, pAuthData IN VARCHAR2) RETURN VARCHAR2 IS
+        l_html LONG;
+    BEGIN
+    l_html:=
 '<!doctype html>
 <html lang="en">
   <head>
@@ -131,15 +133,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
           <div class="content" style="box-sizing: border-box; display: block; margin: 0 auto; max-width: 600px; padding: 0;">
 
             <!-- START CENTERED WHITE CONTAINER -->
-            <span class="preheader" style="color: transparent; display: none; height: 0; max-height: 0; max-width: 0; opacity: 0; overflow: hidden; mso-hide: all; visibility: hidden; width: 0;">Your Login request to #WEBSITE#</span>
+            <span class="preheader" style="color: transparent; display: none; height: 0; max-height: 0; max-width: 0; opacity: 0; overflow: hidden; mso-hide: all; visibility: hidden; width: 0;">Your Login request to ' || pWebsite || '</span>
             <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="main" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; background: #ffffff; border: 1px solid #eaebed; border-radius: 16px; width: 100%;" width="100%">
 
               <!-- START MAIN CONTENT AREA -->
               <tr>
                 <td class="wrapper" style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top; box-sizing: border-box; padding: 24px;" valign="top">
-                  <img src="#FAVICON#" alt="Website favicon" width="96" height="96" border="0" style="border:0; outline:none; text-decoration:none; display:block;">
-                  <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: bold; margin: 0; margin-bottom: 16px;">Your Login request to #WEBSITE#</p>
-                  <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: normal; margin: 0; margin-bottom: 16px;">Click the button below to log in. Your link expires in 5 minutes.</p>
+                  <img src="' || pFavicon || '" alt="Website favicon" width="96" height="96" border="0" style="border:0; outline:none; text-decoration:none; display:block;">
+                  <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: bold; margin: 0; margin-bottom: 16px;">Your Login request to ' || pWebsite || '</p>
+                  <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: normal; margin: 0; margin-bottom: 16px;">';
+                  CASE pAuthMethod 
+                    WHEN 'magic' THEN l_html:=l_html || 'Click the button below to log in. Your link expires in 5 minutes.';
+                    WHEN 'passcode' THEN l_html:=l_html || 'Enter this passcode to log in. Expires in 5 minutes.';
+                  END CASE;
+                  l_html:=l_html ||
+                  '</p>
                   <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="btn btn-primary" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; box-sizing: border-box; width: 100%; min-width: 100%;" width="100%">
                     <tbody>
                       <tr>
@@ -147,9 +155,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                           <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: auto;">
                             <tbody>
                               <tr>
-                                <td style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top; border-radius: 4px; text-align: center; background-color: #0867ec;" valign="top" align="center" bgcolor="#0867ec">
-                                    <a href="#HREF#" target="_blank" style="border: solid 2px #0867ec; border-radius: 4px; box-sizing: border-box; cursor: pointer; display: inline-block; font-size: 16px; font-weight: bold; margin: 0; padding: 12px 24px; text-decoration: none; text-transform: capitalize; background-color: #0867ec; border-color: #0867ec; color: #ffffff;">Login</a>
-                                </td>
+                                <td style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top; border-radius: 4px; text-align: center; background-color: #0867ec;" valign="top" align="center" bgcolor="#0867ec">';
+                                CASE pAuthMethod 
+                                    WHEN 'magic' THEN l_html:=l_html || 
+                                        '<a href="' || pAuthData || '" target="_blank" style="border: solid 2px #0867ec; border-radius: 4px; box-sizing: border-box; cursor: pointer; display: inline-block; font-size: 16px; font-weight: bold; margin: 0; padding: 12px 24px; text-decoration: none; text-transform: capitalize; background-color: #0867ec; border-color: #0867ec; color: #ffffff;">Login</a>';
+                                    WHEN 'passcode' THEN l_html:=l_html || 
+                                        '<span style="border: solid 2px #0867ec; border-radius: 4px; box-sizing: border-box; display: inline-block; font-size: 24px; letter-spacing: 8px; font-weight: bold; margin: 0; padding: 12px 24px; text-transform: capitalize; background-color: #0867ec; border-color: #0867ec; color: #ffffff;">' || pAuthData || '</span>';
+                                END CASE;
+                                l_html:=l_html ||
+                                '</td>
                               </tr>
                             </tbody>
                           </table>
@@ -169,13 +183,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
               <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%;" width="100%">
                 <tr>
                   <td class="content-block" style="font-family: Helvetica, sans-serif; vertical-align: top; color: #9a9ea6; font-size: 16px; text-align: center;" valign="top" align="center">
-                    <span class="apple-link" style="color: #9a9ea6; font-size: 16px; text-align: center;">Company Inc, 7-11 Commercial Ct, Belfast BT1 2NB</span>
-                    <br> Dont like these emails? <a href="http://htmlemail.io/blog" style="text-decoration: underline; color: #9a9ea6; font-size: 16px; text-align: center;">Unsubscribe</a>.
+                    <span class="apple-link" style="color: #9a9ea6; font-size: 16px; text-align: center;">Email sent through adfreesites.com</span>
                   </td>
                 </tr>
                 <tr>
                   <td class="content-block powered-by" style="font-family: Helvetica, sans-serif; vertical-align: top; color: #9a9ea6; font-size: 16px; text-align: center;" valign="top" align="center">
-                    Powered by <a href="http://htmlemail.io" style="color: #9a9ea6; font-size: 16px; text-align: center; text-decoration: none;">HTMLemail.io</a>
+                    Powered by <a href="https://docs.aws.amazon.com/ses/latest/dg/Welcome.html" style="color: #9a9ea6; font-size: 16px; text-align: center; text-decoration: none;">Amazon Simple Email Service(SES)</a>
                   </td>
                 </tr>
               </table>
@@ -190,10 +203,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     </table>
   </body>
 </html>';
-    BEGIN
-        l_html:=REPLACE(l_html,'#WEBSITE#',pWebsite);
-        l_html:=REPLACE(l_html,'#FAVICON#',pFavicon);
-        l_html:=REPLACE(l_html,'#HREF#',pHref);
         RETURN (l_html);
     END;
 
@@ -273,9 +282,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                     UPDATE users SET login_status='AUTH WAITING', token=l_token_hash, updated_date=current_timestamp WHERE id=l_user_id;
                 END IF;
 
-                l_sendmail_subject:='Login to ' || l_url;
+                
                 l_sendmail_link:=pck_core.getRestUrl || 'authenticate/' || pWebsiteId || '?request=magic&user='||l_user_id||'&verify=' ||l_token;
-                l_sendmail_body:=emailTemplate(l_url, 'https://adfreesites.com/favicon.' || pWebsiteId || '.png', l_sendmail_link);
+                l_sendmail_body:=emailTemplate(l_request_type, l_url, 'https://adfreesites.com/favicon.' || pWebsiteId || '.png', l_sendmail_link);
 
             WHEN 'passcode' THEN
                 FOR i IN 1..6 LOOP
@@ -286,18 +295,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 l_passcode_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_passcode,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
 
                 IF (l_user_id=0) THEN
-                    INSERT INTO users (email, passcode) VALUES (l_email, l_passcode_hash);
+                    INSERT INTO users (email, login_status, passcode) VALUES (l_email, 'AUTH WAITING', l_passcode_hash);
                 ELSE
-                    UPDATE users SET passcode=l_passcode_hash WHERE id=l_user_id;
+                    UPDATE users SET login_status='AUTH WAITING', passcode=l_passcode_hash WHERE id=l_user_id;
                 END IF;
 
-                l_sendmail_subject:='Passcode '||l_passcode||' to login on ' || l_url;
-                l_sendmail_body:='<h1>Passcode is ' || l_passcode || '</h1>';
-            END CASE;
+                l_sendmail_body:=emailTemplate(l_request_type, l_url, 'https://adfreesites.com/favicon.' || pWebsiteId || '.png', l_passcode);
+        END CASE;
 
         l_json:=new JSON_OBJECT_T;
         l_json.put('contactEmail',l_email);
-        l_json.put('subject',l_sendmail_subject);
+        l_json.put('subject','Login to ' || l_url);
         l_json.put('body', l_sendmail_body);
         l_json.put('sourceEmail','login@adfreesites.com');
         l_email_payload:=l_json.stringify;
@@ -416,6 +424,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 IF (pRequestType='passcode') THEN
                     sendMessage(FALSE,'Passcode does not match.');
                 END IF;
+                IF (pRequestType='magic') THEN
+                    htp.p('<h1>Token expired. Login again.</h1>');
+                END IF;
                 RETURN;
             END IF;
         END LOOP;
@@ -434,12 +445,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
                 BEGIN
                     apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
-                    EXCEPTION WHEN VALUE_ERROR THEN
-                        sendMessage(FALSE,pRequestType || ' token expired. Login again.');
-                        RETURN;
+                    EXCEPTION 
+                        WHEN VALUE_ERROR THEN
+                            pck_core.log('Was VALUE_ERROR');
+                            htp.p('<h1>Token expired. Login again</h1>');
+                            --sendMessage(FALSE,pRequestType || ' token expired. Login again.');
+                            RETURN;
+                        WHEN OTHERS THEN 
+                            pck_core.log(sqlerrm);
+                            htp.p('<h1>' || sqlerrm || '</h1>');
+                            RETURN;
                 END;
 
-                htp.p('<h1>Authenticated Successfully');
+                htp.p('<h1>Authenticated Successfully</h1>');
             
             WHEN 'passcode' THEN
                 issueJWTTokens(pWebsiteId, l_email);
