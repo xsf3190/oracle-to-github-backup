@@ -436,9 +436,15 @@ form textarea {
   );
 }
 
-
 .button:active {
   transform: scale(99%);
+}
+
+.button[data-button-variant="nav-item"] {
+    --button-padding: 0;
+    --button-color: white;
+    --button-bg: transparent;
+    --button-hover-bg: transparent;
 }
 
 .button[data-button-variant="round-icon"] {
@@ -464,10 +470,12 @@ form textarea {
     --border-radius: 0;
 }
 
-/* Use aria property for current selected button */
+/* Use aria property for current page navigation label */
 [aria-current="page"] {
-  --button-bg: white;
-  --button-color: #342a21;
+  text-decoration: underline;
+  text-decoration-thickness: 0.5ex;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 0.8ex;
 }
 
 /* DIALOG STYLES */
