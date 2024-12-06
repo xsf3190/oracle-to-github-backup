@@ -85,6 +85,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 l_ip_lookup(l_ip_lookup.LAST).ip:=C.ip_address;
                 l_ip_lookup(l_ip_lookup.LAST).city:=C1.city;
                 l_ip_lookup(l_ip_lookup.LAST).country_code:=C1.country_code;
+                l_ip_lookup(l_ip_lookup.LAST).postal:=C1.postal;
                 l_ip_lookup(l_ip_lookup.LAST).error_code:=C1.error_code;
                 l_ip_lookup(l_ip_lookup.LAST).error_message:=C1.error_message;
             END LOOP;
@@ -102,12 +103,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         n PLS_INTEGER;
     BEGIN
         DELETE website_article_cwv WHERE INSTR(UPPER(referrer),UPPER(sys_context('userenv','db_name')))>0;
+        DELETE website_article_cwv WHERE browser LIKE 'Headless%';
         DELETE website_article_cwv cwv WHERE cwv.website_id=pWebsiteId AND NOT EXISTS (SELECT null FROM article a WHERE a.id=cwv.article_id);
-        n:=SQL%ROWCOUNT;
-        IF (n>0) THEN
-            pck_core.log('Discarded '||n||' rows from website_article_cwv referencing articles deleted since last deployment.');
-        END IF;
-
+        
         MERGE INTO page_hit t
         USING (
             SElECT 
@@ -144,15 +142,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 t.url=COALESCE(t.url,s.url) 
                 ;
         n:=SQL%ROWCOUNT;
-        IF (n>0) THEN
-            pck_core.log('Merged '||n||' rows into page_hit table');
-        END IF;
+        pck_core.log(n||' rows loaded into page_hit table');
 
         DELETE website_article_cwv WHERE website_id=pWebsiteId;
-        n:=SQL%ROWCOUNT;
-        IF (n>0) THEN
-            pck_core.log('Deleted '||n||' rows merged from website_article_cwv table');
-        END IF;
 
         uploadIpLookup;
     END;
@@ -348,17 +340,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         <body>';
     BEGIN
         FOR C IN (SELECT NVL(w.contact_email, u.email) contact_email, w.domain_name FROM website w, users u where u.id=w.user_id AND w.id=pWebsiteId) LOOP
-            pck_core.log('Sending website analysis for ' || C.domain_name || ' by email to '|| C.contact_email);
-            /*
-            apex_mail.send(
-                p_to=>C.contact_email, 
-                p_from=>'visits@'||C.domain_name, 
-                p_body=>l_body, 
-                p_body_html=>l_body_html || pContent || '</body></html>',
-                p_subj=>'Website Analysis - ' || C.domain_name);
-            apex_mail.push_queue(); 
-            */
-
             l_json:=new JSON_OBJECT_T;
             l_json.put('contactEmail',C.contact_email);
             l_json.put('subject','Website visits to '|| C.domain_name);
@@ -750,7 +731,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
           FROM website
          WHERE id=l_website_id;
 
-        pck_visits.uploadPageHits(l_website_id);
         FOR C IN (
             SELECT COUNT(DISTINCT website_loaded||ip_address) nb_hit, COUNT(DISTINCT ip_address) nb_distinct_ip, MIN(visit_date) first_hit, MAX(visit_date) last_hit,
                     APPROX_PERCENTILE(0.95 DETERMINISTIC) WITHIN GROUP (ORDER BY lcp) lcp,
@@ -844,16 +824,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     END;
 
     PROCEDURE daily_job IS
-        l_content CLOB:=
-        '<h1></h1><p>This is to avoid repeatedly sending large amounts of data</p>';
+        l_content VARCHAR2(300);
     BEGIN
         FOR C IN (SELECT id, domain_name, login_form FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
+            pck_core.log('START visit data processing for ' || C.domain_name);
             IF (C.login_form='NO') THEN
                 l_content:='<p>Website Analytics is available directly on ' || C.domain_name || ', providing comprehensive details about your traffic. You should ask the CMS Admin to enable it.</p>';
                 sendmail(C.id, l_content);
             END IF;
             uploadPageHits(C.id);
             COMMIT;
+            pck_core.log('END visit data processing for ' || C.domain_name);
         END LOOP;
     END;
     
