@@ -158,7 +158,7 @@ q'{<dialog class="output">
                         '<div class="flex-items space-around">';
                 END IF;
                 l_nav_labels:=l_nav_labels || 
-                    '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="button"' || 
+                    '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="button" data-button-variant="nav-item"' || 
                         CASE WHEN g_nav_labels(i).article_id=pArticleId THEN ' aria-current="page"' END  || 
                         ' data-id="' || g_nav_labels(i).article_id || '">' || g_nav_labels(i).navigation_label || '</a>';
                 IF (i=g_nav_labels.COUNT) THEN
