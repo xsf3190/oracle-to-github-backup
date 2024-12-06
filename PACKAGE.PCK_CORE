@@ -429,6 +429,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     */
     FUNCTION buildBlogList(pEnv IN VARCHAR2, pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pClasses IN VARCHAR2) RETURN CLOB IS
         l_html CLOB;
+        l_html_list CLOB;
         l_featured article.featured%type;
         l_classes VARCHAR2(100);
         l_path website_article.navigation_label%type;
@@ -447,6 +448,43 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END IF;
 
         SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
+
+        /* Build list of all title in title order */
+        IF (l_featured is NULL) THEN
+            FOR C IN (
+                WITH ph AS (
+                  SELECT a.id, COUNT(DISTINCT p.ip_address) nb_distinct_visitors
+                    FROM article a, page_hit p
+                   WHERE a.parent_id=pArticleId
+                     AND a.id=p.article_id
+                     AND p.url='spiritresilience.com'
+                   GROUP BY a.id
+                )
+                SELECT COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY ph.nb_distinct_visitors DESC NULLS LAST) rn,
+                             a.title, DECODE(pEnv,'TEST',a.deployed_date,'LIVE',a.deployed_date_custom) deployed_date
+                        FROM article a, ph
+                       WHERE a.parent_id=pArticleId
+                         AND a.id=ph.id(+)
+                       ORDER BY 2, a.title ) 
+            LOOP
+                IF (C.rn=1) THEN
+                    l_html_list:=
+                    '<details>' ||
+                        '<summary>All Titles (most read first)</summary>' ||
+                        '<article class="grid">';
+                END IF;
+                l_html_list:=l_html_list || 
+                            '<span>' || TO_CHAR(NVL(C.deployed_date,current_timestamp),'fmMon dd, yyyy') || '</span>';
+                l_href:='/' || l_path || '/' || apex_string_util.get_slug(C.title);
+                l_html_list:=l_html_list || 
+                                '<a href="' || l_href || '">' || C.title || '</a>';
+                IF (C.rn=C.nb) THEN
+                    l_html:=l_html || 
+                        '</article>' ||
+                    '</details>';
+                END IF;    
+            END LOOP;
+        END IF;
 
         FOR C IN (SELECT COUNT(*) OVER () nb, ROW_NUMBER() OVER (ORDER BY null) rn,
                             wa.collection_date_format, art.body_html, art.title, art.excerpt, DECODE(pEnv,'TEST',art.deployed_date,'LIVE',art.deployed_date_custom) deployed_date, art.word_count, art.cover_icon_id, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width, ass.height, ass.alt_text
@@ -488,7 +526,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 l_html:=l_html || '</ol>';
             END IF;
         END LOOP;
-        RETURN (l_html);
+        RETURN (l_html_list || l_html);
     END;
 
     /*
