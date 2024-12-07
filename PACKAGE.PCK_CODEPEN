@@ -148,7 +148,17 @@ q'{<dialog class="output">
 
     FUNCTION buildNavLabels(pArticleId IN article.id%type) RETURN VARCHAR2 IS
         l_nav_labels LONG;
+        l_article_id article.id%type;
     BEGIN
+        /* IF pArticleId is a child article set aria-current-page on owner */
+        FOR i IN 1..g_nav_labels.COUNT LOOP
+            IF (g_nav_labels(i).article_id=pArticleId) THEN
+                l_article_id:=pArticleId;
+            END IF;
+        END LOOP;
+        IF (l_article_id IS NULL) THEN
+            SELECT parent_id INTO l_article_id FROM article WHERE id=pArticleId;
+        END IF;
         IF (g_nav_labels.COUNT>1) THEN
             FOR i IN 1..g_nav_labels.COUNT LOOP
                 IF (i=1) THEN
@@ -159,7 +169,7 @@ q'{<dialog class="output">
                 END IF;
                 l_nav_labels:=l_nav_labels || 
                     '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="button" data-button-variant="nav-item"' || 
-                        CASE WHEN g_nav_labels(i).article_id=pArticleId THEN ' aria-current="page"' END  || 
+                        CASE WHEN g_nav_labels(i).article_id=l_article_id THEN ' aria-current="page"' END  || 
                         ' data-id="' || g_nav_labels(i).article_id || '">' || g_nav_labels(i).navigation_label || '</a>';
                 IF (i=g_nav_labels.COUNT) THEN
                     l_nav_labels:=l_nav_labels || '</div></nav>';
