@@ -169,28 +169,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         END IF;
         RETURN(l_cwv);
     END;
-
-    /*
-    ** Get overall Google Core Web Vital performance rating if available
-    */
-    FUNCTION cwvRatingOverall(pLCP IN VARCHAR2 DEFAULT NULL, pCLS IN VARCHAR2 DEFAULT NULL, pINP IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
-        l_cwv page_hit.lcp_rating%type;
-    BEGIN
-        IF (COALESCE(pLCP,pCLS,pINP) IS NULL) THEN
-            RETURN('-');
-        END IF;
-
-        IF ((pLCP='good' OR pLCP IS NULL) AND (pCLS='good' OR pCLS IS NULL) AND (pINP='good' OR pINP IS NULL)) THEN
-           l_cwv:='good';
-        ELSIF ((pLCP='poor' OR pLCP IS NULL) OR (pCLS='poor' OR pCLS IS NULL) OR (pINP='poor' OR pINP IS NULL)) THEN
-            l_cwv:='poor';
-        ELSE
-            l_cwv:='needs improvement';
-        END IF;
-
-        RETURN('<span class="' || REPLACE(l_cwv,' ','-') || '">' || UPPER(l_cwv) || '</span>');
-    END;
-
     
     FUNCTION sql2Html (pSql IN VARCHAR2, pWebsiteId IN website.id%type, pUrl IN VARCHAR2, pOffset IN NUMBER) RETURN CLOB
     IS
@@ -389,10 +367,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_rating VARCHAR2(100);
         l_total PLS_INTEGER;
         n PLS_INTEGER:=0;
+
+        FUNCTION cwv (pLCPr IN VARCHAR2 DEFAULT NULL, pCLSr IN VARCHAR2 DEFAULT NULL, pINPr IN VARCHAR2 DEFAULT NULL, pLCP IN VARCHAR2 DEFAULT NULL, pCLS IN VARCHAR2 DEFAULT NULL, pINP IN VARCHAR2 DEFAULT NULL) RETuRN VARCHAR2
+        IS
+            l_rating VARCHAR2(50);
+        BEGIN
+            l_rating:='<br>';
+            IF (pLCPr IS NOT NULL) THEN
+                IF (pLCP>2.5) THEN
+                    l_rating:=l_rating || '<span>LCP:' || pLCP || 's</span>';
+                END IF;
+            END IF;
+            IF (pCLSr IS NOT NULL) THEN
+                IF (pCLS>0.1) THEN
+                    l_rating:=l_rating || '<span>CLS:' || pCLS || '</span>';
+                END IF;
+            END IF;
+            IF (pINPr IS NOT NULL) THEN
+                IF (pINP>200) THEN
+                    l_rating:=l_rating || '<span>INP:' || pINP || 'ms</span>';
+                END IF;
+            END IF;
+            RETURN (l_rating);
+        END;
     BEGIN
         IF (pOffset=0) THEN
             l_content:='<details><summary>Overview</summary>';
-            l_content:=l_content || '<section class="grid" data-grid-columns="4">';
+            l_content:=l_content || '<section class="grid grid__4col">';
             l_content:=l_content || '<span class="grid-heading">Total Visits</span>';
             l_content:=l_content || '<span class="grid-heading">Since</strong></span>';
             l_content:=l_content || '<span class="grid-heading">Distinct Visitors</strong></span>';
@@ -431,6 +432,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 SELECT p.website_id, p.ip_address, p.visit_date, 
                         MAX(p.referrer) referrer, 
                         MAX(p.lcp_rating) lcp_rating, MAX(p.cls_rating) cls_rating, MAX(p.inp_rating) inp_rating, 
+                        MAX(p.lcp) lcp, MAX(p.cls) cls, MAX(p.inp) inp, 
                         SUM(p.duration_visible) duration_visible, MAX(p.browser) browser, MAX(p.connection) connection, MAX(p.mobile) mobile
                   FROM website w, page_hit p
                  WHERE w.id=pWebsiteId
@@ -442,14 +444,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                  FETCH FIRST ROWS_PER_PAGE ROWS ONLY
             )
             SELECT wh.visit_date, wh.referrer, ip.city||', '||ip.country_code||' '||ip.postal location, CASE WHEN ip.error_message IS NOT NULL THEN ip.ip END ip_address,
-                    wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating
+                    wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating, RouND(wh.lcp/1000,1) lcp, cls, inp
               FROM website_hits wh, ip_lookup ip
              WHERE ip.ip=wh.ip_address
         ) 
         LOOP
             n:=n+1;
             n:=pOffset+n;
-            l_rating:=cwvRatingOverall(C.lcp_rating, C.cls_rating, C.inp_rating);
+            
             l_popover:=C.browser;
             t_ela_time:=apex_string.split(TO_CHAR(TO_DATE(C.duration_visible,'sssss'),'fmhh24:mi:ss'),':');
             l_ela_time:=NULL;
@@ -464,11 +466,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             END if;
 
             IF (C.connection IS NOT NULL) THEN
-                l_popover:=l_popover || '(' || C.connection;
+                l_popover:=l_popover || ' (' || C.connection;
                 IF ( C.mobile='true') THEN
-                    l_popover:=l_popover || ' Mob';
+                    l_popover:=l_popover || ' Mobile';
                 END IF;
                 l_popover:=l_popover || ')';
+            END IF;
+
+            IF (COALESCE(C.lcp_rating,C.cls_rating,C.inp_rating) IS NULL) THEN
+                l_rating:='-';
+            ELSE
+                IF ((C.lcp_rating='good' OR C.lcp_rating IS NULL) AND (C.cls_rating='good' OR C.cls_rating IS NULL) AND (C.inp_rating='good' OR C.inp_rating IS NULL)) THEN
+                   l_rating:='<span class="good">GOOD</span>';
+                ELSIF ((C.lcp_rating='poor' OR C.lcp_rating IS NULL) OR (C.cls_rating='poor' OR C.cls_rating IS NULL) OR (C.inp_rating='poor' OR C.inp_rating IS NULL)) THEN
+                    l_rating:='<span class="poor">POOR</span>' || cwv(C.lcp_rating,C.cls_rating,C.inp_rating, C.lcp,C.cls,C.inp);
+                ELSE
+                    l_rating:='<span class="needs-improvement">NEEDS IMPROVEMENT</span>' || cwv(C.lcp_rating,C.cls_rating,C.inp_rating, C.lcp,C.cls,C.inp);
+                END IF;
             END IF;
 
             l_content:=l_content ||
