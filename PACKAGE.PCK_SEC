@@ -507,12 +507,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_refresh_token VARCHAR2(4000);
         l_token APEX_JWT.T_TOKEN;
         l_jwt_enc_key user_ords_clients.client_secret%type;
-        l_user_object APEX_JSON.T_VALUES;
         l_scope VARCHAR2(7);
         l_email users.email%type;
         l_user_id VARCHAR2(6);
-        l_new_token VARCHAR2 (4000);
-        l_new_refresh VARCHAR2 (4000);
     BEGIN
         l_header_value:=OWA_UTIL.get_cgi_env('Authorization');
         
@@ -526,7 +523,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         getKeyAndScope(pWebsiteId, l_email, l_jwt_enc_key, l_user_id, l_scope);
 
-        l_token:=apex_jwt.DECODE (p_value   => l_refresh_token, p_signature_key   => UTL_RAW.cast_to_raw (l_jwt_enc_key));
+        l_token:=apex_jwt.DECODE (p_value => l_refresh_token, p_signature_key => UTL_RAW.cast_to_raw(l_jwt_enc_key));
 
         apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
 
