@@ -435,6 +435,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_path website_article.navigation_label%type;
         l_href VARCHAR2(200);
         pos PLS_INTEGER;
+        MAX_BLOGS CONSTANT PLS_INTEGER:=12;
     BEGIN
         
         IF (INSTR(pClasses,'featured')>0) THEN
@@ -467,11 +468,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                          AND a.id=ph.id(+)
                        ORDER BY 2, a.title ) 
             LOOP
+                IF (C.nb<MAX_BLOGS) THEN
+                    EXIT;
+                END IF;
                 IF (C.rn=1) THEN
                     l_html_list:=
                     '<details>' ||
-                        '<summary>All Titles (most read first)</summary>' ||
-                        '<article class="grid">';
+                        '<summary>All titles ordered by popularity</summary>' ||
+                        '<article class="grid" data-grid-variant="1">';
                 END IF;
                 l_html_list:=l_html_list || 
                             '<span>' || TO_CHAR(NVL(C.deployed_date,current_timestamp),'fmMon dd, yyyy') || '</span>';
@@ -522,8 +526,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     '<span>' || C.word_count || ' words</span>' ||
                 '</div>' ||
             '</li>';
-            IF (C.rn=C.nb) THEN
+            IF (C.rn=LEAST(MAX_BLOGS,C.nb)) THEN
                 l_html:=l_html || '</ol>';
+                EXIT;
             END IF;
         END LOOP;
         RETURN (l_html_list || l_html);
