@@ -248,33 +248,65 @@ footer :is(p) {
   grid-gap: 1em;
 }
 
-/* SIMPLE EQUAL-SIZED COLuMN GRID */
+
+/* SIMPLE GRID  - DEFAULT IS 2 EQUAL-SIZED COLuMNS WITH NO GAP */
+
 .grid {
+  --grid-border: solid 1px var(--color-primary);
   display: grid;
-  grid-template-columns: repeat(var(--grid-columns,2), 1fr);
-  border-block-start: solid 1px var(--color-primary);
-  border-inline-end: solid 1px var(--color-primary);
-  text-align: center;
-  font-size: var(--step--1);
-}
-.grid > span {
-  padding: 0.2em 0.5em;
-  border-inline-start: solid 1px var(--color-primary);
-  border-block-end: solid 1px var(--color-primary);
-}
-.grid > span.grid-heading {
-  background-color: var(--color-primary);
-  color: white;
-  font-weight: 700;
-}
-.grid > span:not(.grid-heading) {
-  color: var(--color-primary);
-  background-color: white;
-}
-.grid[data-grid-columns="4"] {
-  --grid-columns: 4;
+  grid-template-columns: var(--grid-template-columns, 1fr 1fr);
+  outline: var(--grid-border);
+  text-align: var(--text-align, center);
 }
 
+.grid__2col {
+  --grid-template-columns: repeat(2, 1fr);
+}
+
+.grid__4col {
+  --grid-template-columns: repeat(4, 1fr);
+}
+
+.grid__6col {
+  --grid-template-columns: repeat(6, 1fr);
+}
+
+.grid > * {
+  padding: var(--grid-padding, 0.2em 0.5em);
+  border-inline-start: var(--grid-border);
+  border-block-end: var(--grid-border);
+}
+
+.grid-heading {
+  color: #fff;
+  background-color: var(--color-primary);
+}
+
+.grid[data-grid-variant="1"] {
+  --grid-template-columns: 10ch 1fr;
+  outline: initial;
+  align-items: baseline;
+  column-gap: 1em;
+}
+
+.grid[data-grid-variant="1"]>* {
+  --grid-padding: 1em 0;
+  border: initial;
+}
+
+.grid[data-grid-variant="1"]>*:nth-child(odd) {
+  text-align: end;
+  color: var(--color-primary-light);
+  font-size: var(--step--2);
+}
+
+.grid[data-grid-variant="1"]>*:nth-child(even) {
+  text-align: start;
+  border-block-end: var(--grid-border);
+  font-size: var(--step--1);
+}
+
+/* MORE UtILITES - NEED TO STRUCTURE THIS */
 .round-border {
   border-radius: 50%;
 }
@@ -605,6 +637,7 @@ pre:has(.language-sql)::after {
   display: block;
   color: var(--color-primary);
   background-color: transparent;
+  margin-block: var(--space-3xs);
   padding: 0.5em 1.5em;
   border: none;
   inline-size: 100%;
