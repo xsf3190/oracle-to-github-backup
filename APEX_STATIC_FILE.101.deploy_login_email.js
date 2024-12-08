@@ -39,7 +39,7 @@ const callAPI = async (endpoint, method = "GET", token, data) => {
 
     const response = await fetch(url, config);
 
-    if (!response.ok) {
+    if (response.status>=500) {
         throw Error(`System Error: ${response.status} - ${response.message}}`);
     }
 
@@ -111,6 +111,7 @@ const checkToken = async () => {
         replaceTokens(data);
     })
     .catch((error) => {
+        const content = output.querySelector("article");
         content.replaceChildren();
         content.insertAdjacentHTML('afterbegin',error);
         content.style.color = "red";
