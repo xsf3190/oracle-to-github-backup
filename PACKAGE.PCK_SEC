@@ -1,10 +1,10 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS 
     --
-    PROCEDURE createAuthRequest(pWebsiteId IN website.id%type, pBodyText IN CLOB);
+    PROCEDURE createAuthRequest(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
-    PROCEDURE verifyAuthRequest(pWebsiteId IN website.id%type, pRequestType IN VARCHAR2, pUserId IN NUMBER, pVerifyData IN VARCHAR2);
+    PROCEDURE verifyAuthRequest(pWebsiteId IN website.id%type, pRequestType IN VARCHAR2, pUserId IN NUMBER, pVerifyData IN VARCHAR2, pStatus OUT NUMBER);
     --
-    PROCEDURE checkAuthStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB);
+    PROCEDURE checkAuthStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
     --PROCEDURE makeAuthRequest(pWebsiteId IN website.id%type);
     --
@@ -219,7 +219,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     ** - CREATE RANDOM PASSCODE OR MAGIC LINK AND SEND TO EMAIL ADDRESS
     */
 
-    PROCEDURE createAuthRequest(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
+    PROCEDURE createAuthRequest(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
         l_email users.email%type;
         l_url varchar2(100);
         l_request_type VARCHAR2(10);
@@ -322,8 +322,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 APEX_JSON.close_object;
         END CASE;
 
+        pStatus:=200;
+
         EXCEPTION WHEN OTHERS THEN
-            pck_core.log_error;
+            pck_core.log_error(pStatus);
     END;
 
     PROCEDURE getKeyAndScope(pWebsiteId IN website.id%type, pEmail IN VARCHAR2, pJwtEncKey IN OUT user_ords_clients.client_secret%type, pUserId IN OUT users.id%type, pScope IN OUT VARCHAR2) 
@@ -404,7 +406,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     ** VERIFY PASSCODE OR TOKEN ENTERED BY USER MATCHES DATA ORIGINALLY SENT BY EMAIL
     ** RETURN JWT ACCESS AND REFRESH TOKENS IF VERIFIED
     */
-    PROCEDURE verifyAuthRequest(pWebsiteId IN website.id%type, pRequestType IN VARCHAR2, pUserId IN NUMBER, pVerifyData IN VARCHAR2) IS
+    PROCEDURE verifyAuthRequest(pWebsiteId IN website.id%type, pRequestType IN VARCHAR2, pUserId IN NUMBER, pVerifyData IN VARCHAR2, pStatus OUT NUMBER) IS
         l_email users.email%type;
         l_user_id users.id%type;
         l_jwt_enc_key user_ords_clients.client_secret%type;
@@ -468,15 +470,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         UPDATE users SET login_status='AUTH OK' WHERE id=pUserId;
 
+        pStatus:=200;
+
         EXCEPTION WHEN OTHERS THEN
-            pck_core.log_error;
+            pck_core.log_error(pStatus);
     END;
 
     /* 
     ** CLIENT HAS SUBMITTED EMAIL ADDRESS AND WAITING TO BE LOGGED IN 
     ** IF LOGIN_STATUS FOR USER IS "AUTH OK" ISSUE NEW PAIR OF TOKENS
     */
-    PROCEDURE checkAuthStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB) IS
+    PROCEDURE checkAuthStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
         l_email users.email%type;
         l_user_id users.id%type;
         l_time_since_sent number;
@@ -490,6 +494,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         issueJWTTokens(pWebsiteId, l_email, l_user_id, l_token_issued);
 
+        pStatus:=200;
+
         EXCEPTION 
             WHEN NO_DATA_FOUND THEN
                 APEX_JSON.open_object;
@@ -500,7 +506,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 APEX_JSON.close_object;
 
             WHEN OTHERS THEN
-                pck_core.log_error;
+                pck_core.log_error(pStatus);
     END;
 
     /*
@@ -521,12 +527,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         n PLS_INTEGER;
     BEGIN
         l_header_value:=OWA_UTIL.get_cgi_env('Authorization');
-        
-        -- Check if the Authorization header exists and starts with 'Bearer '
-        IF (l_header_value IS NULL OR INSTR(l_header_value, 'Bearer ') <> 1) THEN
-            RAISE_APPLICATION_ERROR(-20000,'No bearer token in Authorization header');
-        END IF;
-
         l_refresh_token:=SUBSTR(l_header_value, 8);
         l_email:=OWA_UTIL.get_cgi_env('email');
 
@@ -544,19 +544,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
           FROM refresh_token
          WHERE token_used=l_token_used;
 
-        pck_core.log('n:'||n);
-        pck_core.log('l_refresh_token:'||l_refresh_token);
-        pck_core.log('l_refresh_token:'||l_token_used);
-
         -- Refresh token has already been used - return access denied - disable use of the refresh token issued with compromised token
         IF (n=1) THEN
+             pck_core.log('Attempted refresh token reuse for '|| l_email || ' in ' || pWebsiteId);
             BEGIN 
                 INSERT INTO refresh_token(user_id, token_used)
                 SELECT l_user_id, token_issued
                   FROM refresh_token
                  WHERE token_used=l_token_used;
                 
-                EXCEPTioN WHEN dup_val_on_index THEN NULL;
+                EXCEPTION WHEN dup_val_on_index THEN NULL;
             END;
             pStatus:=401;
             APEX_JSON.open_object;
@@ -574,12 +571,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         pStatus:=200;
 
         EXCEPTION WHEN OTHERS THEN
-            --pck_core.log_error;
-            pStatus:=400;
-            APEX_JSON.open_object;
-            APEX_JSON.write ('success', FALSE);
-            APEX_JSON.write ('message', SQLERRM);
-            APEX_JSON.close_object;
+            pck_core.log_error(pStatus);
     END;
 
     /* END OF JWT AUTHENTICATION METHOD */
