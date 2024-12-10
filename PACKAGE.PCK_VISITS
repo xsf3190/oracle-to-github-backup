@@ -2,7 +2,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE getPerformance(pId IN VARCHAR2);
     --
-    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pParentId IN article.id%type);
+    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pParentId IN article.id%type, pStatus OUT NUMBER);
     --
     PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB);
     --
@@ -88,6 +88,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 l_ip_lookup(l_ip_lookup.LAST).postal:=C1.postal;
                 l_ip_lookup(l_ip_lookup.LAST).error_code:=C1.error_code;
                 l_ip_lookup(l_ip_lookup.LAST).error_message:=C1.error_message;
+                l_ip_lookup(l_ip_lookup.LAST).created_date:=current_timestamp;
             END LOOP;
         END LOOP;
         FORALL i IN l_ip_lookup.FIRST..l_ip_lookup.LAST
@@ -661,7 +662,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     /* 
     **  ENTRY POINT FOR ALL VISIT REPORTS
     */
-    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pParentId IN article.id%type) IS
+    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pParentId IN article.id%type, pStatus OUT NUMBER) IS
         l_session_data pck_core.session_data_rt;
         l_html CLOB;
         l_header VARCHAR2(100);
@@ -692,6 +693,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         apex_json.write('article', l_html);
         apex_json.write('offset', pOffset + ROWS_PER_PAGE);
         apex_json.close_object;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
 
     END;
 
@@ -842,10 +846,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     BEGIN
         FOR C IN (SELECT id, domain_name, login_form FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
             pck_core.log('START visit data processing for ' || C.domain_name);
-            IF (C.login_form='NO') THEN
+            /*IF (C.login_form='NO') THEN
                 l_content:='<p>Website Analytics is available directly on ' || C.domain_name || ', providing comprehensive details about your traffic. You should ask the CMS Admin to enable it.</p>';
                 sendmail(C.id, l_content);
             END IF;
+            */
             uploadPageHits(C.id);
             COMMIT;
             pck_core.log('END visit data processing for ' || C.domain_name);
