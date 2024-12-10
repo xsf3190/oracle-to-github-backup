@@ -48,6 +48,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     PROCEDURE log_error;
     --
+    PROCEDURE log_error(pStatus OUT NUMBER);
+    --
     FUNCTION makeWebsiteListItem(pId IN website.id%type, pDomainName IN website.domain_name%type, pEnv IN VARCHAR2) RETURN VARCHAR2;
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
@@ -264,6 +266,43 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         apex_json.close_object;
 
         EXCEPTION WHEN VALUE_ERROR THEN NULL;
+    END;
+
+    /*
+    **  LOG EXCEPTION RETURNING HTTP STATUS CODE
+    */
+    PROCEDURE log_error(pStatus OUT NUMBER) IS
+        l_depth PLS_INTEGER;
+        l_stack LONG;
+        l_apex_session VARCHAR2(50);
+    BEGIN
+        ROLLBACK;
+
+        /* Format call stack which includes procedure names */
+        
+        l_depth:=UTL_CALL_STACK.backtrace_depth;
+        l_stack:='CALL STACK'||chr(10);
+        FOR i IN 1..l_depth LOOP
+            l_stack:=l_stack || 'Line: ' || UTL_CALL_STACK.backtrace_line(i) || ' ' || UTL_CALL_STACK.backtrace_unit(i) || chr(10); --UTL_CALL_STACK.owner(i)||'.'||UTL_CALL_STACK.concatenate_subprogram(UTL_CALL_STACK.subprogram(i)) || chr(10);
+        END LOOP;
+        
+
+        /* Format error backtrace */
+        l_stack:=l_stack || 'ERROR BACKTRACE'||chr(10);
+        l_depth := UTL_CALL_STACK.error_depth;
+        FOR i IN 1..l_depth LOOP
+            l_stack:=l_stack || 'ORA-' || UTL_CALL_STACK.error_number(i) || ' - ' || UTL_CALL_STACK.error_msg(i) || chr(10);
+        END LOOP;
+
+        log(l_stack);
+
+        apex_json.open_object; 
+        apex_json.write('success', FALSE); 
+        apex_json.write('sqlcode', SQLCODE); 
+        apex_json.write('sqlerrm', SQLERRM); 
+        apex_json.close_object;
+
+        pStatus:=400;
     END;
 
     /*
