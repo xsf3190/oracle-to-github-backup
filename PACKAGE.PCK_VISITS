@@ -75,6 +75,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_clob clob;
         TYPE t_ip_lookup IS TABLE OF ip_lookup%rowtype;
         l_ip_lookup t_ip_lookup:=t_ip_lookup();
+        l_current_timestamp ip_lookup.created_date%type:=current_timestamp;
     BEGIN
         FOR C IN (SELECT DISTINCT ip_address FROM page_hit MINUS SELECT ip FROM ip_lookup )
         LOOP
@@ -88,7 +89,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 l_ip_lookup(l_ip_lookup.LAST).postal:=C1.postal;
                 l_ip_lookup(l_ip_lookup.LAST).error_code:=C1.error_code;
                 l_ip_lookup(l_ip_lookup.LAST).error_message:=C1.error_message;
-                l_ip_lookup(l_ip_lookup.LAST).created_date:=current_timestamp;
+                l_ip_lookup(l_ip_lookup.LAST).created_date:=l_current_timestamp;
             END LOOP;
         END LOOP;
         FORALL i IN l_ip_lookup.FIRST..l_ip_lookup.LAST
