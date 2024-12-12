@@ -1,8 +1,8 @@
 /*
 ** LOGIN THROUGH EMAIL. REQUESTS FOR PASSCODE AND MAGIC LINK SUPPORTED.
+** ACCESS CONTROLLED USING REFRESH AND ACCESS TOKENS (JWT)
 */
 
-/* SECURE ACCESS IS HANDLED USING JWT TOKENS */
 let access_token = sessionStorage.getItem("token");
 let refresh_token = localStorage.getItem("refresh");
 
@@ -15,13 +15,28 @@ const email = document.querySelector(".login .email");
 const expires = document.querySelector(".login .expires");
 const login = document.querySelector(".dropdown button.log-in");
 
+/* 
+** CHECK IF TOKEN EXPIRED 
+*/
+const expiredToken = (token) => {
+    if (!token) {
+        return true;
+    }
+    const now = Math.floor(new Date().getTime() / 1000);
+    const arrayToken = token.split(".");
+    const parsedToken = JSON.parse(atob(arrayToken[1]));
+    return parsedToken.exp <= now;
+}
 
-const callAPI = async (endpoint, method = "GET", token, data) => {    
+
+const callAPI = async (endpoint, method = "GET", token, data) => {
+    console.log("callAPI");
     let url = bodydata.resturl + endpoint + "/" + bodydata.websiteid;
     // Append any query parameters to url for GET requests
     if (method==="GET" && data) {
       url+=data;
     }
+    
 
     let headers = new Headers();
     headers.append("Content-Type", "application/json");
@@ -31,7 +46,8 @@ const callAPI = async (endpoint, method = "GET", token, data) => {
     if (token) {
         headers.append("Authorization","Bearer " + token);
     }
-
+    console.log("headers",headers);
+    
     let config = {method: method, headers: headers};
     if (method==="POST" || method==="PUT") {
         config["body"] = JSON.stringify(data);
@@ -61,21 +77,11 @@ document.querySelectorAll("dialog button.close").forEach((button) => {
     });
 });
 
-/* CHECK IF TOKEN EXPIRED */
-const expiredToken = (token) => {
-    if (!token) {
-        return true;
-    }
-    const now = Math.floor(new Date().getTime() / 1000);
-    const arrayToken = token.split(".");
-    const parsedToken = JSON.parse(atob(arrayToken[1]));
-    return parsedToken.exp <= now;
-}
-
 /* 
 ** REPLACE NEW TOKENS IN STORAGE AND MEMORY. UPDATE UI
 */
 const replaceTokens = (data) => {
+    console.log("replaceTokens");
     sessionStorage.setItem("token",data.token);
     access_token = data.token;
     localStorage.setItem("refresh",data.refresh);
@@ -97,6 +103,7 @@ const replaceTokens = (data) => {
 ** CHECK IF TOKEN HAS EXPIRED
 */
 const checkToken = async () => {
+    console.log("checkToken")
     if (!expiredToken(access_token)) {
         return;
     }
@@ -138,6 +145,13 @@ document.querySelectorAll(".dropdown-content button:not([data-endpoint])").forEa
       e.target.closest("details").removeAttribute("open");
     });
 })
+
+/* 
+** REPORT SELECT MENU
+*/
+output.querySelector("select")?.addEventListener("change", (e) => {
+    console.log(e.target.value + " selected");
+});
 
 /*
 ** EACH REPORT RETURNS TOTAL ROWS INTO THIS VARIABLE WHEN offset=0
@@ -380,12 +394,26 @@ validate_passcode.addEventListener("click", (e) => {
         });
 });
 
+const getAuthorisations = async () => {
+    console.log("getAuthorisations")
+    await checkToken();
+    callAPI("authorisations", "GET", access_token, null)
+        .then((data) => {
+            console.log("ok",data);
+        })
+        .catch((error) => {
+            console.log("nok",error);
+        });
+}
+
 /* 
-** CHECK REFRESH TOKEN ON PAGE LOAD
+** PAGE LOAD
+** - SHOW EMAIL ADDRESS AND EXPIRY DATE IF PREVIOUSLY LOGGED IN
+** - OTHERWSIE GET USER'S AUTHORIZED ENDPOINTS AND BUILD DROP DOWN BUTTONS
 */
-if (expiredToken(refresh_token)) {
-    console.log("Not logged in or Refresh Token expired");
-} else {
+console.log("refresh_token",refresh_token)
+console.log("access_token",access_token)
+if (!expiredToken(refresh_token)) {
     const arrayToken = refresh_token.split(".");
     const parsedToken = JSON.parse(atob(arrayToken[1]));
     email.textContent = parsedToken.sub;
@@ -393,4 +421,5 @@ if (expiredToken(refresh_token)) {
     login.classList.toggle("log-in");
     login.classList.toggle("log-out");
     login.textContent = "Log Out";
+    getAuthorisations();
 }
