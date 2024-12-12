@@ -393,6 +393,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_jwt_enc_key user_ords_clients.client_secret%type;
         l_user_id users.id%type;
         l_scope VARCHAR2(7);
+        l_menulist LONG;
+        l_reports LONG;
     BEGIN
         getKeyAndScope(pWebsiteId, pEmail, l_jwt_enc_key, l_user_id, l_scope);
         pUserId:=l_user_id;
@@ -407,6 +409,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
         );
 
+        INSERT INTO access_token(user_id, token) VALUES (l_user_id, dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256));
+
         l_new_refresh:=apex_jwt.ENCODE (
             p_iss       => 'ORDS',
             p_sub       => pEmail,
@@ -416,12 +420,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             p_exp_sec   => REFRESH_TOKEN_EXP,
             p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
         );
+
         pTokenIssued:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+
+        FOR C IN (
+            SELECT o.label, o.uri_template, o.method
+              FROM api_endpoint a, role r, ords_endpoints o
+             WHERE a.website_id=pWebsiteId 
+               AND a.role_id=r.id 
+               AND r.name=l_scope
+               AND a.template_id=o.template_id)
+        LOOP
+            IF (C.uri_template='visits/:ID') THEN
+                l_reports:=
+                'website|Website Visits;location|Top Locations;page|Page Details;'; 
+                FOR C1 IN (SELECT article_id, navigation_label, collection_type FROM website_article WHERE website_id=pWebsiteId AND collection_type<>'N/A') LOOP
+                    l_reports:=l_reports || LOWER(C1.collection_type)|| '|' || C1.navigation_label || '|' || C1.article_id || ';';
+                END LOOP;
+                l_reports:=RTRIM(l_reports,';');
+            END IF;
+            l_menulist:=l_menulist || '<li><button type="button" data-endpoint="' || C.uri_template || '" data-method="' || C.method || '" data-reports="' || l_reports || '" class="button">' || C.label || '</button></li>';
+        END LOOP;
 
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('token', l_new_token);
         APEX_JSON.write ('refresh', l_new_refresh);
+        APEX_JSON.write ('menulist', l_menulist);
+
         APEX_JSON.close_object;
     END;
 
@@ -438,9 +464,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_token_issued refresh_token.token_issued%type;
         l_scope VARCHAR2 (5);
     BEGIN
-    
-        pck_core.log(pWebsiteId || ':' || pRequestType|| ':' || pUserId|| ':' || pVerifyData);
-        
         /* 
         ** Check issued and received tokens are the same 
         */
@@ -569,7 +592,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         -- Refresh token has already been used - return access denied - disable use of the refresh token issued with compromised token
         IF (n=1) THEN
-             pck_core.log('Attempted refresh token reuse for '|| l_email || ' in ' || pWebsiteId);
+            pck_core.log('Attempted refresh token reuse for '|| l_email || ' in ' || pWebsiteId);
             BEGIN 
                 INSERT INTO refresh_token(user_id, token_used, token_issued)
                 SELECT l_user_id, token_issued, 'COMPROMISED'
@@ -578,11 +601,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 
                 EXCEPTION WHEN dup_val_on_index THEN NULL;
             END;
-            pStatus:=401;
-            APEX_JSON.open_object;
-            APEX_JSON.write ('success', FALSE);
-            APEX_JSON.write ('message', 'Access Denied. Login again.');
-            APEX_JSON.close_object;
+            pck_core.sendAccessDenied(pStatus);
             RETURN;
         END IF;
 
@@ -591,6 +610,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         INSERT INTO refresh_token(user_id, token_used, token_issued)
             VALUES (l_user_id, l_token_used, l_token_issued);
 
+        pStatus:=200;
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
+    END;
+
+    /*
+    ** GET PRIVILEGES GRANTED TO USER's ROLE
+    */
+    PROCEDURE getAuthorisations(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+        l_session_data pck_core.session_data_rt;
+    BEGIN
+        l_session_data:=pck_core.getSessionData(pWebsiteId);
+        IF NOT (l_session_data.valid) THEN
+            pck_core.sendAccessDenied(pStatus);
+        END IF;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('authorisations', 'ugh');
+        apex_json.close_object;
+        
         pStatus:=200;
 
         EXCEPTION WHEN OTHERS THEN
