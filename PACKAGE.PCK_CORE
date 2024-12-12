@@ -9,7 +9,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
         timezone VARCHAR2(30),
         canuse_popover BOOLEAN,
         canuse_eyedropper BOOLEAN,
-        user_id NUMBER
+        user_id NUMBER,
+        valid BOOLEAN
     );
     --
     TYPE fluid_type_rt IS RECORD(
@@ -51,6 +52,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     PROCEDURE log_error(pStatus OUT NUMBER);
     --
     FUNCTION makeWebsiteListItem(pId IN website.id%type, pDomainName IN website.domain_name%type, pEnv IN VARCHAR2) RETURN VARCHAR2;
+    --
+    PROCEDURE sendAccessDenied(pStatus OUT NUMBER);
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
@@ -131,7 +134,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     END;
 
     /*
-    ** MIGRATING API FROM APEX SESSION TO CONVENTIONAL OAUTH2
+    ** MIGRATING API FROM APEX SESSION TO CONVENTIONAL OAUTH2 USING JWT
     */
     FUNCTION getSessionData(pWebsiteId IN website.id%type) RETURN session_data_rt IS
         l_apex_session VARCHAR2(50);
@@ -141,27 +144,40 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_bearer_token VARCHAR2(1000);
         l_token APEX_JWT.T_TOKEN;
         l_token_object APEX_JSON.T_VALUES;
+        l_token_hash access_token.token%type;
         l_email users.email%type;
         l_jwt_enc_key user_ords_clients.client_secret%type;
-        
+        n PLS_INTEGER;
     BEGIN
         l_auth_header := OWA_UTIL.get_cgi_env('Authorization');
         l_email := OWA_UTIL.get_cgi_env('email');
         IF (INSTR(l_auth_header, 'Bearer')=1) THEN
+            l_session_data.valid:=TRUE;
             l_bearer_token := SUBSTR(l_auth_header, 8);
             SELECT client_secret INTO l_jwt_enc_key FROM user_ords_clients WHERE name=l_email;
             l_token:=apex_jwt.DECODE(p_value => l_bearer_token, p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key));
             BEGIN
                 apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
                 EXCEPTION WHEN VALUE_ERROR THEN
-                    RAISE_APPLICATION_ERROR(-20000,'JWT token invalid');
+                    l_session_data.valid:=FALSE;
             END;
 
-            apex_json.parse(l_token_object, l_token.payload);
-            l_session_data.user_id:=apex_json.get_number (p_path => 'jti', p_values => l_token_object);
-            l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
-            l_session_data.url:=OWA_UTIL.get_cgi_env('url');
-             RETURN l_session_data;
+            IF (l_session_data.valid) THEN
+                l_token_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_bearer_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+                SELECT COUNT(*) INTO n FROM access_token WHERE token=l_token_hash;
+                IF (n=0) THEN
+                    l_session_data.valid:=FALSE;
+                END IF;
+            END IF;
+
+            IF (l_session_data.valid) THEN
+                apex_json.parse(l_token_object, l_token.payload);
+                l_session_data.user_id:=apex_json.get_number (p_path => 'jti', p_values => l_token_object);
+                l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
+                l_session_data.url:=OWA_UTIL.get_cgi_env('url');
+            END IF;
+
+            RETURN l_session_data;
         END IF;
 
         l_apex_session:=OWA_UTIL.get_cgi_env('Apex-Session');
@@ -198,6 +214,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN l_session_data;
 
         EXCEPTION WHEN VALUE_ERROR THEN RETURN l_session_data;
+    END;
+
+    /*
+    ** SEND ACCESS DENIED STATUS AND MESSAGE TO CLIENT
+    */
+    PROCEDURE sendAccessDenied(pStatus OUT NUMBER) IS
+    BEGIN
+        pStatus:=401;
+        APEX_JSON.open_object;
+        APEX_JSON.write ('success', FALSE);
+        APEX_JSON.write ('message', 'Access Denied');
+        APEX_JSON.close_object;
     END;
 
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB) IS PRAGMA AUTONOMOUS_TRANSACTION;
