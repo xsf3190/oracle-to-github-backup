@@ -676,7 +676,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             'blog' => 'Visit Details for ');
     BEGIN
         l_session_data:=pck_core.getSessionData(pWebsiteId);
-        --pck_core.log(l_session_data.timezone || ':' || l_session_data.url || ':' || l_session_data.user_id || ':' || pWebsiteId || ':' || pReport || ':' || pOffset || ':' || pParentId);
+        IF NOT (l_session_data.valid) THEN
+            pck_core.sendAccessDenied(pStatus);
+        END IF;
 
         CASE pReport
             WHEN 'website' THEN getWebsiteVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
@@ -694,6 +696,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         apex_json.write('article', l_html);
         apex_json.write('offset', pOffset + ROWS_PER_PAGE);
         apex_json.close_object;
+
+        pStatus:=200;
 
     EXCEPTION WHEN OTHERS THEN
         pck_core.log_error(pStatus);
