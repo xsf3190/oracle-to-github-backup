@@ -7,8 +7,11 @@ let access_token = sessionStorage.getItem("token");
 let refresh_token = localStorage.getItem("refresh");
 
 const bodydata = document.body.dataset;
+const main = document.querySelector("main");
+const menulist = document.querySelector(".dropdown .menulist");
 const dialog = document.querySelector("dialog.login-email");
 const output = document.querySelector("dialog.output");
+const reportlist = output.querySelector("header > ul");
 const showmore = output.querySelector(".show-more");
 const form = dialog.querySelector("form");
 const email = document.querySelector(".login .email");
@@ -30,12 +33,16 @@ const expiredToken = (token) => {
 
 
 const callAPI = async (endpoint, method = "GET", token, data) => {
-    console.log("callAPI");
-    let url = bodydata.resturl + endpoint + "/" + bodydata.websiteid;
+    const path = endpoint.replace(":ID",bodydata.websiteid)
+                         .replace(":PAGE",bodydata.articleid);
+    
+    let url = bodydata.resturl + path;
+  
     // Append any query parameters to url for GET requests
     if (method==="GET" && data) {
       url+=data;
     }
+    console.log(url)
     
 
     let headers = new Headers();
@@ -46,7 +53,6 @@ const callAPI = async (endpoint, method = "GET", token, data) => {
     if (token) {
         headers.append("Authorization","Bearer " + token);
     }
-    console.log("headers",headers);
     
     let config = {method: method, headers: headers};
     if (method==="POST" || method==="PUT") {
@@ -81,7 +87,6 @@ document.querySelectorAll("dialog button.close").forEach((button) => {
 ** REPLACE NEW TOKENS IN STORAGE AND MEMORY. UPDATE UI
 */
 const replaceTokens = (data) => {
-    console.log("replaceTokens");
     sessionStorage.setItem("token",data.token);
     access_token = data.token;
     localStorage.setItem("refresh",data.refresh);
@@ -103,7 +108,6 @@ const replaceTokens = (data) => {
 ** CHECK IF TOKEN HAS EXPIRED
 */
 const checkToken = async () => {
-    console.log("checkToken")
     if (!expiredToken(access_token)) {
         return;
     }
@@ -113,7 +117,7 @@ const checkToken = async () => {
         return;
     }
 
-    await callAPI("refresh-token", "GET", refresh_token, null)
+    await callAPI("refresh-token/:ID", "GET", refresh_token, null)
     .then((data) => {
         replaceTokens(data);
     })
@@ -146,81 +150,80 @@ document.querySelectorAll(".dropdown-content button:not([data-endpoint])").forEa
     });
 })
 
-/* 
-** REPORT SELECT MENU
-*/
-output.querySelector("select")?.addEventListener("change", (e) => {
-    console.log(e.target.value + " selected");
-});
-
 /*
-** EACH REPORT RETURNS TOTAL ROWS INTO THIS VARIABLE WHEN offset=0
+** RUN SELECTED REPORT AND SHOW DETAILS
 */
-let gCount;
-let gEndpoint;
-let gReport;
-let gParentId;
-
-const getReport = async (e, offset) => {
+const getReport = async (endpoint, report, offset) => {
     await checkToken();
 
-    const header = output.querySelector("header>*:first-child");
     const article = output.querySelector("article");
     const status = output.querySelector("footer>*:first-child");
-    let rowSpan=1;
 
-    const query = "?report=" + gReport + "&offset=" + offset + "&parentid=" + gParentId;
+    const query = "?report=" + report + "&offset=" + offset;
     
-    callAPI(gEndpoint, "GET", access_token, query)
+    callAPI(endpoint, "GET", access_token, query)
     .then((data) => {
+        const count = showmore.dataset.count ? showmore.dataset.count : data.count;
         if (offset===0) {
-            gCount = data.count;
-            header.insertAdjacentHTML('afterbegin',data.header);
+            article.replaceChildren();
             article.insertAdjacentHTML('afterbegin',data.article);
-            const table = article.querySelector("table");
-            const row = table.rows[0];
-            for(let cell of row.cells) {
-                if (cell.rowSpan > rowSpan) {
-                    rowSpan = cell.rowSpan;
-                }
-            }
-            output.showModal();
+            showmore.dataset.endpoint = endpoint;
+            showmore.dataset.report = report;
+            showmore.dataset.count = data.count;
         } else if (data.article) {            
             article.querySelector("tbody").insertAdjacentHTML('beforeend',data.article);
         }
 
         const tbody = article.querySelector("tbody");
-        if (tbody.childElementCount >= gCount) {
+        if (tbody.childElementCount >= showmore.dataset.count) {
             showmore.classList.add("visually-hidden");
             showmore.disabled = true;
         } else {
             showmore.dataset.offset = data.offset;
         }
-        status.textContent = tbody.childElementCount/rowSpan + " / " + gCount;
+        status.textContent = tbody.childElementCount + " / " + count;
     })
     .catch((error) => {
-        header.replaceChildren();
-        header.insertAdjacentHTML('afterbegin',error);
-        header.style.color = "red";
-        output.showModal();
+        article.replaceChildren();
+        article.insertAdjacentHTML('afterbegin',error);
+        article.style.color = "red";
     });
 }
 
-/* 
-** RESPOND TO DROPDOWN MENU REPORT REQUESTS
+/*
+** USER CLICKS ACTION BUTTON IN MAIN DROPDOWN
 */
-document.querySelectorAll(".dropdown-content button[data-endpoint]").forEach((button) => {
-    button.addEventListener("click", (e) => {
-        if (login.matches(".log-in")) {
-            dialog.showModal();
-            return;
-        }
-        gEndpoint = e.target.dataset.endpoint;
-        gReport = e.target.dataset.report;
-        gParentId = e.target.dataset.parentid ? e.target.dataset.parentid : 0;
-        getReport(e, 0);
-        e.target.closest("details").removeAttribute("open");
-    });
+menulist.addEventListener("click", (e) => {
+    const endpoint = e.target.dataset.endpoint;
+    const method = e.target.dataset.method;
+  
+    if (endpoint==="visits/:ID") {
+        process_report(endpoint, e.target.dataset.reports.split(";")); } else 
+    if (endpoint==="edit-content/:ID/:PAGE") {
+        process_edit_content(endpoint, method);
+    }
+    
+})
+
+/*
+** COMMON ENTRY POINT FOR HANDLING REPORTS
+*/
+const process_report = (endpoint,reports) => {
+    let buttons="";
+    for (let i = 0; i < reports.length; i++) {
+        const elements = reports[i].split("|");
+        buttons += `<button class="button" type="button" data-report="${elements[0]}" data-endpoint="${endpoint}" data-button-variant="small">${elements[1]}</button>`;
+    }
+    reportlist.replaceChildren();
+    reportlist.insertAdjacentHTML('afterbegin',buttons);
+    output.showModal();
+    reportlist.querySelector("button:first-of-type").click();
+}
+
+reportlist.addEventListener("click", (e) => {
+    const endpoint = e.target.dataset.endpoint;
+    const report = e.target.dataset.report;
+    getReport(endpoint, report, 0);
 })
 
 /*
@@ -228,7 +231,34 @@ document.querySelectorAll(".dropdown-content button[data-endpoint]").forEach((bu
 */
 output.querySelector("button.show-more").addEventListener("click", (e) => {
     if (e.detail===1) {
-        getReport(e, showmore.dataset.offset);
+        getReport(showmore.dataset.endpoint, showmore.dataset.report, showmore.dataset.offset);
+    }
+})
+
+/*
+** SET <main> CONTENTEDITABLE, ADD SAVE BUTTON TO UI
+*/
+const process_edit_content = (endpoint,method) => {
+    console.log(endpoint,method);
+    const main = document.querySelector("main");
+    main.setAttribute("contenteditable",true);
+    const button = `<button type="button" class="button save-content" data-endpoint="${endpoint}" data-method="${method}">SAVE CONTENT</button>`;
+    main.querySelector("article:first-of-type").insertAdjacentHTML('afterbegin',button);
+}
+
+main.addEventListener("click", async (e) => {
+    if (e.detail1!==1) return;
+  
+    if (e.target.matches(".save-content")) {
+        await checkToken();
+        console.log("about to callAPI")
+        callAPI(e.target.dataset.endpoint, e.target.dataset.method, access_token, main.innerHTML)
+            .then((data) => {
+                console.log(data)
+            })
+            .catch((error) => {
+                console.log(error)
+            });
     }
 })
 
@@ -305,7 +335,7 @@ sendmail_magic.addEventListener("click", (e) => {
     form.querySelector("[name='request_type']").value = "magic";
     const formData = new FormData(form);
     const formObj = Object.fromEntries(formData);
-    callAPI("authenticate", "POST", null, formObj)
+    callAPI("authenticate/:ID", "POST", null, formObj)
         .then((data) => {
             sendmail_msg.textContent = data.message;
             sendmail_msg.style.color = "green";
@@ -319,10 +349,16 @@ sendmail_magic.addEventListener("click", (e) => {
 });
 
 const checkAuthStatus = (formObj) => {
-    callAPI("authenticate", "PUT", null, formObj)
+    callAPI("authenticate/:ID", "PUT", null, formObj)
         .then((data) => {
             if (data.token) {
+              
               replaceTokens(data);
+              localStorage.setItem("menulist",data.menulist);
+              
+              menulist.replaceChildren();
+              menulist.insertAdjacentHTML('afterbegin',data.menulist);
+              
               sendmail_msg.textContent = "Logged on!";
               sendmail_msg.style.color = "green";
               clearInterval(gIntervalId);
@@ -355,7 +391,7 @@ sendmail_passcode.addEventListener("click", (e) => {
     form.querySelector("[name='url']").value = window.location.hostname;
     form.querySelector("[name='request_type']").value = "passcode";
     const formData = new FormData(form);
-    callAPI("authenticate", "POST", null, Object.fromEntries(formData))
+    callAPI("authenticate/:ID", "POST", null, Object.fromEntries(formData))
         .then((data) => {
             sendmail_msg.textContent = data.message;
             form.querySelectorAll(".visually-hidden").forEach((ele) => {
@@ -381,9 +417,14 @@ validate_passcode.addEventListener("click", (e) => {
     }
   
     const query = "?request=passcode&user=" + e.target.dataset.userid + "&verify=" + form.querySelector("[name='passcode']").value;
-    callAPI("authenticate", "GET", null, query)
+    callAPI("authenticate/:ID", "GET", null, query)
         .then((data) => {
             replaceTokens(data);
+            localStorage.setItem("menulist",data.menulist);
+              
+            menulist.replaceChildren();
+            menulist.insertAdjacentHTML('afterbegin',data.menulist);
+      
             validate_msg.textContent = "Logged In!";
             validate_msg.style.color = "green";
             validate_passcode.classList.add("visually-hidden");
@@ -394,25 +435,11 @@ validate_passcode.addEventListener("click", (e) => {
         });
 });
 
-const getAuthorisations = async () => {
-    console.log("getAuthorisations")
-    await checkToken();
-    callAPI("authorisations", "GET", access_token, null)
-        .then((data) => {
-            console.log("ok",data);
-        })
-        .catch((error) => {
-            console.log("nok",error);
-        });
-}
-
 /* 
 ** PAGE LOAD
 ** - SHOW EMAIL ADDRESS AND EXPIRY DATE IF PREVIOUSLY LOGGED IN
 ** - OTHERWSIE GET USER'S AUTHORIZED ENDPOINTS AND BUILD DROP DOWN BUTTONS
 */
-console.log("refresh_token",refresh_token)
-console.log("access_token",access_token)
 if (!expiredToken(refresh_token)) {
     const arrayToken = refresh_token.split(".");
     const parsedToken = JSON.parse(atob(arrayToken[1]));
@@ -421,5 +448,6 @@ if (!expiredToken(refresh_token)) {
     login.classList.toggle("log-in");
     login.classList.toggle("log-out");
     login.textContent = "Log Out";
-    getAuthorisations();
+    menulist.replaceChildren();
+    menulist.insertAdjacentHTML('afterbegin',localStorage.getItem("menulist"));
 }
