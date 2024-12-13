@@ -2,7 +2,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE getPerformance(pId IN VARCHAR2);
     --
-    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pParentId IN article.id%type, pStatus OUT NUMBER);
+    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pStatus OUT NUMBER);
     --
     PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB);
     --
@@ -359,15 +359,35 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     END;
 
     /*
+    ** Convert seconds to hms notation, e.g. 100 -> 1m40s
+    */
+    FUNCTION elapsedTime(pSeconds IN NUMBER) RETUrN VARCHAR2 IS
+        t_ela_time apex_t_varchar2;
+        l_ela_time VARCHAR2(11);
+    BEGIN
+        t_ela_time:=apex_string.split(TO_CHAR(TO_DATE(pSeconds,'sssss'),'fmhh24:mi:ss'),':');
+        l_ela_time:=NULL;
+        IF (t_ela_time(1)<>'0') THEN
+            l_ela_time:=l_ela_time || t_ela_time(1) || 'h';
+        END if;
+        IF (t_ela_time(2)<>'0') THEN
+            l_ela_time:=l_ela_time || t_ela_time(2) || 'm';
+        END if;
+        IF (t_ela_time(3)<>'0') THEN
+            l_ela_time:=l_ela_time || t_ela_time(3) || 's';
+        END if;
+        RETURN (l_ela_time);
+    END;
+
+    /*
     **  Return log of all visits to website
     */
     PROCEDURE getWebsiteVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB) IS
         l_content CLOB;
         l_popover VARCHAR2(100);
-        t_ela_time apex_t_varchar2;
-        l_ela_time VARCHAR2(11);
         l_rating VARCHAR2(100);
         l_total PLS_INTEGER;
+        l_ela_time VARCHAR2(11);
         n PLS_INTEGER:=0;
 
         FUNCTION cwv (pLCPr IN VARCHAR2 DEFAULT NULL, pCLSr IN VARCHAR2 DEFAULT NULL, pINPr IN VARCHAR2 DEFAULT NULL, pLCP IN VARCHAR2 DEFAULT NULL, pCLS IN VARCHAR2 DEFAULT NULL, pINP IN VARCHAR2 DEFAULT NULL) RETuRN VARCHAR2
@@ -409,7 +429,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             ) LOOP
                 pCount:=C.nb_visit;
                 l_content:=l_content ||
-                    '<span>' || C.nb_visit || '</span><span>' || NVL(C.ela_days,0) || ' days</span><span>' || C.nb_distinct_ip || '</span><span>' || NVL(C.viewing_time,0) || ' seconds</span>';
+                    '<span>' || C.nb_visit || '</span><span>' || NVL(C.ela_days,0) || ' days</span><span>' || C.nb_distinct_ip || '</span><span>' || elapsedTime(NVL(C.viewing_time,0)) || '</span>';
             END LOOP;
             l_content:=l_content || '</section>';
             l_content:=l_content || '</details>';
@@ -455,17 +475,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             n:=pOffset+n;
             
             l_popover:=C.browser;
-            t_ela_time:=apex_string.split(TO_CHAR(TO_DATE(C.duration_visible,'sssss'),'fmhh24:mi:ss'),':');
-            l_ela_time:=NULL;
-            IF (t_ela_time(1)<>'0') THEN
-                l_ela_time:=l_ela_time || t_ela_time(1) || 'h';
-            END if;
-            IF (t_ela_time(2)<>'0') THEN
-                l_ela_time:=l_ela_time || t_ela_time(2) || 'm';
-            END if;
-            IF (t_ela_time(3)<>'0') THEN
-                l_ela_time:=l_ela_time || t_ela_time(3) || 's';
-            END if;
+
+            l_ela_time:=elapsedTime(C.duration_visible);
 
             IF (C.connection IS NOT NULL) THEN
                 l_popover:=l_popover || ' (' || C.connection;
@@ -602,18 +613,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         pHtml:=l_content;
     END;
 
-    PROCEDURE getBlogVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pParentId IN article.id%type, pCount IN OUT NUMBER, pHeader IN OUT VARCHAR2, pHtml IN OUT NOCOPY CLOB)  IS
+    PROCEDURE getBlogVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB)  IS
         l_content CLOB;
     BEGIN
         IF (pOffset=0) THEN
             SELECT COUNT(DISTINCT title) 
               INTO pCount
-              FROM article a, page_hit p
-             WHERE a.parent_id=pParentId
+              FROM article a, website_article wa, page_hit p
+             WHERE wa.website_id=pWebsiteId
+               AND wa.collection_type='BLOG'
+               AND a.parent_id=wa.article_id
                AND a.id=p.article_id
                AND p.url=pUrl;
 
-            SELECT navigation_label INTO pHeader FROM website_article WHERE website_id=pWebsiteId AND article_id=pParentId;
             l_content:=
             '<table role="presentation">
                 <thead>
@@ -633,8 +645,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                             COUNT(*) nb_views, 
                             ROUND(AVG(p.duration_visible),0) avg_viewing_time,
                             COUNT(DISTINCT p.ip_address) nb_distinct_visitors
-                    FROM article a, page_hit p
-                   WHERE a.parent_id=pParentId
+                    FROM article a, website_article wa, page_hit p
+                   WHERE wa.website_id=pWebsiteId
+                     AND wa.collection_type='BLOG'
+                     AND a.parent_id=wa.article_id
                      AND a.id=p.article_id
                      AND p.url=pUrl
                    GROUP BY a.title
@@ -663,17 +677,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     /* 
     **  ENTRY POINT FOR ALL VISIT REPORTS
     */
-    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pParentId IN article.id%type, pStatus OUT NUMBER) IS
+    PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pStatus OUT NUMBER) IS
         l_session_data pck_core.session_data_rt;
         l_html CLOB;
-        l_header VARCHAR2(100);
         l_count NUMBER;
-        TYPE t_title IS TABLE OF VARCHAR2(100) INDEX BY VARCHAR2(10);
-        l_titles t_title:=t_title(
-            'website' => 'Website Visits',
-            'page' => 'Page Visits',
-            'location' => 'Top Locations',
-            'blog' => 'Visit Details for ');
     BEGIN
         l_session_data:=pck_core.getSessionData(pWebsiteId);
         IF NOT (l_session_data.valid) THEN
@@ -684,14 +691,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             WHEN 'website' THEN getWebsiteVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
             WHEN 'page' THEN getPageVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
             WHEN 'location' THEN getVisitsByLocation(pWebsiteId, pOffset, l_session_data.url, l_count, l_html);
-            WHEN 'blog' THEN getBlogVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, pParentId, l_count, l_header, l_html);
+            WHEN 'blog' THEN getBlogVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
         END CASE;
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
         IF (pOffset=0) THEN
             apex_json.write('count', l_count);
-            apex_json.write('header', l_titles(pReport) || l_header);
         END IF;
         apex_json.write('article', l_html);
         apex_json.write('offset', pOffset + ROWS_PER_PAGE);
