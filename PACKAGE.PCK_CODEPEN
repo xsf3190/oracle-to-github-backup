@@ -52,27 +52,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
       <ul class="dropdown-content">
         <li class="align-center"><small class="email"></small></li>
         <li class="align-center"><small class="expires"></small></li>
-        <li><button type="button" class="button" data-endpoint="visits" data-report="website">Website Visits</button></li>
-        <li><button type="button" class="button" data-endpoint="visits" data-report="location">Top Locations</button></li>';
-        
-        
-        IF (g_nav_labels.COUNT>1) THEN
-            l_html:=l_html || 
-            '<li><button type="button" class="button" data-endpoint="visits" data-report="page">Page Visits</button></li>';
-        END IF;
-
-        FOR i IN 1..g_nav_labels.COUNT LOOP
-            IF (g_nav_labels(i).collection_type<>'N/A') THEN
-                l_html:=l_html || 
-                '<li><button type="button" class="button" data-endpoint="visits" ' || 
-                    'data-report="' || LOWER(g_nav_labels(i).collection_type) || '"' ||
-                    'data-parentid="' || g_nav_labels(i).article_id || '">' ||
-                    g_nav_labels(i).navigation_label || ' Viewed</button></li>';
-            END IF;
-        END LOOP;
-        
-        l_html:=l_html || 
-        '<li><button type="button" class="button log-in">Log In</button></li>
+        <ul class="menulist" role="list"></ul>
+        <li><button type="button" class="button log-in">Log In</button></li>
       </ul>
     </details>
   </section>
@@ -130,7 +111,7 @@ q'{<dialog class="login-email">
 q'{<dialog class="output">
     <form>
         <header class="flex-items space-between">
-            <h2></h2>
+            <ul role="list" class="flex-items"></ul>
             <button class="button close no-focus" data-button-variant="round-icon">
                 <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
                     <use href="#cross"></use>
