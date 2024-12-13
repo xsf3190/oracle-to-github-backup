@@ -219,19 +219,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         MERGE INTO ords_endpoints t
         USING
         (
-            SELECT t.id template_id, t.uri_template, h.method, h.comments as label, LISTAGG(p.name,',') WITHIN GROUP (ORDER BY p.id) params
+            SELECT t.id template_id, t.uri_template, h.method, h.comments as label
             FROM user_ords_modules m, user_ords_templates t, user_ords_handlers h, user_ords_parameters p
             WHERE m.name='public'
             AND m.id=t.module_id
             AND t.id=h.template_id
             AND h.id=p.handler_id
             AND h.comments IS NOT NULL
-            GROUP BY m.name, t.id, t.uri_template, h.method, h.comments
+            AND p.name='X-ORDS-STATUS-CODE'
         ) s
         ON (t.template_id=s.template_id)
         WHEN MATCHED THEN
-            UPDATE SET t.uri_template=s.uri_template, t.method=s.method, t.label=s.label, t.params=s.params
-        WHEN NOT MATCHED THEN INSERT (t.template_id, t.uri_template, t.method, t.label, t.params) VALUES (s.template_id, s.uri_template, s.method, s.label, s.params);
+            UPDATE SET t.uri_template=s.uri_template, t.method=s.method, t.label=s.label
+        WHEN NOT MATCHED THEN 
+            INSERT (t.template_id, t.uri_template, t.method, t.label) VALUES (s.template_id, s.uri_template, s.method, s.label);
+
+        /* temporary solution */
+        delete website_role;
+        delete api_endpoint;
+        
+        insert into website_role(website_id, role_id)
+        select w.id, r.id
+        from website w, role r
+        where r.name in ('admin','owner');
+
+        insert into api_endpoint(website_id, role_id, template_id)
+        select w.id, r.id, o.template_id 
+        from website w, role r, ords_endpoints o
+        where r.name in ('admin','owner');
     END;
 
     /*
@@ -387,7 +402,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     /*
     ** ISSUE NEW PAIR OF TOKENS AND RETURN TO CLIENT
     */
-    PROCEDURE issueJWTTokens(pWebsiteId IN website.id%type, pEmail IN users.email%type, pUserId IN OUT users.id%type, pTokenIssued IN OUT refresh_token.token_issued%type) IS 
+    PROCEDURE issueJWTTokens(pWebsiteId IN website.id%type, pEmail IN users.email%type, pMenulist IN BOOLEAN, pUserId IN OUT users.id%type, pTokenIssued IN OUT refresh_token.token_issued%type) IS 
         l_new_token VARCHAR2 (4000);
         l_new_refresh VARCHAR2 (4000);
         l_jwt_enc_key user_ords_clients.client_secret%type;
@@ -395,6 +410,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_scope VARCHAR2(7);
         l_menulist LONG;
         l_reports LONG;
+        n PLS_INTEGER;
     BEGIN
         getKeyAndScope(pWebsiteId, pEmail, l_jwt_enc_key, l_user_id, l_scope);
         pUserId:=l_user_id;
@@ -423,31 +439,35 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         pTokenIssued:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
 
-        FOR C IN (
-            SELECT o.label, o.uri_template, o.method
-              FROM api_endpoint a, role r, ords_endpoints o
-             WHERE a.website_id=pWebsiteId 
-               AND a.role_id=r.id 
-               AND r.name=l_scope
-               AND a.template_id=o.template_id)
-        LOOP
-            IF (C.uri_template='visits/:ID') THEN
-                l_reports:=
-                'website|Website Visits;location|Top Locations;page|Page Details;'; 
-                FOR C1 IN (SELECT article_id, navigation_label, collection_type FROM website_article WHERE website_id=pWebsiteId AND collection_type<>'N/A') LOOP
-                    l_reports:=l_reports || LOWER(C1.collection_type)|| '|' || C1.navigation_label || '|' || C1.article_id || ';';
-                END LOOP;
-                l_reports:=RTRIM(l_reports,';');
-            END IF;
-            l_menulist:=l_menulist || '<li><button type="button" data-endpoint="' || C.uri_template || '" data-method="' || C.method || '" data-reports="' || l_reports || '" class="button">' || C.label || '</button></li>';
-        END LOOP;
-
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('token', l_new_token);
         APEX_JSON.write ('refresh', l_new_refresh);
-        APEX_JSON.write ('menulist', l_menulist);
-
+        IF (pMenulist) THEN
+            FOR C IN (
+                SELECT o.label, o.uri_template, o.method
+                  FROM api_endpoint a, role r, ords_endpoints o
+                 WHERE a.website_id=pWebsiteId 
+                   AND a.role_id=r.id 
+                   AND r.name=l_scope
+                   AND a.template_id=o.template_id)
+            LOOP
+                l_reports:=NULL;
+                IF (INSTR(C.uri_template,'visits/')>0) THEN
+                    l_reports:='website|Visits;location|Locations';
+                    SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId;
+                    IF (n>1) THEN
+                        l_reports:=l_reports || ';page|Pages';
+                        SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId AND collection_type='BLOG';
+                        IF (n>0) THEN
+                            l_reports:=l_reports || ';blog|Blogs';
+                        END IF;
+                    END IF;
+                END IF;
+                l_menulist:=l_menulist || '<li><button type="button" data-endpoint="' || C.uri_template || '" data-method="' || C.method || '" data-reports="' || l_reports || '" class="button">' || C.label || '</button></li>';
+            END LOOP;
+            APEX_JSON.write ('menulist', l_menulist);
+        END IF;
         APEX_JSON.close_object;
     END;
 
@@ -511,7 +531,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 htp.p('<h1>Authenticated Successfully</h1>');
             
             WHEN 'passcode' THEN
-                issueJWTTokens(pWebsiteId, l_email, l_user_id, l_token_issued);
+                issueJWTTokens(pWebsiteId, l_email, TRUE, l_user_id, l_token_issued);
         END CASE;
 
         UPDATE users SET login_status='AUTH OK' WHERE id=pUserId;
@@ -538,7 +558,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
          WHERE u.email=j.email
            AND u.login_status='AUTH OK';
 
-        issueJWTTokens(pWebsiteId, l_email, l_user_id, l_token_issued);
+        issueJWTTokens(pWebsiteId, l_email, TRUE, l_user_id, l_token_issued);
 
         pStatus:=200;
 
@@ -605,33 +625,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             RETURN;
         END IF;
 
-        issueJWTTokens(pWebsiteId, l_email, l_user_id, l_token_issued);
+        issueJWTTokens(pWebsiteId, l_email, FALSE, l_user_id, l_token_issued);
 
         INSERT INTO refresh_token(user_id, token_used, token_issued)
             VALUES (l_user_id, l_token_used, l_token_issued);
 
-        pStatus:=200;
-
-        EXCEPTION WHEN OTHERS THEN
-            pck_core.log_error(pStatus);
-    END;
-
-    /*
-    ** GET PRIVILEGES GRANTED TO USER's ROLE
-    */
-    PROCEDURE getAuthorisations(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
-        l_session_data pck_core.session_data_rt;
-    BEGIN
-        l_session_data:=pck_core.getSessionData(pWebsiteId);
-        IF NOT (l_session_data.valid) THEN
-            pck_core.sendAccessDenied(pStatus);
-        END IF;
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('authorisations', 'ugh');
-        apex_json.close_object;
-        
         pStatus:=200;
 
         EXCEPTION WHEN OTHERS THEN
