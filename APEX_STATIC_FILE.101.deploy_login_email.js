@@ -6,6 +6,7 @@
 let access_token = sessionStorage.getItem("token");
 let refresh_token = localStorage.getItem("refresh");
 
+const body = document.body;
 const bodydata = document.body.dataset;
 const main = document.querySelector("main");
 const menulist = document.querySelector(".dropdown .menulist");
@@ -31,58 +32,6 @@ const expiredToken = (token) => {
     return parsedToken.exp <= now;
 }
 
-
-const callAPI = async (endpoint, method = "GET", token, data) => {
-    const path = endpoint.replace(":ID",bodydata.websiteid)
-                         .replace(":PAGE",bodydata.articleid);
-    
-    let url = bodydata.resturl + path;
-  
-    // Append any query parameters to url for GET requests
-    if (method==="GET" && data) {
-      url+=data;
-    }
-    console.log(url)
-    
-
-    let headers = new Headers();
-    headers.append("Content-Type", "application/json");
-    headers.append("url", window.location.hostname);
-    headers.append("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
-    headers.append("email", email.textContent);
-    if (token) {
-        headers.append("Authorization","Bearer " + token);
-    }
-    
-    let config = {method: method, headers: headers};
-    if (method==="POST" || method==="PUT") {
-        config["body"] = JSON.stringify(data);
-    }
-
-    const response = await fetch(url, config);
-
-    if (response.status>=500) {
-        throw Error(`System Error: ${response.status} - ${response.message}}`);
-    }
-
-    const result = await response.json();
-    if (!result.success) {
-        if (result.sqlcode) {
-            throw Error(`Database error: ${result.sqlcode} - ${result.sqlerrm}`);
-        } else {
-            throw Error(result.message);
-        }
-    }
-    return(result);
-}
-
-/* CLOSE ALL DIALOGS CONSISTENTLY */
-document.querySelectorAll("dialog button.close").forEach((button) => {
-    button.addEventListener("click", (e) => {
-        e.target.closest("dialog").close();
-    });
-});
-
 /* 
 ** REPLACE NEW TOKENS IN STORAGE AND MEMORY. UPDATE UI
 */
@@ -91,6 +40,7 @@ const replaceTokens = (data) => {
     access_token = data.token;
     localStorage.setItem("refresh",data.refresh);
     refresh_token = data.refresh;
+    console.log("tokens refreshed");
   
     const arrayToken = refresh_token.split(".");
     const parsedToken = JSON.parse(atob(arrayToken[1]));
@@ -105,30 +55,75 @@ const replaceTokens = (data) => {
 }
 
 /* 
-** CHECK IF TOKEN HAS EXPIRED
+** CALL API FOR RESOURCES WITH ACCESS TOKEN
 */
-const checkToken = async () => {
-    if (!expiredToken(access_token)) {
-        return;
-    }
-  
-    if (expiredToken(refresh_token)) {
+const callAPI = async (endpoint, method, data) => {
+    let url;
+
+    if (expiredToken(access_token)) {
+      if (expiredToken(refresh_token)) {
         document.querySelector(".log-out").click();
         return;
+      }
+      url = bodydata.resturl + "refresh-token/" + bodydata.websiteid;
+      let refresh_headers = new Headers();
+      refresh_headers.append("Content-Type", "application/json");
+      refresh_headers.append("Authorization","Bearer " + refresh_token);
+      refresh_headers.append("email", email.textContent);
+      const refresh_config = {method: "GET", headers: refresh_headers};
+      const refresh_response = await fetch(url, refresh_config);
+      const refresh_result = await refresh_response.json();
+      replaceTokens(refresh_result);
+    }
+      
+    const path = endpoint.replace(":ID",bodydata.websiteid)
+                         .replace(":PAGE",bodydata.articleid);
+    
+    url = bodydata.resturl + path;
+  
+    // Append any query parameters to url for GET requests
+    if (method==="GET" && data) {
+      url+=data;
+    }
+    
+    let headers = new Headers();
+    headers.append("Content-Type", "application/json");
+    headers.append("url", window.location.hostname);
+    headers.append("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
+    headers.append("Authorization","Bearer " + access_token);
+    headers.append("email", email.textContent);
+    
+    let config = {method: method, headers: headers};
+    if (method==="POST" || method==="PUT") {
+        config["body"] = JSON.stringify(data);
     }
 
-    await callAPI("refresh-token/:ID", "GET", refresh_token, null)
-    .then((data) => {
-        replaceTokens(data);
-    })
-    .catch((error) => {
-        const content = output.querySelector("article");
-        content.replaceChildren();
-        content.insertAdjacentHTML('afterbegin',error);
-        content.style.color = "red";
-        output.showModal();
-    });
+    const response = await fetch(url, config);
+    const result = await response.json();
+  
+    if (response.ok && result.success) {
+        return(result);
+    }
+  
+    // Error handling
+  
+    if (result.cause) {
+      throw Error(`${response.status} - ${result.cause}`);
+    }
+
+    if (result.sqlcode) {
+      throw Error(`${response.status} - ${result.sqlerrm}`);
+    } else {
+      throw Error(`${response.status} - ${result.message}`);
+    }
 }
+
+/* CLOSE ALL DIALOGS CONSISTENTLY */
+document.querySelectorAll("dialog button.close").forEach((button) => {
+    button.addEventListener("click", (e) => {
+        e.target.closest("dialog").close();
+    });
+});
 
 /* 
 ** DROPDOWN MENU LOGIN / LOGOUT EVENT HANDLERS
@@ -138,6 +133,8 @@ document.querySelectorAll(".dropdown-content button:not([data-endpoint])").forEa
       if (e.target.matches(".log-in")) {
             dialog.showModal();
       } else if (e.target.matches(".log-out")) {
+            access_token = null;
+            refresh_token = null;
             sessionStorage.removeItem("token");
             localStorage.removeItem("refresh");
             email.textContent = "";
@@ -154,14 +151,13 @@ document.querySelectorAll(".dropdown-content button:not([data-endpoint])").forEa
 ** RUN SELECTED REPORT AND SHOW DETAILS
 */
 const getReport = async (endpoint, report, offset) => {
-    await checkToken();
 
     const article = output.querySelector("article");
     const status = output.querySelector("footer>*:first-child");
 
     const query = "?report=" + report + "&offset=" + offset;
     
-    callAPI(endpoint, "GET", access_token, query)
+    callAPI(endpoint, "GET", query)
     .then((data) => {
         const count = showmore.dataset.count ? showmore.dataset.count : data.count;
         if (offset===0) {
@@ -217,7 +213,7 @@ const process_report = (endpoint,reports) => {
     reportlist.replaceChildren();
     reportlist.insertAdjacentHTML('afterbegin',buttons);
     output.showModal();
-    reportlist.querySelector("button:first-of-type").click();
+    //reportlist.querySelector("button:first-of-type").click();
 }
 
 reportlist.addEventListener("click", (e) => {
@@ -239,28 +235,72 @@ output.querySelector("button.show-more").addEventListener("click", (e) => {
 ** SET <main> CONTENTEDITABLE, ADD SAVE BUTTON TO UI
 */
 const process_edit_content = (endpoint,method) => {
-    console.log(endpoint,method);
-    const main = document.querySelector("main");
     main.setAttribute("contenteditable",true);
+    //main.style.outline = "1em solid red";
     const button = `<button type="button" class="button save-content" data-endpoint="${endpoint}" data-method="${method}">SAVE CONTENT</button>`;
-    main.querySelector("article:first-of-type").insertAdjacentHTML('afterbegin',button);
+    document.querySelector(".editor-button").insertAdjacentHTML('afterbegin',button);
 }
 
-main.addEventListener("click", async (e) => {
-    if (e.detail1!==1) return;
-  
+document.querySelector(".editor-button").addEventListener("click", async (e) => {
+    if (e.detail!==1) return;
     if (e.target.matches(".save-content")) {
-        await checkToken();
-        console.log("about to callAPI")
-        callAPI(e.target.dataset.endpoint, e.target.dataset.method, access_token, main.innerHTML)
+        
+        const article = output.querySelector("article");
+        callAPI(e.target.dataset.endpoint, e.target.dataset.method, {main:main.innerHTML})
             .then((data) => {
                 console.log(data)
             })
             .catch((error) => {
-                console.log(error)
+                article.replaceChildren();
+                article.insertAdjacentHTML('afterbegin',error);
+                article.style.color = "red";
+                output.showModal();
             });
     }
 })
+
+/* ************************************************************** */
+
+const callAuthAPI = async (method, data) => {
+
+    let url = bodydata.resturl + "authenticate/" + bodydata.websiteid;
+  
+    // Append any query parameters to url for GET requests
+    if (method==="GET" && data) {
+      url+=data;
+    }
+    
+
+    let headers = new Headers();
+    headers.append("Content-Type", "application/json");
+    headers.append("url", window.location.hostname);
+    headers.append("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
+    headers.append("email", email.textContent);
+    
+    let config = {method: method, headers: headers};
+    if (method==="POST" || method==="PUT") {
+        config["body"] = JSON.stringify(data);
+    }
+
+    const response = await fetch(url, config);
+    const result = await response.json();
+  
+    if (response.ok && result.success) {
+        return(result);
+    }
+  
+    // Error handling
+  
+    if (result.cause) {
+      throw Error(`${response.status} - ${result.cause}`);
+    }
+
+    if (result.sqlcode) {
+      throw Error(`${response.status} - ${result.sqlerrm}`);
+    } else {
+      throw Error(`${response.status} - ${result.message}`);
+    }
+}
 
 /*
 ** VALIDATE EMAIL INPUT BY USER
@@ -335,7 +375,7 @@ sendmail_magic.addEventListener("click", (e) => {
     form.querySelector("[name='request_type']").value = "magic";
     const formData = new FormData(form);
     const formObj = Object.fromEntries(formData);
-    callAPI("authenticate/:ID", "POST", null, formObj)
+    callAuthAPI("POST", formObj)
         .then((data) => {
             sendmail_msg.textContent = data.message;
             sendmail_msg.style.color = "green";
@@ -349,10 +389,9 @@ sendmail_magic.addEventListener("click", (e) => {
 });
 
 const checkAuthStatus = (formObj) => {
-    callAPI("authenticate/:ID", "PUT", null, formObj)
+    callAuthAPI("PUT", formObj)
         .then((data) => {
             if (data.token) {
-              
               replaceTokens(data);
               localStorage.setItem("menulist",data.menulist);
               
@@ -391,7 +430,7 @@ sendmail_passcode.addEventListener("click", (e) => {
     form.querySelector("[name='url']").value = window.location.hostname;
     form.querySelector("[name='request_type']").value = "passcode";
     const formData = new FormData(form);
-    callAPI("authenticate/:ID", "POST", null, Object.fromEntries(formData))
+    callAuthAPI("POST", Object.fromEntries(formData))
         .then((data) => {
             sendmail_msg.textContent = data.message;
             form.querySelectorAll(".visually-hidden").forEach((ele) => {
@@ -417,7 +456,7 @@ validate_passcode.addEventListener("click", (e) => {
     }
   
     const query = "?request=passcode&user=" + e.target.dataset.userid + "&verify=" + form.querySelector("[name='passcode']").value;
-    callAPI("authenticate/:ID", "GET", null, query)
+    callAuthAPI("GET", query)
         .then((data) => {
             replaceTokens(data);
             localStorage.setItem("menulist",data.menulist);
