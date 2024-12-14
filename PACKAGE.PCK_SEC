@@ -617,7 +617,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 INSERT INTO refresh_token(user_id, token_used, token_issued)
                 SELECT l_user_id, token_issued, 'COMPROMISED'
                   FROM refresh_token
-                 WHERE token_used=l_token_used;
+                 WHERE token_used=l_token_used
+                   AND token_issued<>'COMPROMISED';
                 
                 EXCEPTION WHEN dup_val_on_index THEN NULL;
             END;
