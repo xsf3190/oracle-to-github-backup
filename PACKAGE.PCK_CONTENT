@@ -1,12 +1,12 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CONTENT" IS
 --
-    PROCEDURE updateContentx(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pContent IN article.body_html%type, pStatus OUT NUMBER);
+    PROCEDURE updateContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pContent IN article.body_html%type, pStatus OUT NUMBER);
 --
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CONTENT" IS
 --
-    PROCEDURE updateContentx(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pContent IN article.body_html%type, pStatus OUT NUMBER) IS
+    PROCEDURE updateContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pContent IN article.body_html%type, pStatus OUT NUMBER) IS
         l_content article.body_html%type:=pContent;
         l_session_data pck_core.session_data_rt;
     BEGIN
@@ -15,7 +15,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CONTENT" IS
             pck_core.sendAccessDenied(pStatus);
         END IF;
 
-        pck_core.log(l_content);
+        INSERT INTO log(id, message) 
+        SELECT seq_log.nextval, main FROM JSON_TABLE(pContent FORMAT JSON, '$' COLUMNS (main CLOB));
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
