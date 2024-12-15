@@ -35,6 +35,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildPushableButton(pClassName IN VARCHAR2, pHTMLSymbol IN VARCHAR2 DEFAULT NULL, pButtonText IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
+    FUNCTION getEmailFromToken(pToken IN VARCHAR2) RETURN VARCHAR2;
+    --
+    FUNCTION getEnckeyFromToken(pToken IN VARCHAR2) RETURN VARCHAR2;
+    --
+    FUNCTION getUseridFromToken(pToken IN VARCHAR2) RETURN users.id%type ;
+    --
     FUNCTION getPageContent RETURN CLOB;
     --
     FUNCTION getRestUrl RETURN VARCHAR2;
@@ -134,6 +140,61 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     END;
 
     /*
+    ** GET EMAIL (SUB) FROM JWT
+    */
+    FUNCTION getEmailFromToken(pToken IN VARCHAR2) RETURN VARCHAR2 IS
+        l_payload varchar2(500);
+        l_decoded varchar2(500);
+        pos1 PLS_INTEGER;
+        pos2 PLS_INTEGER;
+        l_email users.email%type;
+    BEGIN
+        /* Get subscriber, i.e. email, from payload portion of the bearer token */
+        pos1:=INSTR(pToken,'.',1);
+        pos2:=INSTR(pToken,'.',-1);
+        l_payload:=SUBSTR(pToken,pos1+1,pos2-pos1-1);
+        l_decoded:=utl_raw.cast_to_varchar2(utl_encode.base64_decode(utl_raw.cast_to_raw(l_payload)));
+        SELECT sub INTO l_email FROM JSON_TABLE(l_decoded, '$' COLUMNS(sub));
+        RETURN (l_email);
+    END;
+
+    /*
+    ** GET USER ID FROM TOKEN
+    */
+    FUNCTION getUseridFromToken(pToken IN VARCHAR2) RETURN users.id%type IS
+        l_payload varchar2(500);
+        l_decoded varchar2(500);
+        pos1 PLS_INTEGER;
+        pos2 PLS_INTEGER;
+        l_user_id users.id%type;
+    BEGIN
+        /* Get subscriber, i.e. email, from payload portion of the bearer token */
+        pos1:=INSTR(pToken,'.',1);
+        pos2:=INSTR(pToken,'.',-1);
+        l_payload:=SUBSTR(pToken,pos1+1,pos2-pos1-1);
+        l_decoded:=utl_raw.cast_to_varchar2(utl_encode.base64_decode(utl_raw.cast_to_raw(l_payload)));
+        SELECT jti INTO l_user_id FROM JSON_TABLE(l_decoded, '$' COLUMNS(jti));
+        RETURN (l_user_id);
+    END;
+
+    /*
+    ** GET ENCRYPTION KEY FOR EMAIL
+    */
+    FUNCTION getEnckeyFromToken(pToken IN VARCHAR2) RETURN VARCHAR2 IS
+        l_email users.email%type;
+        l_jwt_enc_key user_ords_clients.client_secret%type;
+    BEGIN
+        l_email:=getEmailFromToken(pToken);
+
+        SELECT client_secret 
+          INTO l_jwt_enc_key
+          FROM user_ords_clients
+         WHERE name=l_email;
+
+        RETURN(l_jwt_enc_key);
+    END;
+
+    /*
     ** MIGRATING API FROM APEX SESSION TO CONVENTIONAL OAUTH2 USING JWT
     */
     FUNCTION getSessionData(pWebsiteId IN website.id%type) RETURN session_data_rt IS
@@ -150,11 +211,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         n PLS_INTEGER;
     BEGIN
         l_auth_header := OWA_UTIL.get_cgi_env('Authorization');
-        l_email := OWA_UTIL.get_cgi_env('email');
+
         IF (INSTR(l_auth_header, 'Bearer')=1) THEN
             l_session_data.valid:=TRUE;
             l_bearer_token := SUBSTR(l_auth_header, 8);
-            SELECT client_secret INTO l_jwt_enc_key FROM user_ords_clients WHERE name=l_email;
+
+            l_email:=getEmailFromToken(l_bearer_token);
+
+            SELECT client_secret 
+              INTO l_jwt_enc_key
+              FROM user_ords_clients
+             WHERE name=l_email;
+
+            /* Check expiry and signature are ok */
             l_token:=apex_jwt.DECODE(p_value => l_bearer_token, p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key));
             BEGIN
                 apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
@@ -162,6 +231,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     l_session_data.valid:=FALSE;
             END;
 
+            /* Check that bearer token is an issued access token */
             IF (l_session_data.valid) THEN
                 l_token_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_bearer_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
                 SELECT COUNT(*) INTO n FROM access_token WHERE token=l_token_hash;
