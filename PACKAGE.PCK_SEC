@@ -369,9 +369,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_jwt_enc_key user_ords_clients.client_secret%type;
         l_user_id users.id%type;
         l_contact_email website.contact_email%type;
-        TYPE t_role IS TABLE OF role%ROWTYPE INDEX BY BINARY_INTEGER;
-        l_role t_role;
-        
     BEGIN
         SELECT w.contact_email, o.client_secret
           INTO l_contact_email, l_jwt_enc_key
@@ -482,7 +479,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_verify_data_hash RAW(32);
         l_token APEX_JWT.T_TOKEN;
         l_token_issued refresh_token.token_issued%type;
-        l_scope VARCHAR2 (5);
+        l_scope VARCHAR2 (7);
     BEGIN
         /* 
         ** Check issued and received tokens are the same 
@@ -518,8 +515,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                     apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
                     EXCEPTION 
                         WHEN VALUE_ERROR THEN
-                            pck_core.log('Was VALUE_ERROR');
-                            htp.p('<h1>Token expired. Login again</h1>');
+                            htp.p('<h1>Token expired or not current. Check you sent from most recent message received. Login again</h1>');
                             --sendMessage(FALSE,pRequestType || ' token expired. Login again.');
                             RETURN;
                         WHEN OTHERS THEN 
@@ -588,15 +584,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_token APEX_JWT.T_TOKEN;
         l_jwt_enc_key user_ords_clients.client_secret%type;
         l_scope VARCHAR2(7);
-        l_email users.email%type;
         l_user_id VARCHAR2(6);
         n PLS_INTEGER;
     BEGIN
         l_header_value:=OWA_UTIL.get_cgi_env('Authorization');
         l_refresh_token:=SUBSTR(l_header_value, 8);
-        l_email:=OWA_UTIL.get_cgi_env('email');
 
-        getKeyAndScope(pWebsiteId, l_email, l_jwt_enc_key, l_user_id, l_scope);
+        l_jwt_enc_key:=pck_core.getEnckeyFromToken(l_refresh_token);
 
         l_token:=apex_jwt.DECODE (p_value => l_refresh_token, p_signature_key => UTL_RAW.cast_to_raw(l_jwt_enc_key));
 
@@ -612,7 +606,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         -- Refresh token has already been used - return access denied - disable use of the refresh token issued with compromised token
         IF (n=1) THEN
-            pck_core.log('Attempted refresh token reuse for '|| l_email || ' in ' || pWebsiteId);
+            pck_core.log('Attempted refresh token reuse in ' || pWebsiteId);
+            l_user_id:=pck_core.getUseridFromToken(l_refresh_token);
             BEGIN 
                 INSERT INTO refresh_token(user_id, token_used, token_issued)
                 SELECT l_user_id, token_issued, 'COMPROMISED'
