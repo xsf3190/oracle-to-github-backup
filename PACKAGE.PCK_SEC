@@ -1,5 +1,23 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS 
     --
+    TYPE t_JWT_data IS RECORD (
+        iss VARCHAR2(10),
+        sub VARCHAR2(100),
+        aud VARCHAR2(7),
+        iat NUMBER,
+        exp NUMBER,
+        jti NUMBER,
+        client_secret user_ords_clients.client_secret%type
+    );
+    TYPE t_session_data IS RECORD (
+        url VARCHAR2(100),
+        timezone VARCHAR2(30),
+        canuse_popover BOOLEAN,
+        canuse_eyedropper BOOLEAN,
+        user_id NUMBER,
+        valid BOOLEAN
+    );
+    --
     PROCEDURE createAuthRequest(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
     PROCEDURE verifyAuthRequest(pWebsiteId IN website.id%type, pRequestType IN VARCHAR2, pUserId IN NUMBER, pVerifyData IN VARCHAR2, pStatus OUT NUMBER);
@@ -10,20 +28,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
     --
     PROCEDURE refreshOrdsEndpoints;
     --
+    FUNCTION getSessionData(pWebsiteId IN website.id%type) RETURN t_session_data;
+    --
     PROCEDURE post_auth_facebook;
     --
     PROCEDURE post_auth_google;
-    --
-    -- Implementing Base64URL docede - URL safe Base64
-    FUNCTION BASE64URL_DECODE(p_input IN varchar2) RETURN RAW DETERMINISTIC PARALLEL_ENABLE;
-    -- Convert RSA modulus (n) and exponent (e) that JWKS returns into Base64 encoded PKCS1 public key format that DBMS_CRYPTO expects
-    FUNCTION MAKE_PKCS1_RSA_KEY(v_key_modulus_binary IN RAW /* raw(256) 2048 bits*/, v_public_key_exponent_binary IN RAW /* raw(3) 24 bits*/) RETURN RAW DETERMINISTIC PARALLEL_ENABLE;
-    -- Go to ISS and fetch the public keys
-    PROCEDURE UPDATE_JWKS_KEY_CACHE(p_iss IN VARCHAR2);
-    -- Returns FALSE if there are problems with validation or signature, TRUE if JWT is valid (not expired, correct ISS) and signature is valid
-    FUNCTION DECODE_AND_VALIDATE(p_jwt IN VARCHAR2, p_iss IN VARCHAR2, p_aud IN VARCHAR2, p_payload OUT VARCHAR2) RETURN boolean;
-    --
-    PROCEDURE subscribe;
     --
 END PCK_SEC;
 /
@@ -250,6 +259,70 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     END;
 
     /*
+    ** RETURN DECODED JWT PAYLOAD AND SIGNING SECRET
+    */
+    FUNCTION decodeJWT(pToken IN VARCHAR2) RETURN t_JWT_data IS
+        l_payload varchar2(500);
+        l_decoded varchar2(500);
+        pos1 PLS_INTEGER;
+        pos2 PLS_INTEGER;
+        l_JWT_data t_JWT_data;
+    BEGIN
+        pos1:=INSTR(pToken,'.',1);
+        pos2:=INSTR(pToken,'.',-1);
+        l_payload:=SUBSTR(pToken,pos1+1,pos2-pos1-1);
+        l_decoded:=utl_raw.cast_to_varchar2(utl_encode.base64_decode(utl_raw.cast_to_raw(l_payload)));
+
+        SELECT j.iss, j.sub, j.aud, j.iat, j.exp, j.jti, o.client_secret 
+          INTO l_JWT_data.iss, l_JWT_data.sub, l_JWT_data.aud, l_JWT_data.iat, l_JWT_data.exp, l_JWT_data.jti,  l_JWT_data.client_secret
+          FROM JSON_TABLE(l_decoded, '$' COLUMNS(iss, sub, aud, iat, exp, jti)) j, user_ords_clients o
+         WHERE o.name=j.sub;
+
+        RETURN (l_JWT_data);
+    END;
+
+    FUNCTION getSessionData(pWebsiteId IN website.id%type) RETURN t_session_data IS
+        l_bearer_token VARCHAR2(1000);
+        l_token APEX_JWT.T_TOKEN;
+        --l_token_object APEX_JSON.T_VALUES;
+        l_token_hash access_token.token%type;
+        l_email users.email%type;
+        
+        l_JWT_data t_JWT_data;
+        l_session_data t_session_data;
+        n PLS_INTEGER;
+
+    BEGIN
+        l_bearer_token := SUBSTR(OWA_UTIL.get_cgi_env('Authorization'), 8);
+        l_JWT_data:=decodeJWT(l_bearer_token);
+
+        /* Check expiry and signature are ok */
+        l_token:=apex_jwt.DECODE(p_value => l_bearer_token, p_signature_key => UTL_RAW.cast_to_raw (l_JWT_data.client_secret));
+        BEGIN
+            apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS.'||pWebsiteId);
+            EXCEPTION WHEN VALUE_ERROR THEN
+                l_session_data.valid:=FALSE;
+        END;
+
+        /* Check that bearer token is an issued access token */
+        IF (l_session_data.valid) THEN
+            l_token_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_bearer_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+            SELECT COUNT(*) INTO n FROM access_token WHERE token=l_token_hash;
+            IF (n=0) THEN
+                l_session_data.valid:=FALSE;
+            END IF;
+        END IF;
+
+        IF (l_session_data.valid) THEN
+            l_session_data.user_id:=l_JWT_data.jti;
+            l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
+            l_session_data.url:=OWA_UTIL.get_cgi_env('url');
+        END IF;
+
+        RETURN l_session_data;
+    END;
+
+    /*
     ** USER SUBMITS EMAIL ADDRESS TO BE AUTHENTICATED
     ** - CREATE RANDOM PASSCODE OR MAGIC LINK AND SEND TO EMAIL ADDRESS
     */
@@ -312,11 +385,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 l_token_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
 
                 IF (l_user_id=0) THEN
-                    INSERT INTO users (email, login_status, token) VALUES (l_email, 'AUTH WAITING', l_token_hash);
+                    INSERT INTO users (email, login_status, token) VALUES (l_email, 'AUTH WAITING', l_token_hash) RETURNING id INTO l_user_id;
                 ELSE
                     UPDATE users SET login_status='AUTH WAITING', token=l_token_hash, updated_date=current_timestamp WHERE id=l_user_id;
                 END IF;
-
                 
                 l_sendmail_link:=pck_core.getRestUrl || 'authenticate/' || pWebsiteId || '?request=magic&user='||l_user_id||'&verify=' ||l_token;
                 l_sendmail_body:=emailTemplate(l_request_type, l_url, 'https://adfreesites.com/favicon.' || pWebsiteId || '.png', l_sendmail_link);
@@ -345,17 +417,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_json.put('sourceEmail','login@adfreesites.com');
         l_email_payload:=l_json.stringify;
         pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_email_payload, pData=>l_clob);
-
-        CASE l_request_type
-            WHEN 'magic' THEN
-                sendMessage(TRUE,'Magic link sent to your inbox');
-            WHEN 'passcode' THEN
-                APEX_JSON.open_object;
-                APEX_JSON.write ('success', TRUE);
-                APEX_JSON.write ('message', 'Passcode sent to your inbox');
-                APEX_JSON.write ('userid', l_user_id);
-                APEX_JSON.close_object;
-        END CASE;
+        
+        APEX_JSON.open_object;
+        APEX_JSON.write ('success', TRUE);
+        APEX_JSON.write ('message', CASE l_request_type WHEN 'magic' THEN 'Magic link sent to your inbox' WHEN 'passcode' THEN 'Passcode sent to your inbox' END);
+        APEX_JSON.write ('userid', l_user_id);
+        APEX_JSON.close_object;
 
         pStatus:=200;
 
@@ -363,60 +430,55 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             pck_core.log_error(pStatus);
     END;
 
-    PROCEDURE getKeyAndScope(pWebsiteId IN website.id%type, pEmail IN VARCHAR2, pJwtEncKey IN OUT user_ords_clients.client_secret%type, pUserId IN OUT users.id%type, pScope IN OUT VARCHAR2) 
+
+    FUNCTION getScope(pWebsiteId IN website.id%type, pEmail IN VARCHAR2) RETURN VARCHAR2
     IS
         l_scope VARCHAR2(7);
-        l_jwt_enc_key user_ords_clients.client_secret%type;
-        l_user_id users.id%type;
-        l_contact_email website.contact_email%type;
     BEGIN
-        SELECT w.contact_email, o.client_secret
-          INTO l_contact_email, l_jwt_enc_key
-          FROM website w, user_ords_clients o
-         WHERE w.id=pWebsiteId
-           AND o.name=pEmail;
-
-        pJwtEncKey:=l_jwt_enc_key;
-        
-        IF (l_contact_email=pEmail) THEN 
-            l_scope:='owner';
-        ELSE 
-            FOR C IN (SELECT u.id FROM website w, users u WHERE w.id=pWebsiteId AND u.id=w.user_id AND u.email=pEmail) LOOP
-                l_scope:='admin';
-                l_user_id:=C.id;
+        FOR C IN (
+            SELECT 'owner' as scope
+              FROM website w
+             WHERE w.id=pWebsiteId
+               AND w.contact_email=pEmail) LOOP
+            l_scope:=C.scope;
+        END LOOP;
+            
+        IF (l_scope IS NULL) THEN
+            FOR C IN (SELECT 'admin' as scope FROM website w, users u WHERE w.id=pWebsiteId AND u.id=w.user_id AND u.email=pEmail) LOOP
+                l_scope:=C.scope;
             END LOOP;
         END IF;
         
-        IF (l_user_id IS NULL) THEN
-            SELECT id INTO pUserId FROM users WHERE email=pEmail;
-        ELSE
-            pUserId:=l_user_id;
-        END IF;
-        pScope:=NVL(l_scope,'visitor');
-
+        RETURN (NVL(l_scope,'visitor'));
     END;
 
     /*
-    ** ISSUE NEW PAIR OF TOKENS AND RETURN TO CLIENT
+    ** USER AUTHENTICATED SUCCESSFULLY. ISSUE NEW PAIR OF TOKENS AND RETURN TO CLIENT
     */
-    PROCEDURE issueJWTTokens(pWebsiteId IN website.id%type, pEmail IN users.email%type, pMenulist IN BOOLEAN, pUserId IN OUT users.id%type, pTokenIssued IN OUT refresh_token.token_issued%type) IS 
+    PROCEDURE issueJWTTokens(pWebsiteId IN website.id%type, pEmail IN users.email%type, pUserId IN OUT users.id%type) IS 
         l_new_token VARCHAR2 (4000);
         l_new_refresh VARCHAR2 (4000);
         l_jwt_enc_key user_ords_clients.client_secret%type;
         l_user_id users.id%type;
+        l_issuer VARCHAR2(10);
         l_scope VARCHAR2(7);
         l_menulist LONG;
         l_reports LONG;
         n PLS_INTEGER;
     BEGIN
-        getKeyAndScope(pWebsiteId, pEmail, l_jwt_enc_key, l_user_id, l_scope);
-        pUserId:=l_user_id;
+        SELECT client_secret 
+          INTO l_jwt_enc_key
+          FROM user_ords_clients
+         WHERE name=pEmail;
+
+        l_issuer:='ORDS.'||pWebsiteId;
+        l_scope:=getScope(pWebsiteId,pEmail);
 
         l_new_token:=apex_jwt.ENCODE (
-            p_iss       => 'ORDS',
+            p_iss       =>l_issuer,
             p_sub       => pEmail,
             p_aud       => l_scope,
-            p_jti       => l_user_id,
+            p_jti       => pUserId,
             p_iat_ts    => current_timestamp,
             p_exp_sec   => ACCESS_TOKEN_EXP,
             p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
@@ -425,46 +487,42 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         INSERT INTO access_token(user_id, token) VALUES (l_user_id, dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256));
 
         l_new_refresh:=apex_jwt.ENCODE (
-            p_iss       => 'ORDS',
+            p_iss       => l_issuer,
             p_sub       => pEmail,
             p_aud       => l_scope,
-            p_jti       => l_user_id,
+            p_jti       => pUserId,
             p_iat_ts    => current_timestamp,
             p_exp_sec   => REFRESH_TOKEN_EXP,
             p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
         );
 
-        pTokenIssued:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
-
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('token', l_new_token);
         APEX_JSON.write ('refresh', l_new_refresh);
-        IF (pMenulist) THEN
-            FOR C IN (
-                SELECT o.label, o.uri_template, o.method
-                  FROM api_endpoint a, role r, ords_endpoints o
-                 WHERE a.website_id=pWebsiteId 
-                   AND a.role_id=r.id 
-                   AND r.name=l_scope
-                   AND a.template_id=o.template_id)
-            LOOP
-                l_reports:=NULL;
-                IF (INSTR(C.uri_template,'visits/')>0) THEN
-                    l_reports:='website|Visits;location|Locations';
-                    SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId;
-                    IF (n>1) THEN
-                        l_reports:=l_reports || ';page|Pages';
-                        SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId AND collection_type='BLOG';
-                        IF (n>0) THEN
-                            l_reports:=l_reports || ';blog|Blogs';
-                        END IF;
+        FOR C IN (
+            SELECT o.label, o.uri_template, o.method
+              FROM api_endpoint a, role r, ords_endpoints o
+             WHERE a.website_id=pWebsiteId 
+               AND a.role_id=r.id 
+               AND r.name=l_scope
+               AND a.template_id=o.template_id)
+        LOOP
+            l_reports:=NULL;
+            IF (INSTR(C.uri_template,'visits/')>0) THEN
+                l_reports:='website|Visits;location|Locations';
+                SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId;
+                IF (n>1) THEN
+                    l_reports:=l_reports || ';page|Pages';
+                    SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId AND collection_type='BLOG';
+                    IF (n>0) THEN
+                        l_reports:=l_reports || ';blog|Blogs';
                     END IF;
                 END IF;
-                l_menulist:=l_menulist || '<li><button type="button" data-endpoint="' || C.uri_template || '" data-method="' || C.method || '" data-reports="' || l_reports || '" class="button">' || C.label || '</button></li>';
-            END LOOP;
-            APEX_JSON.write ('menulist', l_menulist);
-        END IF;
+            END IF;
+            l_menulist:=l_menulist || '<li><button type="button" data-endpoint="' || C.uri_template || '" data-method="' || C.method || '" data-reports="' || l_reports || '" class="button">' || C.label || '</button></li>';
+        END LOOP;
+        APEX_JSON.write ('menulist', l_menulist);
         APEX_JSON.close_object;
     END;
 
@@ -504,7 +562,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         */
         CASE pRequestType
             WHEN 'magic' THEN
-                getKeyAndScope(pWebsiteId, l_email, l_jwt_enc_key, l_user_id, l_scope);
+                SELECT o.client_secret INTO l_jwt_enc_key FROM user_ords_clients o, users u WHERE o.name=u.email AND u.id=pUserId;
 
                 l_token:=apex_jwt.DECODE (
                     p_value   => pVerifyData,
@@ -527,7 +585,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 htp.p('<h1>Authenticated Successfully</h1>');
             
             WHEN 'passcode' THEN
-                issueJWTTokens(pWebsiteId, l_email, TRUE, l_user_id, l_token_issued);
+                issueJWTTokens(pWebsiteId, l_email, l_user_id);
         END CASE;
 
         UPDATE users SET login_status='AUTH OK' WHERE id=pUserId;
@@ -554,7 +612,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
          WHERE u.email=j.email
            AND u.login_status='AUTH OK';
 
-        issueJWTTokens(pWebsiteId, l_email, TRUE, l_user_id, l_token_issued);
+        issueJWTTokens(pWebsiteId, l_email, l_user_id);
 
         pStatus:=200;
 
@@ -586,15 +644,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_scope VARCHAR2(7);
         l_user_id VARCHAR2(6);
         n PLS_INTEGER;
+        l_JWT_data t_JWT_data;
     BEGIN
         l_header_value:=OWA_UTIL.get_cgi_env('Authorization');
         l_refresh_token:=SUBSTR(l_header_value, 8);
+        l_JWT_data:=decodeJWT(l_refresh_token);
 
-        l_jwt_enc_key:=pck_core.getEnckeyFromToken(l_refresh_token);
+        l_token:=apex_jwt.DECODE (p_value => l_refresh_token, p_signature_key => UTL_RAW.cast_to_raw(l_JWT_data.client_secret));
 
-        l_token:=apex_jwt.DECODE (p_value => l_refresh_token, p_signature_key => UTL_RAW.cast_to_raw(l_jwt_enc_key));
-
-        apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
+        apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS.'||pWebsiteId);
 
         -- Check refresh token has not previously been used 
         l_token_used:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_refresh_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
@@ -607,10 +665,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         -- Refresh token has already been used - return access denied - disable use of the refresh token issued with compromised token
         IF (n=1) THEN
             pck_core.log('Attempted refresh token reuse in ' || pWebsiteId);
-            l_user_id:=pck_core.getUseridFromToken(l_refresh_token);
             BEGIN 
                 INSERT INTO refresh_token(user_id, token_used, token_issued)
-                SELECT l_user_id, token_issued, 'COMPROMISED'
+                SELECT l_JWT_data.jti, token_issued, 'COMPROMISED'
                   FROM refresh_token
                  WHERE token_used=l_token_used
                    AND token_issued<>'COMPROMISED';
@@ -621,10 +678,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             RETURN;
         END IF;
 
-        issueJWTTokens(pWebsiteId, l_email, FALSE, l_user_id, l_token_issued);
-
         INSERT INTO refresh_token(user_id, token_used, token_issued)
-            VALUES (l_user_id, l_token_used, l_token_issued);
+            VALUES (l_JWT_data.jti, l_token_used, l_token_issued);
 
         pStatus:=200;
 
@@ -632,212 +687,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             pck_core.log_error(pStatus);
     END;
 
-    /* END OF JWT AUTHENTICATION METHOD */
-
-
-    FUNCTION BASE64URL_DECODE(p_input IN varchar2) RETURN RAW DETERMINISTIC PARALLEL_ENABLE AS
-        PRAGMA UDF;
-        v_pad_count NUMBER(1);
-    BEGIN
-        -- This decodes Base64URL encoded value to RAW
-        v_pad_count:= 4 - mod(length(p_input), 4);
-        IF v_pad_count = 4 THEN
-            v_pad_count:= 0;
-        END IF;
-        RETURN utl_encode.base64_decode(
-            UTL_I18N.STRING_TO_RAW(
-                replace(
-                    replace(
-                        rpad(p_input, length(p_input) + v_pad_count, '=')
-                    , '_', '/')
-                , '-', '+')
-            , 'AL32UTF8')
-        );
-    END;
-
-    FUNCTION MAKE_PKCS1_RSA_KEY(v_key_modulus_binary IN RAW /* raw(256) 2048 bits*/, v_public_key_exponent_binary IN RAW /* raw(3) 24 bits*/) RETURN RAW DETERMINISTIC PARALLEL_ENABLE AS
-        PRAGMA UDF;
-        c_tag_INTEGER raw(1) := hextoraw('02'); -- ASN.1 Universal Primitive Tag: 02 (INTEGER)
-        c_tag_SEQUENCE raw(1) := hextoraw('30'); -- ASN.1 Universal Constructed Tag: 16 (SEQUENCE)
-        c_2_LENGTH_BYTES_NEEDED raw(1) := hextoraw('82');
-        c_3_VALUE_BYTES raw(1) := hextoraw('03');
-        c_257_VALUE_BYTES raw(2) := hextoraw('0101');
-        c_266_VALUE_BYTES raw(2) := hextoraw('010A');
-        c_LEADING_ZERO_OF_INTEGER raw(1) := hextoraw('00');
-    BEGIN
-        -- From https://asktom.oracle.com/pls/apex/asktom.search?tag=plsql-only-ways-to-do-json-token-validation#9547303400346607729
-        -- https://stackoverflow.com/questions/18039401/how-can-i-transform-between-the-two-styles-of-public-key-format-one-begin-rsa
-        -- RSA (256) PKCS#1
-        RETURN utl_encode.base64_encode(
-            utl_raw.concat(
-                r1 => c_tag_SEQUENCE -- 1 byte Tag
-                , r2 => c_2_LENGTH_BYTES_NEEDED -- 1 byte Length Bytes
-                , r3 => c_266_VALUE_BYTES -- 2 bytes Length
-                , r4 => c_tag_INTEGER -- 1 byte Tag
-                , r5 => c_2_LENGTH_BYTES_NEEDED -- 1 byte Length Bytes
-                , r6 => c_257_VALUE_BYTES -- 2 bytes Length
-                , r7 => c_LEADING_ZERO_OF_INTEGER -- 1 byte
-                , r8 => v_key_modulus_binary -- 256 bytes
-                , r9 => c_tag_INTEGER -- 1 byte Tag
-                , r10 => c_3_VALUE_BYTES -- 1 byte Length
-                , r11 => v_public_key_exponent_binary -- 3 bytes
-            )
-        );
-    END;
-
-    PROCEDURE UPDATE_JWKS_KEY_CACHE(p_iss IN VARCHAR2) AS
-        PRAGMA AUTONOMOUS_TRANSACTION;
-        v_lock_handle varchar2(128);
-    BEGIN
-        -- This updates local jwks_key_cache from Google IDP
-        -- Executed when JWT signing key is not found in table jwks_key_cache
-        --
-        -- Avoid simultaneoud executions
-        dbms_lock.allocate_unique('APEX_JWT_RS256_JWKS_UPDATE', v_lock_handle);
-        IF dbms_lock.request(lockhandle=>v_lock_handle, timeout=>6, release_on_commit=>true) IN (0,4) THEN
-            MERGE INTO jwks_key_cache t
-            USING (
-                WITH jwks AS 
-                (
-                    SELECT jwks_uri FROM JSON_TABLE(apex_web_service.make_rest_request(p_iss || '/.well-known/openid-configuration', 'GET'), '$' COLUMNS (jwks_uri))
-                )
-                SELECT kid, kty, e, alg, n
-                FROM jwks, JSON_TABLE(apex_web_service.make_rest_request(jwks_uri, 'GET'), '$.keys[*]' COLUMNS (kid, kty, e, alg, n)) 
-                ) s
-            ON (s.kid = t.kid)
-            WHEN NOT MATCHED THEN
-                INSERT (kid, alg, kty, e, n, pkcs1)
-                VALUES (s.kid, s.alg, s.kty, s.e, s.n,
-                    make_pkcs1_rsa_key(base64url_decode(s.n), base64url_decode(s.e)));
-            COMMIT;
-        END IF;
-    END;
-
-    FUNCTION DECODE_AND_VALIDATE(p_jwt IN VARCHAR2, p_iss IN VARCHAR2, p_aud IN VARCHAR2, p_payload OUT VARCHAR2) RETURN boolean IS
-        l_token apex_jwt.t_token;
-        l_json_content json_object_t;
-        l_kid jwks_key_cache.kid%type;
-        l_key jwks_key_cache.pkcs1%type;
-    BEGIN
-        -- This will split and decode JWT token
-        l_token := apex_jwt.decode(p_jwt);
-
-        -- This will check if token has not expired and contains expected issued and audience
-        BEGIN
-            apex_jwt.validate(p_token=>l_token, p_iss=>p_iss, p_aud=>p_aud);
-            EXCEPTION WHEN VALUE_ERROR THEN
-                pck_core.log('Token validation error - check issuer or timeout');
-                RETURN FALSE;
-        END;
-
-        -- Parsing the header to see if it is signed using RS256
-        l_json_content:= json_object_t.parse(l_token.header);
-        IF l_json_content.get_string('alg') != 'RS256' THEN
-            pck_core.log('Only RS256 signed JWT tokens allowed');
-            RETURN FALSE;
-        END IF;
-
-        -- Try fetching the key from cache.
-       l_kid:= l_json_content.get_string('kid');
-        FOR i IN 1..2 LOOP
-            -- If first time key is not in cache, then update key cache from ISS.
-            -- If second time key is also not present, then something is wrong and just fail.
-            BEGIN
-                SELECT pkcs1 INTO l_key FROM jwks_key_cache WHERE kid = l_kid;
-                EXIT;
-            EXCEPTION
-                WHEN no_data_found THEN
-                    IF i = 1 THEN
-                        update_jwks_key_cache(p_iss);
-                    ELSE
-                        pck_core.log('Required key not found in JWKS cache table');
-                        RETURN FALSE;
-                    END IF;
-            END;
-        END LOOP;
-
-        -- Validate the signature
-        IF NOT DBMS_CRYPTO.VERIFY(
-                src => UTL_I18N.STRING_TO_RAW(
-                        SUBSTR(p_jwt, 1, INSTR(p_jwt, '.', 1, 2)-1) -- Operate on the input string itself, since v_token is already decoded, but JWT signs the encoded message
-                    , 'al32utf8'), 
-                sign => base64url_decode(l_token.signature),
-                pub_key => l_key,
-                pubkey_alg => dbms_crypto.KEY_TYPE_RSA,
-                sign_alg => dbms_crypto.SIGN_SHA256_RSA)
-        THEN
-            pck_core.log('JWT signature failed cryptographic verification');
-            RETURN FALSE;
-        END IF;
-
-        -- Signature is valid - return decoded JWT payload
-        p_payload:= l_token.payload;
-        RETURN TRUE;
-    EXCEPTION
-        WHEN others THEN
-            -- In case of any exception, usually from APEX_JWT.validate or DBMS_CRYPTO - fail
-            pck_core.log_error; RAISE;
-    END;
-    
-    PROCEDURE subscribe IS
-        l_header_value     VARCHAR2(4000);
-        l_bearer_token     VARCHAR2(4000);
-        l_token            APEX_JWT.T_TOKEN;
-        l_valid_token       BOOLEAN;
-        l_jwt_payload       VARCHAR2(2000);
-        l_user_object      APEX_JSON.T_VALUES;
-        l_email            users.email%type;
-        l_iss              VARCHAR2(250):='https://accounts.google.com';
-        l_google_client_id users.google_client_id%type;
-    BEGIN
-        --get the authorization header value from the request
-        l_header_value := OWA_UTIL.get_cgi_env('Authorization');
-        
-        -- Check if the Authorization header exists and starts with 'Bearer '
-        IF (l_header_value IS NULL OR INSTR(l_header_value, 'Bearer ') <> 1) THEN
-            APEX_JSON.open_object;
-            APEX_JSON.write ('success', FALSE);
-            APEX_JSON.write ('message', 'Error - no bearer token in Authorization header');
-            APEX_JSON.close_object;
-            RETURN;
-        END IF;
-
-
-        /* Get Admmin user's Google client id name (repository owner) */
-        SELECT u.google_client_id
-          INTO l_google_client_id
-          FROM apex_workspace_apex_users w, users u 
-         WHERE w.email=u.email
-           AND w.is_admin='Yes'
-           FETCH FIRST ROW ONLY;
-
-        -- Extract and validate the JWT token
-        l_bearer_token := SUBSTR(l_header_value, 8);
-        IF (decode_and_validate(l_bearer_token, l_iss, l_google_client_id, l_jwt_payload)) THEN
-            apex_json.parse (l_user_object, l_jwt_payload);
-            l_email:=apex_json.get_varchar2 (p_path => 'email', p_values => l_user_object);
-
-            MERGE INTO users t
-            USING (SELECT email, name FROM JSON_TABLE(l_jwt_payload, '$' COLUMNS (email, name)) ) s
-            ON (s.email = t.email)
-            WHEN MATCHED THEN UPDATE
-                SET t.last_login_date=current_timestamp, t.last_login_provider=l_iss
-            WHEN NOT MATCHED THEN
-                INSERT (email, name, last_login_date, last_login_provider)
-                VALUES (s.email, s.name, current_timestamp, l_iss);
-            COMMIT;
-
-            APEX_JSON.open_object;
-            APEX_JSON.write ('success', TRUE);
-            APEX_JSON.write ('email', l_email);
-            APEX_JSON.close_object;
-        ELSE
-            APEX_JSON.open_object;
-            APEX_JSON.write ('success', FALSE);
-            APEX_JSON.write ('message', 'Error - invalid token');
-            APEX_JSON.close_object;
-        END IF;
-    END;
   
     /*
     ** This procedure is called in the Post-authentication of Social Sign-in processing.
