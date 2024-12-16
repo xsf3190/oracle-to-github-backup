@@ -678,14 +678,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     **  ENTRY POINT FOR ALL VISIT REPORTS
     */
     PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pStatus OUT NUMBER) IS
-        l_session_data pck_core.session_data_rt;
+        l_session_data pck_sec.t_session_data;
         l_html CLOB;
         l_count NUMBER;
     BEGIN
-        l_session_data:=pck_core.getSessionData(pWebsiteId);
-        IF NOT (l_session_data.valid) THEN
-            pck_core.sendAccessDenied(pStatus);
-        END IF;
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
         CASE pReport
             WHEN 'website' THEN getWebsiteVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
