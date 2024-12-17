@@ -281,10 +281,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         RETURN (l_JWT_data);
     END;
 
+    /*
+    ** GET SESSION DETAILS OF JWT RESOURCE ACCESS REQUEST
+    */
     FUNCTION getSessionData(pWebsiteId IN website.id%type) RETURN t_session_data IS
         l_bearer_token VARCHAR2(1000);
         l_token APEX_JWT.T_TOKEN;
-        --l_token_object APEX_JSON.T_VALUES;
         l_token_hash access_token.token%type;
         l_email users.email%type;
         
@@ -293,15 +295,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         n PLS_INTEGER;
 
     BEGIN
+        l_session_data.valid:=TRUE;
         l_bearer_token := SUBSTR(OWA_UTIL.get_cgi_env('Authorization'), 8);
         l_JWT_data:=decodeJWT(l_bearer_token);
+        pck_core.log(l_bearer_token);
 
         /* Check expiry and signature are ok */
         l_token:=apex_jwt.DECODE(p_value => l_bearer_token, p_signature_key => UTL_RAW.cast_to_raw (l_JWT_data.client_secret));
         BEGIN
             apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS.'||pWebsiteId);
             EXCEPTION WHEN VALUE_ERROR THEN
-                l_session_data.valid:=FALSE;
+                pck_core.log('token invalid');
+                RAISE_APPLICATION_ERROR(-20000,'token invalid');
+                --l_session_data.valid:=FALSE;
         END;
 
         /* Check that bearer token is an issued access token */
@@ -309,15 +315,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             l_token_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_bearer_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
             SELECT COUNT(*) INTO n FROM access_token WHERE token=l_token_hash;
             IF (n=0) THEN
-                l_session_data.valid:=FALSE;
+                pck_core.log('token not an access token');
+                RAISE_APPLICATION_ERROR(-20000,'token not an access token');
+                --l_session_data.valid:=FALSE;
             END IF;
         END IF;
 
-        IF (l_session_data.valid) THEN
+        --IF (l_session_data.valid) THEN
             l_session_data.user_id:=l_JWT_data.jti;
             l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
             l_session_data.url:=OWA_UTIL.get_cgi_env('url');
-        END IF;
+        --END IF;
 
         RETURN l_session_data;
     END;
@@ -375,7 +383,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         CASE l_request_type
             WHEN 'magic' THEN
                 l_token:=apex_jwt.ENCODE (
-                    p_iss       => 'ORDS',
+                    p_iss       => 'ORDS.'||pWebsiteId,
                     p_sub       => l_email,
                     p_aud       => 'xxx',
                     p_iat_ts    => current_timestamp,
@@ -455,7 +463,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     /*
     ** USER AUTHENTICATED SUCCESSFULLY. ISSUE NEW PAIR OF TOKENS AND RETURN TO CLIENT
     */
-    PROCEDURE issueJWTTokens(pWebsiteId IN website.id%type, pEmail IN users.email%type, pUserId IN OUT users.id%type) IS 
+    PROCEDURE issueJWTTokens(pWebsiteId IN website.id%type, pEmail IN users.email%type, pUserId IN users.id%type) IS 
         l_new_token VARCHAR2 (4000);
         l_new_refresh VARCHAR2 (4000);
         l_jwt_enc_key user_ords_clients.client_secret%type;
@@ -528,7 +536,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
     /*
     ** VERIFY PASSCODE OR TOKEN ENTERED BY USER MATCHES DATA ORIGINALLY SENT BY EMAIL
-    ** RETURN JWT ACCESS AND REFRESH TOKENS IF VERIFIED
+    ** SET STATUS IN USERS TABLE TO "AUTH OK"
+    **  - FOR VERIFIED PASSCODE, RETURN JWT ACCESS AND REFRESH TOKENS
+    **  - FOR VERIFIED TOKEN, SEND MESSAGE IN NEW WINDOWS TAB
     */
     PROCEDURE verifyAuthRequest(pWebsiteId IN website.id%type, pRequestType IN VARCHAR2, pUserId IN NUMBER, pVerifyData IN VARCHAR2, pStatus OUT NUMBER) IS
         l_email users.email%type;
@@ -570,7 +580,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 );
 
                 BEGIN
-                    apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
+                    apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS.'||pWebsiteId);
                     EXCEPTION 
                         WHEN VALUE_ERROR THEN
                             htp.p('<h1>Token expired or not current. Check you sent from most recent message received. Login again</h1>');
@@ -585,7 +595,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 htp.p('<h1>Authenticated Successfully</h1>');
             
             WHEN 'passcode' THEN
-                issueJWTTokens(pWebsiteId, l_email, l_user_id);
+                issueJWTTokens(pWebsiteId, l_email, pUserId);
         END CASE;
 
         UPDATE users SET login_status='AUTH OK' WHERE id=pUserId;
@@ -606,8 +616,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_time_since_sent number;
         l_token_issued refresh_token.token_issued%type;
     BEGIN
-        SELECT u.email, extract (minute from (current_timestamp - coalesce(u.updated_date, u.created_date)))
-          INTO l_email, l_time_since_sent
+        SELECT u.id, u.email, extract (minute from (current_timestamp - coalesce(u.updated_date, u.created_date)))
+          INTO l_user_id, l_email, l_time_since_sent
           FROM users u, JSON_TABLE(pBodyText, '$' COLUMNS email) j
          WHERE u.email=j.email
            AND u.login_status='AUTH OK';
@@ -635,24 +645,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     ** CHECK REFRESH TOKEN HAS NOT PREVIOUSLY BEEN USED
     */
     PROCEDURE refreshAuthToken(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
-        l_header_value VARCHAR2(4000);
         l_refresh_token VARCHAR2(4000);
         l_token_used refresh_token.token_used%type;
         l_token_issued refresh_token.token_issued%type;
         l_token APEX_JWT.T_TOKEN;
-        l_jwt_enc_key user_ords_clients.client_secret%type;
-        l_scope VARCHAR2(7);
-        l_user_id VARCHAR2(6);
+        l_new_token VARCHAR2 (4000);
+        l_new_refresh VARCHAR2 (4000);
+
         n PLS_INTEGER;
         l_JWT_data t_JWT_data;
     BEGIN
-        l_header_value:=OWA_UTIL.get_cgi_env('Authorization');
-        l_refresh_token:=SUBSTR(l_header_value, 8);
+        l_refresh_token:=SUBSTR(OWA_UTIL.get_cgi_env('Authorization'), 8);
         l_JWT_data:=decodeJWT(l_refresh_token);
+        pck_core.log(l_JWT_data.iss);
 
         l_token:=apex_jwt.DECODE (p_value => l_refresh_token, p_signature_key => UTL_RAW.cast_to_raw(l_JWT_data.client_secret));
 
-        apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS.'||pWebsiteId);
+        apex_jwt.VALIDATE (p_token => l_token, p_iss => l_JWT_data.iss);
 
         -- Check refresh token has not previously been used 
         l_token_used:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_refresh_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
@@ -674,12 +683,40 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 
                 EXCEPTION WHEN dup_val_on_index THEN NULL;
             END;
-            pck_core.sendAccessDenied(pStatus);
-            RETURN;
+            RAISE_APPLICATION_ERROR(-20000,'Attempt to reuse refresh token');
         END IF;
 
+        l_new_token:=apex_jwt.ENCODE (
+            p_iss       => l_JWT_data.iss,
+            p_sub       => l_JWT_data.sub,
+            p_aud       => l_JWT_data.aud,
+            p_jti       => l_JWT_data.jti,
+            p_iat_ts    => current_timestamp,
+            p_exp_sec   => ACCESS_TOKEN_EXP,
+            p_signature_key => UTL_RAW.cast_to_raw (l_JWT_data.client_secret)
+        );
+
+        INSERT INTO access_token(user_id, token) 
+            VALUES (l_JWT_data.jti, dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256));
+
+        l_new_refresh:=apex_jwt.ENCODE (
+            p_iss       => l_JWT_data.iss,
+            p_sub       => l_JWT_data.sub,
+            p_aud       => l_JWT_data.aud,
+            p_jti       => l_JWT_data.jti,
+            p_iat_ts    => current_timestamp,
+            p_exp_sec   => REFRESH_TOKEN_EXP,
+            p_signature_key => UTL_RAW.cast_to_raw (l_JWT_data.client_secret)
+        );
+
         INSERT INTO refresh_token(user_id, token_used, token_issued)
-            VALUES (l_JWT_data.jti, l_token_used, l_token_issued);
+            VALUES (l_JWT_data.jti, l_token_used, dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh,'AL32UTF8'), typ=>dbms_crypto.hash_sh256));
+
+        APEX_JSON.open_object;
+        APEX_JSON.write ('success', TRUE);
+        APEX_JSON.write ('token', l_new_token);
+        APEX_JSON.write ('refresh', l_new_refresh);
+        APEX_JSON.close_object;
 
         pStatus:=200;
 
