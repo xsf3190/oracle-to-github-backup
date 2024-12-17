@@ -274,6 +274,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             IF (l_login_form='YES') THEN
                 apex_string.push(l_labels(i).modules,'deploy_login_email.min.js');
+                apex_string.push(l_labels(i).modules,'deploy_cms.min.js');
             END IF;
 
             IF (l_labels(i).collection_type='BLOG') THEN
