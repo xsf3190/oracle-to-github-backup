@@ -35,12 +35,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildPushableButton(pClassName IN VARCHAR2, pHTMLSymbol IN VARCHAR2 DEFAULT NULL, pButtonText IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION getEmailFromToken(pToken IN VARCHAR2) RETURN VARCHAR2;
-    --
-    FUNCTION getEnckeyFromToken(pToken IN VARCHAR2) RETURN VARCHAR2;
-    --
-    FUNCTION getUseridFromToken(pToken IN VARCHAR2) RETURN users.id%type ;
-    --
     FUNCTION getPageContent RETURN CLOB;
     --
     FUNCTION getRestUrl RETURN VARCHAR2;
@@ -58,8 +52,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     PROCEDURE log_error(pStatus OUT NUMBER);
     --
     FUNCTION makeWebsiteListItem(pId IN website.id%type, pDomainName IN website.domain_name%type, pEnv IN VARCHAR2) RETURN VARCHAR2;
-    --
-    PROCEDURE sendAccessDenied(pStatus OUT NUMBER);
     --
     PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
@@ -159,50 +151,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     END;
 
     /*
-    ** GET USER ID FROM TOKEN
-    */
-    FUNCTION getUseridFromToken(pToken IN VARCHAR2) RETURN users.id%type IS
-        l_payload varchar2(500);
-        l_decoded varchar2(500);
-        pos1 PLS_INTEGER;
-        pos2 PLS_INTEGER;
-        l_user_id users.id%type;
-    BEGIN
-        /* Get subscriber, i.e. email, from payload portion of the bearer token */
-        pos1:=INSTR(pToken,'.',1);
-        pos2:=INSTR(pToken,'.',-1);
-        l_payload:=SUBSTR(pToken,pos1+1,pos2-pos1-1);
-        l_decoded:=utl_raw.cast_to_varchar2(utl_encode.base64_decode(utl_raw.cast_to_raw(l_payload)));
-        SELECT jti INTO l_user_id FROM JSON_TABLE(l_decoded, '$' COLUMNS(jti));
-        RETURN (l_user_id);
-    END;
-
-    /*
-    ** GET ENCRYPTION KEY FOR EMAIL
-    */
-    FUNCTION getEnckeyFromToken(pToken IN VARCHAR2) RETURN VARCHAR2 IS
-        l_email users.email%type;
-        l_jwt_enc_key user_ords_clients.client_secret%type;
-    BEGIN
-        l_email:=getEmailFromToken(pToken);
-
-        SELECT client_secret 
-          INTO l_jwt_enc_key
-          FROM user_ords_clients
-         WHERE name=l_email;
-
-        RETURN(l_jwt_enc_key);
-    END;
-
-    /*
     ** MIGRATING API FROM APEX SESSION TO CONVENTIONAL OAUTH2 USING JWT
     */
     FUNCTION getSessionData(pWebsiteId IN website.id%type) RETURN session_data_rt IS
         l_apex_session VARCHAR2(50);
         l_parts apex_t_varchar2;
         l_session_data session_data_rt;
-        l_auth_header VARCHAR2(1000);
-        l_bearer_token VARCHAR2(1000);
         l_token APEX_JWT.T_TOKEN;
         l_token_object APEX_JSON.T_VALUES;
         l_token_hash access_token.token%type;
@@ -210,46 +164,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_jwt_enc_key user_ords_clients.client_secret%type;
         n PLS_INTEGER;
     BEGIN
-        l_auth_header := OWA_UTIL.get_cgi_env('Authorization');
-
-        IF (INSTR(l_auth_header, 'Bearer')=1) THEN
-            l_session_data.valid:=TRUE;
-            l_bearer_token := SUBSTR(l_auth_header, 8);
-
-            l_email:=getEmailFromToken(l_bearer_token);
-
-            SELECT client_secret 
-              INTO l_jwt_enc_key
-              FROM user_ords_clients
-             WHERE name=l_email;
-
-            /* Check expiry and signature are ok */
-            l_token:=apex_jwt.DECODE(p_value => l_bearer_token, p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key));
-            BEGIN
-                apex_jwt.VALIDATE (p_token => l_token, p_iss => 'ORDS');
-                EXCEPTION WHEN VALUE_ERROR THEN
-                    l_session_data.valid:=FALSE;
-            END;
-
-            /* Check that bearer token is an issued access token */
-            IF (l_session_data.valid) THEN
-                l_token_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_bearer_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
-                SELECT COUNT(*) INTO n FROM access_token WHERE token=l_token_hash;
-                IF (n=0) THEN
-                    l_session_data.valid:=FALSE;
-                END IF;
-            END IF;
-
-            IF (l_session_data.valid) THEN
-                apex_json.parse(l_token_object, l_token.payload);
-                l_session_data.user_id:=apex_json.get_number (p_path => 'jti', p_values => l_token_object);
-                l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
-                l_session_data.url:=OWA_UTIL.get_cgi_env('url');
-            END IF;
-
-            RETURN l_session_data;
-        END IF;
-
         l_apex_session:=OWA_UTIL.get_cgi_env('Apex-Session');
         IF (l_apex_session IS NULL) THEN
             l_session_data.app_id:=apex_application.g_flow_id;
@@ -284,18 +198,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN l_session_data;
 
         EXCEPTION WHEN VALUE_ERROR THEN RETURN l_session_data;
-    END;
-
-    /*
-    ** SEND ACCESS DENIED STATUS AND MESSAGE TO CLIENT
-    */
-    PROCEDURE sendAccessDenied(pStatus OUT NUMBER) IS
-    BEGIN
-        pStatus:=401;
-        APEX_JSON.open_object;
-        APEX_JSON.write ('success', FALSE);
-        APEX_JSON.write ('message', 'Access Denied');
-        APEX_JSON.close_object;
     END;
 
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB) IS PRAGMA AUTONOMOUS_TRANSACTION;
@@ -372,18 +274,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     PROCEDURE log_error(pStatus OUT NUMBER) IS
         l_depth PLS_INTEGER;
         l_stack LONG;
-        l_apex_session VARCHAR2(50);
     BEGIN
         ROLLBACK;
 
         /* Format call stack which includes procedure names */
-        
         l_depth:=UTL_CALL_STACK.backtrace_depth;
         l_stack:='CALL STACK'||chr(10);
         FOR i IN 1..l_depth LOOP
             l_stack:=l_stack || 'Line: ' || UTL_CALL_STACK.backtrace_line(i) || ' ' || UTL_CALL_STACK.backtrace_unit(i) || chr(10); --UTL_CALL_STACK.owner(i)||'.'||UTL_CALL_STACK.concatenate_subprogram(UTL_CALL_STACK.subprogram(i)) || chr(10);
         END LOOP;
-        
 
         /* Format error backtrace */
         l_stack:=l_stack || 'ERROR BACKTRACE'||chr(10);
@@ -400,7 +299,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         apex_json.write('sqlerrm', SQLERRM); 
         apex_json.close_object;
 
-        pStatus:=400;
+        pStatus:=CASE WHEN SQLCODE=-20000 THEN 401 ELSE 400 END;
     END;
 
     /*
