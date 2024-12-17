@@ -8,12 +8,10 @@ let access_token = sessionStorage.getItem("token");
 let refresh_token = localStorage.getItem("refresh");
 
 const bodydata = document.body.dataset;
-const main = document.querySelector("main");
 const menulist = document.querySelector(".dropdown .menulist");
 const output = document.querySelector("dialog.output");
 const reportlist = output.querySelector("header > ul");
 const showmore = output.querySelector(".show-more");
-
 
 /* 
 ** CHECK IF TOKEN EXPIRED 
@@ -40,25 +38,61 @@ const replaceTokens = (data) => {
 }
 
 /* 
+** FORCE LOG OUT WHEN REFRESH TOKEN EXPIRED
+*/
+const forceLogout = () => {
+    sessionStorage.removeItem("token");
+    localStorage.removeItem("refresh");
+    localStorage.removeItem("menulist");
+    menulist.replaceChildren();
+    document.querySelector(".login-btn").textContent = "Log In";
+}
+
+/* 
+** COMMON ERROR HANDLER FOR API CALLS
+*/
+const responseok = (response, result) => {
+    if (response.ok && result.success) {
+        return(true);
+    }
+    if (result.cause) {
+      throw Error(`${response.status} - ${result.cause}`);
+    }
+    if (result.sqlcode) {
+      throw Error(`${response.status} - ${result.sqlerrm}`);
+    } else {
+      throw Error(`${result.message}`);
+    }
+}
+
+/* 
 ** CALL API FOR RESOURCES WITH ACCESS TOKEN
 */
 const callAPI = async (endpoint, method, data) => {
     let url;
 
+    if (!access_token) {
+        access_token = localStorage.getItem("token");
+    }
+    if (!refresh_token) {
+        refresh_token = localStorage.getItem("refresh");
+    }
+
     if (expiredToken(access_token)) {
       if (expiredToken(refresh_token)) {
-        document.querySelector(".log-out").click();
+        forceLogout();
         return;
       }
       url = bodydata.resturl + "refresh-token/" + bodydata.websiteid;
       let refresh_headers = new Headers();
       refresh_headers.append("Content-Type", "application/json");
       refresh_headers.append("Authorization","Bearer " + refresh_token);
-      // refresh_headers.append("email", email.textContent);
       const refresh_config = {method: "GET", headers: refresh_headers};
       const refresh_response = await fetch(url, refresh_config);
       const refresh_result = await refresh_response.json();
-      replaceTokens(refresh_result);
+      if (responseok(refresh_response, refresh_result)) {
+          replaceTokens(refresh_result);
+      }
     }
       
     const path = endpoint.replace(":ID",bodydata.websiteid)
@@ -76,7 +110,6 @@ const callAPI = async (endpoint, method, data) => {
     headers.append("url", window.location.hostname);
     headers.append("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
     headers.append("Authorization","Bearer " + access_token);
-    // headers.append("email", email.textContent);
     
     let config = {method: method, headers: headers};
     if (method==="POST" || method==="PUT") {
@@ -86,20 +119,8 @@ const callAPI = async (endpoint, method, data) => {
     const response = await fetch(url, config);
     const result = await response.json();
   
-    if (response.ok && result.success) {
+    if (responseok(response, result)) {
         return(result);
-    }
-  
-    // Error handling
-  
-    if (result.cause) {
-      throw Error(`${response.status} - ${result.cause}`);
-    }
-
-    if (result.sqlcode) {
-      throw Error(`${response.status} - ${result.sqlerrm}`);
-    } else {
-      throw Error(`${result.message}`);
     }
 }
 
@@ -195,29 +216,13 @@ output.querySelector("button.show-more").addEventListener("click", (e) => {
 })
 
 /*
-** SET <main> CONTENTEDITABLE, ADD SAVE BUTTON TO UI
+**  GO TO CMS EDITOR - SHOW MESSAGE WHILST IN PROGRESS
 */
 const process_edit_content = (endpoint,method) => {
-    main.setAttribute("contenteditable",true);
-    //main.style.outline = "1em solid red";
-    const button = `<button type="button" class="button save-content" data-endpoint="${endpoint}" data-method="${method}">SAVE CONTENT</button>`;
-    document.querySelector(".editor-button").insertAdjacentHTML('afterbegin',button);
+    reportlist.replaceChildren();
+    reportlist.insertAdjacentHTML('afterbegin','<span>UPCOMING FEATURE - EDIT CONTENT</span>');
+    const article = output.querySelector("article");
+    article.replaceChildren();
+    article.insertAdjacentHTML('afterbegin','This will open the current page in the CMS Editor allowing you to edit the content and re-deploy the website.');
+    output.showModal();
 }
-
-document.querySelector(".editor-button").addEventListener("click", async (e) => {
-    if (e.detail!==1) return;
-    if (e.target.matches(".save-content")) {
-        
-        const article = output.querySelector("article");
-        callAPI(e.target.dataset.endpoint, e.target.dataset.method, {main:main.innerHTML})
-            .then((data) => {
-                console.log(data)
-            })
-            .catch((error) => {
-                article.replaceChildren();
-                article.insertAdjacentHTML('afterbegin',error);
-                article.style.color = "red";
-                output.showModal();
-            });
-    }
-})
