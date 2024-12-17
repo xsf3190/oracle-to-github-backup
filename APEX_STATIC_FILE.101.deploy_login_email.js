@@ -1,280 +1,44 @@
-/*
-** LOGIN THROUGH EMAIL. REQUESTS FOR PASSCODE AND MAGIC LINK SUPPORTED.
-** ACCESS CONTROLLED USING REFRESH AND ACCESS TOKENS (JWT)
-*/
+/* ************************************************************** */
+/* LOGIN HANDLER - AUTHENTICATION BY EMAIL WITH LINK OR  PASSCODE */
+/* ************************************************************** */
 
-let access_token = sessionStorage.getItem("token");
-let refresh_token = localStorage.getItem("refresh");
-
-const body = document.body;
 const bodydata = document.body.dataset;
-const main = document.querySelector("main");
-const menulist = document.querySelector(".dropdown .menulist");
+const aside = document.querySelector("aside.login");
+const menulist = aside.querySelector(".menulist");
+const email = aside.querySelector(".email");
+const expires = aside.querySelector(".expires");
+const login = aside.querySelector(".login-btn");
 const dialog = document.querySelector("dialog.login-email");
-const output = document.querySelector("dialog.output");
-const reportlist = output.querySelector("header > ul");
-const showmore = output.querySelector(".show-more");
 const form = dialog.querySelector("form");
-const email = document.querySelector(".login .email");
-const expires = document.querySelector(".login .expires");
-const login = document.querySelector(".dropdown button.log-in");
 
-/* 
-** CHECK IF TOKEN EXPIRED 
-*/
-const expiredToken = (token) => {
-    if (!token) {
-        return true;
-    }
-    const now = Math.floor(new Date().getTime() / 1000);
-    const arrayToken = token.split(".");
-    const parsedToken = JSON.parse(atob(arrayToken[1]));
-    return parsedToken.exp <= now;
-}
 
-/* 
-** REPLACE NEW TOKENS IN STORAGE AND MEMORY. UPDATE UI
+/*
+** MODULE LOAD - SET DROPDOWN IF LOGGED IN - IE. REFRESH TOKEN EXISTS
 */
-const replaceTokens = (data) => {
-    sessionStorage.setItem("token",data.token);
-    access_token = data.token;
-    localStorage.setItem("refresh",data.refresh);
-    refresh_token = data.refresh;
-    console.log("tokens refreshed");
-  
-    const arrayToken = refresh_token.split(".");
+if (localStorage.getItem("refresh")) {
+    const arrayToken = localStorage.getItem("refresh").split(".");
     const parsedToken = JSON.parse(atob(arrayToken[1]));
     email.textContent = parsedToken.sub;
     expires.textContent = new Date(parsedToken.exp*1000).toLocaleString();
-  
-    if (login) {
-        login.classList.toggle("log-in");
-        login.classList.toggle("log-out");
-        login.textContent = "Log Out";
-    }
-}
-
-/* 
-** CALL API FOR RESOURCES WITH ACCESS TOKEN
-*/
-const callAPI = async (endpoint, method, data) => {
-    let url;
-
-    if (expiredToken(access_token)) {
-      if (expiredToken(refresh_token)) {
-        document.querySelector(".log-out").click();
-        return;
-      }
-      url = bodydata.resturl + "refresh-token/" + bodydata.websiteid;
-      let refresh_headers = new Headers();
-      refresh_headers.append("Content-Type", "application/json");
-      refresh_headers.append("Authorization","Bearer " + refresh_token);
-      refresh_headers.append("email", email.textContent);
-      const refresh_config = {method: "GET", headers: refresh_headers};
-      const refresh_response = await fetch(url, refresh_config);
-      const refresh_result = await refresh_response.json();
-      replaceTokens(refresh_result);
-    }
-      
-    const path = endpoint.replace(":ID",bodydata.websiteid)
-                         .replace(":PAGE",bodydata.articleid);
-    
-    url = bodydata.resturl + path;
-  
-    // Append any query parameters to url for GET requests
-    if (method==="GET" && data) {
-      url+=data;
-    }
-    
-    let headers = new Headers();
-    headers.append("Content-Type", "application/json");
-    headers.append("url", window.location.hostname);
-    headers.append("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
-    headers.append("Authorization","Bearer " + access_token);
-    headers.append("email", email.textContent);
-    
-    let config = {method: method, headers: headers};
-    if (method==="POST" || method==="PUT") {
-        config["body"] = JSON.stringify(data);
-    }
-
-    const response = await fetch(url, config);
-    const result = await response.json();
-  
-    if (response.ok && result.success) {
-        return(result);
-    }
-  
-    // Error handling
-  
-    if (result.cause) {
-      throw Error(`${response.status} - ${result.cause}`);
-    }
-
-    if (result.sqlcode) {
-      throw Error(`${response.status} - ${result.sqlerrm}`);
-    } else {
-      throw Error(`${response.status} - ${result.message}`);
-    }
-}
-
-/* CLOSE ALL DIALOGS CONSISTENTLY */
-document.querySelectorAll("dialog button.close").forEach((button) => {
-    button.addEventListener("click", (e) => {
-        e.target.closest("dialog").close();
-    });
-});
-
-/* 
-** DROPDOWN MENU LOGIN / LOGOUT EVENT HANDLERS
-*/
-document.querySelectorAll(".dropdown-content button:not([data-endpoint])").forEach((button) => {
-  button.addEventListener("click", async (e) => {
-      if (e.target.matches(".log-in")) {
-            dialog.showModal();
-      } else if (e.target.matches(".log-out")) {
-            access_token = null;
-            refresh_token = null;
-            sessionStorage.removeItem("token");
-            localStorage.removeItem("refresh");
-            email.textContent = "";
-            expires.textContent = "";
-            e.target.classList.toggle("log-in");
-            e.target.classList.toggle("log-out");
-            e.target.textContent = "Log In";
-      }
-      e.target.closest("details").removeAttribute("open");
-    });
-})
-
-/*
-** RUN SELECTED REPORT AND SHOW DETAILS
-*/
-const getReport = async (endpoint, report, offset) => {
-
-    const article = output.querySelector("article");
-    const status = output.querySelector("footer>*:first-child");
-
-    const query = "?report=" + report + "&offset=" + offset;
-    
-    callAPI(endpoint, "GET", query)
-    .then((data) => {
-        const count = showmore.dataset.count ? showmore.dataset.count : data.count;
-        if (offset===0) {
-            article.replaceChildren();
-            article.insertAdjacentHTML('afterbegin',data.article);
-            showmore.dataset.endpoint = endpoint;
-            showmore.dataset.report = report;
-            showmore.dataset.count = data.count;
-        } else if (data.article) {            
-            article.querySelector("tbody").insertAdjacentHTML('beforeend',data.article);
-        }
-
-        const tbody = article.querySelector("tbody");
-        if (tbody.childElementCount >= showmore.dataset.count) {
-            showmore.classList.add("visually-hidden");
-            showmore.disabled = true;
-        } else {
-            showmore.dataset.offset = data.offset;
-        }
-        status.textContent = tbody.childElementCount + " / " + count;
-    })
-    .catch((error) => {
-        article.replaceChildren();
-        article.insertAdjacentHTML('afterbegin',error);
-        article.style.color = "red";
-    });
+    menulist.replaceChildren();
+    menulist.insertAdjacentHTML('afterbegin',localStorage.getItem("menulist"));
+    login.textContent="Log Out";
 }
 
 /*
-** USER CLICKS ACTION BUTTON IN MAIN DROPDOWN
+** CALL authenticate ENDPOINT
 */
-menulist.addEventListener("click", (e) => {
-    const endpoint = e.target.dataset.endpoint;
-    const method = e.target.dataset.method;
-  
-    if (endpoint==="visits/:ID") {
-        process_report(endpoint, e.target.dataset.reports.split(";")); } else 
-    if (endpoint==="edit-content/:ID/:PAGE") {
-        process_edit_content(endpoint, method);
-    }
-    
-})
-
-/*
-** COMMON ENTRY POINT FOR HANDLING REPORTS
-*/
-const process_report = (endpoint,reports) => {
-    let buttons="";
-    for (let i = 0; i < reports.length; i++) {
-        const elements = reports[i].split("|");
-        buttons += `<button class="button" type="button" data-report="${elements[0]}" data-endpoint="${endpoint}" data-button-variant="small">${elements[1]}</button>`;
-    }
-    reportlist.replaceChildren();
-    reportlist.insertAdjacentHTML('afterbegin',buttons);
-    output.showModal();
-    //reportlist.querySelector("button:first-of-type").click();
-}
-
-reportlist.addEventListener("click", (e) => {
-    const endpoint = e.target.dataset.endpoint;
-    const report = e.target.dataset.report;
-    getReport(endpoint, report, 0);
-})
-
-/*
-** "SHOW MORE" REPORT BUTTON. PREEVENT DOUBLE CLICKS
-*/
-output.querySelector("button.show-more").addEventListener("click", (e) => {
-    if (e.detail===1) {
-        getReport(showmore.dataset.endpoint, showmore.dataset.report, showmore.dataset.offset);
-    }
-})
-
-/*
-** SET <main> CONTENTEDITABLE, ADD SAVE BUTTON TO UI
-*/
-const process_edit_content = (endpoint,method) => {
-    main.setAttribute("contenteditable",true);
-    //main.style.outline = "1em solid red";
-    const button = `<button type="button" class="button save-content" data-endpoint="${endpoint}" data-method="${method}">SAVE CONTENT</button>`;
-    document.querySelector(".editor-button").insertAdjacentHTML('afterbegin',button);
-}
-
-document.querySelector(".editor-button").addEventListener("click", async (e) => {
-    if (e.detail!==1) return;
-    if (e.target.matches(".save-content")) {
-        
-        const article = output.querySelector("article");
-        callAPI(e.target.dataset.endpoint, e.target.dataset.method, {main:main.innerHTML})
-            .then((data) => {
-                console.log(data)
-            })
-            .catch((error) => {
-                article.replaceChildren();
-                article.insertAdjacentHTML('afterbegin',error);
-                article.style.color = "red";
-                output.showModal();
-            });
-    }
-})
-
-/* ************************************************************** */
-
 const callAuthAPI = async (method, data) => {
-
     let url = bodydata.resturl + "authenticate/" + bodydata.websiteid;
   
     // Append any query parameters to url for GET requests
     if (method==="GET" && data) {
       url+=data;
     }
-    
 
     let headers = new Headers();
     headers.append("Content-Type", "application/json");
     headers.append("url", window.location.hostname);
-    headers.append("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
     headers.append("email", email.textContent);
     
     let config = {method: method, headers: headers};
@@ -298,9 +62,26 @@ const callAuthAPI = async (method, data) => {
     if (result.sqlcode) {
       throw Error(`${response.status} - ${result.sqlerrm}`);
     } else {
-      throw Error(`${response.status} - ${result.message}`);
+      throw Error(`${result.message}`);
     }
 }
+
+/*
+** CLICK HANDLER FOR LOGIN BUTTON
+*/
+login.addEventListener("click", (e) => {
+    if (login.textContent==="Log Out") {
+        sessionStorage.removeItem("token");
+        localStorage.removeItem("refresh");
+        localStorage.removeItem("menulist");
+        email.textContent = "";
+        expires.textContent = "";
+        menulist.replaceChildren();
+        login.textContent = "Log In";
+    } else {
+        dialog.showModal();
+    }
+})
 
 /*
 ** VALIDATE EMAIL INPUT BY USER
@@ -388,16 +169,33 @@ sendmail_magic.addEventListener("click", (e) => {
         });
 });
 
+/* 
+** SET NEW TOKENS IN STORAGE AND MEMORY. UPDATE DROPDOWN MENULIST
+*/
+const setTokens = (data) => {
+    sessionStorage.setItem("token",data.token);
+    localStorage.setItem("refresh",data.refresh);
+  
+    localStorage.setItem("menulist",data.menulist);
+    menulist.replaceChildren();
+    menulist.insertAdjacentHTML('afterbegin',data.menulist);
+  
+    const arrayToken = data.refresh.split(".");
+    const parsedToken = JSON.parse(atob(arrayToken[1]));
+    email.textContent = parsedToken.sub;
+    expires.textContent = new Date(parsedToken.exp*1000).toLocaleString();
+  
+    login.textContent = "Log Out";
+}
+
+/* 
+** WAIT FOR USER TO CLICK MAGIC LINK SENT TO THEIR INBOX
+*/
 const checkAuthStatus = (formObj) => {
     callAuthAPI("PUT", formObj)
         .then((data) => {
             if (data.token) {
-              replaceTokens(data);
-              localStorage.setItem("menulist",data.menulist);
-              
-              menulist.replaceChildren();
-              menulist.insertAdjacentHTML('afterbegin',data.menulist);
-              
+              setTokens(data);
               sendmail_msg.textContent = "Logged on!";
               sendmail_msg.style.color = "green";
               clearInterval(gIntervalId);
@@ -433,6 +231,7 @@ sendmail_passcode.addEventListener("click", (e) => {
     callAuthAPI("POST", Object.fromEntries(formData))
         .then((data) => {
             sendmail_msg.textContent = data.message;
+            sendmail_msg.style.color = "green";
             form.querySelectorAll(".visually-hidden").forEach((ele) => {
                 ele.classList.remove("visually-hidden");
             });
@@ -455,15 +254,11 @@ validate_passcode.addEventListener("click", (e) => {
         return;
     }
   
-    const query = "?request=passcode&user=" + e.target.dataset.userid + "&verify=" + form.querySelector("[name='passcode']").value;
+    const query = "?request=passcode&user=" + e.target.dataset.userid 
+                  + "&verify=" + form.querySelector("[name='passcode']").value;
     callAuthAPI("GET", query)
         .then((data) => {
-            replaceTokens(data);
-            localStorage.setItem("menulist",data.menulist);
-              
-            menulist.replaceChildren();
-            menulist.insertAdjacentHTML('afterbegin',data.menulist);
-      
+            setTokens(data);
             validate_msg.textContent = "Logged In!";
             validate_msg.style.color = "green";
             validate_passcode.classList.add("visually-hidden");
@@ -473,20 +268,3 @@ validate_passcode.addEventListener("click", (e) => {
             validate_msg.style.color = "red";
         });
 });
-
-/* 
-** PAGE LOAD
-** - SHOW EMAIL ADDRESS AND EXPIRY DATE IF PREVIOUSLY LOGGED IN
-** - OTHERWSIE GET USER'S AUTHORIZED ENDPOINTS AND BUILD DROP DOWN BUTTONS
-*/
-if (!expiredToken(refresh_token)) {
-    const arrayToken = refresh_token.split(".");
-    const parsedToken = JSON.parse(atob(arrayToken[1]));
-    email.textContent = parsedToken.sub;
-    expires.textContent = new Date(parsedToken.exp*1000).toLocaleString();
-    login.classList.toggle("log-in");
-    login.classList.toggle("log-out");
-    login.textContent = "Log Out";
-    menulist.replaceChildren();
-    menulist.insertAdjacentHTML('afterbegin',localStorage.getItem("menulist"));
-}
