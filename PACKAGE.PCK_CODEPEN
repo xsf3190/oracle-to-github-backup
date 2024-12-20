@@ -39,8 +39,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_html LONG;
     BEGIN
        l_html:=
-'<aside class="login flex-items justify-end no-gap full-width">
-  <section  class="dropdown">
+'<aside class="login align-end">
+  <section class="dropdown">
     <details>
       <summary>
         <svg height="1em" viewBox="0 0 32 32" preserveAspectRatio="none">
@@ -144,16 +144,16 @@ q'{<dialog class="output">
             FOR i IN 1..g_nav_labels.COUNT LOOP
                 IF (i=1) THEN
                     l_nav_labels:=
-                    '<nav aria-label="Main Navigation" class="content-grid">';
+                    '<nav class="section" aria-label="Main Navigation">';
                     l_nav_labels:=l_nav_labels || 
-                        '<div class="flex-items space-around">';
+                        '<div class="section__inner flex-items space-around">';
                 END IF;
                 l_nav_labels:=l_nav_labels || 
                     '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="button" data-button-variant="nav-item"' || 
                         CASE WHEN g_nav_labels(i).article_id=l_article_id THEN ' aria-current="page"' END  || 
                         ' data-id="' || g_nav_labels(i).article_id || '">' || g_nav_labels(i).navigation_label || '</a>';
                 IF (i=g_nav_labels.COUNT) THEN
-                    l_nav_labels:=l_nav_labels || '</div></nav>';
+                    l_nav_labels:=l_nav_labels || '</div>' || g_CURVE || '</nav>';
                 END IF;
             END LOOP;
         END IF;
@@ -243,9 +243,9 @@ q'{<dialog class="output">
         END IF;
 
         /* 
-        ** Create sections for any featured articles
+        ** Create sections for any featured collections
         */
-        l_featured_regex:='<article class="featured full-width" data-id="([^"]+)">';
+        l_featured_regex:='<article class="featured" data-id="([^"]+)">';
         n:=NVL(regexp_count(pHtml,l_featured_regex),0);
         FOR i IN 1..n 
         LOOP
@@ -261,7 +261,7 @@ q'{<dialog class="output">
             END LOOP;
         END IF;
 
-        /* Enclose content in <article> element if none exists */
+        /* Enclose content in <article class="flow"> container if article.body_html was created in ckeditor for example */
         IF (pHtml IS NULL OR INSTR(pHtml,'<article')=0) THEN
             pHtml:='<article class="flow">' || pHtml || '</article>';
         END IF;
@@ -270,7 +270,7 @@ q'{<dialog class="output">
         pHtml:=REPLACE(pHtml,'<h1>&nbsp;</h1>',null);
 
         /* <article> signifies start of page section - insert svg to show curved sections */
-        pHtml:=REPLACE(pHtml,'<article',g_curve || '<article');
+        --pHtml:=REPLACE(pHtml,'<article',g_curve || '<article');
 
         /* Remove any inline styles - pages are deployed with strict Content Security policy */
         pHtml:=REGEXP_REPLACE(pHtml,' style="[^"]*"');
@@ -323,25 +323,27 @@ q'{<dialog class="output">
         /* 
         ** Build website header 
         */
-        l_header:='<header id="main-header" class="content-grid bg-color">';
+        l_header:='<header class="section">';
         IF (pLoginForm='YES') THEN 
-            l_header:=l_header || buildLoginAside(pWebsiteId);
+            l_header:=l_header || REPLACE(pHeader,'<div class="section__inner">','<div class="section__inner">' || buildLoginAside(pWebsiteId) );
+        ELSE
+            l_header:=l_header || pHeader;
         END IF;
-        l_header:=l_header || pHeader || '</header>';
+        l_header:=l_header || '</header>';
 
         /* 
         ** Build website footer 
         */
-        l_footer:='<footer id="main-footer" class="content-grid">' || pFooter || '</footer>';
+        l_footer:='<footer class="section">' || pFooter || '</footer>';
 
         /* 
         ** Assemble content part of document 
         */
         pHtml:=l_header || 
                buildNavLabels(pArticleId) || 
-               '<main class="content-grid">' || 
-                    pHtml  || CASE WHEN nb_articles=1 THEN g_curve ELSE REPLACE(g_curve,'full-width','full-width height-2x') END || 
-                '</main>' || 
+               '<main class="wrapper flow">' || 
+                    pHtml  || 
+               '</main>' || 
                l_footer;
 
         /* 
@@ -366,7 +368,7 @@ q'{<dialog class="output">
             pHtml:=pHtml || '<svg width="0" height="0">';
             FOR C IN (SELECT id, title, viewbox, preserveaspectratio, svg FROM icon WHERE id IN (SELECT DISTINCT column_value FROM TABLE(l_icons)) ORDER BY id)
             LOOP
-                pHtml:=pHtml || '<symbol id="' || C.id|| '" viewBox="' || C.viewbox|| '" preserveAspectRatio="' || C.preserveaspectratio || '"><title>' || C.title || '</title>' || C.svg || '</symbol>';
+                pHtml:=pHtml || '<symbol id="' || C.id|| '" viewBox="' || C.viewbox|| '" preserveAspectRatio="' || C.preserveaspectratio || '">' || C.svg || '</symbol>';
             END LOOP;
             pHtml:=pHtml || '</svg>';
         END IF;
@@ -567,7 +569,7 @@ q'{<dialog class="output">
             ** header and footer are the first and last elements of their type in l_body_html
             */
 
-            l_header:=regexp_substr(l_body_html,'<header id="main-header.+?>(.+?)</header>',1,1,'n',1);
+            l_header:=regexp_substr(l_body_html,'<header class="section.+?>(.+?)</header>',1,1,'n',1);
             l_header:=regexp_replace(l_header,'<aside class="login.+?</aside>');
             IF (l_header IS NULL AND C.header IS NOT NULL) THEN
                 apex_string.push(l_updated_columns,'HEADER');
@@ -577,7 +579,7 @@ q'{<dialog class="output">
                 apex_string.push(l_updated_files,l_header);
             END IF;
 
-            l_footer:=regexp_substr(l_body_html,'<footer id="main-footer.+?>(.+?)</footer>',1,1,'n',1);
+            l_footer:=regexp_substr(l_body_html,'<footer class="section.+?>(.+?)</footer>',1,1,'n',1);
             IF (l_footer IS NULL AND C.footer IS NOT NULL) THEN
                 apex_string.push(l_updated_columns,'FOOTER');
                 apex_string.push(l_updated_files,l_footer);
@@ -620,9 +622,8 @@ q'{<dialog class="output">
         END IF;
         
         /* Remove elements added in getCodepen procedure */
-        l_main:=regexp_replace(regexp_replace(regexp_replace(regexp_replace(l_main,
+        l_main:=regexp_replace(regexp_replace(regexp_replace(l_main,
             '<ol class="featured.+?</ol>'),
-            '<svg.+?</svg>'),
             '<main.+?>'),
             '</main>');
         
