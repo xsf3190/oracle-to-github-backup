@@ -385,7 +385,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     PROCEDURE getWebsiteVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB) IS
         l_content CLOB;
         l_popover VARCHAR2(100);
-        l_rating VARCHAR2(100);
+        l_rating VARCHAR2(200);
         l_total PLS_INTEGER;
         l_ela_time VARCHAR2(11);
         n PLS_INTEGER:=0;
@@ -516,8 +516,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         END IF;
 
         pHtml:=l_content;
-
-        EXCEPTION WHEN OTHERS THEN pck_core.log_error;
     END;
 
 
