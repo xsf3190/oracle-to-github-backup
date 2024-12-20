@@ -413,7 +413,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             END LOOP;
             l_root_css:=l_root_css ||
             '--font-family: "' || C.font || '", ' || CASE WHEN C.category='handwriting' THEN 'cursive' ELSE C.category END || ';'||
-            '--max-width: ' || C.max_width_px || 'px;' || 
+            '--max-width: ' || C.max_width || ';' || 
             '--color-text: ' || C.color_text || ';' || 
             '--color-background: ' || C.color_background || ';' || 
             '--color-primary: ' || C.color_primary || ';';
@@ -473,16 +473,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         pos PLS_INTEGER;
         MAX_BLOGS CONSTANT PLS_INTEGER:=12;
     BEGIN
-        
         IF (INSTR(pClasses,'featured')>0) THEN
             l_featured:='YES';
+            l_classes:='featured ';
         END IF;
 
-        iF (pClasses IS NULL) THEN
-            l_classes:='breakout grid-auto-fit';
-        ELSE
-            l_classes:=l_classes || ' breakout grid-auto-fit';
-        END IF;
+        l_classes:=l_classes || 'grid-auto-fit';
 
         SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
 
@@ -510,7 +506,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 IF (C.rn=1) THEN
                     l_html_list:=
                     '<details>' ||
-                        '<summary>All titles ordered by popularity</summary>' ||
+                        '<summary>Show titles in order of popularity</summary>' ||
                         '<article class="grid" data-grid-variant="1">';
                 END IF;
                 l_html_list:=l_html_list || 
@@ -1005,19 +1001,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     htmlSupport: {
                         allow: [
                             {
-                                name: /^(header|main|footer)$/,
-                                classes: ['content-grid']
-                            },
-                            {
-                                name: /^(div|section|article|p)$/,
+                                name: /.*/,
+                                attributes: true,
                                 classes: true,
-                                attributes: true
-                            },
-                            {
-                                name: 'img',
-                                classes: true,
-                                attributes: true
-                            },
+                                styles: false
+                            }
                         ]
                     },
                     image: {
