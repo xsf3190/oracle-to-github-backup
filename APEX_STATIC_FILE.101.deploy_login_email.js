@@ -21,8 +21,12 @@ if (localStorage.getItem("refresh")) {
     email.textContent = parsedToken.sub;
     expires.textContent = new Date(parsedToken.exp*1000).toLocaleString();
     menulist.replaceChildren();
-    menulist.insertAdjacentHTML('afterbegin',localStorage.getItem("menulist"));
     login.textContent="Log Out";
+    if (localStorage.getItem("menulist")) {
+        menulist.insertAdjacentHTML('afterbegin',localStorage.getItem("menulist"));
+    } else {
+        login.click(); // Force logout
+    }
 }
 
 /*
