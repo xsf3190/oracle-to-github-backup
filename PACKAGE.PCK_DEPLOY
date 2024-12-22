@@ -322,7 +322,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         */
         FOR C IN (SELECT cld_cloud_name, resource_type, public_id, format FROM asset WHERE id=l_favicon_asset_id) LOOP
            l_favicon_url:=pck_media.getCloudinaryUrl(C.cld_cloud_name,C.resource_type,C.public_id,C.format, 96) || '.svg';
-           l_favicon_url:=REPLACE(l_favicon_url,'q_auto,f_auto','f_auto,co_rgb:'||l_color_primary||',e_colorize:100,w_96,h_96');
+           l_favicon_url:=REPLACE(l_favicon_url,'q_auto,f_auto','f_auto,w_96,h_96');
         END LOOP;
 
         /* Web font is self-hosted - build @font-face css at start of stylesheet */
