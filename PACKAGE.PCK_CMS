@@ -321,13 +321,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS" is
         UPDATE article SET (cover_asset_id, nb_assets) = (SELECT  MIN(id), COUNT(*) FROM asset WHERE article_id=l_article_id)
          WHERE id=l_article_id;
 
-        /* Use any SVG image for the website favicon */
-        FOR C IN (SELECT favicon_asset_id FROM website WHERE id=l_website_id AND favicon_asset_id IS NULL)
-        LOOP
-            UPDATE website 
-               SET favicon_asset_id=(SELECT MIN(id) FROM asset WHERE article_id=l_article_id AND format='svg')
-             WHERE id=l_website_id;
-        END LOOP;
+        /* 
+        ** Set website favicon uploaded SVG file with "favicon' in the name"
+        */
+        BEGIN
+            SELECT NVL(MAX(id),0) INTO l_favicon_asset_id FROM asset WHERE article_id=l_article_id AND format='svg' AND INSTR(public_id,'favicon')>0;
+            IF (l_favicon_asset_id>0) THEN
+                UPDATE website 
+                   SET favicon_asset_id=l_favicon_asset_id
+                 WHERE id=l_website_id;
+            END IF;
+        END;
 
         pck_media.getThumbnails(l_article_id,pDeploy=>FALSE,pHtml=>l_thumbnails);
 
