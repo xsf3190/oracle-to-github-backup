@@ -225,27 +225,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
     PROCEDURE refreshOrdsEndpoints IS 
     BEGIN
-        MERGE INTO ords_endpoints t
-        USING
-        (
-            SELECT t.id template_id, t.uri_template, h.method, h.comments as label
-            FROM user_ords_modules m, user_ords_templates t, user_ords_handlers h, user_ords_parameters p
-            WHERE m.name='public'
-            AND m.id=t.module_id
-            AND t.id=h.template_id
-            AND h.id=p.handler_id
-            AND h.comments IS NOT NULL
-            AND p.name='X-ORDS-STATUS-CODE'
-        ) s
-        ON (t.template_id=s.template_id)
-        WHEN MATCHED THEN
-            UPDATE SET t.uri_template=s.uri_template, t.method=s.method, t.label=s.label
-        WHEN NOT MATCHED THEN 
-            INSERT (t.template_id, t.uri_template, t.method, t.label) VALUES (s.template_id, s.uri_template, s.method, s.label);
+        DELETE api_endpoint;
+        DELETE ords_endpoints;
+
+        INSERT INTO ords_endpoints (template_id, uri_template, method, label)
+        SELECT t.id template_id, t.uri_template, h.method, h.comments as label
+        FROM user_ords_modules m, user_ords_templates t, user_ords_handlers h, user_ords_parameters p
+        WHERE m.name='public'
+        AND m.id=t.module_id
+        AND t.id=h.template_id
+        AND h.id=p.handler_id
+        AND h.comments IS NOT NULL
+        AND p.name='X-ORDS-STATUS-CODE';
 
         /* temporary solution */
         delete website_role;
-        delete api_endpoint;
+        
         
         insert into website_role(website_id, role_id)
         select w.id, r.id
@@ -256,6 +251,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         select w.id, r.id, o.template_id 
         from website w, role r, ords_endpoints o
         where r.name in ('admin','owner');
+
+        insert into website_role(website_id, role_id)
+        select w.id, r.id
+        from website w, role r
+        where r.name='visitor';
+
+        insert into api_endpoint(website_id, role_id, template_id)
+        select w.id, r.id, o.template_id 
+        from website w, role r, ords_endpoints o
+        where r.name='visitor'
+        and o.uri_template='contact/:ID';
     END;
 
     /*
