@@ -12,6 +12,7 @@ const menulist = document.querySelector(".dropdown .menulist");
 const output = document.querySelector("dialog.output");
 const reportlist = output.querySelector("header > ul");
 const showmore = output.querySelector(".show-more");
+const contact = document.querySelector("dialog.contact");
 
 /* 
 ** CHECK IF TOKEN EXPIRED 
@@ -180,9 +181,10 @@ menulist.addEventListener("click", (e) => {
     if (endpoint==="visits/:ID") {
         process_report(endpoint, e.target.dataset.reports.split(";")); } else 
     if (endpoint==="edit-content/:ID/:PAGE") {
-        process_edit_content(endpoint, method);
+        process_edit_content(endpoint, method); } else
+    if (endpoint==="contact/:ID") {
+        process_contact(endpoint, method);
     }
-    
 })
 
 /*
@@ -214,6 +216,13 @@ output.querySelector("button.show-more").addEventListener("click", (e) => {
         getReport(showmore.dataset.endpoint, showmore.dataset.report, showmore.dataset.offset);
     }
 })
+
+/*
+**  HANDLE LEAVE A MESSAGE DIALOG
+*/
+const process_contact = (endpoint,method) => {
+    contact.showModal();
+}
 
 /*
 **  GO TO CMS EDITOR - SHOW MESSAGE WHILST IN PROGRESS
