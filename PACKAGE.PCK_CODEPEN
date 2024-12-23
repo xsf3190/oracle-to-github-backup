@@ -127,6 +127,42 @@ q'{<dialog class="output">
  </dialog>}');
     END;
 
+    /*
+     **  Build Content Dialog - here is where we show output from calling API
+     */
+    FUNCTION buildContactDialog RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+q'{<dialog class="contact">
+    <form>
+        <header class="flex-items space-between">
+            <h2>Leave a Message</h2>
+            <button class="button close" data-button-variant="round-icon">
+                <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
+                    <use href="#cross"></use>
+                </svg>
+            </button>
+        </header>
+        <article class="flow">
+            <div>
+                <label for="nameInput">Name</label>
+                <input type="text" id="nameInput" name="name" required minlength="1" maxlength="50">
+                <span class="nameinput-result"></span>
+            </div>
+             <div>
+                <label for="messageInput">Message</label>
+                <textarea id="messageInput" name="message" required minlength="1" maxlength="400" rows="5" cols="40"></textarea>
+                <span class="messageinput-result"></span>
+            </div>
+        </article>
+        <footer class="flex-items space-between">
+            <button type="button" class="button send">SEND</button>
+            <span></span>
+        </footer>
+    </form>
+ </dialog>}');
+    END;
+
     FUNCTION buildNavLabels(pArticleId IN article.id%type) RETURN VARCHAR2 IS
         l_nav_labels LONG;
         l_article_id article.id%type;
@@ -352,6 +388,7 @@ q'{<dialog class="output">
         IF (pLoginForm='YES') THEN 
             pHtml:=pHtml || buildLoginForm;
             pHtml:=pHtml || buildContentDialog;
+            pHtml:=pHtml || buildContactDialog;
         END IF;
 
         /* 
