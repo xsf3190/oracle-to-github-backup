@@ -1,5 +1,5 @@
 /* ************************************************************** */
-/* LOGIN HANDLER - AUTHENTICATION BY EMAIL WITH LINK OR  PASSCODE */
+/* LOGIN HANDLER - AUTHENTICATION BY EMAIL UDING LINK OR PASSCODE */
 /* ************************************************************** */
 
 const bodydata = document.body.dataset;
