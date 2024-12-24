@@ -505,7 +505,7 @@ q'{<dialog class="contact">
             l_html);
 
         IF (l_login_form='YES') THEN
-            l_javascript:=l_javascript || getJSCode('deploy_login_email.js');
+            l_javascript:=l_javascript || getJSCode('deploy_cms.js');
         END IF;
         
         apex_json.open_object;
