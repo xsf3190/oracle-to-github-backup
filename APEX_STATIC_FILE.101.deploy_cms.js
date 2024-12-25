@@ -12,7 +12,7 @@ const menulist = document.querySelector(".dropdown .menulist");
 const output = document.querySelector("dialog.output");
 const reportlist = output.querySelector("header > ul");
 const showmore = output.querySelector(".show-more");
-const contact = document.querySelector("dialog.contact");
+const message = document.querySelector("dialog.message");
 
 /* 
 ** CHECK IF TOKEN EXPIRED 
@@ -182,8 +182,8 @@ menulist.addEventListener("click", (e) => {
         process_report(endpoint, e.target.dataset.reports.split(";")); } else 
     if (endpoint==="edit-content/:ID/:PAGE") {
         process_edit_content(endpoint, method); } else
-    if (endpoint==="contact/:ID") {
-        process_contact(endpoint, method);
+    if (endpoint==="message/:ID/:PAGE") {
+        process_message(endpoint, method);
     }
 })
 
@@ -218,20 +218,177 @@ output.querySelector("button.show-more").addEventListener("click", (e) => {
 })
 
 /*
-**  HANDLE LEAVE A MESSAGE DIALOG
+**  LEAVE A MESSAGE DIALOG
 */
-const process_contact = (endpoint,method) => {
-    contact.showModal();
+const process_message = (endpoint,method) => {
+    message.showModal();
+  
+    const messageInput = document.getElementById("messageInput");
+    const messageError = document.querySelector(".messageInput-result");
+    const sendmessage = message.querySelector(".send");
+    const charcounter = message.querySelector(".charcounter");
+    const maxchars = messageInput.getAttribute("maxlength");
+  
+    messageInput.addEventListener("input", (e) => {
+        let numOfEnteredChars = messageInput.value.length;
+        charcounter.textContent = numOfEnteredChars + "/" + maxchars;
+
+        if (numOfEnteredChars === Number(maxchars)) {
+            charcounter.style.color = "red";
+        } else {
+            charcounter.style.color = "initial";
+        }
+    });
+  
+    sendmessage.addEventListener("click", (event) => {
+        if (messageInput.validity.valueMissing) {
+            messageError.textContent = "You need to enter a message.";
+            messageError.style.color = "red";
+            return;
+        }
+        const formData = new FormData(message.querySelector("form"));
+        const formObj = Object.fromEntries(formData);
+        callAPI(endpoint, method, formObj)
+            .then(() => {
+                const sendresult = message.querySelector(".send-result");
+                sendresult.textContent = "Successfully Sent";
+                sendresult.style.color = "green";
+                sendmessage.disabled = true;
+            })
+            .catch((error) => {
+                messageError.textContent = error;
+                messageError.style.color = "red";
+            });
+    });
 }
 
 /*
-**  GO TO CMS EDITOR - SHOW MESSAGE WHILST IN PROGRESS
+**  SHOW CMS EDITOR
 */
-const process_edit_content = (endpoint,method) => {
-    reportlist.replaceChildren();
-    reportlist.insertAdjacentHTML('afterbegin','<span>UPCOMING FEATURE - EDIT CONTENT</span>');
-    const article = output.querySelector("article");
-    article.replaceChildren();
-    article.insertAdjacentHTML('afterbegin','This will open the current page in the CMS Editor allowing you to edit the content and re-deploy the website.');
-    output.showModal();
+let editor;
+
+const process_edit_content = async (endpoint,method) => {
+    if (document.querySelector("head > link[href='https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css']")) {
+        return;
+    }
+
+    const link = document.createElement('link');
+    link.setAttribute('rel', 'stylesheet');
+    link.setAttribute('href', 'https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css');
+    document.head.appendChild(link);
+    const { ClassicEditor, 
+            Essentials,
+            Alignment,
+            Autosave,
+            BlockQuote,
+            Bold,
+            Clipboard,
+            Code,
+            CodeBlock,
+            GeneralHtmlSupport,
+            Heading,
+            HorizontalLine,
+            Image,
+            ImageCaption,
+            ImageResize,
+            ImageStyle,
+            ImageToolbar,
+            ImageInsert,
+            ImageInsertViaUrl,
+            Italic,
+            Link,
+            List,
+            Paragraph,
+            SelectAll,
+            SourceEditing,
+            Underline,
+            WordCount
+            } = await import("https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js");
+
+    ClassicEditor.create( document.querySelector( '#editor' ), {
+        plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, Paragraph, SelectAll, SourceEditing, Underline, WordCount ],
+        toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'underline', 'code', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
+        alignment: {
+          options: [
+            {name:'left', className: 'align-left'},
+            {name:'right', className: 'align-right'},
+            {name:'center', className: 'align-center'},
+            {name:'justify', className: 'align-justify'}
+          ]
+        },
+        autosave: {
+          waitingTime: 2000,
+          save( editor ) {
+            return saveData( editor.getData() );
+          }
+        },
+        codeBlock: {
+          languages: [
+            { language: 'css', label: 'CSS' },
+            { language: 'html', label: 'HTML' },
+            { language: 'javascript', label: 'Javascript' },
+            { language: 'sql', label: 'SQL' },
+            { language: 'plsql', label: 'PL/SQL' },
+            { language: 'shell', label: 'shell' }
+          ]
+        },
+        htmlSupport: {
+          allow: [
+            {
+              name: /.*/,
+              attributes: true,
+              classes: true,
+              styles: false
+            }
+          ]
+        },
+        image: {
+          insert: {
+            type: 'auto',
+            integrations: ['url']
+          },
+          toolbar: [
+            'imageStyle:inline',
+            'imageStyle:block',
+            '|',
+            'imageStyle:wrapText',
+            '|',
+            'toggleImageCaption',
+            'imageTextAlternative',
+          ]
+        },
+        list: {
+          properties: {
+            styles: true,
+            startIndex: true,
+            reversed: true
+          }
+        },
+        placeholder: 'Enter content',
+        title: {
+          placeholder: 'New title'
+        },
+        ui: {
+          viewportOffset: {
+            top: 0
+          }
+        },
+        wordCount: {
+          displayCharacters: true
+        },
+      } )
+        .then( newEditor => {
+        editor = newEditor;
+        const wordCountPlugin = editor.plugins.get( 'WordCount' );
+        const wordCountWrapper = wrapper.querySelector( '.ck-editor__main' );
+        wordCountWrapper.appendChild(wordCountPlugin.wordCountContainer );
+        const toolbar = wrapper.querySelector(".ck-toolbar__items");
+        toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
+        editor_status = "init";
+        editor_status_text = wrapper.querySelector("#editor-status");
+        editor.enableReadOnlyMode( 'lock-id' );
+      })
+        .catch( error => {
+        console.error(error);
+      });
 }
