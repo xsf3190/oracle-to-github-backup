@@ -373,17 +373,18 @@ form label {
   display: block;
   font-weight: 600;
 }
-form input,
-form textarea {
+form input {
   inline-size: 95%;
   font-size: var(--step-0);
-}
-form input {
   line-height: 2;
 }
+
 form textarea {
   resize: vertical;
-  min-block-size: 5rem;
+  min-block-size: 7rem;
+  font-size: var(--step-0);
+  inline-size: 100%;
+  line-height: 1.5;
 }
 
 /* FLEX ITEMS */
@@ -397,6 +398,9 @@ form textarea {
   align-items: var(--flex-vertical-alignment, center);
 }
 
+.space-apart {
+  --flex-horizontal-alignment: space-apart;
+}
 .space-between {
   --flex-horizontal-alignment: space-between;
 }
