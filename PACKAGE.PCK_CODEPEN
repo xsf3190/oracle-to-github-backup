@@ -33,7 +33,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     g_nav_labels t_nav_labels;
 
     /*
-     **  Build Login Aside
+     **  Build Login Component
      */
     FUNCTION buildLoginAside(pWebsiteId IN website.id%type) RETURN VARCHAR2 IS
         l_html LONG;
@@ -130,10 +130,10 @@ q'{<dialog class="output">
     /*
      **  Build Content Dialog - here is where we show output from calling API
      */
-    FUNCTION buildContactDialog RETURN VARCHAR2 IS
+    FUNCTION buildMessageDialog RETURN VARCHAR2 IS
     BEGIN
         RETURN(
-q'{<dialog class="contact">
+q'{<dialog class="message">
     <form>
         <header class="flex-items space-between">
             <h2>Leave a Message</h2>
@@ -144,20 +144,18 @@ q'{<dialog class="contact">
             </button>
         </header>
         <article class="flow">
-            <div>
-                <label for="nameInput">Name</label>
-                <input type="text" id="nameInput" name="name" required minlength="1" maxlength="50">
-                <span class="nameinput-result"></span>
-            </div>
              <div>
                 <label for="messageInput">Message</label>
                 <textarea id="messageInput" name="message" required minlength="1" maxlength="400" rows="5" cols="40"></textarea>
-                <span class="messageinput-result"></span>
+                <div class="flex-items space-between">
+                    <span class="messageInput-result"></span>
+                    <span class="charcounter"></span>
+                </div>
             </div>
         </article>
         <footer class="flex-items space-between">
             <button type="button" class="button send">SEND</button>
-            <span></span>
+            <span class="send-result"></span>
         </footer>
     </form>
  </dialog>}');
@@ -360,11 +358,26 @@ q'{<dialog class="contact">
         ** Build website header 
         */
         l_header:='<header class="section">';
-        IF (pLoginForm='YES') THEN 
-            l_header:=l_header || REPLACE(pHeader,'<div class="section__inner">','<div class="section__inner">' || buildLoginAside(pWebsiteId) );
+        IF (pHeader IS NULL) THEN
+            pck_core.log('pHeader IS NULL');
+        else
+            pck_core.log(to_char(pHeader));
+        end if;
+        
+        IF (pHeader IS NULL) THEN
+            l_header:=l_header || '<div class="section__inner">';
+            IF (pLoginForm='YES') THEN 
+                l_header:=l_header || buildLoginAside(pWebsiteId);
+            END IF;
+            l_header:=l_header || '</div>';
         ELSE
-            l_header:=l_header || pHeader;
+            IF (pLoginForm='YES') THEN 
+                l_header:=l_header || REPLACE(pHeader,'<div class="section__inner">','<div class="section__inner">' || buildLoginAside(pWebsiteId) );
+            ELSE
+                l_header:=l_header || pHeader;
+            END IF;
         END IF;
+        
         l_header:=l_header || '</header>';
 
         /* 
@@ -378,6 +391,7 @@ q'{<dialog class="contact">
         pHtml:=l_header || 
                buildNavLabels(pArticleId) || 
                '<main class="wrapper flow">' || 
+                '<div id="editor"></div>' ||
                     pHtml  || 
                '</main>' || 
                l_footer;
@@ -388,7 +402,7 @@ q'{<dialog class="contact">
         IF (pLoginForm='YES') THEN 
             pHtml:=pHtml || buildLoginForm;
             pHtml:=pHtml || buildContentDialog;
-            pHtml:=pHtml || buildContactDialog;
+            pHtml:=pHtml || buildMessageDialog;
         END IF;
 
         /* 
@@ -603,11 +617,12 @@ q'{<dialog class="contact">
             END IF;
 
             /*
-            ** header and footer are the first and last elements of their type in l_body_html
+            ** header and footer are the first and last elements of class "section" in l_body_html
             */
 
             l_header:=regexp_substr(l_body_html,'<header class="section.+?>(.+?)</header>',1,1,'n',1);
             l_header:=regexp_replace(l_header,'<aside class="login.+?</aside>');
+            l_header:=TRIM(l_header);
             IF (l_header IS NULL AND C.header IS NOT NULL) THEN
                 apex_string.push(l_updated_columns,'HEADER');
                 apex_string.push(l_updated_files,l_header);
@@ -617,6 +632,7 @@ q'{<dialog class="contact">
             END IF;
 
             l_footer:=regexp_substr(l_body_html,'<footer class="section.+?>(.+?)</footer>',1,1,'n',1);
+            l_footer:=TRIM(l_footer);
             IF (l_footer IS NULL AND C.footer IS NOT NULL) THEN
                 apex_string.push(l_updated_columns,'FOOTER');
                 apex_string.push(l_updated_files,l_footer);
