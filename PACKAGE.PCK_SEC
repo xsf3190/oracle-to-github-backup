@@ -261,7 +261,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         select w.id, r.id, o.template_id 
         from website w, role r, ords_endpoints o
         where r.name='visitor'
-        and o.uri_template='contact/:ID';
+        and INSTR(o.uri_template,'message')>0;
     END;
 
     /*
