@@ -4,6 +4,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pStatus OUT NUMBER);
     --
+    PROCEDURE insertMessage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NuMBER);
+    --
     PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB);
     --
     PROCEDURE uploadIpLookup;
@@ -846,6 +848,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         apex_json.write('success', TRUE);
         apex_json.close_object;
     END;
+
+    /*
+    ** USER LEAVES AE ON A WEBSITE PAGE
+    */
+    PROCEDURE insertMessage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NuMBER) IS
+        l_session_data pck_sec.t_session_data;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        INSERT INTO article_message (id, article_id, sending_user_id, message)
+        SELECT seq_article_message.nextval, pArticleId, l_session_data.user_id, message FROM JSON_TABLE(pBodyText,  '$' COLUMNS (message));
+        
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
+    END;
+
 
     PROCEDURE daily_job IS
         l_content VARCHAR2(300);
