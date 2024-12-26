@@ -755,3 +755,22 @@ td.centered span {
   background: red;
   color: white;
 }
+
+/* CKEDITOR STYLES */
+#editor-status {
+    color: green;
+}
+
+.ck-word-count {
+    display: flex;
+    gap: 1em;
+    font-size: var(--step--2);
+}
+
+/* Override DEPLOY button styles in toolbar */ 
+.deploy-website {
+    background-color: var(--color-primary-light) !important;
+    color: white !important;
+    margin-inline-start: calc (var(--ck-spacing-unit) * 4)) !important;
+    cursor: pointer !important;
+}
