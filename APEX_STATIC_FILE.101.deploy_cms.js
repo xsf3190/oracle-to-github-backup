@@ -181,7 +181,7 @@ menulist.addEventListener("click", (e) => {
     if (endpoint==="visits/:ID") {
         process_report(endpoint, e.target.dataset.reports.split(";")); } else 
     if (endpoint==="edit-content/:ID/:PAGE") {
-        process_edit_content(endpoint, method); } else
+        process_edit_content(endpoint); } else
     if (endpoint==="message/:ID/:PAGE") {
         process_message(endpoint, method);
     }
@@ -209,7 +209,7 @@ reportlist.addEventListener("click", (e) => {
 })
 
 /*
-** "SHOW MORE" REPORT BUTTON. PREEVENT DOUBLE CLICKS
+** "SHOW MORE" REPORT BUTTON. PREVENT DOUBLE CLICKS
 */
 output.querySelector("button.show-more").addEventListener("click", (e) => {
     if (e.detail===1) {
@@ -265,49 +265,64 @@ const process_message = (endpoint,method) => {
 /*
 **  SHOW CMS EDITOR
 */
-let editor;
+let editor, editor_status, editor_status_text, editor_endpoint, intervalId
 
-const process_edit_content = async (endpoint,method) => {
+const process_edit_content = async (endpoint) => {
     if (document.querySelector("head > link[href='https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css']")) {
         return;
     }
+    editor_endpoint = endpoint;
 
     const link = document.createElement('link');
     link.setAttribute('rel', 'stylesheet');
     link.setAttribute('href', 'https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css');
     document.head.appendChild(link);
-    const { ClassicEditor, 
-            Essentials,
-            Alignment,
-            Autosave,
-            BlockQuote,
-            Bold,
-            Clipboard,
-            Code,
-            CodeBlock,
-            GeneralHtmlSupport,
-            Heading,
-            HorizontalLine,
-            Image,
-            ImageCaption,
-            ImageResize,
-            ImageStyle,
-            ImageToolbar,
-            ImageInsert,
-            ImageInsertViaUrl,
-            Italic,
-            Link,
-            List,
-            Paragraph,
-            SelectAll,
-            SourceEditing,
-            Underline,
-            WordCount
+
+    let initialdata, last_update;
+
+    await callAPI(editor_endpoint,'GET')
+        .then((data) => {
+            initialdata = data.html;
+            last_update = data.last_update;
+        })
+        .catch((error) => {
+            console.error(error);
+            return;
+        })
+            
+    const { ClassicEditor, Essentials, Alignment, Autosave, BlockQuote, Bold, ButtonView, Clipboard, Code, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine,
+            Image, ImageCaption, ImageResize, ImageStyle, ImageToolbar, ImageInsert, ImageInsertViaUrl,
+            Italic, Link, List, Paragraph, Plugin, SelectAll, SourceEditing, Underline, WordCount
             } = await import("https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js");
 
+    class Deploy extends Plugin {
+        init() {
+            const editor = this.editor;
+            // The button must be registered among the UI components of the editor
+            // to be displayed in the toolbar.
+            editor.ui.componentFactory.add( 'deploy', () => {
+                // The button will be an instance of ButtonView.
+                const button = new ButtonView();
+
+                button.set( {
+                    label: 'Deploy',
+                    class: 'deploy-website',
+                    tooltip: 'Deploy website',
+                    withText: true
+                } );
+
+                return button;
+            } );
+        }
+    }
+
     ClassicEditor.create( document.querySelector( '#editor' ), {
-        plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, Paragraph, SelectAll, SourceEditing, Underline, WordCount ],
-        toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'underline', 'code', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
+        plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock, Deploy, GeneralHtmlSupport, Heading, HorizontalLine, 
+                    Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, Paragraph, 
+                    SelectAll, SourceEditing, Underline, WordCount ],
+        toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'underline', 'code', 'alignment', 'link', 
+                    'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing', '|', 'deploy'],
+        initialData: initialdata,
         alignment: {
           options: [
             {name:'left', className: 'align-left'},
@@ -376,19 +391,80 @@ const process_edit_content = async (endpoint,method) => {
         wordCount: {
           displayCharacters: true
         },
-      } )
+    })
         .then( newEditor => {
-        editor = newEditor;
-        const wordCountPlugin = editor.plugins.get( 'WordCount' );
-        const wordCountWrapper = wrapper.querySelector( '.ck-editor__main' );
-        wordCountWrapper.appendChild(wordCountPlugin.wordCountContainer );
-        const toolbar = wrapper.querySelector(".ck-toolbar__items");
-        toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
-        editor_status = "init";
-        editor_status_text = wrapper.querySelector("#editor-status");
-        editor.enableReadOnlyMode( 'lock-id' );
-      })
+            editor = newEditor;
+            const wordCountPlugin = editor.plugins.get( 'WordCount' );
+            const wordCountWrapper = document.querySelector( '.ck-editor__main' );
+            wordCountWrapper.appendChild(wordCountPlugin.wordCountContainer );
+            const toolbar = document.querySelector(".ck-toolbar__items");
+            toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
+            toolbar.querySelector(".deploy-website").addEventListener("click", () => {
+                deploy_website();
+            })
+            editor_status = "init";
+            editor_status_text = document.querySelector("#editor-status");
+            editor_status_text.textContent = last_update;
+            //editor.enableReadOnlyMode( 'lock-id' );
+    })
         .catch( error => {
-        console.error(error);
-      });
+            console.error(error);
+    });
+}
+
+const saveData = async ( data ) => {
+    if (editor_status==="init") {
+        editor_status="ok";
+        return Promise.resolve();
+    }
+
+    editor_status_text.textContent = "...";
+
+    const word_count = document.querySelector(".ck-word-count__words").textContent;
+
+    callAPI(editor_endpoint,'PUT', {body_html: data, word_count: word_count})
+        .then((data) => {
+            editor_status_text.textContent = data.message;
+            //editor_status_text.style.color = "green";
+        })
+        .catch((error) => {
+            console.error(error);
+            return;
+        })
+}
+
+const deploy_website = async () => {
+    await callAPI("deploy-website/:ID","POST").then( (data) => {
+        content.replaceChildren();
+        content.insertAdjacentHTML('afterbegin',data.content);
+        content.showModal();
+        if (data.stop) return;
+        if (gIntervalId) {
+            clearInterval(intervalId);
+        }
+        intervalId = setInterval(getDeploymentStatus,2000);
+    });
+}
+
+const getDeploymentStatus = () => {
+    callAPI("deploy-website/:ID","GET").then( (data) => {
+        if (data.content) {
+            content.querySelector("article").insertAdjacentHTML('beforeend',data.content);
+        }
+        /*
+        if (data.completed) {
+            clearInterval(intervalId);
+            const a = websiteNav.querySelector("a"),
+                  domain = a.textContent;
+                  
+            if (!a.hasAttribute("href")) {
+                if (env==="TEST") {
+                    a.href = "https://" + domain + ".netlify.app";
+                } else {
+                    a.href = "https://" + domain;
+                }
+            }
+        }
+        */
+    });
 }
