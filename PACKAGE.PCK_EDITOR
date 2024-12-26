@@ -1,0 +1,94 @@
+CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
+    --
+    PROCEDURE deployWebsite(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
+    --
+    PROCEDURE getEditorContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pStatus OUT NUMBER);
+    --
+    PROCEDURE updateEditorContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
+    --
+end;
+/
+CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
+
+    /* 
+    **  DEPLOY WEBSITE
+    */
+    PROCEDURE deployWebsite(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+        pck_core.log('l_session_data.url:'||l_session_data.url);
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE); 
+        apex_json.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
+    /* 
+    **  GET CONTENT FOR CKEDITOR
+    */
+    PROCEDURE getEditorContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_body_html article.body_html%type;
+        l_last_update VARCHAR2(20);
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+        pck_core.log('pWebsiteId:'||pWebsiteId);
+        pck_core.log('pArticleId:'||pArticleId);
+
+        SELECT body_html, apex_util.get_since(updated_date) last_update
+          INTO l_body_html, l_last_update
+          FROM article
+         WHERE id=pArticleId;
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE); 
+        apex_json.write('html', l_body_html);
+        apex_json.write('last_update', l_last_update);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
+    /* 
+    **  UPDATE CONTENT RECEIVED FROM CKEDITOR
+    */
+    PROCEDURE updateEditorContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_word_count article.word_count%type;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        UPDATE article t SET (t.word_count, t.body_html, t.updated_date) = 
+            (
+                SELECT REGEXP_SUBSTR(j.word_count,'(\d)+') word_count, j.body_html, current_timestamp as updated_date
+                  FROM article x, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (word_count, body_html CLOB)) j
+                 WHERE x.id=pArticleId
+            )
+        WHERE t.id=pArticleId
+        RETURNING t.word_count INTO l_word_count;
+
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.write('message', 'Saved ' || l_word_count || ' words');
+        APEX_JSON.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
+end;
+/
