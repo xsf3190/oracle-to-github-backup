@@ -341,8 +341,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[Content-Security-Policy: default-src 'none';]' ||
             q'[ img-src 'self' res.cloudinary.com;]' ||
             q'[ font-src 'self';]' ||
-            q'[ style-src 'self';]' ||
-            q'[ script-src 'self';]' ||
+            q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com;]' ||
+            q'[ script-src 'self' cdn.ckeditor.com;]' ||
             q'[ frame-src www.youtube.com;]' ||
             q'[ connect-src ]' || pRestUrl || ';';
 
