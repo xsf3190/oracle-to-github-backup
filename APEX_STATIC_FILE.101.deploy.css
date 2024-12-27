@@ -756,6 +756,19 @@ td.centered span {
   color: white;
 }
 
+/* DEPLOYMENT STATUS */
+ol.deploy {
+    color: white;
+    background-color: var(--color-text);
+    font-family: monospace;
+    font-size: var(--step--1);
+    padding: 1em;
+}
+
+ol.deploy span + span {
+    margin-inline-start: 1em;
+}
+
 /* CKEDITOR STYLES */
 #editor-status {
     color: green;
@@ -767,7 +780,7 @@ td.centered span {
     font-size: var(--step--2);
 }
 
-/* Override DEPLOY button styles in toolbar */ 
+/* Override DEPLOY button styles in CKEDITOR toolbar */ 
 .deploy-website {
     background-color: var(--color-primary-light) !important;
     color: white !important;
