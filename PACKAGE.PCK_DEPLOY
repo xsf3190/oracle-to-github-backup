@@ -8,6 +8,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE getDeploymentStatus(pId IN VARCHAR2);
     --
+    PROCEDURE logDeployment(pWebsiteId IN website.id%type, pSiteId IN website_deploy.site_id%type, pMessage IN VARCHAR2, pStatus IN VARCHAR2 DEFAULT 'OK', pLogTime IN TIMESTAMP DEFAULT current_timestamp);
+    --
     PROCEDURE runDelete(pUserId IN users.id%type, pWebsiteId IN website.id%type, pSiteId IN website.netlify_site_id%type);
     --
     PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pResturl IN VARCHAR2, pApplicationId IN VARCHAR2) ;
