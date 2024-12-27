@@ -301,10 +301,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         n PLS_INTEGER;
 
     BEGIN
-        l_session_data.valid:=TRUE;
         l_bearer_token := SUBSTR(OWA_UTIL.get_cgi_env('Authorization'), 8);
         l_JWT_data:=decodeJWT(l_bearer_token);
-        pck_core.log(l_bearer_token);
 
         /* Check expiry and signature are ok */
         l_token:=apex_jwt.DECODE(p_value => l_bearer_token, p_signature_key => UTL_RAW.cast_to_raw (l_JWT_data.client_secret));
@@ -313,7 +311,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             EXCEPTION WHEN VALUE_ERROR THEN
                 pck_core.log('token invalid');
                 RAISE_APPLICATION_ERROR(-20000,'token invalid');
-                --l_session_data.valid:=FALSE;
         END;
 
         /* Check that bearer token is an issued access token */
@@ -323,15 +320,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             IF (n=0) THEN
                 pck_core.log('token not an access token');
                 RAISE_APPLICATION_ERROR(-20000,'token not an access token');
-                --l_session_data.valid:=FALSE;
             END IF;
         END IF;
 
-        --IF (l_session_data.valid) THEN
-            l_session_data.user_id:=l_JWT_data.jti;
-            l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
-            l_session_data.url:=OWA_UTIL.get_cgi_env('url');
-        --END IF;
+        l_session_data.user_id:=l_JWT_data.jti;
+        l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
+        l_session_data.url:=OWA_UTIL.get_cgi_env('url');
 
         RETURN l_session_data;
     END;
