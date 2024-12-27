@@ -8,8 +8,10 @@ let access_token = sessionStorage.getItem("token");
 let refresh_token = localStorage.getItem("refresh");
 
 const bodydata = document.body.dataset;
+const dropdown = document.querySelector(".dropdown details");
 const menulist = document.querySelector(".dropdown .menulist");
 const output = document.querySelector("dialog.output");
+const content = output.querySelector("article");
 const reportlist = output.querySelector("header > ul");
 const showmore = output.querySelector(".show-more");
 const message = document.querySelector("dialog.message");
@@ -57,12 +59,12 @@ const responseok = (response, result) => {
         return(true);
     }
     if (result.cause) {
-      throw Error(`${response.status} - ${result.cause}`);
+      throw new Error(`${response.status} - ${result.cause}`);
     }
     if (result.sqlcode) {
-      throw Error(`${response.status} - ${result.sqlerrm}`);
+      throw new Error(`${response.status} - ${result.sqlerrm}`);
     } else {
-      throw Error(`${result.message}`);
+      throw new Error(`${result.message}`);
     }
 }
 
@@ -263,8 +265,15 @@ const process_message = (endpoint,method) => {
 }
 
 /*
-**  SHOW CMS EDITOR
+**  CONTENT WRAPPED IN EDITOR WITH WEBSITE DEPLoYMENT BUTTON.
 */
+
+const handleError = (error) => {
+    content.replaceChildren();
+    content.insertAdjacentHTML('afterbegin',error);
+    output.showModal();
+}
+
 let editor, editor_status, editor_status_text, editor_endpoint, intervalId
 
 const process_edit_content = async (endpoint) => {
@@ -286,31 +295,30 @@ const process_edit_content = async (endpoint) => {
             last_update = data.last_update;
         })
         .catch((error) => {
-            console.error(error);
+            handleError(error);
             return;
         })
             
     const { ClassicEditor, Essentials, Alignment, Autosave, BlockQuote, Bold, ButtonView, Clipboard, Code, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine,
             Image, ImageCaption, ImageResize, ImageStyle, ImageToolbar, ImageInsert, ImageInsertViaUrl,
             Italic, Link, List, Paragraph, Plugin, SelectAll, SourceEditing, Underline, WordCount
-            } = await import("https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js");
+            } = await import("https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js")
+            .catch((error) => {
+                handleError(error);
+                return;
+            })
 
     class Deploy extends Plugin {
         init() {
             const editor = this.editor;
-            // The button must be registered among the UI components of the editor
-            // to be displayed in the toolbar.
             editor.ui.componentFactory.add( 'deploy', () => {
-                // The button will be an instance of ButtonView.
                 const button = new ButtonView();
-
                 button.set( {
                     label: 'Deploy',
                     class: 'deploy-website',
                     tooltip: 'Deploy website',
                     withText: true
                 } );
-
                 return button;
             } );
         }
@@ -401,23 +409,25 @@ const process_edit_content = async (endpoint) => {
             toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
             toolbar.querySelector(".deploy-website").addEventListener("click", () => {
                 deploy_website();
+            });
+            document.querySelectorAll("main > *:not(.ck)").forEach ((ele) => {
+                ele.style.display = "none";
             })
+            dropdown.removeAttribute("open");
             editor_status = "init";
             editor_status_text = document.querySelector("#editor-status");
             editor_status_text.textContent = last_update;
             //editor.enableReadOnlyMode( 'lock-id' );
-    })
+        })
         .catch( error => {
-            console.error(error);
-    });
+            handleError(error);
+        });
 }
 
+/*
+** SAVE CHANGED DATA TO SERVER
+*/
 const saveData = async ( data ) => {
-    if (editor_status==="init") {
-        editor_status="ok";
-        return Promise.resolve();
-    }
-
     editor_status_text.textContent = "...";
 
     const word_count = document.querySelector(".ck-word-count__words").textContent;
@@ -425,46 +435,47 @@ const saveData = async ( data ) => {
     callAPI(editor_endpoint,'PUT', {body_html: data, word_count: word_count})
         .then((data) => {
             editor_status_text.textContent = data.message;
-            //editor_status_text.style.color = "green";
         })
         .catch((error) => {
-            console.error(error);
-            return;
+            handleError(error);
         })
 }
 
+/*
+** USER CLICKS DEPLOY BUTTON
+*/
 const deploy_website = async () => {
-    await callAPI("deploy-website/:ID","POST").then( (data) => {
-        content.replaceChildren();
-        content.insertAdjacentHTML('afterbegin',data.content);
-        content.showModal();
-        if (data.stop) return;
-        if (gIntervalId) {
-            clearInterval(intervalId);
-        }
-        intervalId = setInterval(getDeploymentStatus,2000);
-    });
+    callAPI("deploy-website/:ID","POST",{})
+        .then( (data) => {
+            content.replaceChildren();
+            content.insertAdjacentHTML('afterbegin',data.content);
+            showmore.classList.add("visually-hidden");
+            output.showModal();
+            if (data.stop) return;
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+            intervalId = setInterval(getDeploymentStatus,2000);
+        })
+        .catch((error) => {
+            handleError(error);
+        });;
 }
 
+/*
+** RETRIEVE AND SHOW DEPLOYMENT STATUS FROM SERVER
+*/
 const getDeploymentStatus = () => {
-    callAPI("deploy-website/:ID","GET").then( (data) => {
-        if (data.content) {
-            content.querySelector("article").insertAdjacentHTML('beforeend',data.content);
-        }
-        /*
-        if (data.completed) {
-            clearInterval(intervalId);
-            const a = websiteNav.querySelector("a"),
-                  domain = a.textContent;
-                  
-            if (!a.hasAttribute("href")) {
-                if (env==="TEST") {
-                    a.href = "https://" + domain + ".netlify.app";
-                } else {
-                    a.href = "https://" + domain;
-                }
+    callAPI("deploy-website/:ID","GET")
+        .then( (data) => {
+            if (data.content) {
+                content.querySelector(".deploy").insertAdjacentHTML('beforeend',data.content);
             }
-        }
-        */
-    });
+            if (data.completed) {
+                clearInterval(intervalId);
+            }
+        })
+        .catch((error) => {
+            handleError(error);
+        })
 }
