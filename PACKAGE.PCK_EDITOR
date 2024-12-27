@@ -2,6 +2,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
     --
     PROCEDURE deployWebsite(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
     --
+    PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
+    --
     PROCEDURE getEditorContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pStatus OUT NUMBER);
     --
     PROCEDURE updateEditorContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
@@ -15,12 +17,79 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     */
     PROCEDURE deployWebsite(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
+        l_job_name VARCHAR2(30);
+        l_env VARCHAR2(4);
+        l_site_id website.netlify_site_id%type;
+        l_site_id_custom website.netlify_site_id_custom%type;
     BEGIN
+        pck_core.log('start deployWebsite:'||pWebsiteId);
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
-        pck_core.log('l_session_data.url:'||l_session_data.url);
 
-        apex_json.open_object;
-        apex_json.write('success', TRUE); 
+        /* 
+        ** Check no other session currently deploying - simultaneous deployments not allowed on Netlify free plan 
+        */
+        FOR C IN (SELECT job_name FROM user_scheduler_running_jobs WHERE job_name LIKE 'DEPLOY_%') LOOP
+            apex_json.open_object;
+            apex_json.write('content', '<h2>Someone else is deploying ... try again later</h2>');
+            apex_json.write('stop', TRUE);
+            apex_json.write('success', TRUE);
+            apex_json.close_object;
+            RETURN;
+        END LOOP;
+
+        IF (INSTR(l_session_data.url,'netlify.app')>0) THEN
+            l_env:='TEST';
+        ELSE
+            l_env:='LIVE';
+        END IF;
+
+        DELETE website_deploy WHERE website_id=pWebsiteId;
+        UPDATE website SET netlify_deploy_id=NULL WHERE id=pWebsiteId RETURNING netlify_site_id, netlify_site_id_custom INTO l_site_id, l_site_id_custom;
+
+        l_job_name:=dbms_scheduler.generate_job_name('DEPLOY_');
+        dbms_scheduler.create_job(
+            job_name   => l_job_name,
+            job_type   =>'STORED_PROCEDURE',
+            job_action =>'pck_deploy.runDeployment',
+            number_of_arguments=>6,
+            start_date=>systimestamp
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 1,
+            argument_value => pWebsiteId
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 2,
+            argument_value => l_session_data.user_id
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 3,
+            argument_value => l_env
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 4,
+            argument_value => CASE WHEN l_env='TEST' THEN l_site_id ELSE l_site_id_custom END
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 5,
+            argument_value => pck_core.getRestUrl()
+        );
+        
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 6,
+            argument_value => 101
+        );
+        dbms_scheduler.enable(l_job_name);
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('content', '<ol role="list" class="deploy"><li><span>' || TO_CHAR(current_timestamp,'hh24:mi:ss') || '</span><span>Starting deployment of ' || l_session_data.url || '</span></li></ol>');
         apex_json.close_object;
 
         pStatus:=200;
@@ -28,6 +97,145 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     EXCEPTION WHEN OTHERS THEN
         pck_core.log_error(pStatus);
 
+    END;
+
+    /*
+     **  Get deployment status from website_deploy logging table - called from Javascript every 3 seconds
+     */
+    PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS 
+        l_site_id website_deploy.site_id%type;
+        l_content CLOB;
+        l_clob CLOB;
+        l_ssl_url VARCHAR2(100);
+        l_deployment_complete BOOLEAN:=FALSE;
+        l_netlify_status website_deploy.status%type;
+        l_netlify_deploy_id website.netlify_deploy_id%type;
+        l_state VARCHAR2(200);
+        l_updated_at website.netlify_last_published%type;
+        l_job_name VARCHAR2(30);
+        l_session_data pck_sec.t_session_data;
+        TYPE t_deploy_log IS RECORD(
+            id website_deploy.id%type,
+            log_time VARCHAR2(8),
+            message website_deploy.message%type,
+            status website_deploy.status%type);
+        TYPE tt_deploy_log IS TABLE OF t_deploy_log;
+        l_deploy_log tt_deploy_log;          
+        l_env VARCHAR2(4);
+        l_is_live BOOLEAN;
+        cert_not_ready exception;
+        pragma exception_init( cert_not_ready, -29273 );
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        IF (INSTR(l_session_data.url,'netlify.app')>0) THEN
+            l_env:='TEST';
+        ELSE
+            l_env:='LIVE';
+        END IF;
+
+        SELECT netlify_deploy_id, CASE WHEN l_env='TEST' THEN netlify_site_id ELSE netlify_site_id_custom END
+          INTO l_netlify_deploy_id, l_site_id
+          FROM website
+         WHERE id=pWebsiteId;
+
+        l_is_live:=l_env='LIVE';
+
+        /* Get latest deployment status if started */
+        IF (l_netlify_deploy_id IS NOT NULL) THEN
+            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys/' || l_netlify_deploy_id, pMethod=>'GET', pData=>l_clob);
+            FOR C IN (SELECT state, ssl_url, TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR') updated_at
+                        FROM JSON_TABLE(l_clob, '$' COLUMNS (state, ssl_url, updated_at)) 
+                       WHERE state='ready') 
+            LOOP
+                pck_deploy.logDeployment(pWebsiteId, l_site_id, C.state, pLogTime=>C.updated_at);
+                l_ssl_url:=C.ssl_url;
+            END LOOP;
+        END IF;
+
+        SELECT id, TO_CHAR(log_time,'hh24:mi:ss') log_time, message, status
+          BULK COLLECT INTO l_deploy_log
+          FROM website_deploy 
+         WHERE website_id=pWebsiteId
+           AND site_id=l_site_id
+           AND sent_ind='N'
+         ORDER BY id;
+
+        /* Now return list of all deployment status messages to client */
+        FOR i IN 1..l_deploy_log.COUNT
+        LOOP
+            IF (l_deploy_log(i).message='ready') THEN 
+                l_content:=l_content ||'<li><span>' || l_deploy_log(i).log_time || '</span><span>Successful deployment</span></li>'; 
+                IF (l_is_live) THEN
+                    BEGIN
+                        l_clob:=apex_web_service.make_rest_request(p_url=>l_ssl_url, p_http_method=>'GET');
+                        EXCEPTION WHEN cert_not_ready THEN
+                            l_content:=l_content ||'<li><span></span><span style="color:red">Certificate in process of being issued</span></li>'; 
+                    END;
+                END If;
+                l_deployment_complete:=TRUE;
+                EXIT;
+            END IF;
+
+            IF (l_deploy_log(i).status='OK') THEN 
+                l_content:=l_content ||'<li><span>' || l_deploy_log(i).log_time || '</span><span>' || l_deploy_log(i).message || '</span></li>'; 
+            ELSE
+                l_content:=l_content ||'<li class="nok"><span>' || l_deploy_log(i).log_time || '</span><span>' || l_deploy_log(i).message || '</span></li>'; 
+                l_deployment_complete:=TRUE;
+            END IF;
+        END LOOP;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('completed', l_deployment_complete);
+        apex_json.write('content', l_content);
+        apex_json.close_object;
+
+        FORALL i IN 1..l_deploy_log.COUNT
+            UPDATE website_deploy SET sent_ind='Y' WHERE id=l_deploy_log(i).id;
+
+        IF (l_deployment_complete) THEN
+            IF (l_is_live) THEN
+                UPDATE website 
+                   SET netlify_last_published_custom = current_timestamp
+                 WHERE id=pWebsiteId;
+            ELSE
+                UPDATE website 
+                   SET netlify_last_published = current_timestamp
+                 WHERE id=pWebsiteId;
+            END IF;
+
+            l_job_name:=dbms_scheduler.generate_job_name('DELETE_');
+            dbms_scheduler.create_job(
+                job_name   => l_job_name,
+                job_type   =>'STORED_PROCEDURE',
+                job_action =>'pck_deploy.runDelete',
+                number_of_arguments=>3,
+                start_date=>systimestamp
+            );
+            dbms_scheduler.set_job_argument_value(
+                job_name => l_job_name,
+                argument_position => 1,
+                argument_value => l_session_data.user_id
+            );
+            dbms_scheduler.set_job_argument_value(
+                job_name => l_job_name,
+                argument_position => 2,
+                argument_value => pWebsiteId
+            );
+            dbms_scheduler.set_job_argument_value(
+                job_name => l_job_name,
+                argument_position => 3,
+                argument_value => l_site_id
+            );
+            dbms_scheduler.enable(l_job_name);    
+        END IF;
+
+        pStatus:=200;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error(pStatus);
     END;
 
     /* 
@@ -39,8 +247,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_last_update VARCHAR2(20);
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
-        pck_core.log('pWebsiteId:'||pWebsiteId);
-        pck_core.log('pArticleId:'||pArticleId);
 
         SELECT body_html, apex_util.get_since(updated_date) last_update
           INTO l_body_html, l_last_update
