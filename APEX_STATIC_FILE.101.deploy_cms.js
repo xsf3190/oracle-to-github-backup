@@ -314,7 +314,7 @@ const process_edit_content = async (endpoint) => {
             editor.ui.componentFactory.add( 'deploy', () => {
                 const button = new ButtonView();
                 button.set( {
-                    label: 'Deploy',
+                    label: 'DEPLOY',
                     class: 'deploy-website',
                     tooltip: 'Deploy website',
                     withText: true
