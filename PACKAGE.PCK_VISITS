@@ -674,6 +674,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         pHtml:=l_content;
     END;
 
+    PROCEDURE getPageViewHistory(pWebsiteId IN website.id%type, pUrl IN VARCHAR2, pHtml IN OUT NOCOPY CLOB) IS
+    BEGIN
+        FOR C IN (
+            WITH weekly as 
+                (SELECT trunc(visit_date,'iw') week, count(*) nb_visits
+                   FROM page_hit 
+                  WHERE website_id=pWebsiteId
+                    AND url=pUrl
+                    AND  visit_date>=current_date-360
+                  GROUP BY trunc(visit_date,'iw')
+                )
+            SELECT to_char(week,'yy-mm-dd') week, nb_visits, avg(nb_visits) over (order by week rows between 3 PRECEDING and current row) moving_avg
+             FROM weekly ORDER BY 1
+        )
+        LOOP
+            null;
+        END LOOP;
+    END;
+
     /* 
     **  ENTRY POINT FOR ALL VISIT REPORTS
     */
