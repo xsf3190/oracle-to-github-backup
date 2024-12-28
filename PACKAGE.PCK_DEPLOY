@@ -346,7 +346,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com;]' ||
             q'[ script-src 'self' cdn.ckeditor.com;]' ||
             q'[ frame-src www.youtube.com;]' ||
-            q'[ connect-src ]' || pRestUrl || ';';
+            q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
+            q'[X-Content-Type-Options: nosniff]' || chr(10) ||
+            q'[X-Frame-Options: SAMEORIGIN]' || chr(10) ||
+            q'[Referrer-Policy: no-referrer-when-downgrade]' || chr(10) ||
+            q'[Permissions-Policy: microphone=(), geolocation=()]';
 
         /* 
         ** Build individual website pages
