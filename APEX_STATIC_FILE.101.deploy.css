@@ -55,6 +55,26 @@ img {
   margin-inline: auto;
 }
 
+/* IMAGE STYLES (FROM CKEDITOR) */
+.image.image-style-align-left {
+  float: left;
+  margin-inline-end: 1em;
+}
+.image.image-style-align-right {
+  float: right;
+  margin-inline-start: 1em;
+}
+.image>figcaption {
+  background-color: #f7f7f7;
+  font-size: 0.75em;
+  padding: 0.6em;
+  text-align: center;
+  word-break: break-word;
+}
+.image>img {
+  border-radius: 0.6em;
+}
+
 .floating-image {
   --shape-outside: ellipse(50% 50%);
   --margin:  0 2em 0.5em 0;
