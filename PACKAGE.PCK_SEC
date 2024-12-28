@@ -230,13 +230,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         INSERT INTO ords_endpoints (template_id, uri_template, method, label)
         SELECT t.id template_id, t.uri_template, h.method, h.comments as label
-        FROM user_ords_modules m, user_ords_templates t, user_ords_handlers h, user_ords_parameters p
-        WHERE m.name='public'
-        AND m.id=t.module_id
-        AND t.id=h.template_id
-        AND h.id=p.handler_id
-        AND h.comments IS NOT NULL
-        AND p.name='X-ORDS-STATUS-CODE';
+          FROM user_ords_modules m, user_ords_templates t, user_ords_handlers h, user_ords_parameters p
+         WHERE m.name='public'
+           AND m.id=t.module_id
+           AND t.id=h.template_id
+           AND h.id=p.handler_id
+           AND h.comments IS NOT NULL
+           AND p.name='X-ORDS-STATUS-CODE';
 
         /* temporary solution */
         delete website_role;
@@ -508,6 +508,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('token', l_new_token);
         APEX_JSON.write ('refresh', l_new_refresh);
+        
+        refreshOrdsEndpoints;
+
         FOR C IN (
             SELECT o.label, o.uri_template, o.method
               FROM api_endpoint a, role r, ords_endpoints o
