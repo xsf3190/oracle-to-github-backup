@@ -302,12 +302,13 @@ q'{<dialog class="message">
 
         /* Remove empty elements */
         pHtml:=REPLACE(pHtml,'<h1>&nbsp;</h1>',null);
+        pHtml:=REPLACE(pHtml,'<p>&nbsp;</p>',null);
 
         /* <article> signifies start of page section - insert svg to show curved sections */
         --pHtml:=REPLACE(pHtml,'<article',g_curve || '<article');
 
         /* Remove any inline styles - pages are deployed with strict Content Security policy */
-        pHtml:=REGEXP_REPLACE(pHtml,' style="[^"]*"');
+        --pHtml:=REGEXP_REPLACE(pHtml,' style="[^"]*"');
 
         /* Construct start of <main> element */
         --pHtml:='<main class="content-grid">' || pHtml;
