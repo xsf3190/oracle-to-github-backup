@@ -407,7 +407,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
         FOR C IN (
             SELECT w.id, w.domain_name, w.font, w.contact_email, w.max_width, 
                      w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, 
-                     w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom, w.price_currency, w.login_form,
+                     w.color_text, w.color_background, w.color_primary, w.netlify_site_id_custom, img_border_radius, w.price_currency, w.login_form,
                      w.netlify_last_published, g.url_regular
               FROM website w, google_font g
              WHERE w.id=l_website_id
@@ -468,8 +468,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                     buildInputWrapper(C.id, 'website.color_primary', C.color_primary, l_session_data.canuse_popover, l_session_data.canuse_eyedropper, FALSE, 'color') ||
                     pck_core.buildPushableButton('save-colors') ||
                     '</fieldset>
-                </details>
-                <div class="demo-container">
+                </details>' ||
+                buildRadioWrapper(C.id, 'website.img_border_radius', C.img_border_radius, l_session_data.canuse_popover) ||
+                '<div class="demo-container">
                     <header><span></span></header>
                     <nav><div>' || buildNavItems(l_website_id) || '</div></nav>
                     <svg viewBox="0 0 1440 96">
