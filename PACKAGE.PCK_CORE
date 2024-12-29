@@ -397,7 +397,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_deploy_css CLOB;
     BEGIN
         FOR C IN (SELECT w.font, w.max_width, w.color_text, w.color_background, w.color_primary, w.css,
-                         w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, g.category
+                         w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, w.img_border_radius, g.category
                     FROM website w, google_font g
                    WHERE w.id=pWebsiteId
                      AND w.font=g.family)
@@ -414,6 +414,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             l_root_css:=l_root_css ||
             '--font-family: "' || C.font || '", ' || CASE WHEN C.category='handwriting' THEN 'cursive' ELSE C.category END || ';'||
             '--max-width: ' || C.max_width || ';' || 
+            '--img-border-radius: ' || C.img_border_radius || ';' || 
             '--color-text: ' || C.color_text || ';' || 
             '--color-background: ' || C.color_background || ';' || 
             '--color-primary: ' || C.color_primary || ';';
