@@ -48,6 +48,7 @@ img {
   height: auto;
   display: block;
   object-fit: cover;
+  border-radius: var(--img-border-radius,1em);
 }
 
 .wrapper {
@@ -55,44 +56,32 @@ img {
   margin-inline: auto;
 }
 
-/* IMAGE STYLES (FROM CKEDITOR) */
-.image.image-style-align-left {
+/* IMAGE STYLES (CLASSES SUPPLIED BY CKEDITOR) */
+.image-style-align-left {
   float: left;
   margin-inline-end: 1em;
 }
-.image.image-style-align-right {
+
+.image-style-align-right {
   float: right;
   margin-inline-start: 1em;
 }
+
+figure.image > img {
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+figure.image + p:first-of-type {
+  margin-block-start: 0;
+}
+
 .image>figcaption {
   background-color: #f7f7f7;
-  font-size: 0.75em;
+  font-size: var(--step--2);
   padding: 0.6em;
   text-align: center;
   word-break: break-word;
-}
-.image>img {
-  border-radius: 0.6em;
-}
-
-.floating-image {
-  --shape-outside: ellipse(50% 50%);
-  --margin:  0 2em 0.5em 0;
-  --float: left;
-  --inline-size: var(--space-3xl);
-  --block-size: auto;
-  --border-radius: 1em;
-  shape-outside: var(--shape-outside);
-  float: var(--float);
-  margin: var(--margin);
-  inline-size: var(--inline-size);
-  block-size: var(--block-size);
-  border-radius: var(--border-radius);
-}
-
-.floating-image[data-float-variant="right"] {
-  --margin:  0 0 0.5em 2em;
-  --float: right;
 }
 
 .section__inner {
