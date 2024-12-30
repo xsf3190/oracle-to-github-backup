@@ -14,7 +14,6 @@ const output = document.querySelector("dialog.output");
 const content = output.querySelector("article");
 const reportlist = output.querySelector("header > ul");
 const showmore = output.querySelector(".show-more");
-const message = document.querySelector("dialog.message");
 
 /* 
 ** CHECK IF TOKEN EXPIRED 
@@ -176,7 +175,7 @@ const getReport = async (endpoint, report, offset) => {
 /*
 ** USER CLICKS ACTION BUTTON IN MAIN DROPDOWN
 */
-menulist.addEventListener("click", (e) => {
+menulist.addEventListener("click", async (e) => {
     const endpoint = e.target.dataset.endpoint;
     const method = e.target.dataset.method;
   
@@ -185,6 +184,7 @@ menulist.addEventListener("click", (e) => {
     if (endpoint==="edit-content/:ID/:PAGE") {
         process_edit_content(endpoint); } else
     if (endpoint==="message/:ID/:PAGE") {
+        const { process_message } = await import("./deploy_leave_message.min.js");
         process_message(endpoint, method);
     }
 })
@@ -221,7 +221,7 @@ output.querySelector("button.show-more").addEventListener("click", (e) => {
 
 /*
 **  LEAVE A MESSAGE DIALOG
-*/
+
 const process_message = (endpoint,method) => {
     message.showModal();
   
@@ -262,7 +262,8 @@ const process_message = (endpoint,method) => {
                 messageError.style.color = "red";
             });
     });
-}
+}*/
+
 
 /*
 **  CONTENT WRAPPED IN EDITOR WITH WEBSITE DEPLoYMENT BUTTON.
@@ -274,22 +275,24 @@ const handleError = (error) => {
     output.showModal();
 }
 
-let editor, editor_status, editor_status_text, editor_endpoint, intervalId
+let intervalId;
 
 const process_edit_content = async (endpoint) => {
-    if (document.querySelector("head > link[href='https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css']")) {
+    const CK_CSS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css";
+    const CK_JS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js";
+
+    if (document.querySelector("head > link[href='" + CK_CSS + "']")) {
         return;
     }
-    editor_endpoint = endpoint;
 
     const link = document.createElement('link');
     link.setAttribute('rel', 'stylesheet');
-    link.setAttribute('href', 'https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css');
+    link.setAttribute('href', CK_CSS);
     document.head.appendChild(link);
 
     let initialdata, last_update;
 
-    await callAPI(editor_endpoint,'GET')
+    await callAPI(endpoint,'GET')
         .then((data) => {
             initialdata = data.html;
             last_update = data.last_update;
@@ -302,7 +305,7 @@ const process_edit_content = async (endpoint) => {
     const { ClassicEditor, Essentials, Alignment, Autosave, BlockQuote, Bold, ButtonView, Clipboard, Code, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine,
             Image, ImageCaption, ImageResize, ImageStyle, ImageToolbar, ImageInsert, ImageInsertViaUrl,
             Italic, Link, List, Paragraph, Plugin, SelectAll, SourceEditing, Underline, WordCount
-            } = await import("https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js")
+            } = await import(CK_JS)
             .catch((error) => {
                 handleError(error);
                 return;
@@ -324,7 +327,7 @@ const process_edit_content = async (endpoint) => {
         }
     }
 
-    ClassicEditor.create( document.querySelector( '#editor' ), {
+    const editor = await ClassicEditor.create( document.querySelector( '#editor' ), {
         plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock, Deploy, GeneralHtmlSupport, Heading, HorizontalLine, 
                     Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, Paragraph, 
                     SelectAll, SourceEditing, Underline, WordCount ],
@@ -342,7 +345,7 @@ const process_edit_content = async (endpoint) => {
         autosave: {
           waitingTime: 2000,
           save( editor ) {
-            return saveData( editor.getData() );
+            return saveData( editor.getData(), endpoint );
           }
         },
         codeBlock: {
@@ -400,41 +403,45 @@ const process_edit_content = async (endpoint) => {
           displayCharacters: true
         },
     })
-        .then( newEditor => {
-            editor = newEditor;
-            const wordCountPlugin = editor.plugins.get( 'WordCount' );
-            const wordCountWrapper = document.querySelector( '.ck-editor__main' );
-            wordCountWrapper.appendChild(wordCountPlugin.wordCountContainer );
-            const toolbar = document.querySelector(".ck-toolbar__items");
-            toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
-            toolbar.querySelector(".deploy-website").addEventListener("click", () => {
-                deploy_website();
-            });
-            document.querySelectorAll("main > *:not(.ck)").forEach ((ele) => {
-                ele.style.display = "none";
-            })
-            dropdown.removeAttribute("open");
-            editor_status = "init";
-            editor_status_text = document.querySelector("#editor-status");
-            editor_status_text.textContent = last_update;
-            //editor.enableReadOnlyMode( 'lock-id' );
-        })
-        .catch( error => {
-            handleError(error);
-        });
+    .catch( error => {
+        handleError(error);
+    });
+
+    /* Configure word count plugin and position at bottom of ediitor */
+    const wordCountPlugin = editor.plugins.get( 'WordCount' );
+    const wordCountWrapper = document.querySelector( '.ck-editor__main' );
+    wordCountWrapper.appendChild(wordCountPlugin.wordCountContainer );
+
+    /* Put editor status element at end of the toolbar. Initialize with last updated */
+    const toolbar = document.querySelector(".ck-toolbar__items");
+    toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
+    document.querySelector("#editor-status").textContent = last_update;
+
+    /* Listen for DEPLOY requests */
+    toolbar.querySelector(".deploy-website").addEventListener("click", () => {
+        deploy_website();
+    });
+
+    /* Hide all other elements in <main> when in Editor mode */
+    document.querySelectorAll("main > *:not(.ck)").forEach ((ele) => {
+        ele.style.display = "none";
+    })
+    
+    dropdown.removeAttribute("open");
 }
 
 /*
 ** SAVE CHANGED DATA TO SERVER
 */
-const saveData = async ( data ) => {
-    editor_status_text.textContent = "...";
-
+const saveData = async ( data, endpoint ) => {
     const word_count = document.querySelector(".ck-word-count__words").textContent;
+    const editor_status = document.querySelector("#editor-status");
 
-    callAPI(editor_endpoint,'PUT', {body_html: data, word_count: word_count})
+    editor_status.textContent = "...";
+
+    callAPI(endpoint,'PUT', {body_html: data, word_count: word_count})
         .then((data) => {
-            editor_status_text.textContent = data.message;
+            editor_status.textContent = data.message;
         })
         .catch((error) => {
             handleError(error);
