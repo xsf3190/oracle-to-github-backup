@@ -273,12 +273,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             
             apex_string.push(l_labels(i).modules,'web-vitals.js'); /* already inified from google download */
             apex_string.push(l_labels(i).modules,'deploy_metric.min.js');
-
-            IF (l_login_form='YES') THEN
-                apex_string.push(l_labels(i).modules,'deploy_login_email.min.js');
-                apex_string.push(l_labels(i).modules,'deploy_leave_message.min.js');
-                apex_string.push(l_labels(i).modules,'deploy_cms.min.js');
-            END IF;
+            apex_string.push(l_labels(i).modules,'deploy_main.min.js');
 
             IF (l_labels(i).collection_type='BLOG') THEN
                 l_is_blog:=TRUE;
@@ -376,7 +371,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_module_html:=NULL;
             l_script_html:=NULL;
 
-            FOR C IN (SELECT column_value FROM TABLE(l_labels(i).modules) ORDER BY DECODE(column_value,'deploy_login_email.min.js',1,'web-vitals',2,3)) LOOP
+            FOR C IN (SELECT column_value FROM TABLE(l_labels(i).modules)) LOOP
                 l_module_html:=l_module_html || '<link rel="modulepreload" href="/' || C.column_value || '">' || chr(10);
                 l_script_html:=l_script_html || '<script src="/' || C.column_value || '" type="module"></script>' || chr(10);
                 IF (C.column_value NOT MEMBER OF l_jscode) THEN
@@ -453,6 +448,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_name:='website.css';
         l_deploy_files(l_sha1).file_content:=l_style;
         l_files.put('website.css', l_sha1);
+
+        l_jscode.EXTEND();
+        l_jscode(l_jscode.LAST):='deploy_elements.min.js';
+        l_jscode.EXTEND();
+        l_jscode(l_jscode.LAST):='deploy_login_email.min.js';
+        l_jscode.EXTEND();
+        l_jscode(l_jscode.LAST):='deploy_leave_message.min.js';
+        l_jscode.EXTEND();
+        l_jscode(l_jscode.LAST):='deploy_callAPI.min.js';
 
         FOR i IN 1..l_jscode.COUNT LOOP
             FOR C IN (SELECT apex_util.blob_to_clob(file_content) file_content
