@@ -2,32 +2,20 @@
 /* LOGIN HANDLER - AUTHENTICATION BY EMAIL UDING LINK OR PASSCODE */
 /* ************************************************************** */
 
-const bodydata = document.body.dataset;
-const aside = document.querySelector("aside.login");
-const menulist = aside.querySelector(".menulist");
-const email = aside.querySelector(".email");
-const expires = aside.querySelector(".expires");
-const login = aside.querySelector(".login-btn");
-const dialog = document.querySelector("dialog.login-email");
-const form = dialog.querySelector("form");
+import { login_dialog, login_btn, email, expires, menulist, bodydata } from "./deploy_elements.min.js";
 
+const form = login_dialog.querySelector("form");
+const emailInput = form.querySelector("[name='email']");
+const emailError = form.querySelector("#emailInput + span");
+const sendmail_magic = form.querySelector(".sendmail-magic");
+const sendmail_passcode = form.querySelector(".sendmail-passcode");
+const sendmail_msg = form.querySelector(".sendmail-result");
+const passcodeInput = form.querySelector("[name='passcode']");
+const passcodeError = form.querySelector("#passcodeInput + span");
+const validate_passcode =  form.querySelector(".validate-passcode");
+const validate_msg = form.querySelector(".passcode-result");
 
-/*
-** MODULE LOAD - SET DROPDOWN IF LOGGED IN - IE. REFRESH TOKEN EXISTS
-*/
-if (localStorage.getItem("refresh")) {
-    const arrayToken = localStorage.getItem("refresh").split(".");
-    const parsedToken = JSON.parse(atob(arrayToken[1]));
-    email.textContent = parsedToken.sub;
-    expires.textContent = new Date(parsedToken.exp*1000).toLocaleString();
-    menulist.replaceChildren();
-    login.textContent="Log Out";
-    if (localStorage.getItem("menulist")) {
-        menulist.insertAdjacentHTML('afterbegin',localStorage.getItem("menulist"));
-    } else {
-        login.click(); // Force logout
-    }
-}
+let intervalId;
 
 /*
 ** CALL authenticate ENDPOINT
@@ -60,45 +48,19 @@ const callAuthAPI = async (method, data) => {
     // Error handling
   
     if (result.cause) {
-      throw Error(`${response.status} - ${result.cause}`);
+      throw new Error(`${response.status} - ${result.cause}`);
     }
 
     if (result.sqlcode) {
-      throw Error(`${response.status} - ${result.sqlerrm}`);
+      throw new Error(`${response.status} - ${result.sqlerrm}`);
     } else {
-      throw Error(`${result.message}`);
+      throw new Error(`${result.message}`);
     }
 }
 
 /*
-** CLICK HANDLER FOR LOGIN BUTTON
-*/
-login.addEventListener("click", (e) => {
-    if (login.textContent==="Log Out") {
-        sessionStorage.removeItem("token");
-        localStorage.removeItem("refresh");
-        localStorage.removeItem("menulist");
-        email.textContent = "";
-        expires.textContent = "";
-        menulist.replaceChildren();
-        login.textContent = "Log In";
-    } else {
-        dialog.showModal();
-    }
-})
-
-/*
 ** VALIDATE EMAIL INPUT BY USER
 */
-const sendmail_magic = form.querySelector(".sendmail-magic"),
-      sendmail_passcode = form.querySelector(".sendmail-passcode"),
-      sendmail_msg = form.querySelector(".sendmail-result");
-
-let gIntervalId;
-
-const emailInput = document.getElementById("emailInput");
-const emailError = document.querySelector("#emailInput + span");
-
 emailInput.addEventListener("input", (event) => {
   if (emailInput.validity.valid) {
     emailError.textContent = ""; // Remove the message content
@@ -111,9 +73,6 @@ emailInput.addEventListener("input", (event) => {
 /*
 ** VALIDATE PASSCODE INPUT BY USER
 */
-const passcodeInput = document.getElementById("passcodeInput");
-const passcodeError = document.querySelector("#passcodeInput + span");
-
 passcodeInput.addEventListener("input", (event) => {
   if (passcodeInput.validity.valid) {
     passcodeInput.textContent = ""; // Remove the message content
@@ -164,8 +123,8 @@ sendmail_magic.addEventListener("click", (e) => {
         .then((data) => {
             sendmail_msg.textContent = data.message;
             sendmail_msg.style.color = "green";
-            clearInterval(gIntervalId);
-            gIntervalId = setInterval(checkAuthStatus,3000, formObj);
+            clearInterval(intervalId);
+            intervalId = setInterval(checkAuthStatus,3000, formObj);
         })
         .catch((error) => {
             sendmail_msg.textContent = error;
@@ -189,7 +148,7 @@ const setTokens = (data) => {
     email.textContent = parsedToken.sub;
     expires.textContent = new Date(parsedToken.exp*1000).toLocaleString();
   
-    login.textContent = "Log Out";
+    login_btn.textContent = "Log Out";
 }
 
 /* 
@@ -202,28 +161,25 @@ const checkAuthStatus = (formObj) => {
               setTokens(data);
               sendmail_msg.textContent = "Logged on!";
               sendmail_msg.style.color = "green";
-              clearInterval(gIntervalId);
+              clearInterval(intervalId);
               sendmail_magic.classList.add("visually-hidden");
               sendmail_passcode.classList.add("visually-hidden");
             } else if (data.expired) {
               sendmail_msg.textContent = "Expired";
               sendmail_msg.style.color = "red";
-              clearInterval(gIntervalId);
+              clearInterval(intervalId);
             }
         })
         .catch((error) => {
             sendmail_msg.textContent = error;
             sendmail_msg.style.color = "red";
-            clearInterval(gIntervalId);
+            clearInterval(intervalId);
         });
 }
 
 /* 
 **  USER REQUESTS 6-DIGIT PASSCODE TO BE SENT TO THEIR iNBOX
 */
-const validate_passcode =  form.querySelector(".validate-passcode"),
-      validate_msg = form.querySelector(".passcode-result");
-
 sendmail_passcode.addEventListener("click", (e) => {
     if (!emailInput.validity.valid) {
         showError();
