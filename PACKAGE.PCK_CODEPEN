@@ -37,8 +37,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
      */
     FUNCTION buildLoginAside(pWebsiteId IN website.id%type) RETURN VARCHAR2 IS
         l_html LONG;
+        l_uri_template ords_endpoints.uri_template%type;
     BEGIN
-       l_html:=
+        /* Get the endpoint for Log in */
+        SELECT o.uri_template
+          INTO l_uri_template
+          FROM api_endpoint a, role r, ords_endpoints o
+         WHERE a.website_id=pWebsiteId 
+           AND a.role_id=r.id 
+           AND r.name='visitor'
+           AND o.label='Log In'
+           AND a.template_id=o.template_id;
+        
+        l_html:=
 '<aside class="login align-end">
   <section class="dropdown">
     <details>
@@ -49,11 +60,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
           <rect class="bottom" x="0" y="26" width="32" height="6" fill="currentColor" />
         </svg>
       </summary>
-      <ul class="dropdown-content">
+      <ul class="dropdown-content" role="list">
         <li class="align-center"><small class="email"></small></li>
         <li class="align-center"><small class="expires"></small></li>
         <ul class="menulist" role="list"></ul>
-        <li><button type="button" class="button login-btn">Log In</button></li>
+        <li><button type="button" class="button login-btn" data-endpoint="' || l_uri_template || '">Log In</button></li>
       </ul>
     </details>
   </section>
