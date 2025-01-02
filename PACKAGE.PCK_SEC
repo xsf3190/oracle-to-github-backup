@@ -223,22 +223,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.close_object;
     END;
 
+    /* 
+    ** TEMPORARY SOLUTION TO POPULATE ENDPOINT TABLES
+    */
     PROCEDURE refreshOrdsEndpoints IS 
     BEGIN
         DELETE api_endpoint;
         DELETE ords_endpoints;
 
         INSERT INTO ords_endpoints (template_id, uri_template, method, label)
-        SELECT t.id template_id, t.uri_template, h.method, h.comments as label
+        SELECT t.id template_id, t.uri_template, MIN(h.method) as method, NVL(t.comments,h.comments) as label
           FROM user_ords_modules m, user_ords_templates t, user_ords_handlers h, user_ords_parameters p
          WHERE m.name='public'
            AND m.id=t.module_id
            AND t.id=h.template_id
            AND h.id=p.handler_id
-           AND h.comments IS NOT NULL
-           AND p.name='X-ORDS-STATUS-CODE';
+           AND NVL(t.comments,h.comments) IS NOT NULL
+           AND p.name='X-ORDS-STATUS-CODE'
+          GROUP BY t.id, t.uri_template, NVL(t.comments,h.comments);
 
-        /* temporary solution */
         delete website_role;
         
         
@@ -261,7 +264,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         select w.id, r.id, o.template_id 
         from website w, role r, ords_endpoints o
         where r.name='visitor'
-        and INSTR(o.uri_template,'message')>0;
+         and (INSTR(o.uri_template,'message')>0 or INSTR(o.uri_template,'authenticate')>0);
     END;
 
     /*
@@ -468,7 +471,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_new_refresh VARCHAR2 (4000);
         l_jwt_enc_key user_ords_clients.client_secret%type;
         l_user_id users.id%type;
-        l_issuer VARCHAR2(10);
+        l_issuer VARCHAR2(15);
         l_scope VARCHAR2(7);
         l_menulist LONG;
         l_reports LONG;
@@ -517,7 +520,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
              WHERE a.website_id=pWebsiteId 
                AND a.role_id=r.id 
                AND r.name=l_scope
-               AND a.template_id=o.template_id)
+               AND a.template_id=o.template_id
+               AND INSTR(o.uri_template,'authenticate')=0
+        )
         LOOP
             l_reports:=NULL;
             IF (INSTR(C.uri_template,'visits/')>0) THEN
