@@ -449,12 +449,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_content:=l_style;
         l_files.put('website.css', l_sha1);
 
+        pck_sec.refreshOrdsEndpoints;
+
+        FOR C IN (
+            SELECT o.uri_template
+              FROM api_endpoint a, role r, ords_endpoints o
+             WHERE a.website_id=pWebsiteId 
+               AND a.role_id=r.id 
+               AND r.name='admin'
+               AND a.template_id=o.template_id
+        ) LOOP
+            l_jscode.EXTEND();
+            l_jscode(l_jscode.LAST):='deploy_' || SUBSTR(C.uri_template,1,INSTR(C.uri_template,'/')-1) || '.min.js';
+        END LOOP;
+
+        /* Utility javascript modules */
         l_jscode.EXTEND();
         l_jscode(l_jscode.LAST):='deploy_elements.min.js';
-        l_jscode.EXTEND();
-        l_jscode(l_jscode.LAST):='deploy_login_email.min.js';
-        l_jscode.EXTEND();
-        l_jscode(l_jscode.LAST):='deploy_leave_message.min.js';
         l_jscode.EXTEND();
         l_jscode(l_jscode.LAST):='deploy_callAPI.min.js';
 
