@@ -34,6 +34,12 @@ const getReport = async (report, offset) => {
     
     callAPI(endpoint, "GET", query)
     .then((data) => {
+        if (data.article.startsWith("<svg")) {
+            article.replaceChildren();
+            article.insertAdjacentHTML('afterbegin',data.article);
+            showmore.classList.add("visually-hidden");
+            return;
+        }
         const count = showmore.dataset.count ? showmore.dataset.count : data.count;
         if (offset===0) {
             article.replaceChildren();
