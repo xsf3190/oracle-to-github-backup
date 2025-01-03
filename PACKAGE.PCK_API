@@ -379,10 +379,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         l_error_message LONG;
     BEGIN
         /* Get user's netlify token */
+        pck_core.log('pUserId:'||pUserId);
         FOR C IN (SELECT netlify_token, netlify_account_slug FROM users WHERE id=pUserId) LOOP 
             l_netlify_token:=C.netlify_token;
             l_netlify_account_slug:=C.netlify_account_slug;
         END LOOP;
+        pck_core.log('l_netlify_token:'||l_netlify_token);
 
         /* Use Administrator's token if user does not have token */
         IF (l_netlify_token IS NULL) THEN
@@ -392,6 +394,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
              WHERE w.email=u.email
                AND w.is_admin='Yes'
                FETCH FIRST ROW ONLY;
+            pck_core.log('l_netlify_token:'||l_netlify_token);
         END IF;
 
         apex_web_service.clear_request_headers;
