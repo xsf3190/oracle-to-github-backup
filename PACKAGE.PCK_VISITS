@@ -674,23 +674,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         pHtml:=l_content;
     END;
 
-    PROCEDURE getPageViewHistory(pWebsiteId IN website.id%type, pUrl IN VARCHAR2, pHtml IN OUT NOCOPY CLOB) IS
+    PROCEDURE getPageViewHistory(pWebsiteId IN website.id%type, pUrl IN VARCHAR2, pPeriod IN VARCHAR2, pHtml IN OUT NOCOPY CLOB) IS
+        l_content CLOB;
+        n PLS_INTEGER:=0;
     BEGIN
         FOR C IN (
-            WITH weekly as 
-                (SELECT trunc(visit_date,'iw') week, count(*) nb_visits
+            WITH data AS
+                (SELECT trunc(visit_date,pPeriod) period, count(*) nb_hits
                    FROM page_hit 
                   WHERE website_id=pWebsiteId
                     AND url=pUrl
-                    AND  visit_date>=current_date-360
-                  GROUP BY trunc(visit_date,'iw')
+                  GROUP BY ip_address, trunc(visit_date,pPeriod)
                 )
-            SELECT to_char(week,'yy-mm-dd') week, nb_visits, avg(nb_visits) over (order by week rows between 3 PRECEDING and current row) moving_avg
-             FROM weekly ORDER BY 1
+            SELECT period, nb_hits, max(nb_hits) over () max_hits, COUNT(*) OVER() nb_periods
+             FROM data ORDER BY 1
         )
         LOOP
-            null;
+            n:=n+1;
+            IF (n=1) THEN
+                l_content:='<svg class="graph" viewBox="0 0 300 ' || C.max_hits || '">' ||
+                '<g class="y-axis"><line x1="100" y1="10" x2="100" y2="' || C.max_hits || '"></line></g>' ||
+                '<g class="x-axis"><line x1="100" y1="' || C.max_hits || '" x2="300" y2="' || C.max_hits || '"></line></g>';
+            END IF;
         END LOOP;
+        l_content:=l_content || '</svg>';
+        pHtml:=l_content;
     END;
 
     /* 
@@ -708,6 +716,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             WHEN 'page' THEN getPageVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
             WHEN 'location' THEN getVisitsByLocation(pWebsiteId, pOffset, l_session_data.url, l_count, l_html);
             WHEN 'blog' THEN getBlogVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
+            WHEN 'graph' THEN getPageViewHistory(pWebsiteId, l_session_data.url, 'mm', l_html);
         END CASE;
         
         apex_json.open_object; 
