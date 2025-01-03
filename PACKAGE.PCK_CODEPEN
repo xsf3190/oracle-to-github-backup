@@ -371,12 +371,6 @@ q'{<dialog class="message">
         */
         l_header:='<header class="section">';
         IF (pHeader IS NULL) THEN
-            pck_core.log('pHeader IS NULL');
-        else
-            pck_core.log(to_char(pHeader));
-        end if;
-        
-        IF (pHeader IS NULL) THEN
             l_header:=l_header || '<div class="section__inner">';
             IF (pLoginForm='YES') THEN 
                 l_header:=l_header || buildLoginAside(pWebsiteId);
