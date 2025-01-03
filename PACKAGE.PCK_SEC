@@ -526,7 +526,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         LOOP
             l_reports:=NULL;
             IF (INSTR(C.uri_template,'visits/')>0) THEN
-                l_reports:='website|Visits;location|Locations';
+                l_reports:='graph|Graphs;website|Visits;location|Locations';
                 SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId;
                 IF (n>1) THEN
                     l_reports:=l_reports || ';page|Pages';
@@ -665,7 +665,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     BEGIN
         l_refresh_token:=SUBSTR(OWA_UTIL.get_cgi_env('Authorization'), 8);
         l_JWT_data:=decodeJWT(l_refresh_token);
-        pck_core.log(l_JWT_data.iss);
 
         l_token:=apex_jwt.DECODE (p_value => l_refresh_token, p_signature_key => UTL_RAW.cast_to_raw(l_JWT_data.client_secret));
 
