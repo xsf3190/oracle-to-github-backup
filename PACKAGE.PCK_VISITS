@@ -631,7 +631,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 <thead>
                     <tr>
                         <th>Title</th>
-                        <th>Total Viewing time</th>
                         <th>No. Views</th>
                         <th>Average Viewing time</th>
                          <th>No. Distinct Visitors</th>
@@ -641,7 +640,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         END IF;
 
         FOR C IN (SELECT a.title, 
-                            SUM(p.duration_visible) total_viewing_time, 
                             COUNT(*) nb_views, 
                             ROUND(AVG(p.duration_visible),0) avg_viewing_time,
                             COUNT(DISTINCT p.ip_address) nb_distinct_visitors
@@ -652,14 +650,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                      AND a.id=p.article_id
                      AND p.url=pUrl
                    GROUP BY a.title
-                   ORDER BY total_viewing_time DESC
+                   ORDER BY nb_views DESC
                   OFFSET pOffset ROWS
                    FETCH FIRST ROWS_PER_PAGE ROWS ONLY) 
         LOOP
             l_content:=l_content ||
             '<tr><td>' 
-                || C.title || '</td><td>' 
-                || C.total_viewing_time || '</td><td>' 
+                || C.title || '</td><td>'
                 || C.nb_views || '</td><td>' 
                 || C.avg_viewing_time || '</td><td>'
                 || C.nb_distinct_visitors || '</td>' ||
@@ -677,41 +674,103 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     PROCEDURE getPageViewHistory(pWebsiteId IN website.id%type, pUrl IN VARCHAR2, pPeriod IN VARCHAR2, pHtml IN OUT NOCOPY CLOB) IS
         l_content CLOB;
         l_height_offset CONSTANT PLS_INTEGER:=10;
-        l_width_offset CONSTANT PLS_INTEGER:=100;
+        l_width_offset CONSTANT PLS_INTEGER:=10;
         l_height PLS_INTEGER;
         l_width PLS_INTEGER;
-        l_height_line PLS_INTEGER;
-        l_viewbox_height PLS_INTEGER;
-        l_viewbox_width PLS_INTEGER;
+        l_data_height PLS_INTEGER;
+        l_points LONG;
+        l_text VARCHAR2(50);
+        l_label_y PLS_INTEGER;
         n PLS_INTEGER:=0;
     BEGIN
         FOR C IN (
             WITH data AS
-                (SELECT trunc(visit_date,pPeriod) period, count(*) nb_hits
-                   FROM page_hit 
-                  WHERE website_id=pWebsiteId
-                    AND url=pUrl
-                  GROUP BY ip_address, trunc(visit_date,pPeriod)
+            (
+                SELECT dt, nb_hits, MAX(nb_hits) OVER () max_hits
+                FROM
+                (
+                    SELECT TRUNC(visit_date) dt, COUNT(nb_hits) nb_hits
+                    FROM
+                    (
+                        SELECT ip_address,visit_date, count(*) nb_hits
+                           FROM page_hit 
+                          WHERE website_id=pWebsiteId
+                            AND url=pUrl
+                            AND TRUNC(visit_date)>=SYSDATE-30
+                          GROUP BY ip_address, visit_date
+                    )
+                    GROUP BY TRUNC(visit_date)
                 )
-            SELECT period, nb_hits, max(nb_hits) over () max_hits, COUNT(*) OVER() nb_periods
-             FROM data ORDER BY 1
+            ),
+            period AS
+            (
+                SELECT MIN(dt) first_dt, TRUNC(SYSDATE) last_dt
+                FROM data
+            ),
+            range AS
+            (
+                SELECT first_dt + level - 1 dt
+                FROM period
+                CONNECT BY level <= last_dt - first_dt
+            )
+            SELECT r.dt, NVL(d.nb_hits,0) nb_hits, d.max_hits, COUNT(*) OVER () nb_periods, MIN(r.dt) OVER() start_date
+            FROM range r, data d
+            WHERE r.dt=d.dt(+)
+            ORDER BY 1
         )
         LOOP
             n:=n+1;
             IF (n=1) THEN
-                l_height:=10 * C.max_hits;
-                l_width:=10 * C.nb_periods;
-                l_viewbox_height:=(2*l_height_offset) + l_height;
-                l_viewbox_width:=l_width_offset + l_width;
-                l_height_line:=l_height_offset + l_height;
-                pck_core.log('C.nb_periods:'||C.nb_periods);
-                l_content:='<svg class="graph" viewBox="0 0 ' || l_viewbox_width || ' ' || l_viewbox_height || '">' ||
-                '<g class="y-axis"><line x1="' || l_width_offset || '" y1="' || l_height_offset || '" x2="' || l_width_offset || '" y2="' || l_height_line || '"></line></g>' ||
-                '<g class="x-axis"><line x1="' || l_width_offset || '" y1="' || l_height_line || '" x2="' || l_viewbox_width || '" y2="' || l_height_line || '"></line></g>';
+                /* Do y-axis labels first starting from top */
+                l_height:=0;
+                l_width:=7;
+                l_content:='<g class="labels y-labels">';
+                IF (C.max_hits<=10) THEN
+                    FOR i IN REVERSE 0 .. C.max_hits LOOP
+                        l_height:=l_height+l_height_offset;
+                        l_text:='<text x="' || l_width || '" y="' || l_height || '">' || i || '</text>';
+                        l_content:=l_content || l_text;
+                    END LOOP;
+                    
+                ELSIF (C.max_hits<=100) THEN
+                    l_content:='<g class="labels y-labels">';
+                    FOR i IN REVERSE 0 .. CEIL(C.max_hits/10) LOOP
+                        l_height:=l_height+l_height_offset;
+                        l_label_y:=i*10;
+                        l_text:='<text x="' || l_width || '" y="' || l_height || '">' || l_label_y || '</text>';
+                        l_content:=l_content || l_text;
+                    END LOOP;
+                END IF;
+                l_content:=l_content || '</g>';
+                l_width:=l_width+3;
+                l_content:=l_content || '<line class="y-axis" x1="' || l_width || '" y1="' || l_height_offset || '" x2="' || l_width || '" y2="' || l_height || '"></line>';
+
+                /* Print x-axis labels */
+                l_height:=l_height + 5;
+                l_content:=l_content || '<g class="labels x-labels">';
+                FOR i IN  0 .. C.nb_periods LOOP
+                    IF (Mod(i,7)=0) THEN
+                        l_text:='<text x="' || l_width || '" y="' || l_height || '">' || TO_CHAR(C.start_date + i,'dd/mm') || '</text>';
+                        l_content:=l_content || l_text;
+                    END IF;
+                    l_width:=l_width + 10;
+                END LOOP;
+                l_height:=l_height - 5;
+                l_content:=l_content || '</g>';
+                l_content:=l_content || '<line class="x-axis" x1="' || l_width_offset || '" y1="' || l_height || '" x2="' || l_width || '" y2="' || l_height || '"></line>';
+                l_width:=l_width_offset;
             END IF;
+            IF (C.max_hits<=10) THEN
+                l_data_height:=l_height - (l_height_offset * C.nb_hits);
+            ELSIF (C.max_hits<=100) THEN
+                l_data_height:=l_height - (l_height_offset * (C.nb_hits/10));
+            END IF;
+            l_points:=l_points || l_width || ',' || l_data_height || ' ';
+            l_width:=l_width + 10;
         END LOOP;
-        l_content:=l_content || '</svg>';
-        pHtml:=l_content;
+        l_height:=l_height + 5;
+        l_content:=l_content || '<polyline points="' || RTRIM(l_points) || '" />';
+        pHtml:='<svg class="graph" viewBox="0 0 ' || l_width || ' ' || l_height || '">' || l_content || '</svg>';
     END;
 
     /* 
