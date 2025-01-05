@@ -38,26 +38,29 @@ const getReport = async (report, offset) => {
             article.replaceChildren();
             article.insertAdjacentHTML('afterbegin',data.article);
             showmore.classList.add("visually-hidden");
-            return;
-        }
-        const count = showmore.dataset.count ? showmore.dataset.count : data.count;
-        if (offset===0) {
-            article.replaceChildren();
-            article.insertAdjacentHTML('afterbegin',data.article);
-            showmore.dataset.report = report;
-            showmore.dataset.count = data.count;
-        } else if (data.article) {            
-            article.querySelector("tbody").insertAdjacentHTML('beforeend',data.article);
-        }
-
-        const tbody = article.querySelector("tbody");
-        if (tbody.childElementCount >= showmore.dataset.count) {
-            showmore.classList.add("visually-hidden");
-            showmore.disabled = true;
+            status.classList.add("visually-hidden");
         } else {
-            showmore.dataset.offset = data.offset;
+            const count = showmore.dataset.count ? showmore.dataset.count : data.count;
+            if (offset===0) {
+                article.replaceChildren();
+                article.insertAdjacentHTML('afterbegin',data.article);
+                showmore.dataset.report = report;
+                showmore.dataset.count = data.count;
+            } else if (data.article) {            
+                article.querySelector("tbody").insertAdjacentHTML('beforeend',data.article);
+            }
+
+            const tbody = article.querySelector("tbody");
+            if (tbody.childElementCount >= showmore.dataset.count) {
+                showmore.classList.add("visually-hidden");
+                showmore.disabled = true;
+            } else {
+                showmore.dataset.offset = data.offset;
+            }
+            status.textContent = tbody.childElementCount + " / " + count;
+            status.classList.remove("visually-hidden");
+            showmore.classList.remove("visually-hidden");
         }
-        status.textContent = tbody.childElementCount + " / " + count;
     })
     .catch((error) => {
         article.replaceChildren();
