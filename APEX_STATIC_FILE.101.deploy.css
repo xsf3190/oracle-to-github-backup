@@ -575,6 +575,7 @@ dialog > form {
 
 dialog > form > header {
     border-block-end: 3px solid black;
+    padding-block: 0.3em;
 }
 
 dialog > form > article {
@@ -797,8 +798,31 @@ ol.deploy span + span {
     cursor: pointer !important;
 }
 
+/* SVG GRAPHS */
+.graph .labels.x-labels {
+  text-anchor: middle;
+}
+
+.graph .labels.y-labels {
+  text-anchor: end;
+}
+
 .graph {
-    stroke: #ccc;
-    stroke-dasharray: 0;
-    stroke-width: 1;
+  width: 70vw;
+}
+
+.graph line {
+  stroke: #ccc;
+  stroke-width: 0.3;
+}
+
+.graph polyline {
+  stroke: red;
+  stroke-width: 0.5;
+  fill: none;
+}
+
+.labels {
+  font-family: monospace;
+  font-size: .1em;
 }
