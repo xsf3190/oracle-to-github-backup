@@ -340,8 +340,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[ img-src 'self' res.cloudinary.com;]' ||
             q'[ font-src 'self';]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com;]' ||
-            q'[ script-src 'self' cdn.ckeditor.com;]' ||
-            q'[ frame-src www.youtube.com;]' ||
+            q'[ script-src 'self' cdn.ckeditor.com upload-widget.cloudinary.com;]' ||
+            q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
             q'[ frame-ancestors 'none';]' ||
             q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
             q'[X-Content-Type-Options: nosniff]' || chr(10) ||
