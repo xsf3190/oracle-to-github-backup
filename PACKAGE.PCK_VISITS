@@ -429,7 +429,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                  WHERE website_id=pWebsiteId
                    AND url=pUrl
             ) LOOP
-                pCount:=C.nb_visit;
                 l_content:=l_content ||
                     '<span>' || C.nb_visit || '</span><span>' || NVL(C.ela_days,0) || ' days</span><span>' || C.nb_distinct_ip || '</span><span>' || elapsedTime(NVL(C.viewing_time,0)) || '</span>';
             END LOOP;
@@ -454,6 +453,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             WITH website_hits as 
             (
                 SELECT p.website_id, p.ip_address, p.visit_date, 
+                        COUNT(*) OVER() total,
                         MAX(p.referrer) referrer, 
                         MAX(p.lcp_rating) lcp_rating, MAX(p.cls_rating) cls_rating, MAX(p.inp_rating) inp_rating, 
                         MAX(p.lcp) lcp, MAX(p.cls) cls, MAX(p.inp) inp, 
@@ -467,13 +467,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                  OFFSET pOffset ROWS
                  FETCH FIRST ROWS_PER_PAGE ROWS ONLY
             )
-            SELECT wh.visit_date, wh.referrer, ip.city||', '||ip.country_code||' '||ip.postal location, CASE WHEN ip.error_message IS NOT NULL THEN ip.ip END ip_address,
+            SELECT wh.total, wh.visit_date, wh.referrer, ip.city||', '||ip.country_code||' '||ip.postal location, CASE WHEN ip.error_message IS NOT NULL THEN ip.ip END ip_address,
                     wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating, RouND(wh.lcp/1000,1) lcp, cls, inp
               FROM website_hits wh, ip_lookup ip
              WHERE ip.ip=wh.ip_address
         ) 
         LOOP
             n:=n+1;
+            IF (n=1) THEN
+                pCount:=C.total;
+            END IF;
             n:=pOffset+n;
             
             l_popover:=C.browser;
@@ -568,14 +571,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
     PROCEDURE getVisitsByLocation(pWebsiteId IN website.id%type, pOffset IN NUMBER, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB)  IS
         l_content CLOB;
+        n PLS_INTEGER:=0;
     BEGIN
         IF (pOffset=0) THEN
-            SELECT COUNT(DISTINCT i.city||','||i.country_code||','||i.postal)
-              INTO pCount
-              FROM page_hit p, ip_lookup i
-             WHERE p.website_id=pWebsiteId
-               AND p.url=pUrl
-               AND p.ip_address=i.ip;
             l_content:=
             '<table role="presentation">
                 <thead>
@@ -588,21 +586,71 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         END IF;
 
         FOR C IN (
-                    SELECT location,  nb_visits, 100*(nb_visits/total_visits) pct
+                    SELECT location,  nb_visits, RATIO_TO_REPORT(nb_visits) OVER() pct, COUNT(*) OVER() total
                     FROM
                         (
-                        SELECT i.city||','||i.country_code||','||i.postal location, COUNT(*) nb_visits, COUNT(*) OVER() total_visits
+                        SELECT i.country_code location, COUNT(*) nb_visits, COUNT(*) OVER() total_visits
                           FROM page_hit p, ip_lookup i
                          WHERE p.website_id=pWebsiteId
                            AND p.url=pUrl
                            AND p.ip_address=i.ip
-                         GROUP BY i.city||','||i.country_code||','||i.postal
+                         AND i.country_code IS NOT NULL
+                         GROUP BY i.country_code
                         )
                         ORDER BY nb_visits DESC, location
                         OFFSET pOffset ROWS
                         FETCH FIRST ROWS_PER_PAGE ROWS ONLY
             ) LOOP
-                l_content:=l_content || '<tr><td>' || LTRIM(RTRIM(C.location,','),',') || '</td><td>' || C.nb_visits || ' (' || TO_CHAR(C.pct,'fm990D00') || '%)</td></tr>';
+                n:=n+1;
+                IF (n=1) THEN
+                    pCount:=C.total;
+                END IF;
+                l_content:=l_content || '<tr><td>' || LTRIM(RTRIM(C.location,','),',') || '</td><td>' || C.nb_visits || ' (' || TO_CHAR(C.pct*100,'fm990D00') || '%)</td></tr>';
+            END LOOP;
+
+        IF (pOffset=0) THEN
+            l_content:=l_content || 
+            '</tbody></table>';
+        END IF;
+
+        pHtml:=l_content;
+    END;
+
+    PROCEDURE getVisitsByBrowser(pWebsiteId IN website.id%type, pOffset IN NUMBER, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB)  IS
+        l_content CLOB;
+        n PLS_INTEGER:=0;
+    BEGIN
+        IF (pOffset=0) THEN
+            l_content:=
+            '<table role="presentation">
+                <thead>
+                    <tr>
+                        <th>Browser</th>
+                        <th>No. Visits</th>
+                    </tr>
+                </thead>
+                <tbody>';
+        END IF;
+
+        FOR C IN (
+                    SELECT browser,  nb_visits, RATIO_TO_REPORT(nb_visits) OVER() pct, COUNT(*) OVER() total
+                    FROM
+                        (
+                        SELECT browser, COUNT(*) nb_visits, COUNT(*) OVER() total_visits
+                          FROM page_hit p
+                         WHERE p.website_id=pWebsiteId
+                           AND p.url=pUrl
+                         GROUP BY p.browser
+                        )
+                        ORDER BY nb_visits DESC, browser
+                        OFFSET pOffset ROWS
+                        FETCH FIRST ROWS_PER_PAGE ROWS ONLY
+            ) LOOP
+                n:=n+1;
+                IF (n=1) THEN
+                    pCount:=C.total;
+                END IF;
+                l_content:=l_content || '<tr><td>' || LTRIM(RTRIM(C.browser,','),',') || '</td><td>' || C.nb_visits || ' (' || TO_CHAR(C.pct*100,'fm990D00') || '%)</td></tr>';
             END LOOP;
 
         IF (pOffset=0) THEN
@@ -615,50 +663,47 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
     PROCEDURE getBlogVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB)  IS
         l_content CLOB;
+        n PLS_INTEGER:=0;
     BEGIN
         IF (pOffset=0) THEN
-            SELECT COUNT(DISTINCT title) 
-              INTO pCount
-              FROM article a, website_article wa, page_hit p
-             WHERE wa.website_id=pWebsiteId
-               AND wa.collection_type='BLOG'
-               AND a.parent_id=wa.article_id
-               AND a.id=p.article_id
-               AND p.url=pUrl;
-
             l_content:=
             '<table role="presentation">
                 <thead>
                     <tr>
                         <th>Title</th>
-                        <th>No. Views</th>
-                        <th>Average Viewing time</th>
-                         <th>No. Distinct Visitors</th>
+                        <th>Views</th>
+                        <th>Avg Viewing time</th>
+                         <th>Distinct Visitors</th>
                     </tr>
                 </thead>
                 <tbody>';
         END IF;
 
         FOR C IN (SELECT a.title, 
+                            COUNT(*) OVER() total,
                             COUNT(*) nb_views, 
-                            ROUND(AVG(p.duration_visible),0) avg_viewing_time,
+                            NVL(ROUND(AVG(p.duration_visible),0),0) avg_viewing_time,
                             COUNT(DISTINCT p.ip_address) nb_distinct_visitors
                     FROM article a, website_article wa, page_hit p
                    WHERE wa.website_id=pWebsiteId
                      AND wa.collection_type='BLOG'
                      AND a.parent_id=wa.article_id
-                     AND a.id=p.article_id
-                     AND p.url=pUrl
+                     AND a.id=p.article_id(+)
+                     AND p.url(+)=pUrl
                    GROUP BY a.title
                    ORDER BY nb_views DESC
                   OFFSET pOffset ROWS
                    FETCH FIRST ROWS_PER_PAGE ROWS ONLY) 
         LOOP
+            n:=n+1;
+            IF (n=1) THEN
+                pCount:=C.total;
+            END IF;
             l_content:=l_content ||
             '<tr><td>' 
                 || C.title || '</td><td>'
                 || C.nb_views || '</td><td>' 
-                || C.avg_viewing_time || '</td><td>'
+                || elapsedTime(C.avg_viewing_time) || '</td><td>'
                 || C.nb_distinct_visitors || '</td>' ||
             '</tr>';
         END LOOP;
@@ -692,7 +737,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     SELECT TRUNC(visit_date) dt, COUNT(nb_hits) nb_hits
                     FROM
                     (
-                        SELECT ip_address,visit_date, count(*) nb_hits
+                        SELECT ip_address,visit_date, COUNT(*) nb_hits
                            FROM page_hit 
                           WHERE website_id=pWebsiteId
                             AND url=pUrl
@@ -787,15 +832,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             WHEN 'website' THEN getWebsiteVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
             WHEN 'page' THEN getPageVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
             WHEN 'location' THEN getVisitsByLocation(pWebsiteId, pOffset, l_session_data.url, l_count, l_html);
+            WHEN 'browser' THEN getVisitsByBrowser(pWebsiteId, pOffset, l_session_data.url, l_count, l_html);
             WHEN 'blog' THEN getBlogVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
-            WHEN 'graph' THEN getPageViewHistory(pWebsiteId, l_session_data.url, 'dd', l_html);
+            WHEN 'daily' THEN getPageViewHistory(pWebsiteId, l_session_data.url, 'dd', l_html);
         END CASE;
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
-        IF (pOffset=0) THEN
-            apex_json.write('count', l_count);
-        END IF;
+        apex_json.write('count', l_count);
         apex_json.write('article', l_html);
         apex_json.write('offset', pOffset + ROWS_PER_PAGE);
         apex_json.close_object;
