@@ -25,11 +25,10 @@ export const init = (element) => {
     reportlist.replaceChildren();
     reportlist.insertAdjacentHTML('afterbegin',buttons);
     output_dialog.showModal();
-    //reportlist.querySelector("button:first-of-type").click();
+    reportlist.querySelector("button:first-of-type").click();
 }
 
 const getReport = async (report, offset) => {
-    
     const query = "?report=" + report + "&offset=" + offset;
     
     callAPI(endpoint, "GET", query)
@@ -40,24 +39,23 @@ const getReport = async (report, offset) => {
             showmore.classList.add("visually-hidden");
             status.classList.add("visually-hidden");
         } else {
-            const count = showmore.dataset.count ? showmore.dataset.count : data.count;
             if (offset===0) {
                 article.replaceChildren();
                 article.insertAdjacentHTML('afterbegin',data.article);
                 showmore.dataset.report = report;
-                showmore.dataset.count = data.count;
             } else if (data.article) {            
                 article.querySelector("tbody").insertAdjacentHTML('beforeend',data.article);
             }
 
             const tbody = article.querySelector("tbody");
-            if (tbody.childElementCount >= showmore.dataset.count) {
+            if (tbody.childElementCount >= data.count) {
                 showmore.classList.add("visually-hidden");
                 showmore.disabled = true;
             } else {
+                showmore.disabled = false;
                 showmore.dataset.offset = data.offset;
             }
-            status.textContent = tbody.childElementCount + " / " + count;
+            status.textContent = tbody.childElementCount + " / " + data.count;
             status.classList.remove("visually-hidden");
             showmore.classList.remove("visually-hidden");
         }
