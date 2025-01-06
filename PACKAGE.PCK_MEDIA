@@ -2,13 +2,133 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_MEDIA" IS
     --
     FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
     --
+    FUNCTION getThumbnails(pArticleId IN article.id%type) RETURN CLOB;
+    --
     PROCEDURE getThumbnails(pArticleId IN article.id%type, pDeploy IN BOOLEAN DEFAULT FALSE, pHTML IN OUT NOCOPY CLOB);
     --
+    PROCEDURE getCldSignature(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pParamsToSign IN CLOB, pStatus OUT NUMBER);
+    --
+    PROCEDURE getCldDetails(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pRequest IN VARCHAR2, pStatus OUT NUMBER);
+    --
+    PROCEDURE uploadCldMetadata(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
 
     gWidthThumbnail CONSTANT INTEGER:=360;
+
+    /*
+    ** GET AUTHENTICATED USER'S CLOUDINARY DETAILS IN ORDER TO PREPARE UPLOAD WIDGET
+    */
+    PROCEDURE getCldDetails(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pRequest IN VARCHAR2, pStatus OUT NUMBER) IS
+        l_cld_cloud_name users.cld_cloud_name%type;
+        l_cld_api_key users.cld_api_key%type;
+        l_cld_api_secret users.cld_api_secret%type;
+        l_image_max_size INTEGER;
+        l_video_max_size INTEGER;
+        l_google_api_key users.google_api_key%type;
+        l_session_data pck_sec.t_session_data;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        CASE pRequest
+            WHEN 'details' THEN
+                pck_api.getCloudinaryData(pUserId=>l_session_data.user_id, pCloudName=>l_cld_cloud_name, pCldApiKey=>l_cld_api_key, pCldImageMaxSize=>l_image_max_size, pCldVideoMaxSize=>l_video_max_size, pGoogleApiKey=>l_google_api_key);
+                apex_json.open_object; 
+                apex_json.write('success', TRUE);
+                apex_json.write('cloudname', l_cld_cloud_name);
+                apex_json.write('apikey', l_cld_api_key);
+                apex_json.write('maxImageFileSize', l_image_max_size);
+                apex_json.write('maxVideoFileSize', l_video_max_size);
+                apex_json.write('googleApiKey', l_google_api_key);
+                apex_json.close_object;
+            WHEN 'list' THEN
+                APEX_JSON.open_object; 
+                APEX_JSON.write('success', TRUE);
+                APEX_JSON.write('thumbnails', pck_media.getThumbnails(pArticleId));
+                APEX_JSON.close_object;
+        END CASE;
+
+        pStatus:=200;
+        
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
+    END;
+
+    /*
+    ** GENERATE USER SIGNATURE FROM AUTHENTICATED  USER'S CLOUDINARY API SECRET
+    */
+    PROCEDURE getCldSignature(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pParamsToSign IN CLOB, pStatus OUT NUMBER) IS
+        l_params_to_sign clob:=pParamsToSign;
+        l_string_to_sign varchar2(2000):=NULL; 
+        l_session_data pck_sec.t_session_data;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        SELECT NVL2(filename_override,'filename_override='||filename_override||'&',NULL) ||
+               NVL2(headers,'headers='||headers||'&',NULL) ||
+               NVL2(source,'source='||source||'&',NULL) ||
+               NVL2(tags,'tags='||tags||'&',NULL) ||
+               NVL2(timestamp,'timestamp='||timestamp||'&',NULL) ||
+               NVL2(use_filename,'use_filename='||use_filename,NULL)
+          INTO l_string_to_sign
+          FROM users, JSON_TABLE(l_params_to_sign FORMAT JSON, '$' COLUMNS filename_override,headers,source,tags,timestamp,use_filename)
+         WHERE users.id=l_session_data.user_id;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('signature', dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign || pck_api.getCloudinaryAPISecret(l_session_data.user_id)), dbms_crypto.HASH_SH1));
+        apex_json.close_object;
+
+        pStatus:=200;
+        
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
+    END;
+
+    /*
+     **  RELEVANT METADATA OF ALL MEDIA UPLOADED TO CLOUDINARY IS INSERTED IN ASSETS TABLE
+     */       
+    PROCEDURE uploadCldMetadata(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_bodytext CLOB:=pBodyText;
+        l_thumbnails CLOB;
+        l_article_id asset.article_id%type;
+        l_favicon_asset_id website.favicon_asset_id%type;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, display_order, created_date, user_id)
+        SELECT seq_asset.nextval, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, seq_asset.currval, current_timestamp, l_session_data.user_id
+          FROM JSON_TABLE(l_bodytext, '$.images[*]' COLUMNS (article_id, public_id, width, height, bytes, resource_type, format, cld_cloud_name));
+
+        UPDATE article 
+           SET (cover_asset_id, nb_assets) = (SELECT  MIN(id), COUNT(*) FROM asset WHERE article_id=pArticleId)
+         WHERE id=pArticleId;
+
+        /* 
+        ** Set website favicon uploaded SVG file with "favicon' in the name"
+        */
+        BEGIN
+            SELECT NVL(MAX(id),0) INTO l_favicon_asset_id FROM asset WHERE article_id=pArticleId AND format='svg' AND INSTR(public_id,'favicon')>0;
+            IF (l_favicon_asset_id>0) THEN
+                UPDATE website 
+                   SET favicon_asset_id=l_favicon_asset_id
+                 WHERE id=pWebsiteId;
+            END IF;
+        END;
+
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.write('thumbnails', pck_media.getThumbnails(pArticleId));
+        APEX_JSON.close_object;
+
+        pStatus:=200;
+        
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
+    END;  
+
 
     FUNCTION getMediaType(pResourceType IN VARCHAR2, pFormat IN VARCHAR2) RETURN VARCHAR2 
     IS
@@ -150,5 +270,69 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             pHTML:=pHTML || TO_CLOB('</li>');
         END LOOP;
     END;
+
+    /*
+     **  Build gallery of thumbnail images for a given article
+     */
+    FUNCTION getThumbnails(pArticleId IN article.id%type) RETURN CLOB
+    IS
+        l_clob CLOB;
+        l_url_image VARCHAR2(300);
+        l_media_type VARCHAR2(5);
+        l_dimensions VARCHAR2(50);
+        n PLS_INTEGER:=0;
+    BEGIN
+        l_clob:='<ul role="list" class="grid grid__auto_fill">';
+        FOR C IN (
+            SELECT a.id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
+                   DECODE(a.width,0,gWidthThumbnail,a.width) width, a.height, a.bytes, a.format
+              FROM asset a
+             WHERE a.article_id=pArticleId
+               AND NVL(a.format,'N/A')<>'clt'
+             ORDER BY a.display_order )
+        LOOP
+            n:=n+1;
+            l_media_type:=getMediaType(C.resource_type, C.format);
+
+            l_url_image:=getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width);
+
+            IF (C.width>0 AND C.width*.25>gWidthThumbnail) THEN
+                l_dimensions:=gWidthThumbnail || ':' || ROUND((C.width-gWidthThumbnail)/2) || ':' || C.width;
+            ELSE
+                l_dimensions:=ROUND(C.width*.25) || ':' || ROUND(C.width*.625) || ':' || C.width;
+            END IF;
+
+            l_clob:=l_clob ||
+                '<li' || CASE WHEN c.width>C.height THEN ' class="landscape"' END || ' tabindex="0" data-id="' || C.id || '">' ||
+                '<img data-dimensions="'  || l_dimensions || '" src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>';
+
+            CASE l_media_type
+                WHEN 'video' THEN
+                    l_clob:=l_clob || 
+                    '<video controls preload="metadata" poster="' || l_url_image || '">' ||
+                        '<source src="' || REPLACE(l_url_image,'.jpg','.webm') || '" type="video/webm"></source>' ||
+                        '<source src="' || REPLACE(l_url_image,'.jpg','.mp4') || '" type="video/mp4"></source>' ||
+                    '</video>';
+
+                WHEN 'audio' THEN
+                    l_url_image:=REGEXP_REPLACE(l_url_image,',w_(\d)+\/fl_waveform',NULL);
+                    l_clob:=l_clob || 
+                    '<audio preload="metadata" controls>' ||
+                        '<source src="' || REPLACE(l_url_image,'.png','.aac') || '" type="audio/aac"></source>' ||
+                        '<source src="' || REPLACE(l_url_image,'.png','.ogg') || '" type="audio/ogg"></source>' ||
+                        '<source src="' || REPLACE(l_url_image,'.png','.mp3') || '" type="audio/mpeg"></source>' ||
+                        '<source src="' || REPLACE(l_url_image,'.png','.wav') || '" type="audio/wav"></source>' ||
+                    '</audio>';
+                ELSE NULL;
+            END CASE;
+
+            l_clob:=l_clob || 
+                '<button type="button" class="media-options" title="Edit Media">&#128397;</button>' ||
+                '</li>';
+        END LOOP;
+
+        RETURN (l_clob);
+    END;
+
 END;
 /
