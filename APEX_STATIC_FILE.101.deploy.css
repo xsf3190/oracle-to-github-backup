@@ -267,7 +267,7 @@ footer :is(p) {
 }
 
 
-/* SIMPLE GRID  - DEFAULT IS 2 EQUAL-SIZED COLuMNS WITH NO GAP */
+/* SIMPLE GRID  - DEFAULT IS 2 EQUAL-SIZED COLUMNS WITH NO GAP */
 
 .grid {
   --grid-border: solid 1px var(--color-primary);
@@ -275,6 +275,12 @@ footer :is(p) {
   grid-template-columns: var(--grid-template-columns, 1fr 1fr);
   outline: var(--grid-border);
   text-align: var(--text-align, center);
+}
+
+.grid__auto_fill {
+    --grid-template-columns: repeat(auto-fill,
+    minmax(min(var(--grid-min-item-size, 10rem), 100%), 1fr)
+  );
 }
 
 .grid__2col {
