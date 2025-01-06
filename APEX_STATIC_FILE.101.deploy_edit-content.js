@@ -58,16 +58,33 @@ export const init = async (element) => {
                 return;
             })
     
-    /* Add DEPlOY button to CKEDITOR toolbar */
+    /* Add PUBLISH button to CKEDITOR toolbar */
     class Deploy extends Plugin {
         init() {
             const editor = this.editor;
             editor.ui.componentFactory.add( 'deploy', () => {
                 const button = new ButtonView();
                 button.set( {
-                    label: 'DEPLOY',
+                    label: 'PUBLISH',
                     class: 'deploy-website',
                     tooltip: 'Deploy website',
+                    withText: true
+                } );
+                return button;
+            } );
+        }
+    }
+
+    /* Add MEDIA button to CKEDITOR toolbar */
+    class Media extends Plugin {
+        init() {
+            const editor = this.editor;
+            editor.ui.componentFactory.add( 'media', () => {
+                const button = new ButtonView();
+                button.set( {
+                    label: 'MEDIA',
+                    class: 'show-media',
+                    tooltip: 'Show Uploaded Media',
                     withText: true
                 } );
                 return button;
@@ -83,11 +100,11 @@ export const init = async (element) => {
                 plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock,  
                            Deploy, GeneralHtmlSupport, Heading, HorizontalLine, 
                            Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, 
-                           Italic, Link, List, Paragraph, 
+                           Italic, Link, List, Media, Paragraph, 
                            SelectAll, SourceEditing, Underline, WordCount ],
                 toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic',
                            'underline', 'code', 'alignment', 'link', 
-                            'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing', '|', 'deploy'],
+                            'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing', '|', 'media', '|', 'deploy'],
                 initialData: initialdata,
                 alignment: {
                   options: [
@@ -168,11 +185,11 @@ export const init = async (element) => {
             editor = await ClassicEditor.create( document.querySelector( '#editor' ), {
                 plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard,
                            Deploy, GeneralHtmlSupport, Heading, HorizontalLine, 
-                           Italic, Link, List, Paragraph, 
+                           Italic, Link, List, Media, Paragraph, 
                            Underline, WordCount ],
                 toolbar: [ 'heading', '|', 'undo', 'redo', '|', 'horizontalLine', 'bold', 'italic',
                            'underline', 'alignment', 'link', 
-                           'bulletedList', 'numberedList', 'blockQuote', '|', 'deploy'],
+                           'bulletedList', 'numberedList', 'blockQuote', '|', 'media', '|', 'deploy'],
                 initialData: initialdata,
                 alignment: {
                   options: [
@@ -235,6 +252,11 @@ export const init = async (element) => {
     toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
     document.querySelector("#editor-status").textContent = last_update;
 
+    /* Listen for request to show MEDIA  */
+    toolbar.querySelector(".show-media").addEventListener("click", () => {
+        show_media();
+    });
+
     /* Listen for DEPLOY requests */
     toolbar.querySelector(".deploy-website").addEventListener("click", () => {
         deploy_website();
@@ -264,6 +286,24 @@ const saveData = async ( data, endpoint ) => {
         .catch((error) => {
             handleError(error);
         })
+}
+
+/*
+** USER CLICKS MEDIA BUTTON
+*/
+const show_media = async () => {
+    const content = output_dialog.querySelector("article");
+    const showmore = output_dialog.querySelector(".show-more");
+    callAPI("cloudinary/:ID/:PAGE","GET","?request=list")
+        .then( (data) => {
+            content.replaceChildren();
+            content.insertAdjacentHTML('afterbegin',data.thumbnails);
+            showmore.classList.add("visually-hidden");
+            output_dialog.showModal();
+        })
+        .catch((error) => {
+            handleError(error);
+        });;
 }
 
 /*
