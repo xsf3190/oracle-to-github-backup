@@ -1,8 +1,14 @@
-import { bodydata, menulist, login_btn } from "./deploy_elements.min.js";
+import { bodydata, menulist, login_btn, info_dialog } from "./deploy_elements.min.js";
 
 let access_token = sessionStorage.getItem("token");
 let refresh_token = localStorage.getItem("refresh");
 
+const handleError = (error) => {
+    const article = info_dialog.querySelector("article");
+    article.replaceChildren();
+    article.insertAdjacentHTML('afterbegin',error);
+    error_dialog.showModal();
+}
 
 /* 
 ** CHECK IF TOKEN EXPIRED 
@@ -114,4 +120,4 @@ const callAPI = async (endpoint, method, data) => {
     }
 }
 
-export { callAPI };
+export { handleError, callAPI };
