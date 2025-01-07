@@ -303,7 +303,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             END IF;
 
             l_clob:=l_clob ||
-                '<li' || CASE WHEN c.width>C.height THEN ' class="landscape"' END || ' tabindex="0" data-id="' || C.id || '">' ||
+                '<li class="card" data-id="' || C.id || '">' ||
                 '<img data-dimensions="'  || l_dimensions || '" src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>';
 
             CASE l_media_type
@@ -327,7 +327,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             END CASE;
 
             l_clob:=l_clob || 
-                '<button type="button" class="media-options" title="Edit Media">&#128397;</button>' ||
+                '<div>' ||
+                    '<button type="button" class="button copy-url">COPY URL</button><button type="button" class="button delete--media">DELETE</button>' ||
                 '</li>';
         END LOOP;
 
