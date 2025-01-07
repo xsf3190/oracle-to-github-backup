@@ -123,7 +123,7 @@ q'{<dialog class="output">
     <form>
         <header class="flex-items space-between">
             <ul role="list" class="flex-items"></ul>
-            <button class="button close no-focus" data-button-variant="round-icon">
+            <button type="button" class="button close" data-button-variant="round-icon">
                 <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
                     <use href="#cross"></use>
                 </svg>
@@ -141,14 +141,34 @@ q'{<dialog class="output">
     /*
      **  Build Content Dialog - here is where we show output from calling API
      */
+    FUNCTION buildInfoDialog RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+q'{<dialog class="info">
+    <header class="flex-items space-between">
+        <h4></h4>
+        <button type="button" class="button close" data-button-variant="round-icon">
+            <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
+                <use href="#cross"></use>
+            </svg>
+        </button>
+    </header>
+    <article></article>
+    <footer></footer>
+ </dialog>}');
+    END;
+
+    /*
+     **  Build Content Dialog - here is where we show output from calling API
+     */
     FUNCTION buildMessageDialog RETURN VARCHAR2 IS
     BEGIN
         RETURN(
 q'{<dialog class="message">
     <form>
         <header class="flex-items space-between">
-            <h2>Leave a Message</h2>
-            <button class="button close" data-button-variant="round-icon">
+            <h2>Leave a Review</h2>
+            <button type="button" class="button close" data-button-variant="round-icon">
                 <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
                     <use href="#cross"></use>
                 </svg>
@@ -156,7 +176,7 @@ q'{<dialog class="message">
         </header>
         <article class="flow">
              <div>
-                <label for="messageInput">Message</label>
+                <label for="messageInput">Review</label>
                 <textarea id="messageInput" name="message" required minlength="1" maxlength="400" rows="5" cols="40"></textarea>
                 <div class="flex-items space-between">
                     <span class="messageInput-result"></span>
@@ -408,6 +428,7 @@ q'{<dialog class="message">
         IF (pLoginForm='YES') THEN 
             pHtml:=pHtml || buildLoginForm;
             pHtml:=pHtml || buildContentDialog;
+            pHtml:=pHtml || buildInfoDialog;
             pHtml:=pHtml || buildMessageDialog;
         END IF;
 
