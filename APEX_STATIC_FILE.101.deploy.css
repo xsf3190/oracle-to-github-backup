@@ -180,9 +180,20 @@ h3,
 h4 {
   text-wrap: balance;
 }
-a {
-  text-decoration: none;
-  color: inherit;
+
+/* LINK STYLES */
+/* LINK STYLES */
+main a {
+  text-decoration: underline;
+  color: var(--color-primary-light);
+}
+
+main a:visited {
+    color: rebeccapurple;
+}
+
+main a:hover {
+    color: var(--color-primary);
 }
 
 .no-padding {
@@ -216,13 +227,11 @@ a {
   inline-size: 25%;
   fill: #fff;
 }
-.card :is(h2, h3, h4),
-footer :is(h2, h3, h4) {
+.card :is(h2, h3, h4) {
   text-transform: uppercase;
   font-size: var(--step--1);
 }
-.card :is(p),
-footer :is(p) {
+.card :is(p) {
   font-size: var(--step--2);
 }
 .card img {
@@ -243,27 +252,23 @@ footer :is(p) {
   transform: scale(1.05);
   text-decoration: underline;
 }
+.card a {
+    text-decoration: none;
+    color: inherit;
+}
+.card a:visited {
+    color: inherit;
+}
+
 .card .ending-text {
   font-family: monospace;
   font-size: 40%;
+}
+
+.card>*:last-child {
   display: flex;
   justify-content: space-between;
   margin-block-start: auto;
-}
-.auto-fill {
-  --grid-placement: auto-fill;
-  --grid-min-item-size: clamp(10rem, 25vw, 20rem);
-}
-.grid-repeat-4 {
-    --grid-placement: 4;
-}
-.grid-auto-fit {
-  display: grid;
-  grid-template-columns: repeat(
-    var(--grid-placement, auto-fit),
-    minmax(min(var(--grid-min-item-size, 16rem), 100%), 1fr)
-  );
-  grid-gap: 1em;
 }
 
 
@@ -275,11 +280,12 @@ footer :is(p) {
   grid-template-columns: var(--grid-template-columns, 1fr 1fr);
   outline: var(--grid-border);
   text-align: var(--text-align, center);
+  gap: var(--space-s);
 }
 
 .grid__auto_fill {
     --grid-template-columns: repeat(auto-fill,
-    minmax(min(var(--grid-min-item-size, 10rem), 100%), 1fr)
+    minmax(min(var(--grid-min-item-size, 15rem), 100%), 1fr)
   );
 }
 
@@ -562,13 +568,11 @@ html:has(dialog[open]) {
 }
 
 dialog {
-/*   background-color: var(--color-background); */
-/*   color: var(--color-text); */
   border-radius: var(--space-s);
-/*   max-inline-size: min(90vw, 60ch); */
   padding: 0;
   inset: 0;
   overflow: hidden;
+  min-inline-size: 75vw;
 }
 
 dialog > form {
@@ -779,6 +783,7 @@ ol.deploy {
     font-family: monospace;
     font-size: var(--step--1);
     padding: 1em;
+    margin-inline-end: 1em;
 }
 
 ol.deploy span + span {
@@ -796,12 +801,20 @@ ol.deploy span + span {
     font-size: var(--step--2);
 }
 
-/* Override DEPLOY button styles in CKEDITOR toolbar */ 
-.deploy-website {
+/* Override MEDIA button styles in CKEDITOR toolbar */ 
+.show-media {
     background-color: var(--color-primary-light) !important;
     color: white !important;
     margin-inline-start: calc (var(--ck-spacing-unit) * 4)) !important;
     cursor: pointer !important;
+}
+
+.deploy-website {
+    background-color: rebeccapurple !important;
+    color: white !important;
+    cursor: pointer !important;
+    margin-inline-end: 1em !important;
+    padding: 0.2em 0.3em !important;
 }
 
 /* SVG GRAPHS */
