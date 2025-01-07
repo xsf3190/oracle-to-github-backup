@@ -3,20 +3,13 @@
 ** INCLUDE DEPLOY BUTTON IN CKEDITOR TOOLBAR
 */
 
-import { output_dialog, dropdown_details } from "./deploy_elements.min.js";
-import { callAPI } from "./deploy_callAPI.min.js";
+import { info_dialog, dropdown_details } from "./deploy_elements.min.js";
+import { callAPI, handleError } from "./deploy_callAPI.min.js";
 
 const CK_CSS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css";
 const CK_JS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js";
 
 let endpoint, intervalId;
-
-const handleError = (error) => {
-    const article = output_dialog.querySelector("article");
-    article.replaceChildren();
-    article.insertAdjacentHTML('afterbegin',error);
-    output_dialog.showModal();
-}
 
 export const init = async (element) => {
     if (document.querySelector("head > link[href='" + CK_CSS + "']")) {
@@ -104,7 +97,7 @@ export const init = async (element) => {
                            SelectAll, SourceEditing, Underline, WordCount ],
                 toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic',
                            'underline', 'code', 'alignment', 'link', 
-                            'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing', '|', 'media', '|', 'deploy'],
+                            'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing', '|', 'media'],
                 initialData: initialdata,
                 alignment: {
                   options: [
@@ -189,7 +182,7 @@ export const init = async (element) => {
                            Underline, WordCount ],
                 toolbar: [ 'heading', '|', 'undo', 'redo', '|', 'horizontalLine', 'bold', 'italic',
                            'underline', 'alignment', 'link', 
-                           'bulletedList', 'numberedList', 'blockQuote', '|', 'media', '|', 'deploy'],
+                           'bulletedList', 'numberedList', 'blockQuote', '|', 'media'],
                 initialData: initialdata,
                 alignment: {
                   options: [
@@ -248,16 +241,17 @@ export const init = async (element) => {
     wordCountWrapper.appendChild(wordCountPlugin.wordCountContainer );
 
     /* Put editor status element at end of the toolbar. Initialize with last updated */
-    const toolbar = document.querySelector(".ck-toolbar__items");
-    toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
+    const toolbar_items = document.querySelector(".ck-toolbar__items");
+    toolbar_items.insertAdjacentHTML('afterend','<button type="button" class="button deploy-website">PUBLISH</button><span id="editor-status"></span>');
     document.querySelector("#editor-status").textContent = last_update;
 
     /* Listen for request to show MEDIA  */
-    toolbar.querySelector(".show-media").addEventListener("click", () => {
+    toolbar_items.querySelector(".show-media").addEventListener("click", () => {
         show_media();
     });
 
     /* Listen for DEPLOY requests */
+    const toolbar = document.querySelector(".ck-toolbar");
     toolbar.querySelector(".deploy-website").addEventListener("click", () => {
         deploy_website();
     });
@@ -292,14 +286,12 @@ const saveData = async ( data, endpoint ) => {
 ** USER CLICKS MEDIA BUTTON
 */
 const show_media = async () => {
-    const content = output_dialog.querySelector("article");
-    const showmore = output_dialog.querySelector(".show-more");
+    const content = info_dialog.querySelector("article");
     callAPI("cloudinary/:ID/:PAGE","GET","?request=list")
         .then( (data) => {
             content.replaceChildren();
             content.insertAdjacentHTML('afterbegin',data.thumbnails);
-            showmore.classList.add("visually-hidden");
-            output_dialog.showModal();
+            info_dialog.showModal();
         })
         .catch((error) => {
             handleError(error);
@@ -310,14 +302,12 @@ const show_media = async () => {
 ** USER CLICKS DEPLOY BUTTON
 */
 const deploy_website = async () => {
-    const content = output_dialog.querySelector("article");
-    const showmore = output_dialog.querySelector(".show-more");
+    const content = info_dialog.querySelector("article");
     callAPI("deploy-website/:ID","POST",{})
         .then( (data) => {
             content.replaceChildren();
             content.insertAdjacentHTML('afterbegin',data.content);
-            showmore.classList.add("visually-hidden");
-            output_dialog.showModal();
+            info_dialog.showModal();
             if (data.stop) return;
             if (intervalId) {
                 clearInterval(intervalId);
@@ -336,7 +326,7 @@ const getDeploymentStatus = () => {
     callAPI("deploy-website/:ID","GET")
         .then( (data) => {
             if (data.content) {
-                output_dialog.querySelector(".deploy").insertAdjacentHTML('beforeend',data.content);
+                info_dialog.querySelector(".deploy").insertAdjacentHTML('beforeend',data.content);
             }
             if (data.completed) {
                 clearInterval(intervalId);
