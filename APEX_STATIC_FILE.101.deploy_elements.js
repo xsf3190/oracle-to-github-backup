@@ -9,4 +9,5 @@ export const menulist = dropdown.querySelector(".menulist");
 
 export const login_dialog = document.querySelector("dialog.login-email");
 export const output_dialog = document.querySelector("dialog.output");
+export const info_dialog = document.querySelector("dialog.info");
 export const message_dialog = document.querySelector("dialog.message");
