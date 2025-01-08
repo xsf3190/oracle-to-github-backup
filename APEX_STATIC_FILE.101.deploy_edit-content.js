@@ -33,7 +33,7 @@ export const init = async (element) => {
     let initialdata, last_update;
     await callAPI(endpoint,'GET')
         .then((data) => {
-            initialdata = data.html;
+            initialdata = "<div class='flow'>" + data.html + "</div>";
             last_update = data.last_update;
         })
         .catch((error) => {
@@ -240,9 +240,11 @@ export const init = async (element) => {
     const wordCountWrapper = document.querySelector( '.ck-editor__main' );
     wordCountWrapper.appendChild(wordCountPlugin.wordCountContainer );
 
-    /* Put editor status element at end of the toolbar. Initialize with last updated */
+    /* Put editor status element at end of the toolbar */
     const toolbar_items = document.querySelector(".ck-toolbar__items");
     toolbar_items.insertAdjacentHTML('afterend','<button type="button" class="button deploy-website">PUBLISH</button><span id="editor-status"></span>');
+    
+    /* Put Last Update date in editor status element */
     document.querySelector("#editor-status").textContent = last_update;
 
     /* Listen for request to show MEDIA  */
