@@ -479,8 +479,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             l_classes:='featured ';
         END IF;
 
-        l_classes:=l_classes || 'grid-auto-fit';
-
         SELECT apex_string_util.get_slug(navigation_label) INTO l_path FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
 
         /* Build list of all title in title order */
@@ -533,7 +531,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    ORDER BY deployed_date DESC ) 
         LOOP
             IF (C.rn=1) THEN
-                l_html:=l_html || '<ol class="' || l_classes || CASE WHEN C.nb<2 THEN ' auto-fill' END || '" role="list" >';
+                l_html:=l_html || '<ol class="' || l_classes || ' grid grid__auto_fill' || '" role="list" >';
             END IF;
             l_html:=l_html || 
             '<li class="card">';
@@ -552,12 +550,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                     '</h2>' ||
                     '<p>' || CASE WHEN LENGTH(C.excerpt)<160 THEN C.excerpt ELSE SUBSTR(C.excerpt,1,INSTR(C.excerpt,' ',-1)) || '...' END  || '</p>' ||
                 '</div>' ||
-                '<div class="ending-text">' ||
+                '<small>' ||
                     CASE WHEN NVL(C.collection_date_format,'NONE')<>'NONE' THEN
                     '<span>' || TO_CHAR(NVL(C.deployed_date,current_timestamp),'fm'||C.collection_date_format) || '</span>'
                     END ||
                     '<span>' || C.word_count || ' words</span>' ||
-                '</div>' ||
+                '</small>' ||
             '</li>';
             IF (C.rn=LEAST(MAX_BLOGS,C.nb)) THEN
                 l_html:=l_html || '</ol>';
