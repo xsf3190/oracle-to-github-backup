@@ -1,12 +1,6 @@
-html:has(dialog[open][modal-mode="mega"]) {
-  overflow: hidden;
-}
-
-dialog {
-  display: grid;
-  align-content: start;
-  &:not([open]) {
-    pointer-events: none;
-    opacity: 0;
+@container (width>=0) {
+    p {
+      font-weight: bold;
+      color: red;
+    }
   }
-}
