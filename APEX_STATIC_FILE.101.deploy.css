@@ -199,12 +199,11 @@ main a:hover {
 .no-padding {
   --padding: 0;
 }
-[data-font="75%"] {
-  font-size: 75%;
-}
 
+/* CARD STYLES */
 .card {
   --card-radius: 0.5em;
+  container-type: inline-size;
   background: var(--color-primary);
   color: #fff;
   display: flex;
@@ -219,6 +218,9 @@ main a:hover {
 .card:hover {
   box-shadow: 4px 8px 8px hsl(0deg 0% 0%/0.38);
 }
+.card a:hover {
+  color:currentColor;
+}
 .icon {
   pointer-events: none;
 }
@@ -229,11 +231,8 @@ main a:hover {
 }
 .card :is(h2, h3, h4) {
   text-transform: uppercase;
-  font-size: var(--step--1);
 }
-.card :is(p) {
-  font-size: var(--step--2);
-}
+
 .card img {
   block-size: 16rem;
   border-radius: var(--card-radius);
@@ -260,11 +259,6 @@ main a:hover {
     color: inherit;
 }
 
-.card .ending-text {
-  font-family: monospace;
-  font-size: 40%;
-}
-
 .card>*:last-child {
   display: flex;
   justify-content: space-between;
@@ -275,7 +269,7 @@ main a:hover {
 /* SIMPLE GRID  - DEFAULT IS 2 EQUAL-SIZED COLUMNS WITH NO GAP */
 
 .grid {
-  --grid-border: solid 1px var(--color-primary);
+  --grid-min-item-size: calc( (var(--max-width) / 3) - 2rem);
   display: grid;
   grid-template-columns: var(--grid-template-columns, 1fr 1fr);
   outline: var(--grid-border);
@@ -356,11 +350,8 @@ main a:hover {
   height: 1em;
   fill: currentColor;
 }
-.condensed {
-  line-height: 1.1;
-}
-.icon:has(+ .condensed) {
-  align-self: flex-start;
+footer .icon-with-text {
+    color: white;
 }
 
 /* VISUALLY-HIDDEN CAN'T BE SEEN EXCEPT TO ASSISTIVE TECHNOLOGY */
