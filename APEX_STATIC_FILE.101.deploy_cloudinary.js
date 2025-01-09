@@ -2,7 +2,7 @@
  ** INITIALIZE CLOUDINARY UPLOAD WIDGET
  */
 
-import { media_dialog, bodydata } from "./deploy_elements.min.js";
+import { info_dialog, bodydata } from "./deploy_elements.min.js";
 import { callAPI, handleError } from "./deploy_callAPI.min.js";
 
 let endpoint, widget;
@@ -91,10 +91,10 @@ const createWidget = () => {
             });
             callAPI(endpoint,"PUT",metadata)
                 .then( (data) => {
-                    const article = media_dialog.querySelector("article");
+                    const article = info_dialog.querySelector("article");
                     article.replaceChildren();
                     article.insertAdjacentHTML('afterbegin',data.thumbnails);
-                    media_dialog.showModal();
+                    info_dialog.showModal();
                 })
                 .catch((error) => {
                     handleError(error);
