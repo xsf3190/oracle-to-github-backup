@@ -78,39 +78,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     FUNCTION buildLoginForm RETURN VARCHAR2 IS
     BEGIN
         RETURN(
-q'{<dialog class="login-email">
-    <form class="flow">
-        <input type="hidden" name="url" value="">
-        <input type="hidden" name="request_type" value="">
-        <header class="flex-items space-between">
-            <h2>Sign up or log in</h2>
-            <button type="button" class="button close no-focus" data-button-variant="round-icon">
-                <svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">
-                    <use href="#cross"></use>
-                </svg>
-            </button>
-        </header>
-        <article class="flow">
-            <div>
-                <label for="emailInput">Email</label>
-                <input type="email" id="emailInput" name="email" required maxlength="50" autocapitalize="none" autocorrect="off">
-                <span class="sendmail-result"></span>
-            </div>
-            <div class="visually-hidden">
-                <label for="passcodeInput">Enter Passcode</label>
-                <input type="text" id="passcodeInput" name="passcode" pattern="\d{6}" title="6 digit passcode">
-                <span class="passcode-result"></span>
-            </div>
-        </article>
-        <footer>
-            <menu class="flex-items">
-                <button class="button sendmail-magic" type="button">Send Magic Link</button>
-                <button class="button sendmail-passcode" type="button">Send Passcode</button>
-                <button class="button validate-passcode visually-hidden" type="button">Submit Passcode</button>
-            </menu>
-        </footer>
-    </form>
- </dialog>}');
+            '<dialog class="login-email">' ||
+                '<form class="flow">' ||
+                    '<input type="hidden" name="url" value="">' ||
+                    '<input type="hidden" name="request_type" value="">' ||
+                    '<header class="flex-items space-between">' ||
+                        '<h2>Sign up or log in</h2>' ||
+                        '<button type="button" class="button close no-focus" data-button-variant="round-icon">' ||
+                            '<svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16">' ||
+                                '<use href="#cross"></use>' ||
+                            '</svg>' ||
+                        '</button>' ||
+                    '</header>' ||
+                    '<article class="flow">' ||
+                        '<div>' ||
+                            '<label for="emailInput">Email</label>' ||
+                            '<input type="email" id="emailInput" name="email" required maxlength="50" autocapitalize="none" autocorrect="off">' ||
+                            '<span class="sendmail-result"></span>' ||
+                        '</div>' ||
+                        '<div class="visually-hidden">' ||
+                            '<label for="passcodeInput">Enter Passcode</label>' ||
+                            '<input type="text" id="passcodeInput" name="passcode" pattern="\d{6}" title="6 digit passcode">' ||
+                            '<span class="passcode-result"></span>' ||
+                        '</div>' ||
+                    '</article>' ||
+                    '<footer class="flex-items">' ||
+                        '<button class="button sendmail-magic" type="button">Send Magic Link</button>' ||
+                        '<button class="button sendmail-passcode" type="button">Send Passcode</button>' ||
+                        '<button class="button validate-passcode visually-hidden" type="button">Submit Passcode</button>' ||
+                    '</footer>' ||
+                '</form>' ||
+             '</dialog>');
     END;
 
     /*
@@ -545,9 +543,10 @@ q'{<dialog class="message">
             l_footer, 
             l_html);
 
-        IF (l_login_form='YES') THEN
-            l_javascript:=l_javascript || getJSCode('deploy_cms.js');
-        END IF;
+        l_javascript:=
+        'document.querySelector(".login-btn").addEventListener("click", () => {' || 
+            'document.querySelector(".login-email").showModal();' ||
+        '})';
         
         apex_json.open_object;
         apex_json.write('success', TRUE); 
