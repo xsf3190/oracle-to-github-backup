@@ -153,7 +153,8 @@ const setTokens = (data) => {
     sessionStorage.setItem("token",data.token);
     localStorage.setItem("refresh",data.refresh);
   
-    localStorage.setItem("menulist",data.menulist);
+    sessionStorage.setItem("menulist",data.menulist);
+    sessionStorage.setItem("dialogs",data.dialogs);
     menulist.replaceChildren();
     menulist.insertAdjacentHTML('afterbegin',data.menulist);
   
