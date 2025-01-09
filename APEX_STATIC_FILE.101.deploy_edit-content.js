@@ -293,7 +293,7 @@ const show_media = async () => {
         .then( (data) => {
             content.replaceChildren();
             content.insertAdjacentHTML('afterbegin',data.thumbnails);
-            info_dialog.showModal();
+            info_dialog.show();
         })
         .catch((error) => {
             handleError(error);
