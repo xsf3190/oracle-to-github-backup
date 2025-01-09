@@ -269,7 +269,6 @@ main a:hover {
 /* SIMPLE GRID  - DEFAULT IS 2 EQUAL-SIZED COLUMNS WITH NO GAP */
 
 .grid {
-  --grid-min-item-size: calc( (var(--max-width) / 3) - 2rem);
   display: grid;
   grid-template-columns: var(--grid-template-columns, 1fr 1fr);
   outline: var(--grid-border);
@@ -279,7 +278,13 @@ main a:hover {
 
 .grid__auto_fill {
     --grid-template-columns: repeat(auto-fill,
-    minmax(min(var(--grid-min-item-size, 15rem), 100%), 1fr)
+    minmax(min(var(--grid-min-item-size, 18rem), 100%), 1fr)
+  );
+}
+
+.grid__auto_fit {
+    --grid-template-columns: repeat(auto-fit,
+    minmax(min(var(--grid-min-item-size, 18rem), 100%), 1fr)
   );
 }
 
@@ -386,7 +391,7 @@ form label {
   font-weight: 600;
 }
 form input {
-  inline-size: 95%;
+  inline-size: 100%;
   font-size: var(--step-0);
   line-height: 2;
 }
@@ -563,7 +568,6 @@ dialog {
   padding: 0;
   inset: 0;
   overflow: hidden;
-  min-inline-size: 75vw;
 }
 
 dialog > form {
