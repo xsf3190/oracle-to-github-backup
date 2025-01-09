@@ -7,7 +7,7 @@ const handleError = (error) => {
     const article = info_dialog.querySelector("article");
     article.replaceChildren();
     article.insertAdjacentHTML('afterbegin',error);
-    error_dialog.showModal();
+    info_dialog.showModal();
 }
 
 /* 
