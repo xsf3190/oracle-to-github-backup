@@ -468,6 +468,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_jscode(l_jscode.LAST):='deploy_elements.min.js';
         l_jscode.EXTEND();
         l_jscode(l_jscode.LAST):='deploy_callAPI.min.js';
+        l_jscode.EXTEND();
+        l_jscode(l_jscode.LAST):='deploy_menulist.min.js';
 
         FOR i IN 1..l_jscode.COUNT LOOP
             FOR C IN (SELECT apex_util.blob_to_clob(file_content) file_content
