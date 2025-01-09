@@ -531,7 +531,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                    ORDER BY deployed_date DESC ) 
         LOOP
             IF (C.rn=1) THEN
-                l_html:=l_html || '<ol class="' || l_classes || ' grid grid__auto_fill' || '" role="list" >';
+                l_html:=l_html || '<ol class="' || l_classes || ' grid grid__auto_fit' || '" role="list" >';
             END IF;
             l_html:=l_html || 
             '<li class="card">';
