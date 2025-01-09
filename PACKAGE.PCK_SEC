@@ -15,10 +15,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
         canuse_popover BOOLEAN,
         canuse_eyedropper BOOLEAN,
         user_id NUMBER,
+        scope VARCHAR2(7),
         valid BOOLEAN
     );
     --
     PROCEDURE createAuthRequest(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
+    --
+    PROCEDURE getMenulist(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
     --
     PROCEDURE verifyAuthRequest(pWebsiteId IN website.id%type, pRequestType IN VARCHAR2, pUserId IN NUMBER, pVerifyData IN VARCHAR2, pStatus OUT NUMBER);
     --
@@ -327,6 +330,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         END IF;
 
         l_session_data.user_id:=l_JWT_data.jti;
+        l_session_data.scope:=l_JWT_data.aud;
         l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
         l_session_data.url:=OWA_UTIL.get_cgi_env('url');
 
@@ -441,7 +445,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             pck_core.log_error(pStatus);
     END;
 
-
+    /*
+    ** DETERMINE ROLE (I.E. SCOPE) OF LOGGED ON USER
+    */
     FUNCTION getScope(pWebsiteId IN website.id%type, pEmail IN VARCHAR2) RETURN VARCHAR2
     IS
         l_scope VARCHAR2(7);
@@ -464,6 +470,63 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     END;
 
     /*
+    ** BUILD LIST OF MENU ITEMS FOR GIVEN SCOPE, I.E ROLE
+    */
+    FUNCTION getMenulist(pWebsiteId IN website.id%type, pScope IN VARCHAR2) RETURN VARCHAR2 IS
+        l_menulist LONG;
+        l_reports LONG;
+        n PLS_INTEGER;
+    BEGIN
+        refreshOrdsEndpoints;
+
+        FOR C IN (
+            SELECT o.label, o.uri_template, o.method
+              FROM api_endpoint a, role r, ords_endpoints o
+             WHERE a.website_id=pWebsiteId 
+               AND a.role_id=r.id 
+               AND r.name=pScope
+               AND a.template_id=o.template_id
+               AND INSTR(o.uri_template,'authenticate')=0
+        )
+        LOOP
+            l_reports:=NULL;
+            IF (INSTR(C.uri_template,'visits/')>0) THEN
+                l_reports:='daily|Daily;website|Visits;location|Locations;browser|Browsers';
+                SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId;
+                IF (n>1) THEN
+                    l_reports:=l_reports || ';page|Pages';
+                    SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId AND collection_type='BLOG';
+                    IF (n>0) THEN
+                        l_reports:=l_reports || ';blog|Blogs';
+                    END IF;
+                END IF;
+            END IF;
+            l_menulist:=l_menulist || '<li><button type="button" data-endpoint="' || C.uri_template || '" data-method="' || C.method || '" data-reports="' || l_reports || '" class="button">' || C.label || '</button></li>';
+        END LOOP;
+        RETURN (l_menulist);
+    END;
+
+    /*
+    ** CALLED BY menulist GET ENDPOINT
+    */
+    PROCEDURE getMenulist(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        pStatus:=200;
+
+        APEX_JSON.open_object;
+        APEX_JSON.write ('success', TRUE);
+        APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_session_data.scope));
+        APEX_JSON.write ('dialogs','<dialog><p>COUCOU</p></dialog>');
+        APEX_JSON.close_object;
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
+    END;
+
+    /*
     ** USER AUTHENTICATED SUCCESSFULLY. ISSUE NEW PAIR OF TOKENS AND RETURN TO CLIENT
     */
     PROCEDURE issueJWTTokens(pWebsiteId IN website.id%type, pEmail IN users.email%type, pUserId IN users.id%type) IS 
@@ -473,8 +536,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_user_id users.id%type;
         l_issuer VARCHAR2(15);
         l_scope VARCHAR2(7);
-        l_menulist LONG;
-        l_reports LONG;
+        
         n PLS_INTEGER;
     BEGIN
         SELECT client_secret 
@@ -511,34 +573,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('token', l_new_token);
         APEX_JSON.write ('refresh', l_new_refresh);
-        
-        refreshOrdsEndpoints;
-
-        FOR C IN (
-            SELECT o.label, o.uri_template, o.method
-              FROM api_endpoint a, role r, ords_endpoints o
-             WHERE a.website_id=pWebsiteId 
-               AND a.role_id=r.id 
-               AND r.name=l_scope
-               AND a.template_id=o.template_id
-               AND INSTR(o.uri_template,'authenticate')=0
-        )
-        LOOP
-            l_reports:=NULL;
-            IF (INSTR(C.uri_template,'visits/')>0) THEN
-                l_reports:='daily|Daily;website|Visits;location|Locations;browser|Browsers';
-                SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId;
-                IF (n>1) THEN
-                    l_reports:=l_reports || ';page|Pages';
-                    SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId AND collection_type='BLOG';
-                    IF (n>0) THEN
-                        l_reports:=l_reports || ';blog|Blogs';
-                    END IF;
-                END IF;
-            END IF;
-            l_menulist:=l_menulist || '<li><button type="button" data-endpoint="' || C.uri_template || '" data-method="' || C.method || '" data-reports="' || l_reports || '" class="button">' || C.label || '</button></li>';
-        END LOOP;
-        APEX_JSON.write ('menulist', l_menulist);
+        APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_scope));
         APEX_JSON.close_object;
     END;
 
