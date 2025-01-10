@@ -118,23 +118,8 @@ const preloadImage = (img) => {
 };
 
 /*
-** DIALOG HANDLING
+** IMPORT OUR PRIVATELY HOSTED CWV MODULE
 */
-document.querySelectorAll("a[data-dialog]").forEach((button) => {
-    button.addEventListener("click", (e) => {
-      e.preventDefault();
-      document.querySelector("dialog."+e.target.dataset.dialog).showModal();
-    });
-});
-
-document.querySelectorAll("dialog button.close").forEach((button) => {
-    button.addEventListener("click", (e) => {
-      e.target.closest("dialog").close();
-    });
-    /* Anomaly in CKEditor that removes button text */
-    if (!button.textContent) button.textContent = "X";
-});
-
 import {onLCP, onINP, onCLS} from '/web-vitals.js';
 onCLS(addToVitalsQueue);
 onLCP(addToVitalsQueue);
