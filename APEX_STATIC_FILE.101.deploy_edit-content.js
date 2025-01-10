@@ -242,7 +242,7 @@ export const init = async (element) => {
 
     /* Put editor status element at end of the toolbar */
     const toolbar_items = document.querySelector(".ck-toolbar__items");
-    toolbar_items.insertAdjacentHTML('afterend','<button type="button" class="button deploy-website">PUBLISH</button><span id="editor-status"></span>');
+    toolbar_items.insertAdjacentHTML('afterend','<button type="button" class="button deploy-website">PUBLISH</button><span id="editor-status"></span><section class="dropdown"><details><summary>IMAGES</summary><span>item 1</span></details></section>');
     
     /* Put Last Update date in editor status element */
     document.querySelector("#editor-status").textContent = last_update;
@@ -288,16 +288,38 @@ const saveData = async ( data, endpoint ) => {
 ** USER CLICKS MEDIA BUTTON
 */
 const show_media = async () => {
-    const content = info_dialog.querySelector("article");
+    
+    const ckeditor = document.querySelector(".ck-toolbar").getBoundingClientRect();
+    const top = ckeditor.top;
+    const right = ckeditor.right + 16;
+    const media = document.querySelector("#media");
+    /*
+    media.style.position = "sticky";
+    media.style.display = "block";
+    media.style.top = "0";
+    media.style.left = right + "px";
+    media.style.width = ckeditor.left - 16 + "px";
+    media.style.maxHeight = "1000px";
+    media.style.overflowY = "auto";
+    media.style.flexBasis = "400px";
+    media.style.flexGrow = "1";
+    media.style.alignSelf = "start";
+
+
+
+    document.querySelector("main").classList.add("flex-items");
+    */
+
+    media.style.width = ckeditor.left - 16 + "px";
+
     callAPI("cloudinary/:ID/:PAGE","GET","?request=list")
         .then( (data) => {
-            content.replaceChildren();
-            content.insertAdjacentHTML('afterbegin',data.thumbnails);
-            info_dialog.show();
+            media.replaceChildren();
+            media.insertAdjacentHTML('afterbegin',data.thumbnails);
         })
         .catch((error) => {
             handleError(error);
-        });;
+        });
 }
 
 /*
