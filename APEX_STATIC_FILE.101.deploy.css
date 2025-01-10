@@ -482,15 +482,13 @@ form textarea {
 .button svg {
   height: var(--button-icon-size, 1.2cap);
   width: auto;   
-  flex: none; 
+  aspect-ratio: 1;
 }
-
 
 .button:hover {
   background: var(--button-hover-bg);
   color: var(--button-hover-color);
 }
-
 
 .button:not(.no-focus):focus {
   outline-width: var(--button-outline-width, var(--button-border-width));
@@ -578,9 +576,21 @@ dialog > form {
     max-block-size: 80dvb;
 }
 
-dialog > form > header {
-    border-block-end: 3px solid black;
-    padding-block: 0.3em;
+dialog header h2 {
+    text-decoration: underline;
+    text-decoration-thickness: .04em;
+    text-underline-offset: .2em;
+}
+
+dialog header ul.underline {
+    padding-block: 0.5em;
+    border-block-end: solid 1px black;
+}
+
+dialog button.close {
+    align-self: start;
+    margin-inline-end: -.8em;
+    border: none;
 }
 
 dialog > form > article {
