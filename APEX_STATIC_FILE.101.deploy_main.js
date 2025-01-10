@@ -8,12 +8,25 @@ import { dropdown } from "./deploy_elements.min.js";
 ** SET DROPDOWN ELEMENTS IF REFRESH TOKEN EXISTS
 */
 if (localStorage.getItem("refresh")) {
-    import("/deploy_menulist.min.js")
+    import("./deploy_menulist.min.js")
         .then((module) => {
             module.init("menulist/:ID");
+        })
+        .catch((error) => {
+            console.error(error);
+            console.error("Failed to load JS module deploy_menulist.");
         });
 }
-            
+
+/*
+** CLOSE DIALOGS BY CLICKING X BUTTON
+*/
+document.querySelectorAll("dialog button.close").forEach((button) => {
+    button.addEventListener("click", (e) => {
+      e.target.closest("dialog").close();
+    });
+});
+
 /*
 ** CLICK HANDLER FOR ALL BUTTONS IN DYNAMIC DROPDOWN MENULIST
 */
