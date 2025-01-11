@@ -1,13 +1,14 @@
-import { bodydata, menulist, login_btn, info_dialog } from "./deploy_elements.min.js";
+import { bodydata, menulist, login_btn } from "./deploy_elements.min.js";
 
 let access_token = sessionStorage.getItem("token");
 let refresh_token = localStorage.getItem("refresh");
 
 const handleError = (error) => {
-    const article = info_dialog.querySelector("article");
+    const error_dialog = document.querySelector("dialog.error");
+    const article = error_dialog.querySelector("article");
     article.replaceChildren();
     article.insertAdjacentHTML('afterbegin',error);
-    info_dialog.showModal();
+    error_dialog.showModal();
 }
 
 /* 
@@ -108,7 +109,7 @@ const callAPI = async (endpoint, method, data) => {
     headers.append("Authorization","Bearer " + access_token);
     
     let config = {method: method, headers: headers};
-    if (method==="POST" || method==="PUT") {
+    if (method==="POST" || method==="PUT" || method==="DELETE") {
         config["body"] = JSON.stringify(data);
     }
 
