@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_MEDIA" IS
     --
+    PROCEDURE deleteCldAsset(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodytext IN CLOB, pStatus OUT NUMBER);
+    --
     FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
     --
     FUNCTION getThumbnails(pArticleId IN article.id%type) RETURN CLOB;
@@ -48,6 +50,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
                 APEX_JSON.write('thumbnails', pck_media.getThumbnails(pArticleId));
                 APEX_JSON.close_object;
         END CASE;
+
+        pStatus:=200;
+        
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
+    END;
+
+    /*
+    ** DELETE CLOUDINARY ASSET
+    */
+    PROCEDURE deleteCldAsset(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodytext IN CLOB, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_asset_id asset.id%type;
+        l_bodytext CLOB:=pBodytext;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+        pck_core.log(l_bodytext);
+        pck_core.log('l_session_data.user_id:'||l_session_data.user_id);
+
+        SELECT id INTO l_asset_id FROM asset a, JSON_TABLE(pBodytext, '$' COLUMNS (asset_id)) j
+        WHERE a.id=j.asset_id
+        AND a.user_id=l_session_data.user_id
+        AND a.article_id=pArticleId;
+
+        pck_cms_delete.deleteAsset(l_session_data.user_id, l_asset_id);
 
         pStatus:=200;
         
@@ -282,7 +309,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
         l_dimensions VARCHAR2(50);
         n PLS_INTEGER:=0;
     BEGIN
-        l_clob:='<ul role="list" class="grid grid__auto_fill">';
+        l_clob:='<ul role="list" class="grid grid__auto_fill" style="--grid-min-item-size:10rem">';
         FOR C IN (
             SELECT a.id, a.cld_cloud_name, a.resource_type, a.public_id, TO_CHAR(a.created_date,'dd-Mon-yyyy') uploaded, 
                    DECODE(a.width,0,gWidthThumbnail,a.width) width, a.height, a.bytes, a.format
@@ -304,12 +331,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
 
             l_clob:=l_clob ||
                 '<li class="card" data-id="' || C.id || '">' ||
-                    '<img data-dimensions="'  || l_dimensions || '" src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>';
+                    '<img draggable="false" data-dimensions="'  || l_dimensions || '" src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>';
 
             CASE l_media_type
                 WHEN 'video' THEN
                     l_clob:=l_clob || 
-                    '<video controls preload="metadata" poster="' || l_url_image || '">' ||
+                    '<video draggable="false" controls preload="metadata" poster="' || l_url_image || '">' ||
                         '<source src="' || REPLACE(l_url_image,'.jpg','.webm') || '" type="video/webm"></source>' ||
                         '<source src="' || REPLACE(l_url_image,'.jpg','.mp4') || '" type="video/mp4"></source>' ||
                     '</video>';
@@ -317,7 +344,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
                 WHEN 'audio' THEN
                     l_url_image:=REGEXP_REPLACE(l_url_image,',w_(\d)+\/fl_waveform',NULL);
                     l_clob:=l_clob || 
-                    '<audio preload="metadata" controls>' ||
+                    '<audio draggable="false" preload="metadata" controls>' ||
                         '<source src="' || REPLACE(l_url_image,'.png','.aac') || '" type="audio/aac"></source>' ||
                         '<source src="' || REPLACE(l_url_image,'.png','.ogg') || '" type="audio/ogg"></source>' ||
                         '<source src="' || REPLACE(l_url_image,'.png','.mp3') || '" type="audio/mpeg"></source>' ||
