@@ -155,8 +155,19 @@ const setTokens = (data) => {
   
     sessionStorage.setItem("menulist",data.menulist);
     sessionStorage.setItem("dialogs",data.dialogs);
+
     menulist.replaceChildren();
     menulist.insertAdjacentHTML('afterbegin',data.menulist);
+    
+    const nb_dialogs = document.querySelectorAll("dialog").length;
+    if (nb_dialogs===1) {
+        document.body.insertAdjacentHTML('beforeend',data.dialogs);
+        document.querySelectorAll("dialog button.close").forEach((button) => {
+            button.addEventListener("click", (e) => {
+            e.target.closest("dialog").close();
+            });
+        });
+    }
   
     const arrayToken = data.refresh.split(".");
     const parsedToken = JSON.parse(atob(arrayToken[1]));
