@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CMS_DELETE" IS
     --
+    PROCEDURE deleteAsset(pUserId IN users.id%type, pAssetId IN asset.id%type);
+    --
     PROCEDURE init(pBodyText IN CLOB);
     --
     PROCEDURE runDeleteArticle(pUserId IN users.id%type, pEndpoint IN VARCHAR2);
