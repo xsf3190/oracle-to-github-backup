@@ -1,9 +1,9 @@
 /*
 **  LEAVE A MESSAGE
 */
-import { message_dialog } from "./deploy_elements.min.js";
 import { callAPI } from "./deploy_callAPI.min.js";
 
+const message_dialog = document.querySelector("dialog.message");
 const form = message_dialog.querySelector("form");
 const messageInput = form.querySelector("[name='message']");
 const messageError = form.querySelector(".messageInput-result");
