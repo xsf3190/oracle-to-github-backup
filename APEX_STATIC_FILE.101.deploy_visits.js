@@ -2,10 +2,10 @@
 ** VISIT REPORTS
 */
 
-import { output_dialog } from "./deploy_elements.min.js";
 import { callAPI } from "./deploy_callAPI.min.js";
 
 //const content = output_dialog.querySelector("article");
+const output_dialog = document.querySelector("dialog.output");
 const reportlist = output_dialog.querySelector("header > ul");
 const showmore = output_dialog.querySelector(".show-more");
 const article = output_dialog.querySelector("article");
