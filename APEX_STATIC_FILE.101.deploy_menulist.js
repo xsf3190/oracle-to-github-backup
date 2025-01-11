@@ -16,9 +16,9 @@ export const init = (endpoint) => {
         menulist.replaceChildren();
         menulist.insertAdjacentHTML('afterbegin',sessionStorage.getItem("menulist"));
         document.body.insertAdjacentHTML('beforeend',sessionStorage.getItem("dialogs"));
+        closeBtnEvents();
         return;
     }
-    console.log("endpoint",endpoint);
     
     callAPI(endpoint, "GET")
         .then((data) => {
@@ -27,8 +27,20 @@ export const init = (endpoint) => {
             menulist.replaceChildren();
             menulist.insertAdjacentHTML('afterbegin',data.menulist);
             document.body.insertAdjacentHTML('beforeend',data.dialogs);
+            closeBtnEvents();
         })
         .catch((error) => {
             handleError(error);
         });
+}
+
+/*
+** CLOSE DIALOGS BY CLICKING X BUTTON
+*/
+const closeBtnEvents = () => {
+    document.querySelectorAll("dialog button.close").forEach((button) => {
+        button.addEventListener("click", (e) => {
+        e.target.closest("dialog").close();
+        });
+    });
 }
