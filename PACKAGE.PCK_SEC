@@ -507,6 +507,109 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     END;
 
     /*
+     **  Build Content Dialog - here is where we show output from calling API
+     */
+    FUNCTION buildContentDialog RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+            '<dialog class="output">' ||
+                '<form>' ||
+                    '<header class="flex-items space-between">' ||
+                        '<ul role="list" class="flex-items underline"></ul>' ||
+                        '<button type="button" class="button close no-focus" data-button-variant="round-icon">' ||
+                            '<svg class="icon" aria-hidden="true" focusable="false">' ||
+                                '<use href="#cross"></use>' ||
+                            '</svg>' ||
+                        '</button>' ||
+                    '</header>' ||
+                    '<article></article>' ||
+                    '<footer class="flex-items space-between">' ||
+                        '<span></span>' ||
+                        '<button type="button" class="button show-more" data-button-variant="no-styles">More >></button>' ||
+                    '</footer>' ||
+                '</form>' ||
+             '</dialog>');
+    END;
+
+    /*
+     **  Build Content Dialog - here is where we show output from calling API
+     */
+    FUNCTION buildInfoDialog RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+            '<dialog class="info">' ||
+                '<form>' ||
+                    '<header class="flex-items space-between">' ||
+                        '<h4></h4>' ||
+                        '<button type="button" class="button close no-focus" data-button-variant="round-icon">' ||
+                            '<svg class="icon" aria-hidden="true" focusable="false">' ||
+                                '<use href="#cross"></use>' ||
+                            '</svg>' ||
+                        '</button>' ||
+                    '</header>' ||
+                    '<article></article>' ||
+                    '<footer></footer>' ||
+                '</form>' ||
+             '</dialog>');
+    END;
+
+    /*
+     **  Build Content Dialog - here is where we show output from calling API
+     */
+    FUNCTION buildMessageDialog RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+            '<dialog class="message">' ||
+                '<form>' ||
+                    '<header class="flex-items space-between">' ||
+                        '<h2>Leave a Review</h2>' ||
+                        '<button type="button" class="button close no-focus" data-button-variant="round-icon">' ||
+                            '<svg class="icon" aria-hidden="true" focusable="false">' ||
+                                '<use href="#cross"></use>' ||
+                            '</svg>' ||
+                        '</button>' ||
+                    '</header>' ||
+                    '<article class="flow">' ||
+                         '<div>' ||
+                            '<label for="messageInput">Review</label>' ||
+                            '<textarea id="messageInput" name="message" required minlength="1" maxlength="400" rows="5" cols="40"></textarea>' ||
+                            '<div class="flex-items space-between">' ||
+                                '<span class="messageInput-result"></span>' ||
+                                '<span class="charcounter"></span>' ||
+                            '</div>' ||
+                        '</div>' ||
+                    '</article>' ||
+                    '<footer class="flex-items space-between">' ||
+                        '<button type="button" class="button send">SEND</button>' ||
+                        '<span class="send-result"></span>' ||
+                    '</footer>' ||
+                '</form>' ||
+             '</dialog>');
+    END;
+
+    /*
+     **  Build General purpose ERROR dialog
+     */
+    FUNCTION buildErrorDialog RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+            '<dialog class="error">' ||
+                '<form>' ||
+                    '<header class="flex-items space-between">' ||
+                        '<h4></h4>' ||
+                        '<button type="button" class="button close no-focus" data-button-variant="round-icon">' ||
+                            '<svg class="icon" aria-hidden="true" focusable="false">' ||
+                                '<use href="#cross"></use>' ||
+                            '</svg>' ||
+                        '</button>' ||
+                    '</header>' ||
+                    '<article style="color:red"></article>' ||
+                    '<footer></footer>' ||
+                '</form>' ||
+             '</dialog>');
+    END;
+
+    /*
     ** CALLED BY menulist GET ENDPOINT
     */
     PROCEDURE getMenulist(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
@@ -519,7 +622,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_session_data.scope));
-        APEX_JSON.write ('dialogs','<dialog><p>COUCOU</p></dialog>');
+        APEX_JSON.write ('dialogs', buildContentDialog || buildInfoDialog || buildMessageDialog || buildErrorDialog);
         APEX_JSON.close_object;
 
         EXCEPTION WHEN OTHERS THEN
@@ -574,6 +677,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.write ('token', l_new_token);
         APEX_JSON.write ('refresh', l_new_refresh);
         APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_scope));
+        APEX_JSON.write ('dialogs',  buildContentDialog || buildInfoDialog || buildMessageDialog || buildErrorDialog);
         APEX_JSON.close_object;
     END;
 
