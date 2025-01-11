@@ -2,7 +2,14 @@
 ** MAIN JAVASCRIPT MODULE ALWAYS LOADED ON CONNECTION TO WEBSITE
 */
 
-import { dropdown } from "./deploy_elements.min.js";
+import { dropdown, login_dialog } from "./deploy_elements.min.js";
+
+/*
+** LOGIN DIALOG IS INCLUDED IN DOWNLOADED WEBSITE DOCUMENT
+*/
+login_dialog.querySelector("button.close").addEventListener("click", () => {
+    login_dialog.close();
+})
 
 /*
 ** SET DROPDOWN ELEMENTS IF REFRESH TOKEN EXISTS
@@ -17,15 +24,6 @@ if (localStorage.getItem("refresh")) {
             console.error("Failed to load JS module deploy_menulist.");
         });
 }
-
-/*
-** CLOSE DIALOGS BY CLICKING X BUTTON
-*/
-document.querySelectorAll("dialog button.close").forEach((button) => {
-    button.addEventListener("click", (e) => {
-      e.target.closest("dialog").close();
-    });
-});
 
 /*
 ** CLICK HANDLER FOR ALL BUTTONS IN DYNAMIC DROPDOWN MENULIST
