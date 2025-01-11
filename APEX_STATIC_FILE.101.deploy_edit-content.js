@@ -3,11 +3,13 @@
 ** INCLUDE DEPLOY BUTTON IN CKEDITOR TOOLBAR
 */
 
-import { info_dialog, dropdown_details } from "./deploy_elements.min.js";
+import { dropdown_details } from "./deploy_elements.min.js";
 import { callAPI, handleError } from "./deploy_callAPI.min.js";
 
 const CK_CSS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css";
 const CK_JS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js";
+
+const info_dialog = document.querySelector("dialog.info");
 
 let endpoint, intervalId;
 
@@ -33,7 +35,11 @@ export const init = async (element) => {
     let initialdata, last_update;
     await callAPI(endpoint,'GET')
         .then((data) => {
-            initialdata = "<div class='flow'>" + data.html + "</div>";
+            if (data.html.startsWith('<article class="flow">')) {
+                initialdata = data.html;
+            } else {
+                initialdata = "<article class='flow'>" + data.html + "</article>";
+            }
             last_update = data.last_update;
         })
         .catch((error) => {
@@ -242,7 +248,7 @@ export const init = async (element) => {
 
     /* Put editor status element at end of the toolbar */
     const toolbar_items = document.querySelector(".ck-toolbar__items");
-    toolbar_items.insertAdjacentHTML('afterend','<button type="button" class="button deploy-website">PUBLISH</button><span id="editor-status"></span><section class="dropdown"><details><summary>IMAGES</summary><span>item 1</span></details></section>');
+    toolbar_items.insertAdjacentHTML('afterend','<button type="button" class="button deploy-website">PUBLISH</button><span id="editor-status"></span>');
     
     /* Put Last Update date in editor status element */
     document.querySelector("#editor-status").textContent = last_update;
@@ -285,37 +291,37 @@ const saveData = async ( data, endpoint ) => {
 }
 
 /*
-** USER CLICKS MEDIA BUTTON
+** USER CLICKS MEDIA BUTTON. SHOW LIST OF MEDIA. ALLOW USER T COPY URL AND DELETE.
 */
 const show_media = async () => {
-    
-    const ckeditor = document.querySelector(".ck-toolbar").getBoundingClientRect();
-    const top = ckeditor.top;
-    const right = ckeditor.right + 16;
-    const media = document.querySelector("#media");
-    /*
-    media.style.position = "sticky";
-    media.style.display = "block";
-    media.style.top = "0";
-    media.style.left = right + "px";
-    media.style.width = ckeditor.left - 16 + "px";
-    media.style.maxHeight = "1000px";
-    media.style.overflowY = "auto";
-    media.style.flexBasis = "400px";
-    media.style.flexGrow = "1";
-    media.style.alignSelf = "start";
-
-
-
-    document.querySelector("main").classList.add("flex-items");
-    */
-
-    media.style.width = ckeditor.left - 16 + "px";
-
+    const media = info_dialog.querySelector("article");
     callAPI("cloudinary/:ID/:PAGE","GET","?request=list")
         .then( (data) => {
             media.replaceChildren();
             media.insertAdjacentHTML('afterbegin',data.thumbnails);
+            info_dialog.showModal();
+            media.querySelectorAll(".copy-url").forEach( (button) => {
+                button.addEventListener("click", async (e) => {
+                    const src = e.target.closest("li").querySelector("img").src;
+                    try {
+                        await navigator.clipboard.writeText(src);
+                    } catch (error) {
+                        handleError(error);
+                    }
+                });
+            });
+            media.querySelectorAll(".delete-media").forEach( (button) => {
+                button.addEventListener("click", async (e) => {
+                    const asset = e.target.closest("li");
+                    callAPI("cloudinary/:ID/:PAGE","DELETE",{asset_id:asset.dataset.id})
+                    .then( () => {
+                        asset.remove();
+                    })
+                    .catch((error) => {
+                        handleError(error);
+                    });
+                });
+            });
         })
         .catch((error) => {
             handleError(error);
