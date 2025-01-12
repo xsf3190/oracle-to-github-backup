@@ -159,7 +159,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_session_data session_data_rt;
         l_token APEX_JWT.T_TOKEN;
         l_token_object APEX_JSON.T_VALUES;
-        l_token_hash access_token.token%type;
         l_email users.email%type;
         l_jwt_enc_key user_ords_clients.client_secret%type;
         n PLS_INTEGER;
