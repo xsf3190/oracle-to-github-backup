@@ -68,13 +68,6 @@ const responseok = (response, result) => {
 const callAPI = async (endpoint, method, data) => {
     let url;
 
-    if (!access_token) {
-        access_token = localStorage.getItem("token");
-    }
-    if (!refresh_token) {
-        refresh_token = localStorage.getItem("refresh");
-    }
-
     if (expiredToken(access_token)) {
       if (expiredToken(refresh_token)) {
         forceLogout();
