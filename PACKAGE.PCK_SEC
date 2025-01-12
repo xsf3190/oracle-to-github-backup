@@ -299,7 +299,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     FUNCTION getSessionData(pWebsiteId IN website.id%type) RETURN t_session_data IS
         l_bearer_token VARCHAR2(1000);
         l_token APEX_JWT.T_TOKEN;
-        l_token_hash access_token.token%type;
         l_email users.email%type;
         
         l_JWT_data t_JWT_data;
@@ -309,6 +308,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     BEGIN
         l_bearer_token := SUBSTR(OWA_UTIL.get_cgi_env('Authorization'), 8);
         l_JWT_data:=decodeJWT(l_bearer_token);
+        
 
         /* Check expiry and signature are ok */
         l_token:=apex_jwt.DECODE(p_value => l_bearer_token, p_signature_key => UTL_RAW.cast_to_raw (l_JWT_data.client_secret));
@@ -319,14 +319,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 RAISE_APPLICATION_ERROR(-20000,'token invalid');
         END;
 
-        /* Check that bearer token is an issued access token */
-        IF (l_session_data.valid) THEN
-            l_token_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_bearer_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
-            SELECT COUNT(*) INTO n FROM access_token WHERE token=l_token_hash;
-            IF (n=0) THEN
-                pck_core.log('token not an access token');
-                RAISE_APPLICATION_ERROR(-20000,'token not an access token');
-            END IF;
+        /* Check that bearer token really is an issued access token */
+        IF (l_JWT_data.exp-l_JWT_data.iat>ACCESS_TOKEN_EXP) THEN
+            pck_core.log('token not an access token');
+            RAISE_APPLICATION_ERROR(-20000,'token not an access token');
         END IF;
 
         l_session_data.user_id:=l_JWT_data.jti;
@@ -660,8 +656,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
         );
 
-        INSERT INTO access_token(user_id, token) VALUES (l_user_id, dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256));
-
         l_new_refresh:=apex_jwt.ENCODE (
             p_iss       => l_issuer,
             p_sub       => pEmail,
@@ -841,9 +835,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             p_exp_sec   => ACCESS_TOKEN_EXP,
             p_signature_key => UTL_RAW.cast_to_raw (l_JWT_data.client_secret)
         );
-
-        INSERT INTO access_token(user_id, token) 
-            VALUES (l_JWT_data.jti, dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256));
 
         l_new_refresh:=apex_jwt.ENCODE (
             p_iss       => l_JWT_data.iss,
