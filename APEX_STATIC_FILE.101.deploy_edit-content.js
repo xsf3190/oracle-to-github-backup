@@ -294,9 +294,12 @@ const saveData = async ( data, endpoint ) => {
 ** USER CLICKS MEDIA BUTTON. SHOW LIST OF MEDIA. ALLOW USER T COPY URL AND DELETE.
 */
 const show_media = async () => {
-    const media = info_dialog.querySelector("article");
     callAPI("cloudinary/:ID/:PAGE","GET","?request=list")
         .then( (data) => {
+            const header = info_dialog.querySelector("header>h4");
+            header.textContent = data.heading;
+
+            const media = info_dialog.querySelector("article");
             media.replaceChildren();
             media.insertAdjacentHTML('afterbegin',data.thumbnails);
             info_dialog.showModal();
@@ -342,6 +345,9 @@ const deploy_website = async () => {
             if (intervalId) {
                 clearInterval(intervalId);
             }
+            info_dialog.addEventListener("close", () => {
+                window.location.reload();
+            })
             intervalId = setInterval(getDeploymentStatus,2000);
         })
         .catch((error) => {
@@ -357,6 +363,7 @@ const getDeploymentStatus = () => {
         .then( (data) => {
             if (data.content) {
                 info_dialog.querySelector(".deploy").insertAdjacentHTML('beforeend',data.content);
+                info_dialog.querySelector(".deploy>li:last-child").scrollIntoView();
             }
             if (data.completed) {
                 clearInterval(intervalId);
