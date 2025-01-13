@@ -67,6 +67,10 @@ img {
   margin-inline-start: 1em;
 }
 
+figure.image {
+    margin: auto;
+}
+
 figure.image > img {
   border-bottom-right-radius: 0;
   border-bottom-left-radius: 0;
@@ -269,11 +273,12 @@ main a:hover {
 /* SIMPLE GRID  - DEFAULT IS 2 EQUAL-SIZED COLUMNS WITH NO GAP */
 
 .grid {
+  --grid-gap: var(--space-s);
   display: grid;
   grid-template-columns: var(--grid-template-columns, 1fr 1fr);
   outline: var(--grid-border);
   text-align: var(--text-align, center);
-  gap: var(--space-s);
+  gap: var(--grid-gap);
 }
 
 .grid__auto_fill {
@@ -565,6 +570,10 @@ dialog {
   overflow: hidden;
 }
 
+dialog:not(.login-email) {
+   font-family:georgia,system-ui;
+}
+
 dialog > form {
     display: grid;
     grid-template-rows: auto 1fr auto;
@@ -598,6 +607,32 @@ dialog > form > article {
 
 dialog > form > footer {
     padding-block-end: var(--space-s);
+}
+
+
+/* STYLES FOR OVERLAY COMPONENT */
+
+.overlay {
+  display: grid;
+  grid-template-area: "overlay";
+}
+.overlay img {
+  --aspect-ratio:1;
+  grid-area:overlay;
+  place-self:center;
+  object-fit:cover;
+  inline-size:100%;
+  block-size:100%;
+  aspect-ratio: var(--aspect-ratio);
+}
+.overlay button {
+  grid-area: overlay;
+  place-self: start center;
+  font-size:var(--step--2);
+}
+.overlay button.copied {
+  background-color: white;
+  color: green;
 }
 
 .no-border {
