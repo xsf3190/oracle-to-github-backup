@@ -92,10 +92,7 @@ const createWidget = () => {
             });
             callAPI(endpoint,"PUT",metadata)
                 .then( (data) => {
-                    const article = info_dialog.querySelector("article");
-                    article.replaceChildren();
-                    article.insertAdjacentHTML('afterbegin',data.thumbnails);
-                    info_dialog.showModal();
+                    console.log("Uploaded MEDIA metadata successfully");
                 })
                 .catch((error) => {
                     handleError(error);
