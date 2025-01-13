@@ -148,7 +148,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
-        APEX_JSON.write('thumbnails', pck_media.getThumbnails(pArticleId));
         APEX_JSON.close_object;
 
         pStatus:=200;
@@ -320,7 +319,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
         LOOP
             n:=n+1;
             IF (n=1) THEN
-                l_clob:='<ul role="list" class="grid grid__auto_fill" style="--grid-min-item-size:10cqi;container-type:inline-size">';
+                l_clob:='<ul role="list" class="grid grid__auto_fill" style="--grid-min-item-size:15cqi;--grid-gap:2cqi;container-type:inline-size;max-inline-size:90vw">';
             END IF;
 
             l_media_type:=getMediaType(C.resource_type, C.format);
@@ -334,7 +333,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             END IF;
 
             l_clob:=l_clob ||
-                '<li class="card" data-id="' || C.id || '">' ||
+                '<li class="overlay" data-id="' || C.id || '">' ||
                     '<img draggable="false" data-dimensions="'  || l_dimensions || '" src="' || l_url_image || '"' || CASE WHEN l_media_type='video' THEN ' style="display:none"' END || '>';
 
             CASE l_media_type
@@ -357,9 +356,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
                 ELSE NULL;
             END CASE;    
             l_clob:=l_clob || 
-                '<small>' ||
-                    '<button type="button" class="button copy-url">COPY URL</button><button type="button" class="button delete-media">DELETE</button>' ||
-                '</small>' ||
+                '<button type="button" class="button copy-url">COPY</button>' ||
             '</li>';
         END LOOP;
 
