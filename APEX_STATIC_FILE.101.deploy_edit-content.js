@@ -308,6 +308,14 @@ const show_media = async () => {
                     const src = e.target.closest("li").querySelector("img").src;
                     try {
                         await navigator.clipboard.writeText(src);
+                        media.querySelectorAll(".copied").forEach((copied) => {
+                          copied.textContent = "COPY";
+                          copied.classList.toggle("copied");
+                        });
+                        if (e.target.textContent = "COPY") {
+                          e.target.textContent = "copied";
+                          e.target.classList.toggle("copied");
+                        }
                     } catch (error) {
                         handleError(error);
                     }
