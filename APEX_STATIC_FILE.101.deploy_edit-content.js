@@ -303,6 +303,20 @@ const show_media = async () => {
             media.replaceChildren();
             media.insertAdjacentHTML('afterbegin',data.thumbnails);
             info_dialog.showModal();
+            /*
+            const dialog = info_dialog.getBoundingClientRect();
+            const aside = document.querySelector("aside").getBoundingClientRect();
+
+            console.log("dialog.height:",dialog.height);
+            console.log("aside.bottom:",aside.bottom);
+            console.log("window.innerHeight:",window.innerHeight);
+
+            const top = (window.innerHeight - dialog.height - aside.bottom)*-1;
+            console.log("top",top);
+            
+            info_dialog.style.top = `${top}`+"px";
+            */
+
             media.querySelectorAll(".copy-url").forEach( (button) => {
                 button.addEventListener("click", async (e) => {
                     const src = e.target.closest("li").querySelector("img").src;
@@ -343,6 +357,9 @@ const show_media = async () => {
 ** USER CLICKS DEPLOY BUTTON
 */
 const deploy_website = async () => {
+    if (info_dialog.open) {
+        info_dialog.close();
+    }
     const content = info_dialog.querySelector("article");
     callAPI("deploy-website/:ID","POST",{})
         .then( (data) => {
