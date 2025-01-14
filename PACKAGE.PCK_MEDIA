@@ -48,7 +48,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
                 APEX_JSON.open_object; 
                 APEX_JSON.write('success', TRUE);
                 APEX_JSON.write('thumbnails', pck_media.getThumbnails(pArticleId));
-                APEX_JSON.write('heading','Copy URL of image to include in Editor');
+                APEX_JSON.write('heading','Copy image URL');
                 APEX_JSON.close_object;
         END CASE;
 
@@ -319,7 +319,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
         LOOP
             n:=n+1;
             IF (n=1) THEN
-                l_clob:='<ul role="list" class="grid grid__auto_fill" style="--grid-min-item-size:15cqi;--grid-gap:2cqi;container-type:inline-size;max-inline-size:90vw">';
+                l_clob:='<ul role="list" class="carousel">';
             END IF;
 
             l_media_type:=getMediaType(C.resource_type, C.format);
@@ -361,7 +361,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
         END LOOP;
 
         IF (n=0) THEN
-            l_clob:='<p class="align-center">Use Upload Media option from main menu</p>';
+            l_clob:=
+                '<p class="align-center">NO IMAGES UPLOADED FOR THIS PAGE</p>' ||
+                '<p class="align-center">Use Upload Media option from hamburger menu</p>';
         END IF;
 
         RETURN (l_clob);
