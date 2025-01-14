@@ -535,7 +535,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         RETURN(
             '<dialog class="info">' ||
                 '<form>' ||
-                    '<header class="flex-items space-between">' ||
+                    '<header class="flex-items space-between no-wrap">' ||
                         '<h4></h4>' ||
                         '<button type="button" class="button close no-focus" data-button-variant="round-icon">' ||
                             '<svg class="icon" aria-hidden="true" focusable="false">' ||
