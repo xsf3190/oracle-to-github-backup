@@ -71,15 +71,6 @@ figure.image {
     margin: auto;
 }
 
-figure.image > img {
-  border-bottom-right-radius: 0;
-  border-bottom-left-radius: 0;
-}
-
-figure.image + p:first-of-type {
-  margin-block-start: 0;
-}
-
 .image>figcaption {
   background-color: #f7f7f7;
   font-size: var(--step--2);
@@ -435,6 +426,10 @@ form textarea {
 .no-gap {
   --flex-gap: 0;
 }
+.no-wrap {
+    flex-wrap: no-wrap;
+}
+
 [data-variant-flex="column"] {
   --flex-direction: column;
   --flex-vertical-alignment: flex-start;
@@ -633,6 +628,26 @@ dialog > form > footer {
 .overlay button.copied {
   background-color: white;
   color: green;
+}
+
+/* STYLES FOR CAROUSEL COMPONENT */
+
+.carousel {
+  container-type: inline-size;
+  display: flex;
+  block-size: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block-end: 1rem;
+  scrollbar-color: var(--color-primary) var(--color-primary-lightest);
+}
+
+.carousel > * {
+  flex: 0 0 7rem;
+}
+
+.carousel > * + * {
+  margin-inline-start: 1rem;
 }
 
 .no-border {
