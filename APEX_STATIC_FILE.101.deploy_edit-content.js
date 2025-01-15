@@ -183,12 +183,13 @@ export const init = async (element) => {
         case 'owner':
             editor = await ClassicEditor.create( document.querySelector( '#editor' ), {
                 plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard,
-                           Deploy, GeneralHtmlSupport, Heading, HorizontalLine, 
+                           Deploy, GeneralHtmlSupport, Heading, HorizontalLine,
+                           Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl,  
                            Italic, Link, List, Media, Paragraph, 
                            Underline, WordCount ],
                 toolbar: [ 'heading', '|', 'undo', 'redo', '|', 'horizontalLine', 'bold', 'italic',
                            'underline', 'alignment', 'link', 
-                           'bulletedList', 'numberedList', 'blockQuote', '|', 'media'],
+                           'bulletedList', 'numberedList', 'blockQuote', 'insertImage', '|', 'media'],
                 initialData: initialdata,
                 alignment: {
                   options: [
@@ -220,6 +221,21 @@ export const init = async (element) => {
                     startIndex: true,
                     reversed: true
                   }
+                },
+                image: {
+                  insert: {
+                    type: 'auto',
+                    integrations: ['url']
+                  },
+                  toolbar: [
+                    'imageStyle:inline',
+                    'imageStyle:block',
+                    '|',
+                    'imageStyle:wrapText',
+                    '|',
+                    'toggleImageCaption',
+                    'imageTextAlternative',
+                  ]
                 },
                 placeholder: 'Enter content',
                 title: {
