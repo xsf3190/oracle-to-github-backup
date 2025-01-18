@@ -1,15 +1,8 @@
-/*
-** MAIN JAVASCRIPT MODULE ALWAYS LOADED ON CONNECTION TO WEBSITE
-*/
+import "./deploy_metric.min.js";
 
-import { dropdown, login_dialog } from "./deploy_elements.min.js";
+import { dropdown } from "./deploy_elements.min.js";
 
-/*
-** LOGIN DIALOG IS INCLUDED IN DOWNLOADED WEBSITE DOCUMENT
-*/
-login_dialog.querySelector("button.close").addEventListener("click", () => {
-    login_dialog.close();
-})
+
 
 /*
 ** SET DROPDOWN ELEMENTS IF REFRESH TOKEN EXISTS
@@ -21,7 +14,7 @@ if (localStorage.getItem("refresh")) {
         })
         .catch((error) => {
             console.error(error);
-            console.error("Failed to load JS module deploy_menulist.");
+            console.error("Failed to load deploy_menulist.min.js");
         });
 }
 
