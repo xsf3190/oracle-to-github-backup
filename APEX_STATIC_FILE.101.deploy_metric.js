@@ -1,4 +1,11 @@
 /*
+** IMPORT SELF-HOSTED CWV MODULE FUNCTIONS
+*/
+import {onLCP, onINP, onCLS} from './deploy_web_vitals.min.js';
+
+import { bodydata } from "./deploy_elements.min.js";
+
+/*
 ** SETUP COLLECTION OF METRICS. 
 */
 if (!sessionStorage.getItem("website_loaded")) {
@@ -22,10 +29,9 @@ const flushQueues = () => {
     /* This would happen if user manually clears sessionStorage for example */
     if (website_loaded === 0) return; 
 
-    const data = document.body.dataset;
     const json = {};
-    json["website_id"] = data.websiteid;
-    json["article_id"] = data.articleid;
+    json["website_id"] = bodydata.websiteid;
+    json["article_id"] = bodydata.articleid;
     json["website_loaded"] = Number(sessionStorage.getItem("website_loaded"));
     json["seq"] = page_visit;
     if (page_loaded !== 0) {
@@ -56,7 +62,7 @@ const flushQueues = () => {
 
     const body = JSON.stringify(json);
     page_visit++;
-    (navigator.sendBeacon && navigator.sendBeacon(data.resturl+"page-visit", body)) || fetch(visit_url, {body, method: 'POST', keepalive: true});
+    (navigator.sendBeacon && navigator.sendBeacon(bodydata.resturl+"page-visit", body)) || fetch(visit_url, {body, method: 'POST', keepalive: true});
 
 
     /* Send any media performance metrics */
@@ -117,10 +123,6 @@ const preloadImage = (img) => {
   img.src = src;
 };
 
-/*
-** IMPORT OUR PRIVATELY HOSTED CWV MODULE
-*/
-import {onLCP, onINP, onCLS} from '/web-vitals.js';
 onCLS(addToVitalsQueue);
 onLCP(addToVitalsQueue);
 onINP(addToVitalsQueue);
