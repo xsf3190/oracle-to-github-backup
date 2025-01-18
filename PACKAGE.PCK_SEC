@@ -468,11 +468,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     /*
     ** BUILD LIST OF MENU ITEMS FOR GIVEN SCOPE, I.E ROLE
     */
-    FUNCTION getMenulist(pWebsiteId IN website.id%type, pScope IN VARCHAR2) RETURN VARCHAR2 IS
+    FUNCTION getMenulist(pWebsiteId IN website.id%type, pScope IN VARCHAR2, pUrl IN VARCHAR2) RETURN VARCHAR2 IS
         l_menulist LONG;
         l_reports LONG;
+        l_publish BOOLEAN:=FALSE;
         n PLS_INTEGER;
     BEGIN
+        IF (INSTR(pUrl,'netlify.app')>0) THEN
+            l_publish:=TRUE;
+        ELSE
+            FOR C IN (SELECT CASE WHEN netlify_site_id_custom IS NOT NULL AND NVL(netlify_last_published_custom,created_date) < netlify_last_published THEN 'OK'  END can_publish
+                        FROM website
+                       WHERE id=pWebsiteId)
+            LOOP
+                IF (C.can_publish='OK') THEN
+                    l_publish:=TRUE;
+                END IF;
+            END LOOP;
+        END IF;
+
         refreshOrdsEndpoints;
 
         FOR C IN (
@@ -617,7 +631,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
-        APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_session_data.scope));
+        APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_session_data.scope, l_session_data.url));
         APEX_JSON.write ('dialogs', buildContentDialog || buildInfoDialog || buildMessageDialog || buildErrorDialog);
         APEX_JSON.close_object;
 
@@ -670,7 +684,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('token', l_new_token);
         APEX_JSON.write ('refresh', l_new_refresh);
-        APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_scope));
+        APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_scope, OWA_UTIL.get_cgi_env('url')));
         APEX_JSON.write ('dialogs',  buildContentDialog || buildInfoDialog || buildMessageDialog || buildErrorDialog);
         APEX_JSON.close_object;
     END;
