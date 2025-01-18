@@ -7,3 +7,7 @@ export const expires = dropdown.querySelector(".expires");
 export const login_btn = dropdown.querySelector(".login-btn");
 export const menulist = dropdown.querySelector(".menulist");
 export const login_dialog = document.querySelector("dialog.login-email");
+
+login_dialog.querySelector("button.close").addEventListener("click", () => {
+    login_dialog.close();
+})
