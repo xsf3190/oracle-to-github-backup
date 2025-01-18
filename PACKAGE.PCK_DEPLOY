@@ -271,8 +271,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         
         FOR i IN 1..l_labels.COUNT LOOP
             
-            apex_string.push(l_labels(i).modules,'web-vitals.js'); /* already inified from google download */
-            apex_string.push(l_labels(i).modules,'deploy_metric.min.js');
+            --apex_string.push(l_labels(i).modules,'web-vitals.js'); /* already inified from google download */
+            --apex_string.push(l_labels(i).modules,'deploy_metric.min.js');
             apex_string.push(l_labels(i).modules,'deploy_main.min.js');
 
             IF (l_labels(i).collection_type='BLOG') THEN
@@ -464,6 +464,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END LOOP;
 
         /* Utility javascript modules */
+        l_jscode.EXTEND();
+        l_jscode(l_jscode.LAST):='deploy_web_vitals.min.js';
+        l_jscode.EXTEND();
+        l_jscode(l_jscode.LAST):='deploy_metric.min.js';
         l_jscode.EXTEND();
         l_jscode(l_jscode.LAST):='deploy_elements.min.js';
         l_jscode.EXTEND();
