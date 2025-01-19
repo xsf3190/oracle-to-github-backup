@@ -372,12 +372,12 @@ const show_media = async () => {
 /*
 ** USER CLICKS DEPLOY BUTTON
 */
-const deploy_website = async () => {
+export const deploy_website = async () => {
     if (info_dialog.open) {
         info_dialog.close();
     }
     const content = info_dialog.querySelector("article");
-    callAPI("deploy-website/:ID","POST",{})
+    callAPI("publish-website/:ID","POST",{})
         .then( (data) => {
             content.replaceChildren();
             content.insertAdjacentHTML('afterbegin',data.content);
@@ -400,7 +400,7 @@ const deploy_website = async () => {
 ** SHOW NETLIFY DEPLOYMENT PROGRESS
 */
 const getDeploymentStatus = () => {
-    callAPI("deploy-website/:ID","GET")
+    callAPI("publish-website/:ID","GET")
         .then( (data) => {
             if (data.content) {
                 info_dialog.querySelector(".deploy").insertAdjacentHTML('beforeend',data.content);
