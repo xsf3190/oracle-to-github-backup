@@ -230,12 +230,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     ** TEMPORARY SOLUTION TO POPULATE ENDPOINT TABLES
     */
     PROCEDURE refreshOrdsEndpoints IS 
+        n pls_integer;
     BEGIN
         DELETE api_endpoint;
         DELETE ords_endpoints;
 
-        INSERT INTO ords_endpoints (template_id, uri_template, method, label)
-        SELECT t.id template_id, t.uri_template, MIN(h.method) as method, NVL(t.comments,h.comments) as label
+        INSERT INTO ords_endpoints (template_id, uri_template, method, label, priority)
+        SELECT t.id template_id, t.uri_template, MIN(h.method) as method, NVL(t.comments,h.comments) as label, t.priority
           FROM user_ords_modules m, user_ords_templates t, user_ords_handlers h, user_ords_parameters p
          WHERE m.name='public'
            AND m.id=t.module_id
@@ -243,7 +244,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
            AND h.id=p.handler_id
            AND NVL(t.comments,h.comments) IS NOT NULL
            AND p.name='X-ORDS-STATUS-CODE'
-          GROUP BY t.id, t.uri_template, NVL(t.comments,h.comments);
+          GROUP BY t.id, t.uri_template, NVL(t.comments,h.comments), t.priority;
+        n:=sql%rowcount;
+        pck_core.log('ords_endpoints:'||n);
 
         DELETE website_role;
         
@@ -252,22 +255,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         select w.id, r.id
         from website w, role r
         where r.name in ('admin','owner');
+        n:=sql%rowcount;
+        pck_core.log('website_role:'||n);
+
 
         insert into api_endpoint(website_id, role_id, template_id)
         select w.id, r.id, o.template_id 
         from website w, role r, ords_endpoints o
         where r.name in ('admin','owner');
+        n:=sql%rowcount;
+        pck_core.log('api_endpoint:'||n);
+
 
         insert into website_role(website_id, role_id)
         select w.id, r.id
         from website w, role r
         where r.name='visitor';
+        n:=sql%rowcount;
+        pck_core.log('website_role:'||n);
 
         insert into api_endpoint(website_id, role_id, template_id)
         select w.id, r.id, o.template_id 
         from website w, role r, ords_endpoints o
         where r.name='visitor'
          and (INSTR(o.uri_template,'message')>0 or INSTR(o.uri_template,'authenticate')>0);
+         n:=sql%rowcount;
+        pck_core.log('api_endpoint:'||n);
+
     END;
 
     /*
@@ -466,15 +480,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     END;
 
     /*
-    ** BUILD LIST OF MENU ITEMS FOR GIVEN SCOPE, I.E ROLE
+    ** BUILD LIST OF MENU ITEMS FOR GIVEN SCOPE AND URL
     */
     FUNCTION getMenulist(pWebsiteId IN website.id%type, pScope IN VARCHAR2, pUrl IN VARCHAR2) RETURN VARCHAR2 IS
         l_menulist LONG;
         l_reports LONG;
+        l_test_site BOOLEAN:=FALSE;
         l_publish BOOLEAN:=FALSE;
         n PLS_INTEGER;
+
+        FUNCTION addButton(pUriTemplate IN VARCHAR2, pMethod IN VARCHAR2, pLabel IN VARCHAR2) RETURN VARCHAR2 IS
+        BEGIN
+            RETURN ('<li><button type="button" data-endpoint="' || pUriTemplate || '" data-method="' ||pMethod || '" data-reports="' || l_reports || '" class="button">' || pLabel || '</button></li>');
+        END;
+
     BEGIN
+        /*
+        ** ENABLE ALL EDITING AND REPORTING FUNCTIONS ON TEST SITE 
+        ** ENABLE REPORTING AND PUBLISH (IF QUALIFYING) ON LIVE SITE 
+        */
         IF (INSTR(pUrl,'netlify.app')>0) THEN
+            l_test_site:=TRUE;
             l_publish:=TRUE;
         ELSE
             FOR C IN (SELECT CASE WHEN netlify_site_id_custom IS NOT NULL AND NVL(netlify_last_published_custom,created_date) < netlify_last_published THEN 'OK'  END can_publish
@@ -490,7 +516,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         refreshOrdsEndpoints;
 
         FOR C IN (
-            SELECT o.label, o.uri_template, o.method
+            SELECT o.label, o.uri_template, o.method, o.priority
               FROM api_endpoint a, role r, ords_endpoints o
              WHERE a.website_id=pWebsiteId 
                AND a.role_id=r.id 
@@ -511,7 +537,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                     END IF;
                 END IF;
             END IF;
-            l_menulist:=l_menulist || '<li><button type="button" data-endpoint="' || C.uri_template || '" data-method="' || C.method || '" data-reports="' || l_reports || '" class="button">' || C.label || '</button></li>';
+            IF (l_test_site) THEN
+                l_menulist:=l_menulist || addButton(C.uri_template, C.method, C.label);
+            ELSIF (C.priority=1) THEN
+                IF (INSTR(C.uri_template,'publish-website')>0 AND NOT l_publish) THEN
+                    CONTINUE;
+                ELSE
+                   l_menulist:=l_menulist || addButton(C.uri_template, C.method, C.label);
+                END IF;
+            END IF;
         END LOOP;
         RETURN (l_menulist);
     END;
