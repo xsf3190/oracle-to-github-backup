@@ -3,7 +3,6 @@ import "./deploy_metric.min.js";
 import { dropdown } from "./deploy_elements.min.js";
 
 
-
 /*
 ** SET DROPDOWN ELEMENTS IF REFRESH TOKEN EXISTS
 */
@@ -24,8 +23,13 @@ if (localStorage.getItem("refresh")) {
 dropdown.addEventListener("click", async (e) => {
     const module_name = e.target.dataset.endpoint;
     if (!module_name) return;
-    import("./deploy_" + module_name.substring(0,module_name.indexOf("/")) + ".min.js")
+    const import_module_name = "./deploy_" + module_name.substring(0,module_name.indexOf("/")) + ".min.js";
+    import(import_module_name)
         .then((module) => {
             module.init(e.target);
+        })
+        .catch((error) => {
+            console.error(error);
+            console.error("Failed to load " + import_module_name);
         });
 })
