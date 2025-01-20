@@ -50,7 +50,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
            AND a.template_id=o.template_id;
         
         l_html:=
-            '<aside class="login align-end">' ||
+            '<aside class="login align-end" aria-label="Actions Menu">' ||
               '<section class="dropdown">' ||
                 '<details>' ||
                   '<summary>' ||
@@ -169,7 +169,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                             '<span class="passcode-result"></span>' ||
                         '</div>' ||
                     '</article>' ||
-                    '<footer class="flex-items">' ||
+                    '<footer class="flex-items space-apart">' ||
                         '<button class="button sendmail-magic" type="button">Send a Link</button>' ||
                         '<button class="button sendmail-passcode" type="button">Send a Code</button>' ||
                         '<button class="button validate-passcode visually-hidden" type="button">Submit Passcode</button>' ||
