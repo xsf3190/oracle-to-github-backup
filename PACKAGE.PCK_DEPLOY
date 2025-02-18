@@ -161,6 +161,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_login_form website.login_form%type;
         l_favicon_url VARCHAR2(250);
         l_favicon_download BLOB;
+        l_content CLOB;
         l_text CLOB;
         l_chars VARCHAR2(256):=' ';
         l_char VARCHAR2(4);
@@ -189,7 +190,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             contact_form website_article.contact_form%type,
             lastmod article.updated_date%type,
             word_count article.word_count%type, 
-            header website.footer%type,
+            title website.title%type,
+            subtitle website.subtitle%type,
+            header_effect website.header_effect%type,
+            hero_asset_id website.hero_asset_id%type,
+            promotion website.promotion%type,
             body_html article.body_html%type,
             footer website.footer%type,
             modules apex_t_varchar2
@@ -243,17 +248,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /*
         ** Get all website content into collection
         */
-        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count,  header, body_html, footer, apex_t_varchar2()
+        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count, title, subtitle, header_effect, hero_asset_id, promotion, body_html, footer, apex_t_varchar2()
           BULK COLLECT INTO l_labels
           FROM
           (
-        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.display_order, a.updated_date lastmod, a.word_count, w.header, a.body_html body_html, w.footer
+        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.display_order, NVL(a.updated_date,a.created_date) lastmod, a.word_count, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html body_html, w.footer
           FROM website w, website_article wa, article a
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
            AND wa.article_id=a.id
          UNION ALL
-        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001), a.updated_date lastmod, a.word_count, w.header, a.body_html, w.footer
+        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001),  NVL(a.updated_date,a.created_date) lastmod, a.word_count, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.footer
           FROM website w, website_article wa, article a 
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
@@ -264,6 +269,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
+
+        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM api_endpoint WHERE website_id=pWebsiteId);
+        IF (n=0) THEN
+            pck_sec.refreshOrdsEndpoints;
+        END IF;
 
         /* Get URL of site to be deployed */
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId, pMethod=>'GET', pData=>l_clob);
@@ -292,8 +302,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 apex_string.push(l_labels(i).modules,'deploy_contact.min.js');
             END IF;
 
-            
-
             pck_codepen.buildBodyHtml(
                 pUserId, 
                 pWebsiteId, 
@@ -303,8 +311,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_labels(i).collection_type, 
                 l_is_media, 
                 l_labels(i).contact_form, 
-                l_login_form, 
-                l_labels(i).header, 
+                l_labels(i).title,
+                l_labels(i).subtitle,
+                l_labels(i).header_effect,
+                l_labels(i).hero_asset_id,
+                l_labels(i).promotion,
                 l_labels(i).footer, 
                 l_labels(i).body_html
             );
@@ -389,7 +400,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<title>' || l_labels(i).page_title || '</title>' ||
                     '<meta name="description" content="' || l_labels(i).page_description || '">' ||
                     '<meta name="author" content="mark.russellbrown@gmail.com">' ||
-                    '<meta name="view-transition" content="same-origin">' ||
                     '<link rel="preload" as="font" href="/' || l_font_filename || '" crossorigin>' ||
                     l_module_html ||
                     l_script_html ||
@@ -449,8 +459,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_content:=l_style;
         l_files.put('website.css', l_sha1);
 
-        pck_sec.refreshOrdsEndpoints;
-
         FOR C IN (
             SELECT o.uri_template
               FROM api_endpoint a, role r, ords_endpoints o
@@ -505,24 +513,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_name:=l_font_filename;
         l_deploy_files(l_sha1).file_content_b:=l_font_download;
         l_files.put(l_font_filename, l_sha1);
-
-        /* adfreesites.com is the domain registered with AWS  SES for sending emails to website clients. All favicons included in emails must be hosted at adfreesites to avoid rejections */
-        IF (INSTR(l_ssl_url,'adfreesites')>0) THEN
-            logDeployment(pWebsiteId, pSiteId, 'Building website favicons to be sent in branded emails from adfreesites.com');
-            FOR C IN (SELECT w.id, w.domain_name, a.cld_cloud_name, a.resource_type, a.public_id, a.format 
-                        FROM website w, asset a
-                       WHERE w.favicon_asset_id=a.id) 
-            LOOP
-                logDeployment(pWebsiteId, pSiteId, 'Building favicon for ' || C.domain_name);
-                l_favicon_url:=pck_media.getCloudinaryUrl(C.cld_cloud_name,C.resource_type,C.public_id,C.format, 96) || '.png';
-                apex_web_service.clear_request_headers;
-                l_favicon_download:=apex_web_service.make_rest_request_b(p_url=>l_favicon_url, p_http_method=>'GET');
-                l_sha1:=LOWER(dbms_crypto.hash(src => l_favicon_download, typ => dbms_crypto.hash_sh1));
-                l_deploy_files(l_sha1).file_name:='favicon.' || C.id || '.png';
-                l_deploy_files(l_sha1).file_content_b:=l_favicon_download;
-                l_files.put('favicon.' || C.id || '.png', l_sha1);
-            END LOOP;
-        END IF;
 
         l_json.put('files',l_files);
 
