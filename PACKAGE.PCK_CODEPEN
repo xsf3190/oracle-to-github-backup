@@ -13,8 +13,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
         pCollectionType IN website_article.collection_type%type, 
         pIsMedia IN BOOLEAN, 
         pContactForm IN website_article.contact_form%type, 
-        pLoginForm IN website.login_form%type, 
-        pHeader IN CLOB, 
+        pTitle website.title%type,
+        pSubtitle website.subtitle%type,
+        pHeaderEffect website.header_effect%type,
+        pHeroAssetId website.hero_asset_id%type,
+        pPromotion website.promotion%type,
         pFooter IN CLOB, 
         pHtml IN OUt NOCOPY CLOB
     );
@@ -74,7 +77,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
     
 
-    FUNCTION buildNavLabels(pArticleId IN article.id%type) RETURN VARCHAR2 IS
+    FUNCTION buildNavLabels(pWebsiteId IN website.id%type, pArticleId IN article.id%type) RETURN VARCHAR2 IS
         l_nav_labels LONG;
         l_article_id article.id%type;
     BEGIN
@@ -87,23 +90,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         IF (l_article_id IS NULL) THEN
             SELECT parent_id INTO l_article_id FROM article WHERE id=pArticleId;
         END IF;
+
+        l_nav_labels:=
+            '<nav class="flex-items space-between" aria-label="Main Navigation">' ||
+                '<span class="logo"></span>';
         IF (g_nav_labels.COUNT>1) THEN
             FOR i IN 1..g_nav_labels.COUNT LOOP
                 IF (i=1) THEN
-                    l_nav_labels:=
-                    '<nav class="section" aria-label="Main Navigation">';
-                    l_nav_labels:=l_nav_labels || 
-                        '<div class="section__inner flex-items space-around">';
+                    l_nav_labels:=l_nav_labels ||
+                    '<div>';
                 END IF;
                 l_nav_labels:=l_nav_labels || 
-                    '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '" class="button" data-button-variant="nav-item"' || 
+                    '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '"' ||
                         CASE WHEN g_nav_labels(i).article_id=l_article_id THEN ' aria-current="page"' END  || 
                         ' data-id="' || g_nav_labels(i).article_id || '">' || g_nav_labels(i).navigation_label || '</a>';
                 IF (i=g_nav_labels.COUNT) THEN
-                    l_nav_labels:=l_nav_labels || '</div>' || g_CURVE || '</nav>';
+                    l_nav_labels:=l_nav_labels || 
+                    '</div>';
                 END IF;
             END LOOP;
         END IF;
+        l_nav_labels:=l_nav_labels || buildLoginAside(pWebsiteId) ||
+            '</nav>';
 
         RETURN (l_nav_labels);
     END;
@@ -165,7 +173,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                         '</div>' ||
                         '<div class="visually-hidden">' ||
                             '<label for="passcodeInput">Enter Passcode</label>' ||
-                            '<input type="text" id="passcodeInput" name="passcode" pattern="\d{6}" title="6 digit passcode">' ||
+                            '<input type="text" id="passcodeInput" name="passcode" pattern="\d{6}" inputmode="numeric" maxlength="6" autocomplete="6-digit-passcode">' ||
                             '<span class="passcode-result"></span>' ||
                         '</div>' ||
                     '</article>' ||
@@ -198,8 +206,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         pCollectionType IN website_article.collection_type%type, 
         pIsMedia IN BOOLEAN, 
         pContactForm IN website_article.contact_form%type, 
-        pLoginForm IN website.login_form%type, 
-        pHeader IN CLOB, 
+        pTitle website.title%type,
+        pSubtitle website.subtitle%type,
+        pHeaderEffect website.header_effect%type,
+        pHeroAssetId website.hero_asset_id%type,
+        pPromotion website.promotion%type,
         pFooter IN CLOB, 
         pHtml IN OUt NOCOPY CLOB) 
     IS
@@ -255,15 +266,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Remove empty elements */
         pHtml:=REPLACE(pHtml,'<h1>&nbsp;</h1>',null);
         pHtml:=REPLACE(pHtml,'<p>&nbsp;</p>',null);
-
-        /* <article> signifies start of page section - insert svg to show curved sections */
-        --pHtml:=REPLACE(pHtml,'<article',g_curve || '<article');
-
-        /* Remove any inline styles - pages are deployed with strict Content Security policy */
-        --pHtml:=REGEXP_REPLACE(pHtml,' style="[^"]*"');
-
-        /* Construct start of <main> element */
-        --pHtml:='<main class="content-grid">' || pHtml;
     
         /* Build index if page is index of Blog / Media / Product */
         IF (pCollectionType='BLOG') THEN
@@ -298,34 +300,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         ** All images lazy loaded except first
         */
         n:=regexp_count(pHtml,'<img');
-        IF (n>1) THEN
-            FOR i IN 2..n 
-            LOOP
+        FOR i IN 1..n 
+        LOOP
+            IF (i=1) THEN
+                pHtml:=REGEXP_REPLACE(pHtml,'<img', '<img loading="eager" fetchpriority="high"',1,i);
+            ELSE
                 pHtml:=REGEXP_REPLACE(pHtml,'<img', '<img loading="lazy"',1,i);
-            END LOOP;
-        END IF;
+            END IF;
+        END LOOP;
 
         nb_articles:=MOD(regexp_count(pHtml,'<article'),2);
 
         /* 
         ** Build website header 
         */
-        l_header:='<header class="section">';
-        IF (pHeader IS NULL) THEN
-            l_header:=l_header || '<div class="section__inner">';
-            IF (pLoginForm='YES') THEN 
-                l_header:=l_header || buildLoginAside(pWebsiteId);
+        IF (pHeroAssetId IS NULL) THEN
+            l_header:=
+            '<header>' ||
+                '<div class="flow enclosure wrapper spaced-letters align-center">' ||
+                    '<h1>' || pTitle || '</h1>' ||
+                    CASE WHEN pSubtitle IS NOT NULL THEN '<p>' || pSubtitle || '</p>' END ||
+                '</div>' ||
+            '</header>';
+            IF (pHeaderEffect='curve') THEN
+                l_header:=l_header || g_curve;
             END IF;
-            l_header:=l_header || '</div>';
         ELSE
-            IF (pLoginForm='YES') THEN 
-                l_header:=l_header || REPLACE(pHeader,'<div class="section__inner">','<div class="section__inner">' || buildLoginAside(pWebsiteId) );
-            ELSE
-                l_header:=l_header || pHeader;
-            END IF;
+            l_header:=
+            '<header>' ||
+                '<div class="hero">' ||
+                    pck_media.getImageSrcset(pHeroAssetId) ||
+                    CASE WHEN pTitle IS NOT NULL THEN '<h1>' || pTitle || '</h1>' END ||
+                    CASE WHEN pSubtitle IS NOT NULL THEN '<p>' || pSubtitle || '</p>' END ||
+                '</div>' || 
+            '</header>';
         END IF;
-        
-        l_header:=l_header || '</header>';
 
         /* 
         ** Build website footer 
@@ -335,13 +344,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* 
         ** Assemble content part of document 
         */
-        pHtml:=l_header || 
-               buildNavLabels(pArticleId) || 
-               '<main class="wrapper flow">' || 
-                '<div id="editor"></div>' ||
-                    pHtml  || 
-               '</main>' || 
-               l_footer;
+        pHtml:=buildNavLabels(pWebsiteId,pArticleId) || 
+            l_header || 
+           '<main class="wrapper flow">' || 
+            '<div id="editor"></div>' ||
+                pHtml  || 
+                pPromotion ||
+           '</main>' || 
+           l_footer;
 
         /* 
         ** Append any Dialog elements
@@ -385,12 +395,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         
         l_domain_name website.domain_name%type;
         l_contact_form website_article.contact_form%type;
-        l_login_form website.login_form%type; 
         l_collection_type website_article.collection_type%type;
         l_is_blog BOOLEAN:=FALSE;
         l_is_media BOOLEAN:=FALSE;
         l_html CLOB;
-        l_header CLOB;
+        l_title website.title%type;
+        l_subtitle website.subtitle%type;
+        l_header_effect website.header_effect%type;
+        l_hero_asset_id website.hero_asset_id%type;
+        l_promotion website.promotion%type;
         l_footer CLOB;
         l_css CLOB;
         l_javascript CLOB;
@@ -435,14 +448,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Get page content */
 
         IF (l_is_blog OR l_is_media) THEN
-            SELECT w.domain_name, w.header, a.body_html, w.footer, w.login_form,  null, null
-              INTO l_domain_name, l_header, l_html, l_footer, l_login_form, l_contact_form, l_collection_type
+            SELECT w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.footer, null,null
+              INTO l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_footer, l_contact_form, l_collection_type
               FROM website w, article a
              WHERE w.id=l_website_id
                AND a.id=pArticleId;
         ELSE
-            SELECT w.domain_name, w.header, a.body_html, w.footer, w.login_form, wa.contact_form, wa.collection_type
-              INTO l_domain_name, l_header, l_html, l_footer, l_login_form, l_contact_form, l_collection_type
+            SELECT w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.footer, wa.contact_form, wa.collection_type
+              INTO l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_footer, l_contact_form, l_collection_type
               FROM website w, website_article wa, article a
              WHERE w.id=l_website_id
                AND wa.website_id=w.id
@@ -459,8 +472,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             l_collection_type, 
             l_is_media, 
             l_contact_form, 
-            l_login_form,
-            l_header, 
+            l_title, 
+            l_subtitle, 
+            l_header_effect,
+            l_hero_asset_id,
+            l_promotion,
             l_footer, 
             l_html);
 
