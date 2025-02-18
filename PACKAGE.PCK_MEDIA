@@ -4,6 +4,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_MEDIA" IS
     --
     FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
     --
+    FUNCTION getImageSrcset(pAssetId IN asset.id%type, pFullWidth IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2;
+    --
     FUNCTION getThumbnails(pArticleId IN article.id%type) RETURN CLOB;
     --
     PROCEDURE getThumbnails(pArticleId IN article.id%type, pDeploy IN BOOLEAN DEFAULT FALSE, pHTML IN OUT NOCOPY CLOB);
@@ -367,6 +369,52 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
         END IF;
 
         RETURN (l_clob);
+    END;
+
+    /*
+     **  Build gallery of thumbnail images for a given article
+     */
+    FUNCTION getImageSrcset(pAssetId IN asset.id%type, pFullWidth IN BOOLEAN) RETURN VARCHAR2
+    IS
+        l_img_html VARCHAR2(1000);
+        l_img_src VARCHAR2(200);
+        l_sizes VARCHAR2(500);
+        l_image_width PLS_INTEGER:=gWidthThumbnail;
+        n PLS_INTEGER:=gWidthThumbnail;
+        done BOOLEAN:=FALSE;
+    BEGIN
+        FOR C IN (
+            SELECT cld_cloud_name, resource_type, public_id, width, height
+              FROM asset
+             WHERE id=pAssetId )
+        LOOP
+            l_img_html:=
+            '<img draggable="false" style="margin-inline:auto;border-radius:initial"';
+
+            WHILE NOT done LOOP
+                l_img_src:='https://res.cloudinary.com/' || C.cld_cloud_name || CASE WHEN l_image_width>C.width THEN '/e_upscale' END || '/f_auto,q_auto,w_' || l_image_width || '/' || C.public_id;
+                IF (l_image_width=gWidthThumbnail) THEN
+                    l_img_html:=l_img_html || ' src="' || l_img_src || '"';
+                    l_img_html:=l_img_html || ' srcset="';
+                END IF;
+                l_img_html:=l_img_html || l_img_src || ' ' || l_image_width || 'w,';
+                n:=l_image_width+gWidthThumbnail;
+                IF (NOT pFullWidth) THEN
+                    l_sizes:=l_sizes || '(max-width: ' || n || 'px) ' || l_image_width || 'px,';
+                END IF;
+                l_image_width:=l_image_width + gWidthThumbnail;
+                done:=(n=1800 OR l_image_width>C.width);
+            END LOOP;
+
+            IF (pFullWidth) THEN
+                l_img_html:=RTRIM(l_img_html,',') || '" sizes="100vw">';
+            ELSE
+                l_img_html:=RTRIM(l_img_html,',') || '" sizes="' || l_sizes || C.width || 'px">';
+            END IF;
+
+        END LOOP;
+
+        RETURN (l_img_html);
     END;
 
 END;
