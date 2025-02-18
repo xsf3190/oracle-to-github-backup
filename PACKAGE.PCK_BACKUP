@@ -10,18 +10,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     */ 
     PROCEDURE datapump_backup(p_repo IN OUT NOCOPY CLOB) IS
         h1 NUMBER;
-        
-        TYPE t_admin_user IS RECORD(
-            id users.id%type,
-            email users.email%type);
-        TYPE tt_admin_user IS TABLE OF t_admin_user;
-        l_admin_users tt_admin_user; 
-
+        l_email users.email%type;
         l_schema VARCHAR2(30):=sys_context('userenv','current_schema');
         l_filename VARCHAR2(60);
         l_schema_size NUMBER;
         l_status varchar2(4000);
-        l_password users.export_pw%type;
+        l_client_secret user_ords_clients.client_secret%type;
         l_json JSON_OBJECT_T;
         l_payload CLOB;
         l_clob CLOB;
@@ -65,6 +59,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         ** Delete any files left over from previous operation to avoid ora-39001  
         */
         FOR C IN (SELECT object_name FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR')) LOOP
+            pck_core.log('File in DATA_PUMP_DIR:'||C.object_name);
             DBMS_CLOUD.DELETE_FILE(directory_name=>'DATA_PUMP_DIR',file_name=>C.object_name);
         END LOOP;
 
@@ -76,14 +71,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         END LOOP;
 
         /* 
-        ** Get the application user(s) to whom email will be sent on completion 
+        ** Get the schema workspace admin email
         */
-        SELECT u.id, u.email
-          BULK COLLECT INTO l_admin_users
-          FROM users u, apex_workspace_developers w 
-         WHERE w.first_schema_provisioned=l_schema
+        SELECT u.email, o.client_secret
+          INTO l_email, l_client_secret
+          FROM users u, apex_workspace_developers w, user_ords_clients o
+         WHERE w.user_name=l_schema
            AND w.is_admin='Yes'
-           AND w.email=u.email;
+           AND w.email=u.email
+           AND o.name(+)=w.email;
+
+        IF (l_client_secret IS NULL) THEN
+            OAUTH.create_client(
+                p_name            => l_email,
+                p_grant_type      => 'client_credentials',
+                p_owner           => 'mark.russellbrown@gmail.com',
+                p_support_email   => 'mark.russellbrown@gmail.com',
+                p_description     => 'Provide secure secret in order to encrypt JWT tokens',
+                p_privilege_names => 'api_priv'
+            );
+            SELECT client_secret INTO l_client_secret FROM user_ords_clients WHERE name=l_email;
+        END IF;
 
         h1 := dbms_datapump.OPEN (operation => 'EXPORT', job_mode => 'SCHEMA', job_name => dbms_scheduler.generate_job_name('EXPORT_SCHEMA_'), version => 'COMPATIBLE'); 
 
@@ -103,9 +111,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         dbms_datapump.metadata_filter(handle => h1, name => 'SCHEMA_EXPR', VALUE => 'IN(''' || l_schema || ''')');
         dbms_datapump.metadata_filter(handle => h1, name => 'EXCLUDE_PATH_EXPR', VALUE => 'IN (''DBTOOLS$EXECUTION_HISTORY'',''STATISTICS'',''CLUSTER'',''DB_LINK'',''INDEXTYPE'',''PROCOBJ'',''JOB'',''SCHEDULER'')'); 
 
-        l_password:=pck_core.password;
         dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_MODE', VALUE => 'PASSWORD'); 
-        dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => l_password);
+        dbms_datapump.set_parameter(handle => h1, name => 'ENCRYPTION_PASSWORD', VALUE => l_client_secret);
 
         dbms_datapump.start_job(handle => h1, skip_current => 0, abort_step => 0); 
         dbms_datapump.wait_for_job( handle => h1, job_state => l_status);
@@ -121,41 +128,30 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         */
         IF (l_status='COMPLETED') THEN
             dbms_cloud_repo.put_file(repo=>p_repo, file_path=>l_filename || '.dmp', directory_name=>'DATA_PUMP_DIR');
-            FORALL i IN l_admin_users.FIRST..l_admin_users.LAST
-                UPDATE users SET export_pw=l_password WHERE id=l_admin_users(i).id;
-            
         END IF;
-
-        /* 
-        ** Delete old entries in application LOG table
-        */
-        DELETE log WHERE log_date<current_timestamp-1;
-        COMMIT;
 
         /* 
         ** Send Email to Admin users 
         */
         l_body_html:=l_body_html || '<table role="presentation">';
-        l_body_html:=l_body_html || '<thead><tr><th>File Name on Github</th><th>Compression</th><th>Created</th><th>Encryption Password</th></tr></thead>';
+        l_body_html:=l_body_html || '<thead><tr><th>File Name on Github</th><th>Compression</th><th>Created</th></tr></thead>';
         l_body_html:=l_body_html || '<tbody>';
         SELECT SUM(bytes) INTO l_schema_size FROM user_segments;
         FOR C IN (SELECT object_name, bytes, last_modified FROM DBMS_CLOUD.LIST_FILES('DATA_PUMP_DIR') WHERE object_name LIKE '%.dmp')
         LOOP
-            l_body_html:=l_body_html || '<tr><td>' || C.object_name || '</td><td>' || apex_string_util.to_display_filesize(l_schema_size) || ' --> ' || apex_string_util.to_display_filesize(C.bytes) || '<td>' || to_char(C.last_modified,'dd.mm.yyyy hh24:mi pm') || '</td><td>' || l_password || '</td></tr>';
+            l_body_html:=l_body_html || '<tr><td>' || C.object_name || '</td><td>' || 
+            apex_string_util.to_display_filesize(l_schema_size) || ' --> ' || apex_string_util.to_display_filesize(C.bytes) || '<td>' || to_char(C.last_modified,'dd.mm.yyyy hh24:mi pm') || '</td></tr>';
         END LOOP;
         l_body_html:=l_body_html || '</tbody></table>';
         l_body_html:=l_body_html || '</html>';
 
-        FOR i IN l_admin_users.FIRST..l_admin_users.LAST
-        LOOP
-            l_json:=new JSON_OBJECT_T;
-            l_json.put('contactEmail',l_admin_users(i).email);
-            l_json.put('subject','Daily Backup Job ' || l_status);
-            l_json.put('body', l_body_html);
-            l_json.put('sourceEmail','backup@adfreesites.com');
-            l_payload:=l_json.stringify;
-            pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_payload, pData=>l_clob);
-        END LOOP;
+        l_json:=new JSON_OBJECT_T;
+        l_json.put('contactEmail',l_email);
+        l_json.put('subject','Daily Backup Job ' || l_status);
+        l_json.put('body', l_body_html);
+        l_json.put('sourceEmail','backup@adfreesites.com');
+        l_payload:=l_json.stringify;
+        pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_payload, pData=>l_clob);
 
         pck_core.log('Completed datapump schema exports. Final status:' || l_status);
     END;
@@ -317,13 +313,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     */
     PROCEDURE daily_job IS 
         l_repo CLOB;
+        n PLS_INTEGER;
     BEGIN
         l_repo := dbms_cloud_repo.init_github_repo(
             credential_name => 'GITHUB_CRED', 
             owner => 'xsf3190', 
             repo_name => 'oracle-to-github-backup');
 
-        datapump_backup(l_repo);
+        --datapump_backup(l_repo);
         github_backup(l_repo);
 
         EXCEPTION
