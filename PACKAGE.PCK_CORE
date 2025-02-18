@@ -578,7 +578,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         ELSE
             l_href:='#';
         END IF;
-        l_html:=l_html || '<ol class="gallery-list">';
+        l_html:=l_html || '<ol role="list" class="gallery-list">';
         FOR C IN (SELECT art.title, ass.cld_cloud_name, ass.resource_type, ass.public_id, ass.format, ass.width
                     FROM article art, asset ass
                    WHERE art.parent_id=pArticleId
