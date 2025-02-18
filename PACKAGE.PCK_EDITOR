@@ -6,7 +6,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
     --
     PROCEDURE getEditorContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pStatus OUT NUMBER);
     --
+    PROCEDURE getHeader(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER);
+    --
     PROCEDURE updateEditorContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
+    --
+    PROCEDURE updateHeader(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
 end;
 /
@@ -288,6 +292,144 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         APEX_JSON.write('success', TRUE);
         APEX_JSON.write('message', 'Saved ' || l_word_count || ' words');
         APEX_JSON.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
+    /*
+     **  Get details of column to be edited
+     */
+    PROCEDURE getColumnDetails(pColumn IN VARCHAR2, pDataLength IN OUT user_tab_columns.data_length%type, pPopover IN OUT VARCHAR2 ) IS
+        l_comments user_col_comments.comments%type;
+        l_column_name user_tab_columns.column_name%type:=SUBSTR(pColumn,INSTR(pColumn,'.')+1);
+    BEGIN
+        SELECT c.data_length, i.comments
+          INTO pDataLength, l_comments
+          FROM user_tab_columns c, user_col_comments i
+         WHERE c.table_name=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1))
+           AND c.column_name=UPPER(l_column_name)
+           AND i.table_name=c.table_name
+           AND i.column_name=c.column_name;
+
+        IF (l_comments IS NOT NULL) THEN
+            pPopover:=
+            '<button type="button" popovertarget="' || l_column_name || '_popover" id="' || l_column_name || '_btn">&#9432;</button>
+            <div id="' || l_column_name || '_popover" popover anchor="' || l_column_name || '_btn">' || l_comments || '</div>';
+        END IF;
+    END;
+
+    /*
+     **  Create wrapper html for input text element
+     */
+    FUNCTION buildInputWrapper(pColumn IN VARCHAR2, pValue IN VARCHAR2) RETURN VARCHAR2 IS
+        l_column_name user_tab_columns.column_name%type;
+        l_data_length user_tab_columns.data_length%type;
+        l_popover LONG;
+    BEGIN
+        getColumnDetails(pColumn, l_data_length, l_popover);
+
+        l_column_name:=SUBSTR(pColumn,INSTR(pColumn,'.')+1);
+
+        RETURN(
+        '<div class="input-wrapper">' ||
+            '<input type="text" style="line-height:initial" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
+                '" size="20" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '">' ||
+            '<div class="charcounter align-end" style="font-size:var(--step--2);font-family:monospace">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</div>' ||
+        '</div>');
+    END;
+
+    /* 
+    **  BUILD HTML INPUT ELEMENTS TO EDiT WEBSITE HEADER
+    */
+    PROCEDURE getHeader(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_color_primary website.color_primary%type;
+        l_title website.title%type;
+        l_subtitle website.subtitle%type;
+        l_header_effect website.header_effect%type;
+        l_html LONG;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        SELECT color_primary, title, subtitle, header_effect
+          INTO l_color_primary, l_title, l_subtitle, l_header_effect
+          FROM website
+         WHERE id=pWebsiteId;
+
+        l_html:=
+        '<form class="flow">' ||
+            '<fieldset>' ||
+                '<legend>Change Background</legend>' ||
+                '<div class="flex-items">' ||
+                    '<input type="color" class="background-color" value="' || l_color_primary || '">' || 
+                    CASE WHEN pEyeDropper='true' THEN
+                    '<button type="button" class="button eyedropper" style="--button-padding:0 0;--button-radius:0;--button-bg:transparent;fill:white">' ||
+                        '<svg class="icon" aria-hidden="true" focusable="false">' ||
+                            '<use href="#eyedropper"></use>' ||
+                        '</svg>' ||
+                    '</button>'
+                    END ||
+                    '<button type="button" class="button background-image" style="--button-padding:0 0;--button-radius:0;--button-bg:transparent;fill:white">' ||
+                        '<svg class="icon" aria-hidden="true" focusable="false">' ||
+                            '<use href="#image"></use>' ||
+                        '</svg>' ||
+                    '</button>' ||
+                '</div>' ||
+            '</fieldset>' ||
+            buildInputWrapper('website.title',l_title) || 
+            buildInputWrapper('website.subtitle',l_subtitle) ||
+            '<div class="flex-items space-between">' ||
+                '<button type="button" class="button publish-changes">PUBLISH CHANGES</button>' ||
+                '<button type="button" class="button cancel-changes">CANCEL</button>' ||
+            '</div>' ||
+        '</form>';
+
+        l_html:=l_html || '<svg width="0" height="0">';
+        FOR C IN (SELECT id, viewbox, svg FROM icon WHERE id IN ('eyedropper','image')) LOOP
+            l_html:=l_html || '<symbol id="' || C.id || '" viewBox="' || C.viewbox || '" preserveAspectRatio="">' || C.svg || '</symbol>';
+        END LOOP;
+        l_html:=l_html || '</svg>';
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE); 
+        apex_json.write('html', l_html);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
+    /* 
+    **  UPDATE WEBSITE HEADER FIELDS
+    */
+    PROCEDURE updateHeader(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_table_name VARCHAR2(30);
+        l_column_name VARCHAR2(30);
+        l_ddl VARCHAR2(200);
+        l_bodytext CLOB:=pBodyText;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+        pck_core.log(l_bodytext);
+        /*
+        FOR C IN (SELECT table_column, value FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (table_column, value)) )
+        LOOP
+            l_table_name:=SUBSTR(C.table_column,1,INSTR(C.table_column,'.')-1);
+            l_column_name:=SUBSTR(C.table_column,INSTR(C.table_column,'.')+1);
+            l_ddl:='UPDATE ' || l_table_name || ' SET updated_date=current_timestamp,' || l_column_name || '=:B1 WHERE id=:B2';
+             EXECUTE IMMEDIATE l_ddl USING C.value, pWebsiteId;
+        END LOOP;
+        */
+        apex_json.open_object;
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
 
         pStatus:=200;
 
