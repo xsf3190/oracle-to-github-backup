@@ -14,14 +14,13 @@ if (!sessionStorage.getItem("website_loaded")) {
 }
 
 let page_loaded = Date.now(),
-    page_visit = 0;
+    page_visit = 0,
+    transfer_size = 0;
 
 const vitalsQueue = new Set(),
       mediaQueue = new Set();
 
 const flushQueues = () => {
-    /* Prevent error in codepen whch does not allow importing modules */
-    /*if (!document.querySelector("[name='website_id']")) return;*/
 
     if (vitalsQueue.size === 0 && page_loaded === 0) return;
 
@@ -34,6 +33,7 @@ const flushQueues = () => {
     json["article_id"] = bodydata.articleid;
     json["website_loaded"] = Number(sessionStorage.getItem("website_loaded"));
     json["seq"] = page_visit;
+    json["webdriver"] = navigator.webdriver;
     if (page_loaded !== 0) {
         json["duration_visible"] =  Math.round((Date.now() - page_loaded)/1000);
         page_loaded = 0;
@@ -58,6 +58,7 @@ const flushQueues = () => {
         }
         json["url"] = window.location.hostname;
         json["referrer"] = document.referrer;
+        json["transfer_size"] = transfer_size;
     }
 
     const body = JSON.stringify(json);
@@ -98,6 +99,7 @@ if ('onpagehide' in self) {
 /*
 ** IMAGE INTERSECTION OBSERVER
 */
+/*
 const images = document.querySelectorAll('[data-src]');
 const config = {rootMargin: '0px 0px 50px 0px',threshold: 0};
 
@@ -122,6 +124,16 @@ const preloadImage = (img) => {
   }
   img.src = src;
 };
+*/
+
+const observer = new PerformanceObserver((list) => {
+  list.getEntries().forEach((entry) => {
+    console.log(entry.name,entry.transferSize);
+    transfer_size+=entry.transferSize;
+  });
+});
+
+observer.observe({ type: "resource", buffered: true });
 
 onCLS(addToVitalsQueue);
 onLCP(addToVitalsQueue);
