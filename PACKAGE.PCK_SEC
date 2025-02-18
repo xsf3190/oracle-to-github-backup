@@ -44,7 +44,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     REFRESH_TOKEN_EXP CONSTANT PLS_INTEGER:=(24*60*60)*90; --90 DAYS
     ACCESS_TOKEN_EXP CONSTANT PLS_INTEGER:=60*5; -- 5 MINUTES
 
-    FUNCTION emailTemplate(pAuthMethod IN VARCHAR2, pWebsite IN VARCHAR2, pFavicon IN VARCHAR2, pAuthData IN VARCHAR2) RETURN VARCHAR2 IS
+    FUNCTION emailTemplate(pAuthMethod IN VARCHAR2, pWebsite IN VARCHAR2, pAuthData IN VARCHAR2) RETURN VARCHAR2 IS
         l_html LONG;
     BEGIN
     l_html:=
@@ -151,7 +151,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
               <!-- START MAIN CONTENT AREA -->
               <tr>
                 <td class="wrapper" style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top; box-sizing: border-box; padding: 24px;" valign="top">
-                  <img src="' || pFavicon || '" alt="Website favicon" width="96" height="96" border="0" style="border:0; outline:none; text-decoration:none; display:block;">
                   <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: bold; margin: 0; margin-bottom: 16px;">Your Login request to ' || pWebsite || '</p>
                   <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: normal; margin: 0; margin-bottom: 16px;">';
                   CASE pAuthMethod 
@@ -245,42 +244,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
            AND NVL(t.comments,h.comments) IS NOT NULL
            AND p.name='X-ORDS-STATUS-CODE'
           GROUP BY t.id, t.uri_template, NVL(t.comments,h.comments), t.priority;
-        n:=sql%rowcount;
-        pck_core.log('ords_endpoints:'||n);
 
         DELETE website_role;
-        
         
         insert into website_role(website_id, role_id)
         select w.id, r.id
         from website w, role r
         where r.name in ('admin','owner');
-        n:=sql%rowcount;
-        pck_core.log('website_role:'||n);
-
 
         insert into api_endpoint(website_id, role_id, template_id)
         select w.id, r.id, o.template_id 
         from website w, role r, ords_endpoints o
         where r.name in ('admin','owner');
-        n:=sql%rowcount;
-        pck_core.log('api_endpoint:'||n);
-
 
         insert into website_role(website_id, role_id)
         select w.id, r.id
         from website w, role r
         where r.name='visitor';
-        n:=sql%rowcount;
-        pck_core.log('website_role:'||n);
 
         insert into api_endpoint(website_id, role_id, template_id)
         select w.id, r.id, o.template_id 
         from website w, role r, ords_endpoints o
         where r.name='visitor'
          and (INSTR(o.uri_template,'message')>0 or INSTR(o.uri_template,'authenticate')>0);
-         n:=sql%rowcount;
-        pck_core.log('api_endpoint:'||n);
 
     END;
 
@@ -371,10 +357,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_sendmail_link VARCHAR2(500);
         l_clob CLOB;
     BEGIN
-        FOR C IN (SELECT o.client_secret, j.email, j.url, j.request_type, NVL(u.id,0) user_id, NVL(o.id,0) ords_user_id
+        FOR C IN (SELECT o.client_secret, LOWER(j.email) email, j.url, j.request_type, NVL(u.id,0) user_id, NVL(o.id,0) ords_user_id
                     FROM user_ords_clients o, users u, JSON_TABLE(pBodyText, '$' COLUMNS email, url, request_type) j
-                   WHERE o.name(+)=j.email
-                     AND u.email(+)=j.email)
+                   WHERE o.name(+)=LOWER(j.email)
+                     AND u.email(+)=LOWER(j.email))
         LOOP
             l_email:=C.email;
             l_url:=C.url;
@@ -416,7 +402,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 END IF;
                 
                 l_sendmail_link:=pck_core.getRestUrl || 'authenticate/' || pWebsiteId || '?request=magic&user='||l_user_id||'&verify=' ||l_token;
-                l_sendmail_body:=emailTemplate(l_request_type, l_url, 'https://adfreesites.com/favicon.' || pWebsiteId || '.png', l_sendmail_link);
+                l_sendmail_body:=emailTemplate(l_request_type, l_url, l_sendmail_link);
 
             WHEN 'passcode' THEN
                 FOR i IN 1..6 LOOP
@@ -432,7 +418,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                     UPDATE users SET login_status='AUTH WAITING', passcode=l_passcode_hash WHERE id=l_user_id;
                 END IF;
 
-                l_sendmail_body:=emailTemplate(l_request_type, l_url, 'https://adfreesites.com/favicon.' || pWebsiteId || '.png', l_passcode);
+                l_sendmail_body:=emailTemplate(l_request_type, l_url, l_passcode);
         END CASE;
 
         l_json:=new JSON_OBJECT_T;
@@ -445,7 +431,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
-        APEX_JSON.write ('message', CASE l_request_type WHEN 'magic' THEN 'Magic link sent to your inbox' WHEN 'passcode' THEN 'Passcode sent to your inbox' END);
+        APEX_JSON.write ('message', CASE l_request_type WHEN 'magic' THEN 'Link sent to your inbox' WHEN 'passcode' THEN 'Passcode sent to your inbox' END);
         APEX_JSON.write ('userid', l_user_id);
         APEX_JSON.close_object;
 
@@ -486,7 +472,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_menulist LONG;
         l_reports LONG;
         l_test_site BOOLEAN:=FALSE;
-        l_publish BOOLEAN:=FALSE;
+        l_netlify_site_id_custom website.netlify_site_id_custom%type;
+        l_can_publish VARCHAR2(3);
         n PLS_INTEGER;
 
         FUNCTION addButton(pUriTemplate IN VARCHAR2, pMethod IN VARCHAR2, pLabel IN VARCHAR2) RETURN VARCHAR2 IS
@@ -499,19 +486,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         ** ENABLE ALL EDITING AND REPORTING FUNCTIONS ON TEST SITE 
         ** ENABLE REPORTING AND PUBLISH (IF QUALIFYING) ON LIVE SITE 
         */
+
         IF (INSTR(pUrl,'netlify.app')>0) THEN
             l_test_site:=TRUE;
-            l_publish:=TRUE;
-        ELSE
-            FOR C IN (SELECT CASE WHEN netlify_site_id_custom IS NOT NULL AND NVL(netlify_last_published_custom,created_date) < netlify_last_published THEN 'OK'  END can_publish
-                        FROM website
-                       WHERE id=pWebsiteId)
-            LOOP
-                IF (C.can_publish='OK') THEN
-                    l_publish:=TRUE;
-                END IF;
-            END LOOP;
         END IF;
+
+        SELECT netlify_site_id_custom, CASE WHEN netlify_site_id_custom IS NOT NULL AND NVL(netlify_last_published_custom,created_date) < netlify_last_published THEN 'OK'  ELSE 'NOK' END 
+          INTO l_netlify_site_id_custom, l_can_publish
+          FROM website
+         WHERE id=pWebsiteId;
 
         refreshOrdsEndpoints;
 
@@ -540,13 +523,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             IF (l_test_site) THEN
                 l_menulist:=l_menulist || addButton(C.uri_template, C.method, C.label);
             ELSIF (C.priority=1) THEN
-                IF (INSTR(C.uri_template,'publish-website')>0 AND NOT l_publish) THEN
+                IF (INSTR(C.uri_template,'publish-website')>0 AND l_can_publish='NOK') THEN
                     CONTINUE;
                 ELSE
                    l_menulist:=l_menulist || addButton(C.uri_template, C.method, C.label);
                 END IF;
             END IF;
         END LOOP;
+
+        FOR C IN (SELECT netlify_site_id_custom, netlify_last_published_custom, netlify_last_published
+                    FROM website
+                   WHERE id=pWebsiteId)
+        LOOP
+            IF (l_test_site AND l_netlify_site_id_custom IS NOT NULL) THEN
+                l_menulist:=l_menulist || '<li><a class="button" data-button-variant="nav-item" href="https://' || REPLACE(SUBSTR(pUrl,1,INSTR(pUrl,'.',1,1)-1),'-','.') || '">Live Site</a></li>';
+            END IF;
+            IF NOT (l_test_site) THEN
+                l_menulist:=l_menulist || '<li><a class="button" data-button-variant="nav-item" href="https://' || REPLACE(pUrl,'.','-') || '.netlify.app' || '">Test Site</a></li>';
+            END IF;
+        END LOOP;
+
         RETURN (l_menulist);
     END;
 
@@ -674,7 +670,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     END;
 
     /*
-    ** USER AUTHENTICATED SUCCESSFULLY. ISSUE NEW PAIR OF TOKENS AND RETURN TO CLIENT
+    ** BUILD FINGERPRINT FOR CLIENT DEVICE
+    */
+    FUNCTION getFingerprint RETURN RAW IS
+        l_fingerprint_string VARCHAR2(500);
+        l_fingerprint fingerprint.fingerprint%type;
+    BEGIN
+        l_fingerprint_string:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR') || OWA_UTIL.get_cgi_env('HTTP_USER_AGENT') || OWA_UTIL.get_cgi_env('timezone');
+        l_fingerprint:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_fingerprint_string,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+        RETURN (l_fingerprint);
+    END;
+
+    /*
+    ** USER AUTHENTICATED SUCCESSFULLY. CREATE FINGERPRINT AND ISSUE NEW PAIR OF TOKENS FOR CLIENT
     */
     PROCEDURE issueJWTTokens(pWebsiteId IN website.id%type, pEmail IN users.email%type, pUserId IN users.id%type) IS 
         l_new_token VARCHAR2 (4000);
@@ -683,9 +691,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_user_id users.id%type;
         l_issuer VARCHAR2(15);
         l_scope VARCHAR2(7);
-        
+        l_fingerprint fingerprint.fingerprint%type;
         n PLS_INTEGER;
     BEGIN
+        -- Check fingerprint is valid 
+        l_fingerprint:=getFingerprint;
+        SELECT COUNT(*) 
+          INTO n
+          FROM fingerprint
+         WHERE user_id=pUserId
+           AND fingerprint=l_fingerprint;
+
+        IF (n=0) THEN
+            INSERT INTO fingerprint (user_id, fingerprint) VALUES (pUserId, l_fingerprint);
+        END IF;
+
         SELECT client_secret 
           INTO l_jwt_enc_key
           FROM user_ords_clients
@@ -796,8 +816,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     END;
 
     /* 
-    ** CLIENT HAS SUBMITTED EMAIL ADDRESS AND WAITING TO BE LOGGED IN 
-    ** IF LOGIN_STATUS FOR USER IS "AUTH OK" ISSUE NEW PAIR OF TOKENS
+    ** CLIENT HAS ClICKED ON MAGIC LINK ON MESSAGE RECEIVED IN THEIR INBOX,
+    ** CAUSING THEIR USERS.LOGIN_STATUS TO BE UPDATED TO "AUTH OK".
+    ** NOW WE CAN ISSUE NEW PAIR OF TOKENS
     */
     PROCEDURE checkAuthStatus(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
         l_email users.email%type;
@@ -805,7 +826,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_time_since_sent number;
         l_token_issued refresh_token.token_issued%type;
     BEGIN
-        SELECT u.id, u.email, extract (minute from (current_timestamp - coalesce(u.updated_date, u.created_date)))
+        SELECT u.id, LOWER(u.email), extract (minute from (current_timestamp - coalesce(u.updated_date, u.created_date)))
           INTO l_user_id, l_email, l_time_since_sent
           FROM users u, JSON_TABLE(pBodyText, '$' COLUMNS email) j
          WHERE u.email=j.email
@@ -840,7 +861,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_token APEX_JWT.T_TOKEN;
         l_new_token VARCHAR2 (4000);
         l_new_refresh VARCHAR2 (4000);
-
+        l_fingerprint fingerprint.fingerprint%type;
         n PLS_INTEGER;
         l_JWT_data t_JWT_data;
     BEGIN
@@ -872,6 +893,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 EXCEPTION WHEN dup_val_on_index THEN NULL;
             END;
             RAISE_APPLICATION_ERROR(-20000,'Attempt to reuse refresh token');
+        END IF;
+
+        -- Check fingerprint is valid 
+        l_fingerprint:=getFingerprint;
+        SELECT COUNT(*) 
+          INTO n
+          FROM fingerprint
+         WHERE user_id=l_JWT_data.jti
+           AND fingerprint=l_fingerprint;
+
+        IF (n=0) THEN
+            RAISE_APPLICATION_ERROR(-20000,'Access denied from unknown device or location. Login again.');
         END IF;
 
         l_new_token:=apex_jwt.ENCODE (
