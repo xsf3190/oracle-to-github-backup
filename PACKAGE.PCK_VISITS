@@ -30,40 +30,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_ip_address website_article_cwv.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
         l_user_agent website_article_cwv.user_agent%type:=SUBSTR(OWA_UTIL.get_cgi_env('HTTP_USER_AGENT'),1,255);
         l_this_referrer VARCHAR2(50):=LOWER(sys_context('userenv','db_name'));
-        l_browser website_article_cwv.browser%type;
-        l_object JSON_OBJECT_T;
-        l_array JSON_ARRAY_T;
-        l_clob clob;
-        l_clob2 clob;
     BEGIN
-        BEGIN
-            SELECT browser INTO l_browser 
-            FROM browser_lookup 
-            WHERE user_agent=l_user_agent;
-        EXCEPTION WHEN NO_DATA_FOUND THEN
-            l_array:= new JSON_ARRAY_T;
-            l_object:=new JSON_OBJECT_T;
-            l_object.put('name','User-Agent');
-            l_object.put('value',l_user_agent);
-            l_array.append(l_object);
-            l_object:=new JSON_OBJECT_T;
-            l_object.put('headers',l_array);
-            l_clob:=l_object.stringify;
-            pck_api.callBrowserAPI(l_clob,l_clob2);
-
-            SELECT simple_software_string INTO l_browser
-              FROM JSON_TABLE(l_clob2 FORMAT JSON, '$.detection' 
-                COLUMNS (simple_software_string)); 
-        END;
-
         INSERT INTO website_article_cwv (
             website_id, article_id, seq, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, 
-            user_agent, browser, mobile, connection, url, website_loaded, duration_visible)
+            user_agent, mobile, connection, url, website_loaded, duration_visible, transfer_size)
         SELECT website_id, article_id, seq, CASE WHEN referrer LIKE '%' || l_this_referrer || '%' THEN l_this_referrer ELSE referrer END, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, 
-                l_user_agent, l_browser, mobile, connection, url, website_loaded, duration_visible
+                l_user_agent, mobile, connection, url, website_loaded, duration_visible, transfer_size
           FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' 
             COLUMNS (website_id, article_id, seq, referrer, LCP, LCP_rating, CLS, CLS_rating, INP, INP_rating, 
-                    browser, mobile, connection, url, website_loaded, duration_visible));  
+                    mobile, connection, url, website_loaded, duration_visible, transfer_size, webdriver))
+          WHERE webdriver='false';  
 
         EXCEPTION
             WHEN OTHERS THEN
@@ -104,26 +80,54 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
      **  Each page_hit row represents one visit from one ip address to a web page in a discrete client session.
      */
     PROCEDURE uploadPageHits(pWebsiteId IN website.id%type) IS
+        TYPE t_browser_lookup IS TABLE OF browser_lookup%rowtype;
+        l_browser_lookup t_browser_lookup:=t_browser_lookup();
+        l_object JSON_OBJECT_T;
+        l_array JSON_ARRAY_T;
+        l_clob clob;
+        l_clob2 clob;
         n PLS_INTEGER;
     BEGIN
         DELETE website_article_cwv WHERE INSTR(UPPER(referrer),UPPER(sys_context('userenv','db_name')))>0;
-        DELETE website_article_cwv WHERE browser LIKE 'Headless%';
+        DELETE website_article_cwv WHERE INSTR(user_agent,'Headless')>0;
         DELETE website_article_cwv cwv WHERE cwv.website_id=pWebsiteId AND NOT EXISTS (SELECT null FROM article a WHERE a.id=cwv.article_id);
+
+        FOR C IN (SELECT DISTINCT user_agent FROM website_article_cwv c WHERE website_id=pWebsiteId AND NOT EXISTS (SELECT NULL FROM browser_lookup b WHERE b.user_agent=c.user_agent))
+        LOOP
+            l_array:= new JSON_ARRAY_T;
+            l_object:=new JSON_OBJECT_T;
+            l_object.put('name','User-Agent');
+            l_object.put('value',C.user_agent);
+            l_array.append(l_object);
+            l_object:=new JSON_OBJECT_T;
+            l_object.put('headers',l_array);
+            l_clob:=l_object.stringify;
+            pck_api.callBrowserAPI(l_clob,l_clob2);
+            FOR C1 IN (SELECT simple_software_string FROM JSON_TABLE(l_clob2 FORMAT JSON, '$.detection' COLUMNS (simple_software_string)) )
+            LOOP
+                l_browser_lookup.EXTEND;
+                l_browser_lookup(l_browser_lookup.LAST).browser:=C1.simple_software_string;
+                l_browser_lookup(l_browser_lookup.LAST).user_agent:=C.user_agent;
+            END LOOP;
+        END LOOP;
+        FORALL i IN l_browser_lookup.FIRST..l_browser_lookup.LAST
+            INSERT INTO browser_lookup VALUES l_browser_lookup(i);
         
         MERGE INTO page_hit t
         USING (
             SElECT 
-                website_id, article_id, website_loaded, ip_address, apex_string_util.get_domain(referrer) referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, NVL(duration_visible,0) duration_visible, user_agent, browser, connection, url, mobile,
-                to_timestamp('1970-01-01','yyyy-mm-dd') + numtodsinterval(website_loaded,'second') visit_date
+                website_id, article_id, website_loaded, ip_address, apex_string_util.get_domain(referrer) referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, NVL(duration_visible,0) duration_visible, NVL(browser,user_agent) browser, connection, url, mobile,
+                to_timestamp('1970-01-01','yyyy-mm-dd') + numtodsinterval(website_loaded,'second') visit_date, transfer_size
             FROM
             (
                 SELECT 
                     website_id, article_id, ip_address, website_loaded,  
                     MAX(CASE WHEN INSTR(referrer,url)=0 THEN referrer END) referrer, 
                     MAX(lcp) lcp, MAX(lcp_rating) lcp_rating, MAX(cls) cls, MAX(cls_rating) cls_rating, MAX(inp) inp, MAX(inp_rating) inp_rating, 
-                    SUM(duration_visible) duration_visible, MAX(user_agent) user_agent, MAX(browser) browser, MAX(connection) connection, MAX(url) url, MAX(mobile) mobile
-                FROM website_article_cwv 
+                    SUM(duration_visible) duration_visible, MAX(website_article_cwv.user_agent) user_agent, MAX(browser_lookup.browser) browser, MAX(connection) connection, MAX(url) url, MAX(mobile) mobile, MAX(transfer_size) transfer_size
+                FROM website_article_cwv, browser_lookup
                 WHERE website_id=pWebsiteId
+                AND browser_lookup.user_agent(+)=website_article_cwv.user_agent
                 GROUP BY website_id, article_id, ip_address, website_loaded
             )
         ) s
@@ -132,8 +136,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             t.ip_address=s.ip_address AND 
             t.website_loaded=s.website_loaded)
         WHEN NOT MATCHED THEN
-            INSERT (website_id, article_id, ip_address, website_loaded, visit_date, referrer, duration_visible, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, user_agent, browser, connection, url, mobile)    
-            VALUES (s.website_id, s.article_id, s.ip_address, s.website_loaded, s.visit_date, s.referrer, s.duration_visible, s.lcp, s.lcp_rating, s.cls, s.cls_rating, s.inp, s.inp_rating, s.user_agent, s.browser, s.connection, s.url, s.mobile)
+            INSERT (website_id, article_id, ip_address, website_loaded, visit_date, referrer, duration_visible, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, browser, connection, url, mobile, transfer_size)    
+            VALUES (s.website_id, s.article_id, s.ip_address, s.website_loaded, s.visit_date, s.referrer, s.duration_visible, s.lcp, s.lcp_rating, s.cls, s.cls_rating, s.inp, s.inp_rating, s.browser, s.connection, s.url, s.mobile, s.transfer_size)
         WHEN MATCHED THEN
             UPDATE SET t.updated_date=current_timestamp,
                 t.duration_visible=t.duration_visible+s.duration_visible,
@@ -367,6 +371,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         t_ela_time apex_t_varchar2;
         l_ela_time VARCHAR2(11);
     BEGIN
+        IF (pSeconds>86399) THEN
+            RETURN ('>24h');
+        END IF;
         t_ela_time:=apex_string.split(TO_CHAR(TO_DATE(pSeconds,'sssss'),'fmhh24:mi:ss'),':');
         l_ela_time:=NULL;
         IF (t_ela_time(1)<>'0') THEN
@@ -386,7 +393,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     */
     PROCEDURE getWebsiteVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB) IS
         l_content CLOB;
-        l_popover VARCHAR2(100);
+        l_popover VARCHAR2(300);
         l_rating VARCHAR2(200);
         l_total PLS_INTEGER;
         l_ela_time VARCHAR2(11);
