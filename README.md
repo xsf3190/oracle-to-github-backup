@@ -1,7 +1,7 @@
 # oracle-to-github-backup
-This repository contains data backed up daily from an ORACLE "Always Free" OCI database.
+This repository contains data and object definitions backed up daily from an ORACLE "Always Free" OCI database.
 
-The backup is a compressed schema export dump file encrypted with a randomly generated complex password.
+The backup is a compressed, encrypted schema export dump file.
 
 Includes DDL metadata extracts of tables, packages and grants.
 
@@ -29,7 +29,7 @@ end;
 3. Provide an automatic backup / restore cycle betweeen 2 databases.
 4. Deploy an environment to test a new Oracle software release.
 
-Although Github supports a maximum file size of 100MB, the Advanced Compression option reduces dump file size by an order of magnitude (up to 10 times).
+Note that although Github supports a maximum file size of 100MB, the Advanced Compression option reduces dump file size by an order of magnitude (up to 10 times).
 
 ## Install
 Logged on to the subject database as ADMIN
@@ -37,12 +37,6 @@ Logged on to the subject database as ADMIN
 2. GRANT EXECUTE ON DBMS_CLOUD TO "schema-to-backup"
 3. GRANT EXECUTE ON DBMS_CLOUD_REPO TO "schema-to-backup"
 4. Compile PACKAGE.PCK_BACKUP from this repository in "schema-to-backup"
-
-This package implements the actual backup process for my EXAMPLE application schema which includes:
-1. Logging process steps in a schema table
-2. Emailing backup result to application-specific "admin" users
-
-Adapt the package, therefore, to suit specific requirements.
 
 ## Run
 For example, to schedule every day at 9PM
@@ -59,17 +53,3 @@ BEGIN
 end;
 /
 ```
-
-## Restore
-The repository includes the "import_schema.sql" script which runs on the second ADB database in my OCI "Always Free" tenancy.
-
-The script runs daily on a Linux Compute instance and recreates the schema from the Github export schema dump file.
-
-The log file is uploaded to the repository as "IMPORT_SCHEMA.EXAMPLE.log" and reflects rows counts in "EXPORT_SCHEMA.EXAMPLE.log".
-
-How to securely serve the encryption password that was used to create the daily dump file?
-
-My simplistic naive approach:
-1. Store the randomly generated encryption password in an application schema table for "admin" users in the exporting database
-2. Create database link in the importing database pointing to the ADMIN user in the exporting database
-3. The "import_schema.sql" script retrieves the password using the database link
