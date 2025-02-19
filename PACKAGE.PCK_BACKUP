@@ -163,7 +163,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
     ** 3. DDL of TABLES and PACKAGES
     */
     PROCEDURE github_backup(
-        p_repo IN OUT NOCOPY CLOB)
+        p_repo IN OUT NOCOPY CLOB,
+        p_apex IN INTEGER)
     IS  
         TYPE t_backup IS RECORD(
             object_type         user_objects.object_type%type,
@@ -192,46 +193,53 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         /*
         ** Build PLSQL collection of all objects to be exported and copied to Github
         */
-        SELECT object_type, object_name
-          BULK COLLECT INTO l_backup
-         FROM
-            (
-                SELECT object_type,object_name
-                FROM user_objects
-                WHERE generated='N'
-                AND object_type IN ('TABLE','PACKAGE')
-                UNION ALL 
+        IF (p_apex=0) THEN
+            SELECT object_type, object_name
+              BULK COLLECT INTO l_backup
+             FROM
+                (
+                    SELECT object_type,object_name
+                    FROM user_objects
+                    WHERE generated='N'
+                    AND object_type IN ('TABLE','PACKAGE')
+                    UNION ALL 
 
-                SELECT 'APEX_APPLICATION',TO_CHAR(application_id)
-                FROM apex_applications
-                WHERE owner=sys_context('userenv','current_schema') 
-                UNION ALL 
+                    SELECT 'GRANT','OBJECT_GRANT'
+                    FROM user_tab_privs
+                    WHERE grantee=sys_context('userenv','current_schema') 
+                    AND grantor='ADMIN'
+                    AND ROWNUM=1
+                    UNION ALL
 
-                SELECT 'APEX_STATIC_FILE',f.application_id || '.' || f.file_name
-                FROM apex_application_static_files f, apex_applications a
-                WHERE f.application_id=a.application_id
-                AND SUBSTR(f.mime_type,INSTR(f.mime_type,'/')+1) IN ('javascript','css')
-                AND INSTR(f.file_name,'.min.')=0
-                UNION ALL
+                    SELECT 'GRANT','SYSTEM_GRANT'
+                    FROM user_tab_privs
+                    WHERE grantee=sys_context('userenv','current_schema') 
+                    AND grantor='ADMIN'
+                    AND ROWNUM=1
+                )
+            ORDER BY object_type,object_name;
+        ELSE
+            SELECT object_type, object_name
+              BULK COLLECT INTO l_backup
+             FROM
+                (
+                    SELECT 'APEX_APPLICATION' object_type, TO_CHAR(application_id) object_name
+                    FROM apex_applications
+                    WHERE owner=sys_context('userenv','current_schema') 
+                    UNION ALL 
 
-                SELECT 'ORDS_METADATA',sys_context('userenv','current_schema')
-                FROM dual
-                UNION ALL
+                    SELECT 'APEX_STATIC_FILE',f.application_id || '.' || f.file_name
+                    FROM apex_application_static_files f, apex_applications a
+                    WHERE f.application_id=a.application_id
+                    AND SUBSTR(f.mime_type,INSTR(f.mime_type,'/')+1) IN ('javascript','css')
+                    AND INSTR(f.file_name,'.min.')=0
+                    UNION ALL
 
-                SELECT 'GRANT','OBJECT_GRANT'
-                FROM user_tab_privs
-                WHERE grantee=sys_context('userenv','current_schema') 
-                AND grantor='ADMIN'
-                AND ROWNUM=1
-                UNION ALL
-
-                SELECT 'GRANT','SYSTEM_GRANT'
-                FROM user_tab_privs
-                WHERE grantee=sys_context('userenv','current_schema') 
-                AND grantor='ADMIN'
-                AND ROWNUM=1
-            )
-        ORDER BY DECODE(object_type,'GRANT',1,'APEX_APPLICATION',2,3),object_name;
+                    SELECT 'ORDS_METADATA',sys_context('userenv','current_schema')
+                    FROM dual
+                )
+            ORDER BY object_type,object_name;
+        END IF;
 
         FOR i IN 1..l_backup.COUNT
         LOOP
@@ -320,8 +328,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
             owner => 'xsf3190', 
             repo_name => 'oracle-to-github-backup');
 
-        --datapump_backup(l_repo);
-        github_backup(l_repo);
+        SELECT COUNT(*) INTO n
+          FROM apex_applications
+         WHERE owner=sys_context('userenv','current_schema');
+
+        IF (n=0) THEN
+            datapump_backup(l_repo);
+        END IF;
+        
+        github_backup(l_repo,n);
 
         EXCEPTION
             WHEN OTHERS THEN
