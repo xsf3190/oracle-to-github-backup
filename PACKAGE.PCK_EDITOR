@@ -336,9 +336,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
 
         RETURN(
         '<div class="input-wrapper">' ||
-            '<input type="text" style="line-height:initial" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
+            '<label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || l_popover ||
+            '</label>' ||
+            '<input type="text" style="font:inherit" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
                 '" size="20" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '">' ||
-            '<div class="charcounter align-end" style="font-size:var(--step--2);font-family:monospace">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</div>' ||
+            '<div class="flex-items space-between">' ||
+                '<span class="result"></span>' ||
+                '<span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</span>' ||
+            '</div>' ||
         '</div>');
     END;
 
@@ -361,31 +366,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
          WHERE id=pWebsiteId;
 
         l_html:=
-        '<form class="flow">' ||
+        '<form class="flex-items" style="font-family:sans-serif;font-size:var(--step--2)">' ||
             '<fieldset>' ||
                 '<legend>Change Background</legend>' ||
-                '<div class="flex-items">' ||
-                    '<input type="color" class="background-color" value="' || l_color_primary || '">' || 
-                    CASE WHEN pEyeDropper='true' THEN
-                    '<button type="button" class="button eyedropper" style="--button-padding:0 0;--button-radius:0;--button-bg:transparent;fill:white">' ||
-                        '<svg class="icon" aria-hidden="true" focusable="false">' ||
-                            '<use href="#eyedropper"></use>' ||
-                        '</svg>' ||
-                    '</button>'
-                    END ||
-                    '<button type="button" class="button background-image" style="--button-padding:0 0;--button-radius:0;--button-bg:transparent;fill:white">' ||
-                        '<svg class="icon" aria-hidden="true" focusable="false">' ||
-                            '<use href="#image"></use>' ||
-                        '</svg>' ||
-                    '</button>' ||
-                '</div>' ||
+                '<input type="color" class="background-color" data-column="website.color_primary" value="' || l_color_primary || '">' || 
+                CASE WHEN pEyeDropper='true' THEN
+                '<button type="button" class="button eyedropper" style="--button-bg:transparent;--button-hover-bg:transparent">' ||
+                    '<svg class="icon" aria-hidden="true" focusable="false">' ||
+                        '<use href="#eyedropper"></use>' ||
+                    '</svg>' ||
+                '</button>'
+                END ||
+                '<button type="button" class="button background-image" style="--button-bg:transparent;--button-hover-bg:transparent">' ||
+                    '<svg class="icon" aria-hidden="true" focusable="false">' ||
+                        '<use href="#image"></use>' ||
+                    '</svg>' ||
+                '</button>' ||
             '</fieldset>' ||
             buildInputWrapper('website.title',l_title) || 
             buildInputWrapper('website.subtitle',l_subtitle) ||
-            '<div class="flex-items space-between">' ||
-                '<button type="button" class="button publish-changes">PUBLISH CHANGES</button>' ||
-                '<button type="button" class="button cancel-changes">CANCEL</button>' ||
-            '</div>' ||
+            '<button type="button" class="button publish-changes" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
         '</form>';
 
         l_html:=l_html || '<svg width="0" height="0">';
