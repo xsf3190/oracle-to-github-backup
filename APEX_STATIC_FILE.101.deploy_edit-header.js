@@ -73,17 +73,29 @@ editor.addEventListener("change", (e) => {
         const ratio = whiteluminance > colorluminance 
                 ? ((colorluminance + 0.05) / (whiteluminance + 0.05))
                 : ((whiteluminance + 0.05) / (colorluminance + 0.05));
-        let rating;
-        if (ratio < 1/7) {
-            rating = "AAA PASS";
-        } 
-        else if (ratio < 1/4.5) {
-            rating = "AA PASS";
+
+        header.style.backgroundColor = e.target.value;
+        if (ratio < 1/4.5) {
+            header.style.color = "#ffffff";
         } else {
-            rating = "CONTRAST FAIL";
+            header.style.color = "#000000";
         }
-        console.log("ratio",ratio,rating);
     }
+    const result = e.target.parentElement.querySelector(".result");
+    callAPI(endpoint,'PUT', {table_column:e.target.dataset.column, value:e.target.value})
+        .then(() => {
+            result.textContent = "OK";
+            result.style.color = "green";
+            if (e.target.dataset.column==="website.title") {
+                header.querySelector("h1").textContent = e.target.value;
+            } else if (e.target.dataset.column==="website.subtitle") {
+                header.querySelector("p").textContent = e.target.value;
+            }
+        })
+        .catch((error) => {
+            result.textContent = error;
+            result.style.color = "red";
+        });
 });
 
 const selectColorFromScreen = async (abortController) => {
@@ -102,13 +114,11 @@ editor.addEventListener("click", async (e) => {
         return;
     }
 
-    const colorInput = editor.querySelector(".background-color");
-
     if (e.target.matches(".eyedropper")) {
         const abortController = new AbortController();
         const newColor = await selectColorFromScreen(abortController);
+        const colorInput = editor.querySelector(".background-color");
         colorInput.value = newColor;
-        header.style.backgroundColor = newColor;
         colorInput.dispatchEvent(new Event('change', { 'bubbles': true }));
     }
 
