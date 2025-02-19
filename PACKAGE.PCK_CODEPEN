@@ -344,14 +344,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* 
         ** Assemble content part of document 
         */
-        pHtml:=buildNavLabels(pWebsiteId,pArticleId) || 
+        pHtml:=
+            buildNavLabels(pWebsiteId,pArticleId) || 
+            '<div class="editor"></div>' ||
             l_header || 
-           '<main class="wrapper flow">' || 
-            '<div id="editor"></div>' ||
+            '<main class="wrapper flow">' || 
+                '<div id="editor"></div>' ||
                 pHtml  || 
                 pPromotion ||
-           '</main>' || 
-           l_footer;
+            '</main>' || 
+            l_footer;
 
         /* 
         ** Append any Dialog elements
