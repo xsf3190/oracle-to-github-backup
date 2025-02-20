@@ -382,6 +382,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                         '<use href="#image"></use>' ||
                     '</svg>' ||
                 '</button>' ||
+                '<span class="result"></span>' ||
             '</fieldset>' ||
             buildInputWrapper('website.title',l_title) || 
             buildInputWrapper('website.subtitle',l_subtitle) ||
@@ -417,8 +418,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_bodytext CLOB:=pBodyText;
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
-        pck_core.log(l_bodytext);
-        /*
+        
         FOR C IN (SELECT table_column, value FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (table_column, value)) )
         LOOP
             l_table_name:=SUBSTR(C.table_column,1,INSTR(C.table_column,'.')-1);
@@ -426,7 +426,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             l_ddl:='UPDATE ' || l_table_name || ' SET updated_date=current_timestamp,' || l_column_name || '=:B1 WHERE id=:B2';
              EXECUTE IMMEDIATE l_ddl USING C.value, pWebsiteId;
         END LOOP;
-        */
+        
         apex_json.open_object;
         apex_json.write('success', TRUE);
         apex_json.close_object;
