@@ -64,7 +64,6 @@ const luminance = (r, g, b) => {
 }
 
 editor.addEventListener("change", (e) => {
-    console.log(e.target.dataset.column, e.target.value);
     if (e.target.dataset.column==="website.color_primary") {
         const whiteRGB = hexToRGB("#ffffff");
         const colorRGB = hexToRGB(e.target.value);
@@ -86,10 +85,18 @@ editor.addEventListener("change", (e) => {
         .then(() => {
             result.textContent = "OK";
             result.style.color = "green";
-            if (e.target.dataset.column==="website.title") {
-                header.querySelector("h1").textContent = e.target.value;
-            } else if (e.target.dataset.column==="website.subtitle") {
-                header.querySelector("p").textContent = e.target.value;
+
+            const column = e.target.dataset.column.split(".")[1];
+            
+            const element = column==="title" ? header.querySelector("h1") : header.querySelector("p");
+
+            if (column==="title" || column==="subtitle") {
+                element.textContent = e.target.value;
+            } else if (column.includes("font_size")) {
+                element.style.fontSize = "var(--step-" + e.target.value + ")";
+            } else if (column.includes("spacing")) {
+                element.style.letterSpacing = e.target.value + "em";
+                element.style.marginRight = "-" + e.target.value + "em";
             }
         })
         .catch((error) => {
