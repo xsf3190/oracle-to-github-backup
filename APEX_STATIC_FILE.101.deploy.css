@@ -457,17 +457,8 @@ form textarea {
   line-height: 1.5;
 }
 
-.input-wrapper>div {
-    margin-block-start: var(--space-2xs);
-}
-.input-wrapper button, .input-wrapper span {
-    font-size: var(--step--2);
-}
-.input-wrapper button {
-    --button-padding: var(--space-2xs);
-}
-.input-wrapper span:last-child {
-    align-self: flex-start;
+fieldset {
+    border-radius:0.5em;
 }
 
 /* FLEX ITEMS */
