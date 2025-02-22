@@ -335,16 +335,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_column_name:=SUBSTR(pColumn,INSTR(pColumn,'.')+1);
 
         RETURN(
-        '<div class="input-wrapper">' ||
-            '<label for="' || l_column_name || '">' || INITCAP(REPLACE(l_column_name,'_',' ')) || l_popover ||
-            '</label>' ||
+        '<fieldset>' ||
+            '<legend><strong>' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</strong></legend>' ||
             '<input type="text" style="font:inherit" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
                 '" size="20" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '">' ||
             '<div class="flex-items space-between">' ||
                 '<span class="result"></span>' ||
                 '<span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</span>' ||
             '</div>' ||
-        '</div>');
+            '<label for="' || l_column_name || '-font-size">Size</label>' ||
+            '<input type="range" id="' || l_column_name || '-font-size" data-column="' || pColumn || '_font_size" min="1" max="6" value="4" step="1"/>' ||
+            '<label for="' || l_column_name || '-spacing">Spacing</label>' ||
+            '<input type="range" id="' || l_column_name || '-spacing" data-column="' || pColumn || '_spacing" min="0" max="1" value="0" step="0.05"/>' ||
+        '</fieldset>');
     END;
 
     /* 
@@ -368,7 +371,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_html:=
         '<form class="flex-items" style="font-family:sans-serif;font-size:var(--step--2)">' ||
             '<fieldset>' ||
-                '<legend>Change Background</legend>' ||
+                '<legend><strong>Change Background</strong></legend>' ||
                 '<input type="color" class="background-color" data-column="website.color_primary" value="' || l_color_primary || '">' || 
                 CASE WHEN pEyeDropper='true' THEN
                 '<button type="button" class="button eyedropper" style="--button-bg:transparent;--button-hover-bg:transparent">' ||
