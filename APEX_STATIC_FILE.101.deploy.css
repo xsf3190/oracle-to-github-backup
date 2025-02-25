@@ -89,10 +89,57 @@ figure.image {
   word-break: break-word;
 }
 
-body>header, body>footer {
+
+/* MAIN HEADER STYLES */
+
+body>header {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "title"
+    "subtitle";
+  gap: var(--space-s);
   background-color: var(--color-primary);
-  color: #fff;
-  padding: var(--space-m);
+}
+
+body>header:has(img)>div {
+  display:contents;
+}
+
+body>header:not(:has(img)) {
+  grid-template-areas: "div";
+}
+
+body>header>div {
+  align-self:center;
+  justify-self:center;
+  border:1px solid var(--color-primary);
+  padding:var(--space-s);
+  margin-block:var(--space-s);
+}
+
+body>header>img {
+  grid-column: 1/-1;
+  grid-row: 1/-1;
+  width:100%;
+  height:auto;
+  object-fit:cover;
+}
+
+.title {
+  grid-area: title;
+  align-self: var(--align, center);
+  justify-self: var(--justify, center);
+  line-height: 1;
+  font-size: var(--title-font-size);
+}
+
+.subtitle {
+  grid-area: subtitle;
+  align-self: var(--align, center);
+  justify-self: var(--justify, center);
+  text-decoration: var(--text-decoration, none);
+  font-size: var(--subtitle-font-size);
 }
 
 
