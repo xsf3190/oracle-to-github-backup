@@ -325,29 +325,38 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     /*
      **  Create wrapper html for input text element
      */
-    FUNCTION buildInputWrapper(pColumn IN VARCHAR2, pValue IN VARCHAR2) RETURN VARCHAR2 IS
+    FUNCTION buildInputWrapper(pColumn IN VARCHAR2, pValue IN VARCHAR2, pFontSize IN NUMBER, pLetterSpacing IN NUMBER, pFontWeight IN NUMBER, pWghtStart IN NUMBER, pWghtEnd IN NUMBER) RETURN VARCHAR2 IS
         l_column_name user_tab_columns.column_name%type;
         l_data_length user_tab_columns.data_length%type;
         l_popover LONG;
     BEGIN
-        getColumnDetails(pColumn, l_data_length, l_popover);
-
-        l_column_name:=SUBSTR(pColumn,INSTR(pColumn,'.')+1);
-
+        FOR C IN (
+            SELECT c.data_length, i.comments
+              FROM user_tab_columns c, user_col_comments i
+             WHERE c.table_name=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1))
+               AND c.column_name=UPPER(l_column_name)
+               AND i.table_name=c.table_name
+               AND i.column_name=c.column_name
+        )
+        LOOP
+            l_column_name:=SUBSTR(pColumn,INSTR(pColumn,'.')+1);
         RETURN(
-        '<fieldset>' ||
-            '<legend><strong>' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</strong></legend>' ||
-            '<input type="text" style="font:inherit" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
-                '" size="20" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '">' ||
-            '<div class="flex-items space-between">' ||
-                '<span class="result"></span>' ||
-                '<span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</span>' ||
-            '</div>' ||
-            '<label for="' || l_column_name || '-font-size">Size</label>' ||
-            '<input type="range" id="' || l_column_name || '-font-size" data-column="' || pColumn || '_font_size" min="1" max="6" value="4" step="1"/>' ||
-            '<label for="' || l_column_name || '-spacing">Spacing</label>' ||
-            '<input type="range" id="' || l_column_name || '-spacing" data-column="' || pColumn || '_spacing" min="0" max="1" value="0" step="0.05"/>' ||
-        '</fieldset>');
+            '<fieldset>' ||
+                '<legend><strong>' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</strong></legend>' ||
+                '<input type="text" style="font:inherit" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
+                    '" size="20" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '">' ||
+                '<div class="flex-items space-between">' ||
+                    '<span class="result"></span>' ||
+                    '<span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</span>' ||
+                '</div>' ||
+                '<label for="' || l_column_name || '-font-size">Size</label>' ||
+                '<input type="range" id="' || l_column_name || '-font-size" data-column="' || pColumn || '_font_size" min="1" max="6" value="' || pFontSize || '" step="1"/>' ||
+                '<label for="' || l_column_name || 'letter-spacing">Letter Spacing</label>' ||
+                '<input type="range" id="' || l_column_name || 'letter-spacing" data-column="' || pColumn || 'letter_spacing" min="0" max="1" value="' || pLetterSpacing || '" step="0.05"/>' ||
+                '<label for="' || l_column_name || '-font-weight">Font Weight</label>' ||
+                '<input type="range" id="' || l_column_name || '-font-weight" data-column="' || pColumn || '_font_weight" min="' || pWghtStart || '" max="' || pWghtEnd || '" value="' || pFontWeight || '" step="0.05"/>' ||
+            '</fieldset>');
+        END LOOP;
     END;
 
     /* 
@@ -355,43 +364,48 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     */
     PROCEDURE getHeader(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
-        l_color_primary website.color_primary%type;
-        l_title website.title%type;
-        l_subtitle website.subtitle%type;
-        l_header_effect website.header_effect%type;
+        l_value VARCHAR2(100);
         l_html LONG;
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
-        SELECT color_primary, title, subtitle, header_effect
-          INTO l_color_primary, l_title, l_subtitle, l_header_effect
-          FROM website
-         WHERE id=pWebsiteId;
+        FOR C IN (
+            SELECT w.color_primary, w.header_effect, 
+                    w.title, w.title_font_size, w.title_letter_spacing, w.title_font_wght,
+                    w.subtitle, w.subtitle_font_size, w.subtitle_letter_spacing, w.subtitle_font_wght,
+                    w.font, f.wght_start, f.wght_end
+              FROM website w, google_font_variable f
+             WHERE w.id=pWebsiteId
+               AND w.font=f.family
+        ) 
+        LOOP
+            l_html:=
+            '<form class="flex-items" style="font-family:sans-serif;font-size:var(--step--2)">' ||
+                '<fieldset>' ||
+                    '<legend><strong>Change Background</strong></legend>' ||
+                    '<input type="color" class="background-color" data-column="website.color_primary" value="' || C.color_primary || '">' || 
+                    CASE WHEN pEyeDropper='true' THEN
+                    '<button type="button" class="button eyedropper" style="--button-bg:transparent;--button-hover-bg:transparent">' ||
+                        '<svg class="icon" aria-hidden="true" focusable="false">' ||
+                            '<use href="#eyedropper"></use>' ||
+                        '</svg>' ||
+                    '</button>'
+                    END ||
+                    '<button type="button" class="button background-image" style="--button-bg:transparent;--button-hover-bg:transparent">' ||
+                        '<svg class="icon" aria-hidden="true" focusable="false">' ||
+                            '<use href="#image"></use>' ||
+                        '</svg>' ||
+                    '</button>' ||
+                    '<span class="result"></span>' ||
+                '</fieldset>' ||
 
-        l_html:=
-        '<form class="flex-items" style="font-family:sans-serif;font-size:var(--step--2)">' ||
-            '<fieldset>' ||
-                '<legend><strong>Change Background</strong></legend>' ||
-                '<input type="color" class="background-color" data-column="website.color_primary" value="' || l_color_primary || '">' || 
-                CASE WHEN pEyeDropper='true' THEN
-                '<button type="button" class="button eyedropper" style="--button-bg:transparent;--button-hover-bg:transparent">' ||
-                    '<svg class="icon" aria-hidden="true" focusable="false">' ||
-                        '<use href="#eyedropper"></use>' ||
-                    '</svg>' ||
-                '</button>'
-                END ||
-                '<button type="button" class="button background-image" style="--button-bg:transparent;--button-hover-bg:transparent">' ||
-                    '<svg class="icon" aria-hidden="true" focusable="false">' ||
-                        '<use href="#image"></use>' ||
-                    '</svg>' ||
-                '</button>' ||
-                '<span class="result"></span>' ||
-            '</fieldset>' ||
-            buildInputWrapper('website.title',l_title) || 
-            buildInputWrapper('website.subtitle',l_subtitle) ||
-            '<button type="button" class="button publish-changes" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
-        '</form>';
+                buildInputWrapper('website.title', C.title, C.title_font_size, C.title_letter_spacing, C.title_font_wght, C.wght_start, C.wght_end) || 
+                buildInputWrapper('website.subtitle',C.subtitle, C.subtitle_font_size, C.subtitle_letter_spacing, C.subtitle_font_wght, C.wght_start, C.wght_end) ||
 
+                '<button type="button" class="button publish-changes" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
+            '</form>';
+        END LOOP;
+        /* Include SVG symbols in hidden element */
         l_html:=l_html || '<svg width="0" height="0">';
         FOR C IN (SELECT id, viewbox, svg FROM icon WHERE id IN ('eyedropper','image')) LOOP
             l_html:=l_html || '<symbol id="' || C.id || '" viewBox="' || C.viewbox || '" preserveAspectRatio="">' || C.svg || '</symbol>';
