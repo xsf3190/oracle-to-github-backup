@@ -317,7 +317,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_header:=
             '<header>' ||
                 CASE WHEN pHeroAssetId IS NOT NULL THEN pck_media.getImageSrcset(pHeroAssetId) END ||
-                '<div' ||
+                '<div>' ||
                     '<h1 class="title">' || pTitle || '</h1>' ||
                      CASE WHEN pSubtitle IS NOT NULL THEN '<p class="subtitle">' || pSubtitle || '</p>' END ||
                 '</div>' ||
