@@ -326,37 +326,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
      **  Create wrapper html for input text element
      */
     FUNCTION buildInputWrapper(pColumn IN VARCHAR2, pValue IN VARCHAR2, pFontSize IN NUMBER, pLetterSpacing IN NUMBER, pFontWeight IN NUMBER, pWghtStart IN NUMBER, pWghtEnd IN NUMBER) RETURN VARCHAR2 IS
-        l_column_name user_tab_columns.column_name%type;
-        l_data_length user_tab_columns.data_length%type;
-        l_popover LONG;
+        l_table_name user_tab_columns.table_name%type:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
+        l_column_name user_tab_columns.column_name%type:=SUBSTR(pColumn,INSTR(pColumn,'.')+1);
+        l_html LONG;
     BEGIN
         FOR C IN (
             SELECT c.data_length, i.comments
               FROM user_tab_columns c, user_col_comments i
-             WHERE c.table_name=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1))
+             WHERE c.table_name=l_table_name
                AND c.column_name=UPPER(l_column_name)
                AND i.table_name=c.table_name
                AND i.column_name=c.column_name
         )
         LOOP
-            l_column_name:=SUBSTR(pColumn,INSTR(pColumn,'.')+1);
-        RETURN(
+            l_html:=
             '<fieldset>' ||
                 '<legend><strong>' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</strong></legend>' ||
                 '<input type="text" style="font:inherit" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
-                    '" size="20" maxlength="' || l_data_length || '" value="' || pValue || '" data-column="' || pColumn || '">' ||
+                    '" size="20" maxlength="' || C.data_length || '" value="' || pValue || '" data-column="' || pColumn || '">' ||
                 '<div class="flex-items space-between">' ||
                     '<span class="result"></span>' ||
-                    '<span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || l_data_length || '</span>' ||
+                    '<span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || C.data_length || '</span>' ||
                 '</div>' ||
                 '<label for="' || l_column_name || '-font-size">Size</label>' ||
                 '<input type="range" id="' || l_column_name || '-font-size" data-column="' || pColumn || '_font_size" min="1" max="6" value="' || pFontSize || '" step="1"/>' ||
-                '<label for="' || l_column_name || 'letter-spacing">Letter Spacing</label>' ||
-                '<input type="range" id="' || l_column_name || 'letter-spacing" data-column="' || pColumn || 'letter_spacing" min="0" max="1" value="' || pLetterSpacing || '" step="0.05"/>' ||
+                '<label for="' || l_column_name || '-letter-spacing">Letter Spacing</label>' ||
+                '<input type="range" id="' || l_column_name || 'letter-spacing" data-column="' || pColumn || '_letter_spacing" min="0" max="1" value="' || pLetterSpacing || '" step="0.05"/>' ||
                 '<label for="' || l_column_name || '-font-weight">Font Weight</label>' ||
                 '<input type="range" id="' || l_column_name || '-font-weight" data-column="' || pColumn || '_font_weight" min="' || pWghtStart || '" max="' || pWghtEnd || '" value="' || pFontWeight || '" step="0.05"/>' ||
-            '</fieldset>');
+            '</fieldset>';
         END LOOP;
+        RETURN(l_html);
     END;
 
     /* 
@@ -364,7 +364,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     */
     PROCEDURE getHeader(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
-        l_value VARCHAR2(100);
         l_html LONG;
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
