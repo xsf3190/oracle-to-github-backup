@@ -80,29 +80,21 @@ editor.addEventListener("change", (e) => {
             header.style.color = "#000000";
         }
     }
-    const result = e.target.parentElement.querySelector(".result");
-    callAPI(endpoint,'PUT', {table_column:e.target.dataset.column, value:e.target.value})
-        .then(() => {
-            result.textContent = "OK";
-            result.style.color = "green";
+    //const result = e.target.parentElement.querySelector(".result");
 
-            const column = e.target.dataset.column.split(".")[1];
-            
-            const element = column==="title" ? header.querySelector("h1") : header.querySelector("p");
+    const column = e.target.dataset.column.split(".")[1];
+    const element = header.querySelector("." + column.split("_")[0]);
 
-            if (column==="title" || column==="subtitle") {
-                element.textContent = e.target.value;
-            } else if (column.includes("font_size")) {
-                element.style.fontSize = "var(--step-" + e.target.value + ")";
-            } else if (column.includes("spacing")) {
-                element.style.letterSpacing = e.target.value + "em";
-                element.style.marginRight = "-" + e.target.value + "em";
-            }
-        })
-        .catch((error) => {
-            result.textContent = error;
-            result.style.color = "red";
-        });
+    if (column==="title" || column==="subtitle") {
+        element.textContent = e.target.value;
+    } else if (column.includes("font_size")) {
+        element.style.fontSize = "var(--step-" + e.target.value + ")";
+    } else if (column.includes("letter_spacing")) {
+        element.style.letterSpacing = e.target.value + "em";
+        element.style.marginRight = "-" + e.target.value + "em";
+    } else if (column.includes("font_weight")) {
+        element.style.fontWeight = e.target.value;
+    }
 });
 
 const selectColorFromScreen = async (abortController) => {
