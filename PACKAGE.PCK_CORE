@@ -1159,18 +1159,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         --l_google_url:='https://www.googleapis.com/webfonts/v1/webfonts?key=' || l_google_api_key||'&capability=WOFF2&sort=popularity';
         l_google_url:='https://www.googleapis.com/webfonts/v1/webfonts?key=' || l_google_api_key||'&capability=VF';
         l_clob := apex_web_service.make_rest_request(p_url=>l_google_url, p_http_method=>'GET');
-        /*DELETE google_font;
+        /* static fonts load
+        DELETE google_font;
         INSERT INTO google_font (seq, family, category, url_regular)
-        SELECT ROWNUM, family, category, url_regular FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, url_regular PATH '$.files.regular'));*/
+        SELECT ROWNUM, family, category, url_regular FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, url_regular PATH '$.files.regular'));
+        */
+        
         DELETE google_font_variable;
 
-        INSERT INTO google_font_variable(family,category,menu,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end)
-        with data as (
-            select family, category, menu, tag,"start" as tag_start, "end" as tag_end
-            FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, menu, NESTED '$.axes[*]' COLUMNS(tag varchar2(4) PATH '$.tag', "start" number PATH '$.start', "end" number PATH '$.end'))) 
-            WHERE tag is not null and tag in ('wdth','wght','slnt','opsz')
+        INSERT INTO google_font_variable(family,category,menu,regular,italic,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end)
+        WITH data as (
+            select family, category, menu, variant, tag,"start" as tag_start, "end" as tag_end
+            FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, menu, NESTED '$.variants[*]' COLUMNS (variant PATH '$'), NESTED '$.axes[*]' COLUMNS(tag varchar2(4) PATH '$.tag', "start" number PATH '$.start', "end" number PATH '$.end'))) 
+            --WHERE tag is not null and tag in ('wdth','wght','slnt','opsz')
         )
         SELECT family,category,menu, 
+            max(decode(variant,'regular','YES')) as regular, max(decode(variant,'italic','YES')) as italic,
             max(decode(tag,'wght',tag_start)) as wght_start, max(decode(tag,'wght',tag_end)) as wght_end,
             max(decode(tag,'wdth',tag_start)) as wdth_start, max(decode(tag,'wdth',tag_end)) as wdth_end,
             max(decode(tag,'opsz',tag_start)) as opsz_start, max(decode(tag,'opsz',tag_end)) as opsz_end,
