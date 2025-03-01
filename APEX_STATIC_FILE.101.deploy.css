@@ -126,6 +126,11 @@ body>header>img {
   object-fit:cover;
 }
 
+.title, .subtitle {
+  max-width:100%;
+  white-space:nowrap;
+}
+
 .title {
   grid-area: title;
   align-self: var(--align, center);
@@ -238,8 +243,9 @@ article {
 }
 
 .flow > * + * {
-  margin-block-start: var(--space-s);
+  margin-block-start: var(--flow-space, 1em);
 }
+
 .spaced-letters {
   letter-spacing: 0.2em;
 }
