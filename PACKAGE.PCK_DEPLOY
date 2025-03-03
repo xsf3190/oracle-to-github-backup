@@ -166,7 +166,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_font_css CLOB;
         l_font_download BLOB;
         l_googleapis_query VARCHAR2(100);
-        l_googleapis_query_params VARCHAR2(100);
+        l_googleapis_query_params VARCHAR2(500);
         l_color_primary website.color_primary%type;
         l_favicon_asset_id website.favicon_asset_id%type;
         l_login_form website.login_form%type;
@@ -519,19 +519,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         apex_web_service.g_request_headers(1).value := 'Mozilla/5.0 (Windows NT 6.3; rv:39.0) Gecko/20100101 Firefox/39.0';
         --pck_core.log(l_chars);
         --pck_core.log(utl_url.escape(l_chars, escape_reserved_chars=>TRUE, url_charset=>'UTF-8'));
-        l_font_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(l_font,' ','+') || ':';
+        
         IF (l_font_italic='YES') THEN 
             l_googleapis_query:='ital';
             l_googleapis_query_params:='0';
         END IF;
         IF (l_font_opsz_start IS NoT NULL) THEN 
             l_googleapis_query:=l_googleapis_query || ',opsz';
+            l_googleapis_query_params:=l_googleapis_query_params || ',' || l_font_opsz_start || '..' || l_font_opsz_end;
         END IF;
         IF (l_font_slnt_start IS NoT NULL) THEN 
             l_googleapis_query:=l_googleapis_query || ',slnt';
+            l_googleapis_query_params:=l_googleapis_query_params || ',' || l_font_slnt_start || '..' || l_font_slnt_end;
+        END IF;
+        IF (l_font_wdth_start IS NoT NULL) THEN 
+            l_googleapis_query:=l_googleapis_query || ',wdth';
+            l_googleapis_query_params:=l_googleapis_query_params || ',' || l_font_wdth_start || '..' || l_font_wdth_end;
+        END IF;
+        IF (l_font_wght_start IS NoT NULL) THEN 
+            l_googleapis_query:=l_googleapis_query || ',wght';
+            l_googleapis_query_params:=l_googleapis_query_params || ',' || l_font_wght_start || '..' || l_font_wght_end;
         END IF;
 
-        l_googleapis_query:=l_googleapis_query || '&text=' || utl_url.escape(l_chars,TRUE,'UTF-8');
+        l_googleapis_query:=LTRIM(l_googleapis_query,',');
+        l_googleapis_query:=l_googleapis_query || '@' || l_googleapis_query_params;
+
+        IF (l_font_italic='YES') THEN 
+            l_googleapis_query:=l_googleapis_query || ';1' || SUBSTR(l_googleapis_query_params,2);
+        END IF;
+
+        l_font_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(l_font,' ','+') || ':' || l_googleapis_query || '&text=' || utl_url.escape(l_chars,TRUE,'UTF-8');
+        pck_core.log('l_font_url:'||l_font_url);
 
         l_font_css:=apex_web_service.make_rest_request(p_url=>l_font_url, p_http_method=>'GET');
         l_font_url:=REGEXP_SUBSTR(l_font_css, '\(([^)]*)\)', 1, 1, NULL, 1);
