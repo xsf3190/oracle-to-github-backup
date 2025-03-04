@@ -377,6 +377,52 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         END LOOP;
     END;
 
+
+    PROCEDURE buildGoogleFontImport(pFontFamily IN google_font_variable.family%type, pCategory IN OUT google_font_variable.category%type, pUrl IN OUT VARCHAR2) IS
+        l_googleapis_query VARCHAR2(100);
+        l_googleapis_query_params VARCHAR2(500);
+    BEGIN
+        FOR C IN (
+            SELECT category, wght_start, wght_end, wdth_start, wdth_end, opsz_start, opsz_end, slnt_start, slnt_end, italic
+              FROM google_font_variable 
+             WHERE family=pFontFamily
+        ) LOOP
+            IF (C.italic='YES') THEN 
+                l_googleapis_query:='ital';
+                l_googleapis_query_params:='0';
+            END IF;
+            IF (C.opsz_start IS NoT NULL) THEN 
+                l_googleapis_query:=l_googleapis_query || ',opsz';
+                l_googleapis_query_params:=l_googleapis_query_params || ',' || C.opsz_start || '..' || C.opsz_end;
+            END IF;
+            IF (C.slnt_start IS NoT NULL) THEN 
+                l_googleapis_query:=l_googleapis_query || ',slnt';
+                l_googleapis_query_params:=l_googleapis_query_params || ',' || C.slnt_start || '..' || C.slnt_end;
+            END IF;
+            IF (C.wdth_start IS NoT NULL) THEN 
+                l_googleapis_query:=l_googleapis_query || ',wdth';
+                l_googleapis_query_params:=l_googleapis_query_params || ',' || C.wdth_start || '..' || C.wdth_end;
+            END IF;
+            IF (C.wght_start IS NoT NULL) THEN 
+                l_googleapis_query:=l_googleapis_query || ',wght';
+                l_googleapis_query_params:=l_googleapis_query_params || ',' || C.wght_start || '..' || C.wght_end;
+            END IF;
+
+            l_googleapis_query:=LTRIM(l_googleapis_query,',');
+            l_googleapis_query:=l_googleapis_query || '@' || l_googleapis_query_params;
+
+            IF (C.italic='YES') THEN 
+                l_googleapis_query:=l_googleapis_query || ';1' || SUBSTR(l_googleapis_query_params,2);
+            END IF;
+
+            pCategory:=C.category;
+            pUrl:='https://fonts.googleapis.com/css2?family=' || REPLACE(pFontFamily,' ','+') || ':' || l_googleapis_query || '&display=swap';
+        
+        END LOOP;
+    END;
+
+
+
     /* 
     ** Build page CSS
     */ 
@@ -392,26 +438,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_rgb_lightest VARCHAR2(6);
         
         l_css_file apex_application_static_files.file_name%type;
+        l_font_category google_font_variable.category%type;
+        l_font_url VARCHAR2(200);
         l_root_css LONG;
         l_deploy_css CLOB;
     BEGIN
-        FOR C IN (SELECT w.font, w.max_width, w.color_text, w.color_background, w.color_primary, w.css,
-                         w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, w.img_border_radius, g.category
-                    FROM website w, google_font g
-                   WHERE w.id=pWebsiteId
-                     AND w.font=g.family)
+        FOR C IN (
+            SELECT w.font, w.max_width, w.color_text, w.color_background, w.color_primary, w.css,
+                     w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, w.img_border_radius
+              FROM website w
+             WHERE w.id=pWebsiteId
+            )
         LOOP
             /* Build design tokens */
 
             l_fluid_types:=getFluidTypes(C.min_font_size, C.min_width_px, C.min_scale, C.max_font_size, C.max_width_px, C.max_scale);
+
+            buildGoogleFontImport(C.font, l_font_category, l_font_url);
             
             l_root_css:=
+            CASE WHEN NOT pDeploy THEN
+                '@import url("' || l_font_url || '");' || chr(10)
+            END ||
             ':root {';
             FOR i IN 1..l_fluid_types.COUNT LOOP
                 l_root_css:=l_root_css || l_fluid_types(i).property || ': ' || l_fluid_types(i).value || ';';
             END LOOP;
             l_root_css:=l_root_css ||
-            '--font-family: "' || C.font || '", ' || CASE WHEN C.category='handwriting' THEN 'cursive' ELSE C.category END || ';'||
+            '--font-family: "' || C.font || '", ' || l_font_category || ';'||
             '--max-width: ' || C.max_width || ';' || 
             '--img-border-radius: ' || C.img_border_radius || ';' || 
             '--color-text: ' || C.color_text || ';' || 
