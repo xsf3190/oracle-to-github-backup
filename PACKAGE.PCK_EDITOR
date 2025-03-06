@@ -379,7 +379,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         ) 
         LOOP
             l_html:=
-            '<form class="flex-items" style="font-family:sans-serif;font-size:var(--step--2)">' ||
+            '<form class="flex-items">' ||
                 '<fieldset>' ||
                     '<legend><strong>Change Background</strong></legend>' ||
                     '<input type="color" class="background-color" data-column="website.color_primary" value="' || C.color_primary || '">' || 
@@ -397,11 +397,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     '</button>' ||
                     '<span class="result"></span>' ||
                 '</fieldset>' ||
-
                 buildInputWrapper('website.title', C.title, C.title_font_size, C.title_letter_spacing, C.title_font_wght, C.wght_start, C.wght_end) || 
                 buildInputWrapper('website.subtitle',C.subtitle, C.subtitle_font_size, C.subtitle_letter_spacing, C.subtitle_font_wght, C.wght_start, C.wght_end) ||
-
-                '<button type="button" class="button publish-changes" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
+                '<div class="flex-items space-between">' ||
+                    '<button type="button" class="button publish-changes" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
+                    '<button type="button" class="button save-changes" style="--button-bg:rebeccapurple">SAVE</button>' ||
+                    '<button type="button" class="button cancel-changes" style="--button-bg:rebeccapurple">CANCEL</button>' ||
             '</form>';
         END LOOP;
         /* Include SVG symbols in hidden element */
