@@ -1199,6 +1199,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_google_api_key users.google_api_key%type;
         l_google_url VARCHAR2(250);
         l_clob CLOB;
+        l_lastModified google_font_variable.lastModified%type;
     BEGIN
         SELECT u.google_api_key 
           INTO l_google_api_key
@@ -1221,27 +1222,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         
         DELETE google_font_variable;
 
-        INSERT INTO google_font_variable(family,category,menu,regular,italic,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end)
-        WITH data as (
-            select family, category, menu, variant, tag,"start" as tag_start, "end" as tag_end
-            FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, menu, NESTED '$.variants[*]' COLUMNS (variant PATH '$'), NESTED '$.axes[*]' COLUMNS(tag varchar2(4) PATH '$.tag', "start" number PATH '$.start', "end" number PATH '$.end'))) 
-            --WHERE tag is not null and tag in ('wdth','wght','slnt','opsz')
+        INSERT INTO google_font_variable(family,category,menu,lastModified,regular,italic,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end)
+        WITH data AS (
+            SELECT family, category, menu, lastModified, variant, tag,"start" as tag_start, "end" as tag_end
+              FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, menu, lastModified, NESTED '$.variants[*]' COLUMNS (variant PATH '$'), NESTED '$.axes[*]' COLUMNS(tag varchar2(4) PATH '$.tag', "start" number PATH '$.start', "end" number PATH '$.end'))) 
         )
-        SELECT family,category,menu, 
+        SELECT family,category,menu,TO_DATE(lastModified,'YYYY-MM-DD'),
             max(decode(variant,'regular','YES')) as regular, max(decode(variant,'italic','YES')) as italic,
             max(decode(tag,'wght',tag_start)) as wght_start, max(decode(tag,'wght',tag_end)) as wght_end,
             max(decode(tag,'wdth',tag_start)) as wdth_start, max(decode(tag,'wdth',tag_end)) as wdth_end,
             max(decode(tag,'opsz',tag_start)) as opsz_start, max(decode(tag,'opsz',tag_end)) as opsz_end,
             max(decode(tag,'slnt',tag_start)) as slnt_start, max(decode(tag,'slnt',tag_end)) as slnt_end
         FROM data
-        GROUP BY family,category,menu;
+        GROUP BY family,category,menu,lastModified;
+
+        DELETE google_font_variable WHERE COALESCE(wght_start,wdth_start,opsz_start,slnt_start) IS NULL;
+
+        SELECT MAX(lastModified) INTO l_lastModified FROM google_font_variable;
+        pck_core.log('Google variable fonts loaded - last modified is ' || TO_CHAR(l_lastModified,'DD-MM-YYYY'));
     END;
-
-
-
-
-
-
 
     /*
     **  Administrator function to transfer ownership of a specified website and all dependent table rows to a different User 
