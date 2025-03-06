@@ -323,20 +323,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         l_repo CLOB;
         n PLS_INTEGER;
     BEGIN
-        l_repo := dbms_cloud_repo.init_github_repo(
-            credential_name => 'GITHUB_CRED', 
-            owner => 'xsf3190', 
-            repo_name => 'oracle-to-github-backup');
+       
 
         SELECT COUNT(*) INTO n
           FROM apex_applications
          WHERE owner=sys_context('userenv','current_schema');
+
+        l_repo := dbms_cloud_repo.init_github_repo(
+            credential_name => 'GITHUB_CRED', 
+            owner => 'xsf3190', 
+            repo_name => 'oracle-to-github-backup');
 
         IF (n=0) THEN
             datapump_backup(l_repo);
         END IF;
         
         github_backup(l_repo,n);
+
+         /* Delete log data older than 24 hours */
+        DELETE log WHERE log_date<SYSDATE-1;
+        
+        IF (n>0) THEN
+            pck_core.loadGoogleFonts;
+        END IF;
 
         EXCEPTION
             WHEN OTHERS THEN
