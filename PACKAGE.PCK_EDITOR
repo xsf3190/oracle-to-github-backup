@@ -322,38 +322,93 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         END IF;
     END;
 
+    FUNCTION buildSelectFont(pFontId IN font.id%type) RETURN VARCHAR2 IS
+        l_html LONG;
+        l_selected_category font.category%type;
+    BEGIN
+        /* Font Category first */
+        SELECT category INTO l_selected_category FROM font WHERE id=pFontId;
+        l_html:=
+        '<label for="select-category">Font Category' ||
+          '<select id="select-category" style="min-width:10em">' ||
+            '<button>' ||
+              '<selectedcontent></selectedcontent>' ||
+              '<span class="arrow"></span>' ||
+            '</button>';
+        FOR C IN (SELECT DISTINCT category FROM font ORDER BY 1)
+        LOOP
+            l_html:=l_html || 
+            '<option'|| CASE WHEN C.category=l_selected_category THEN ' selected' END || '>' ||
+                C.category ||
+            '</option>';
+        END LOOP;
+        l_html:=l_html || 
+            '</select>' ||
+        '</label>';
+
+        /* Fonts in category */
+        l_html:=l_html || 
+        '<label for="select-font">Font Family' ||
+        '<select id="select-font">' ||
+            '<button>' ||
+              '<selectedcontent></selectedcontent>' ||
+              '<span class="arrow"></span>' ||
+            '</button>';
+        FOR C IN (SELECT id, family FROM font WHERE category=l_selected_category ORDER BY 2)
+        LOOP
+            l_html:=l_html || 
+            '<option'|| CASE WHEN C.id=pFontId THEN ' selected' END || '>' ||
+                C.family ||
+            '</option>';
+        END LOOP;
+
+        RETURN(l_html);
+    END;
+
     /*
      **  Create wrapper html for input text element
      */
-    FUNCTION buildInputWrapper(pColumn IN VARCHAR2, pValue IN VARCHAR2, pFontSize IN NUMBER, pLetterSpacing IN NUMBER, pFontWeight IN NUMBER, pWghtStart IN NUMBER, pWghtEnd IN NUMBER) RETURN VARCHAR2 IS
+    FUNCTION buildInputWrapper(pWebsiteId IN website.id%type, pColumn IN VARCHAR2, pValue IN VARCHAR2, pFontSize IN NUMBER, pLetterSpacing IN NUMBER) RETURN VARCHAR2 IS
         l_table_name user_tab_columns.table_name%type:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
         l_column_name user_tab_columns.column_name%type:=SUBSTR(pColumn,INSTR(pColumn,'.')+1);
         l_html LONG;
     BEGIN
         FOR C IN (
-            SELECT c.data_length, i.comments
-              FROM user_tab_columns c, user_col_comments i
+            SELECT c.data_length, i.comments, wf.font_id, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt, wf.ital
+              FROM user_tab_columns c, user_col_comments i, website_font wf, font f
              WHERE c.table_name=l_table_name
                AND c.column_name=UPPER(l_column_name)
                AND i.table_name=c.table_name
                AND i.column_name=c.column_name
+               AND wf.website_id=pWebsiteId
+               AND wf.context=UPPER(l_column_name)
+               AND wf.font_id=f.id
         )
         LOOP
             l_html:=
-            '<fieldset>' ||
+            '<fieldset class="flex-items" style="--flex-direction:column; --flex-vertical-alignment:flex-start;--flex-gap:1em">' ||
                 '<legend><strong>' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</strong></legend>' ||
-                '<input type="text" style="font:inherit" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
-                    '" size="20" maxlength="' || C.data_length || '" value="' || pValue || '" data-column="' || pColumn || '">' ||
-                '<div class="flex-items space-between">' ||
-                    '<span class="result"></span>' ||
-                    '<span class="charcounter">' || NVL(LENGTH(pValue),0) ||  '/' || C.data_length || '</span>' ||
+                '<div class="flex-items" style="--flex-direction:row;">' ||
+                    buildSelectFont(C.font_id) ||
                 '</div>' ||
-                '<label for="' || l_column_name || '-font-size">Size</label>' ||
-                '<input type="range" id="' || l_column_name || '-font-size" data-column="' || pColumn || '_font_size" min="4" max="6" value="' || pFontSize || '" step="1"/>' ||
-                '<label for="' || l_column_name || '-letter-spacing">Letter Spacing</label>' ||
-                '<input type="range" id="' || l_column_name || 'letter-spacing" data-column="' || pColumn || '_letter_spacing" min="0" max="0.75" value="' || pLetterSpacing || '" step="0.05"/>' ||
-                '<label for="' || l_column_name || '-font-weight">Font Weight</label>' ||
-                '<input type="range" id="' || l_column_name || '-font-weight" data-column="' || pColumn || '_font_weight" min="' || pWghtStart || '" max="' || pWghtEnd || '" value="' || pFontWeight || '" step="50"/>' ||
+
+                '<div style="width:100%">' ||
+                    '<input type="text" style="font:inherit;font-size:120%" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || LOWER(l_column_name) || 
+                        '" size="20" maxlength="' || C.data_length || '" value="' || pValue || '" data-column="' || pColumn || '">' ||
+                    '<div class="flex-items space-between">' ||
+                        '<span class="result"></span>' ||
+                        '<span class="charcounter" style="font-size:80%">' || NVL(LENGTH(pValue),0) ||  '/' || C.data_length || '</span>' ||
+                    '</div>' ||
+                '</div>' ||
+                
+                '<div class="flex-items" style="--flex-direction:row;--flex-gap:0.2em">' ||
+                    '<label for="' || l_column_name || '-font-size">Size</label>' ||
+                    '<input type="range" id="' || l_column_name || '-font-size" data-column="' || pColumn || '_font_size" min="4" max="6" value="' || pFontSize || '" step="1"/>' ||
+                    '<label for="' || l_column_name || '-letter-spacing">Letter Spacing</label>' ||
+                    '<input type="range" id="' || l_column_name || 'letter-spacing" data-column="' || pColumn || '_letter_spacing" min="0" max="0.75" value="' || pLetterSpacing || '" step="0.05"/>' ||
+                    '<label for="' || l_column_name || '-font-weight">Font Weight</label>' ||
+                    '<input type="range" id="' || l_column_name || '-font-weight" data-column="' || pColumn || '_font_weight" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '" step="50"/>' ||
+                '</div>' ||
             '</fieldset>';
         END LOOP;
         RETURN(l_html);
@@ -370,16 +425,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
 
         FOR C IN (
             SELECT w.color_primary, w.header_effect, 
-                    w.title, w.title_font_size, w.title_letter_spacing, w.title_font_wght,
-                    w.subtitle, w.subtitle_font_size, w.subtitle_letter_spacing, w.subtitle_font_wght,
-                    w.font, f.wght_start, f.wght_end
-              FROM website w, google_font_variable f
+                    w.title, w.title_font_size, w.title_letter_spacing, 
+                    w.subtitle, w.subtitle_font_size, w.subtitle_letter_spacing
+              FROM website w
              WHERE w.id=pWebsiteId
-               AND w.font=f.family
         ) 
         LOOP
             l_html:=
-            '<form class="flex-items">' ||
+            '<form class="editor" style="font-family:sans-serif;font-size:var(--step--2)">' ||
                 '<fieldset>' ||
                     '<legend><strong>Change Background</strong></legend>' ||
                     '<input type="color" class="background-color" data-column="website.color_primary" value="' || C.color_primary || '">' || 
@@ -397,8 +450,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     '</button>' ||
                     '<span class="result"></span>' ||
                 '</fieldset>' ||
-                buildInputWrapper('website.title', C.title, C.title_font_size, C.title_letter_spacing, C.title_font_wght, C.wght_start, C.wght_end) || 
-                buildInputWrapper('website.subtitle',C.subtitle, C.subtitle_font_size, C.subtitle_letter_spacing, C.subtitle_font_wght, C.wght_start, C.wght_end) ||
+                buildInputWrapper(pWebsiteId,'website.title', C.title, C.title_font_size, C.title_letter_spacing) || 
+                buildInputWrapper(pWebsiteId,'website.subtitle',C.subtitle, C.subtitle_font_size, C.subtitle_letter_spacing) ||
                 '<div class="flex-items space-between">' ||
                     '<button type="button" class="button publish-changes" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
                     '<button type="button" class="button save-changes" style="--button-bg:rebeccapurple">SAVE</button>' ||
