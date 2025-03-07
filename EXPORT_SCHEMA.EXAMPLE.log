@@ -1,51 +1,53 @@
-06-MAR-25 05:12:27.020: Starting "EXAMPLE"."EXPORT_SCHEMA_15582":  
-06-MAR-25 05:12:32.825: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
-06-MAR-25 05:12:33.104: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
-06-MAR-25 05:12:33.996: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA/LOGREP
-06-MAR-25 05:12:35.368: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
-06-MAR-25 05:12:40.787: Processing object type SCHEMA_EXPORT/TABLE/TABLE
-06-MAR-25 05:12:55.575: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
-06-MAR-25 05:12:55.949: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
-06-MAR-25 05:12:56.683: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
-06-MAR-25 05:12:57.827: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
-06-MAR-25 05:13:00.668: Processing object type SCHEMA_EXPORT/VIEW/VIEW
-06-MAR-25 05:13:01.828: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
-06-MAR-25 05:13:07.060: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
-06-MAR-25 05:13:09.350: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
-06-MAR-25 05:13:11.975: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA/LBAC_EXP
-06-MAR-25 05:13:12.393: . . exported "EXAMPLE"."WEBSITE"                          13.8 KB      22 rows
-06-MAR-25 05:13:12.446: . . exported "EXAMPLE"."ICON"                             12.8 KB      21 rows
-06-MAR-25 05:13:12.538: . . exported "EXAMPLE"."ASSET"                             479 KB   21591 rows
-06-MAR-25 05:13:12.638: . . exported "EXAMPLE"."PAGE_HIT"                          298 KB    7382 rows
-06-MAR-25 05:13:12.757: . . exported "EXAMPLE"."ARTICLE"                         650.2 KB     737 rows
-06-MAR-25 05:13:12.842: . . exported "EXAMPLE"."USER_LOGIN"                       95.7 KB    6260 rows
-06-MAR-25 05:13:12.891: . . exported "EXAMPLE"."LOG"                               8.2 KB     108 rows
-06-MAR-25 05:13:12.951: . . exported "EXAMPLE"."USAGE"                            73.1 KB    2336 rows
-06-MAR-25 05:13:13.007: . . exported "EXAMPLE"."GOOGLE_FONT"                     100.3 KB    1722 rows
-06-MAR-25 05:13:13.062: . . exported "EXAMPLE"."SESSION_DATA"                     59.9 KB    2649 rows
-06-MAR-25 05:13:13.117: . . exported "EXAMPLE"."REFRESH_TOKEN"                    72.1 KB    1072 rows
-06-MAR-25 05:13:13.171: . . exported "EXAMPLE"."IP_LOOKUP"                        66.9 KB    3385 rows
-06-MAR-25 05:13:13.225: . . exported "EXAMPLE"."WEBSITE_ARTICLE_CWV"              14.9 KB     406 rows
-06-MAR-25 05:13:13.280: . . exported "EXAMPLE"."GOOGLE_FONT_VARIABLE"             36.7 KB     454 rows
-06-MAR-25 05:13:13.332: . . exported "EXAMPLE"."WEBSITE_DEPLOY"                   16.8 KB     606 rows
-06-MAR-25 05:13:13.384: . . exported "EXAMPLE"."BROWSER_LOOKUP"                   14.1 KB     378 rows
-06-MAR-25 05:13:13.436: . . exported "EXAMPLE"."BROWSER_LOOKUP_TMP"               10.2 KB     279 rows
-06-MAR-25 05:13:13.488: . . exported "EXAMPLE"."METRICS"                          13.6 KB     310 rows
-06-MAR-25 05:13:13.541: . . exported "EXAMPLE"."USERS"                             9.1 KB      38 rows
-06-MAR-25 05:13:13.593: . . exported "EXAMPLE"."WEBSITE_ARTICLE"                   8.4 KB      55 rows
-06-MAR-25 05:13:13.645: . . exported "EXAMPLE"."JWKS_KEY_CACHE"                      7 KB       6 rows
-06-MAR-25 05:13:13.696: . . exported "EXAMPLE"."API_ENDPOINT"                      5.5 KB     352 rows
-06-MAR-25 05:13:13.747: . . exported "EXAMPLE"."NETLIFY_SITE"                      5.9 KB      18 rows
-06-MAR-25 05:13:13.798: . . exported "EXAMPLE"."ARTICLE_MESSAGE"                   5.6 KB      17 rows
-06-MAR-25 05:13:13.848: . . exported "EXAMPLE"."NETLIFY_DNS_ZONE"                  5.1 KB       7 rows
-06-MAR-25 05:13:13.897: . . exported "EXAMPLE"."FINGERPRINT"                       5.4 KB      17 rows
-06-MAR-25 05:13:13.944: . . exported "EXAMPLE"."ORDS_ENDPOINTS"                    4.9 KB       7 rows
-06-MAR-25 05:13:13.993: . . exported "EXAMPLE"."NETLIFY_DNS_ZONE_SERVER"           4.8 KB      28 rows
-06-MAR-25 05:13:14.041: . . exported "EXAMPLE"."WEBSITE_ROLE"                      4.8 KB      66 rows
-06-MAR-25 05:13:14.088: . . exported "EXAMPLE"."ROLE"                              4.6 KB       3 rows
-06-MAR-25 05:13:14.094: . . exported "EXAMPLE"."DBTOOLS$EXECUTION_HISTORY"           0 KB       0 rows
-06-MAR-25 05:13:16.123: Master table "EXAMPLE"."EXPORT_SCHEMA_15582" successfully loaded/unloaded
-06-MAR-25 05:13:16.344: ******************************************************************************
-06-MAR-25 05:13:16.345: Dump file set for EXAMPLE.EXPORT_SCHEMA_15582 is:
-06-MAR-25 05:13:16.346:   /u03/dbfs/1E20BEEAF2C0BC4DE063ED5D000AE048/data/dpdump/EXPORT_SCHEMA.EXAMPLE.dmp
-06-MAR-25 05:13:16.359: Job "EXAMPLE"."EXPORT_SCHEMA_15582" successfully completed at Thu Mar 6 05:13:16 2025 elapsed 0 00:00:54
+07-MAR-25 00:03:18.137: Starting "EXAMPLE"."EXPORT_SCHEMA_15614":  
+07-MAR-25 00:03:33.730: Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
+07-MAR-25 00:03:34.245: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_BODY
+07-MAR-25 00:03:35.931: Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA/LOGREP
+07-MAR-25 00:03:38.325: Processing object type SCHEMA_EXPORT/SEQUENCE/SEQUENCE
+07-MAR-25 00:03:44.217: Processing object type SCHEMA_EXPORT/TABLE/TABLE
+07-MAR-25 00:04:00.842: Processing object type SCHEMA_EXPORT/TABLE/COMMENT
+07-MAR-25 00:04:01.343: Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
+07-MAR-25 00:04:02.102: Processing object type SCHEMA_EXPORT/PACKAGE/PACKAGE_SPEC
+07-MAR-25 00:04:03.616: Processing object type SCHEMA_EXPORT/PACKAGE/COMPILE_PACKAGE/PACKAGE_SPEC/ALTER_PACKAGE_SPEC
+07-MAR-25 00:04:06.664: Processing object type SCHEMA_EXPORT/VIEW/VIEW
+07-MAR-25 00:04:07.986: Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
+07-MAR-25 00:04:09.685: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
+07-MAR-25 00:04:12.597: Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
+07-MAR-25 00:04:17.090: Processing object type SCHEMA_EXPORT/POST_SCHEMA/PROCACT_SCHEMA/LBAC_EXP
+07-MAR-25 00:04:17.595: . . exported "EXAMPLE"."WEBSITE"                          13.8 KB      22 rows
+07-MAR-25 00:04:17.801: . . exported "EXAMPLE"."ARTICLE"                         650.2 KB     737 rows
+07-MAR-25 00:04:17.960: . . exported "EXAMPLE"."ASSET"                             479 KB   21591 rows
+07-MAR-25 00:04:18.101: . . exported "EXAMPLE"."PAGE_HIT"                        299.5 KB    7421 rows
+07-MAR-25 00:04:18.441: . . exported "EXAMPLE"."ICON"                             12.8 KB      21 rows
+07-MAR-25 00:04:18.648: . . exported "EXAMPLE"."USER_LOGIN"                       95.8 KB    6261 rows
+07-MAR-25 00:04:18.713: . . exported "EXAMPLE"."LOG"                              10.6 KB     200 rows
+07-MAR-25 00:04:18.787: . . exported "EXAMPLE"."USAGE"                            73.1 KB    2336 rows
+07-MAR-25 00:04:18.902: . . exported "EXAMPLE"."GOOGLE_FONT"                     100.3 KB    1722 rows
+07-MAR-25 00:04:18.994: . . exported "EXAMPLE"."SESSION_DATA"                     59.9 KB    2650 rows
+07-MAR-25 00:04:19.064: . . exported "EXAMPLE"."REFRESH_TOKEN"                    72.2 KB    1073 rows
+07-MAR-25 00:04:19.140: . . exported "EXAMPLE"."IP_LOOKUP"                        67.5 KB    3416 rows
+07-MAR-25 00:04:19.202: . . exported "EXAMPLE"."WEBSITE_ARTICLE_CWV"              14.6 KB     395 rows
+07-MAR-25 00:04:19.283: . . exported "EXAMPLE"."GOOGLE_FONT_VARIABLE"             36.6 KB     454 rows
+07-MAR-25 00:04:19.358: . . exported "EXAMPLE"."WEBSITE_DEPLOY"                   16.8 KB     606 rows
+07-MAR-25 00:04:19.425: . . exported "EXAMPLE"."BROWSER_LOOKUP"                   14.1 KB     380 rows
+07-MAR-25 00:04:19.489: . . exported "EXAMPLE"."BROWSER_LOOKUP_TMP"               10.2 KB     279 rows
+07-MAR-25 00:04:19.545: . . exported "EXAMPLE"."FONT"                             12.3 KB     454 rows
+07-MAR-25 00:04:19.605: . . exported "EXAMPLE"."METRICS"                          13.6 KB     310 rows
+07-MAR-25 00:04:19.683: . . exported "EXAMPLE"."USERS"                             9.1 KB      38 rows
+07-MAR-25 00:04:19.765: . . exported "EXAMPLE"."WEBSITE_ARTICLE"                   8.4 KB      55 rows
+07-MAR-25 00:04:19.840: . . exported "EXAMPLE"."JWKS_KEY_CACHE"                      7 KB       6 rows
+07-MAR-25 00:04:19.909: . . exported "EXAMPLE"."API_ENDPOINT"                      5.5 KB     352 rows
+07-MAR-25 00:04:19.968: . . exported "EXAMPLE"."WEBSITE_FONT"                        5 KB       2 rows
+07-MAR-25 00:04:20.363: . . exported "EXAMPLE"."NETLIFY_SITE"                      5.9 KB      18 rows
+07-MAR-25 00:04:20.431: . . exported "EXAMPLE"."ARTICLE_MESSAGE"                   5.6 KB      17 rows
+07-MAR-25 00:04:20.491: . . exported "EXAMPLE"."NETLIFY_DNS_ZONE"                  5.1 KB       7 rows
+07-MAR-25 00:04:20.551: . . exported "EXAMPLE"."FINGERPRINT"                       5.4 KB      18 rows
+07-MAR-25 00:04:20.605: . . exported "EXAMPLE"."ORDS_ENDPOINTS"                    4.9 KB       7 rows
+07-MAR-25 00:04:20.670: . . exported "EXAMPLE"."NETLIFY_DNS_ZONE_SERVER"           4.8 KB      28 rows
+07-MAR-25 00:04:20.741: . . exported "EXAMPLE"."WEBSITE_ROLE"                      4.8 KB      66 rows
+07-MAR-25 00:04:20.799: . . exported "EXAMPLE"."ROLE"                              4.6 KB       3 rows
+07-MAR-25 00:04:20.808: . . exported "EXAMPLE"."DBTOOLS$EXECUTION_HISTORY"           0 KB       0 rows
+07-MAR-25 00:04:33.032: Master table "EXAMPLE"."EXPORT_SCHEMA_15614" successfully loaded/unloaded
+07-MAR-25 00:04:35.062: ******************************************************************************
+07-MAR-25 00:04:35.064: Dump file set for EXAMPLE.EXPORT_SCHEMA_15614 is:
+07-MAR-25 00:04:35.064:   /u03/dbfs/1E20BEEAF2C0BC4DE063ED5D000AE048/data/dpdump/EXPORT_SCHEMA.EXAMPLE.dmp
+07-MAR-25 00:04:35.074: Job "EXAMPLE"."EXPORT_SCHEMA_15614" successfully completed at Fri Mar 7 00:04:35 2025 elapsed 0 00:01:26
