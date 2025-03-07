@@ -1240,6 +1240,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         SELECT MAX(lastModified) INTO l_lastModified FROM google_font_variable;
         pck_core.log('Google variable fonts loaded - last modified is ' || TO_CHAR(l_lastModified,'DD-MM-YYYY'));
+
+        /* Update font table from staging table */
+        MERGE INTO font t
+        USING
+        (
+            SELECT family,category,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end,CASE WHEN italic='YES' THEN 1 ELSE 0 END italic
+            FROM google_font_variable
+        ) s
+        ON (t.family=s.family)
+        WHEN MATCHED THEN UPDATE SET
+            t.category=s.category,
+            t.wght_start=s.wght_start,t.wght_end=s.wght_end,
+            t.wdth_start=s.wdth_start,t.wdth_end=s.wdth_end,
+            t.opsz_start=s.opsz_start,t.opsz_end=s.opsz_end,
+            t.slnt_start=s.slnt_start,t.slnt_end=s.slnt_end,
+            t.italic=s.italic,
+            t.updated_date=current_timestamp
+        WHEN NOT MATCHED THEN INSERT (id,family,category,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end,italic,created_date) 
+            VALUES (seq_font.nextval,s.family,s.category,s.wght_start,s.wght_end,s.wdth_start,s.wdth_end,s.opsz_start,s.opsz_end,s.slnt_start,s.slnt_end,s.italic,current_timestamp);
     END;
 
     /*
