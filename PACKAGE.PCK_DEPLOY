@@ -421,6 +421,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     l_chars:=l_chars || l_char;
                 END IF;
             END LOOP;
+            
+            SELECT LISTAGG(DISTINCT SUBSTR(l_chars, LEVEL, 1), NULL) WITHIN GROUP (
+                  ORDER BY SUBSTR(l_chars, LEVEL, 1)
+                ) AS ordered_value
+            INTO l_chars
+            FROM   dual
+            CONNECT BY LEVEL <= LENGTH(l_chars);
 
             l_sha1:=LOWER(dbms_crypto.hash(src=>l_page, typ=>dbms_crypto.hash_sh1));
 
