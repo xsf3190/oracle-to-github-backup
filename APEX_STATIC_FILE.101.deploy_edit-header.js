@@ -124,4 +124,11 @@ editor.addEventListener("click", async (e) => {
     if (e.target.matches(".publish-changes")) {
         console.log("publish-changes");
     }
+
+    if (e.target.matches(".save-changes")) {
+        const formData = new FormData(editor);
+        const formObj = Object.fromEntries(formData);
+        console.log("formObj",formObj)
+    }
+
 });
