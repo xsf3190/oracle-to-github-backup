@@ -168,9 +168,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_googleapis_query VARCHAR2(100);
         l_googleapis_query_params VARCHAR2(500);
         l_regex VARCHAR2(20);
+        l_title website.title%type;
+        l_subtitle website.subtitle%type;
         l_color_primary website.color_primary%type;
         l_favicon_asset_id website.favicon_asset_id%type;
-        l_login_form website.login_form%type;
+        l_body_html article.body_html%type;
         l_favicon_url VARCHAR2(250);
         l_favicon_download BLOB;
         l_content CLOB;
@@ -180,6 +182,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_css CLOB;
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
+
+        TYPE tt_fonts IS RECORD (
+            family font.family%type,
+            ital website_font.ital%type,
+            wdth website_font.wdth%type,
+            wght website_font.wght%type,
+            opsz website_font.opsz%type,
+            slnt website_font.slnt%type,
+            chars_normal VARCHAR2(500),
+            chars_italic VARCHAR2(500)
+        );
+        TYPE t_font IS TABLE OF tt_fonts INDEX BY VARCHAR2(15);
+        l_fonts t_font;
+
+        l_italics_regex varchar2(12):='<i>(.+?)</i>';
+        l_headings_regex varchar2(16):='<h\d>(.+?)</h\d>';
 
         TYPE tt_files IS RECORD (
             lastmod article.updated_date%type,
@@ -236,9 +254,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_headers CLOB;
         l_ssl_url VARCHAR2(200);
         l_url VARCHAR2(200);
-
-        n PLS_INTEGER:=0;
         l_total_pages PLS_INTEGER;
+        n PLS_INTEGER;
+
+        /* Return distict characters sorted */
+        FUNCTION chars_used (pCharacters IN VARCHAR2) RETURN VARCHAR2 IS
+            l_chars VARCHAR2(500);
+        BEGIN
+            SELECT LISTAGG(DISTINCT SUBSTR(pCharacters, LEVEL, 1), NULL) WITHIN GROUP (
+                      ORDER BY SUBSTR(pCharacters, LEVEL, 1))
+            INTO l_chars
+            FROM dual
+            CONNECT BY LEVEL <= LENGTH(pCharacters);
+            RETURN(l_chars);
+        END;
 
         FUNCTION contactEmail RETURN VARCHAR2 IS
             l_contact_email website.contact_email%type;
@@ -251,13 +280,47 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
-        SELECT w.font, g.category, REPLACE(LOWER(w.font), ' ', '_') || '.woff2', g.wght_start, g.wght_end, g.wdth_start, g.wdth_end, g.opsz_start, g.opsz_end, g.slnt_start, g.slnt_end, g.italic,
-                SUBSTR(w.color_primary,2), w.favicon_asset_id, w.login_form
-          INTO l_font, l_font_category, l_font_filename, l_font_wght_start, l_font_wght_end, l_font_wdth_start, l_font_wdth_end, l_font_opsz_start, l_font_opsz_end, l_font_slnt_start, l_font_slnt_end, l_font_italic, 
-                l_color_primary, l_favicon_asset_id, l_login_form
-          FROM website w, google_font_variable g
-         WHERE w.id=pWebsiteId
-           AND w.font=g.family;
+        SELECT title, subtitle, SUBSTR(color_primary,2), favicon_asset_id
+          INTO l_title, l_subtitle, l_color_primary, l_favicon_asset_id
+          FROM website
+         WHERE id=pWebsiteId;
+
+        /* Build array of fonts */
+        FOR C IN (
+            SELECT wf.context, f.family, wf.wght, wf.wdth, wf.opsz, wf.slnt, wf.ital
+              FROM website_font wf, font f
+             WHERE wf.website_id=pWebsiteId
+               AND wf.font_id=f.id
+        )
+        LOOP
+            l_fonts(C.context).family:=C.family;
+            l_fonts(C.context).ital:=C.ital;
+            l_fonts(C.context).wdth:=C.wdth;
+            l_fonts(C.context).wght:=C.wght;
+            l_fonts(C.context).opsz:=C.opsz;
+            l_fonts(C.context).slnt:=C.slnt;
+        END LOOP;
+        IF NOT (l_fonts.EXISTS('headings')) THEN
+            l_fonts('headings').family:=l_fonts('TITLE').family;
+        END IF;
+        IF NOT (l_fonts.EXISTS('prose')) THEN
+            l_fonts('prose').family:=l_fonts('SUBTITLE').family;
+        END IF;
+        
+        IF (l_title IS NOT NULL) THEN
+            IF (l_fonts('TITLE').ital=0) THEN
+                l_fonts('TITLE').chars_normal:=chars_used(l_title);
+            ELSE
+                l_fonts('TITLE').chars_italic:=chars_used(l_title);
+            END IF;
+        END IF;
+        IF (l_subtitle IS NOT NULL) THEN
+            IF (l_fonts('SUBTITLE').ital=0) THEN
+                l_fonts('SUBTITLE').chars_normal:=chars_used(l_subtitle);
+            ELSE
+                l_fonts('SUBTITLE').chars_italic:=chars_used(l_subtitle);
+            END IF;
+        END IF;
 
         /*
         ** Get all website content into collection
@@ -325,8 +388,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_labels(i).collection_type, 
                 l_is_media, 
                 l_labels(i).contact_form, 
-                l_labels(i).title,
-                l_labels(i).subtitle,
+                l_title,
+                l_subtitle,
                 l_labels(i).header_effect,
                 l_labels(i).hero_asset_id,
                 l_labels(i).promotion,
@@ -409,7 +472,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     l_script_html ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
                     '<link rel="stylesheet" href="/website.css">'  ||
-                    --CASE WHEN l_is_blog AND l_labels(i).parent_article_id<>l_labels(i).article_id THEN '<script src="https://accounts.google.com/gsi/client" async defer></script>' END ||
                 '</head>' ||
                 l_labels(i).body_html ||
             '</html>';
@@ -422,12 +484,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END IF;
             END LOOP;
             
-            SELECT LISTAGG(DISTINCT SUBSTR(l_chars, LEVEL, 1), NULL) WITHIN GROUP (
-                  ORDER BY SUBSTR(l_chars, LEVEL, 1)
-                ) AS ordered_value
-            INTO l_chars
-            FROM   dual
-            CONNECT BY LEVEL <= LENGTH(l_chars);
 
             l_sha1:=LOWER(dbms_crypto.hash(src=>l_page, typ=>dbms_crypto.hash_sh1));
 
@@ -502,13 +558,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END LOOP;
         END LOOP;
         
-        logDeployment(pWebsiteId, pSiteId, 'Building FONTS for (' || LENGTH(l_chars) || ' distinct characters)');
+        logDeployment(pWebsiteId, pSiteId, 'Building FONTS');
         apex_web_service.clear_request_headers;
         apex_web_service.g_request_headers(1).name := 'User-Agent';
         apex_web_service.g_request_headers(1).value := 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
-        --'Mozilla/5.0 (Windows NT 6.3; rv:39.0) Gecko/20100101 Firefox/39.0';
-        --pck_core.log(l_chars);
-        --pck_core.log(utl_url.escape(l_chars, escape_reserved_chars=>TRUE, url_charset=>'UTF-8'));
         
         IF (l_font_italic='YES') THEN 
             l_googleapis_query:='ital';
