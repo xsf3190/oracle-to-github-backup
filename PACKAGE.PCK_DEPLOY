@@ -150,24 +150,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_files JSON_OBJECT_T;
         l_head CLOB;
         l_page CLOB;
-        l_font website.font%type;
-        l_font_category google_font_variable.category%type;
-        l_font_wght_start google_font_variable.wght_start%type;
-        l_font_wght_end google_font_variable.wght_end%type;
-        l_font_wdth_start google_font_variable.wdth_start%type;
-        l_font_wdth_end google_font_variable.wdth_end%type;
-        l_font_opsz_start google_font_variable.opsz_start%type;
-        l_font_opsz_end google_font_variable.opsz_end%type;
-        l_font_slnt_start google_font_variable.slnt_start%type;
-        l_font_slnt_end google_font_variable.slnt_end%type;
-        l_font_italic google_font_variable.italic%type;
-        l_font_filename website.font%type;
-        l_font_url VARCHAR2(500);
+
         l_font_css CLOB;
         l_font_download BLOB;
         l_googleapis_query VARCHAR2(100);
         l_googleapis_query_params VARCHAR2(500);
-        l_regex VARCHAR2(20);
+        
         l_title website.title%type;
         l_subtitle website.subtitle%type;
         l_color_primary website.color_primary%type;
@@ -176,8 +164,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_favicon_url VARCHAR2(250);
         l_favicon_download BLOB;
         l_content CLOB;
-        l_text CLOB;
-        l_chars VARCHAR2(256):=' ';
+        
         l_char VARCHAR2(4);
         l_deploy_css CLOB;
         l_file_name VARCHAR2(200);
@@ -191,13 +178,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             opsz website_font.opsz%type,
             slnt website_font.slnt%type,
             chars_normal VARCHAR2(500),
-            chars_italic VARCHAR2(500)
+            api_url_normal VARCHAR2(500),
+            font_url_normal VARCHAR2(200),
+            chars_italic VARCHAR2(500),
+            api_url_italic VARCHAR2(500),
+            font_url_italic VARCHAR2(200)
         );
         TYPE t_font IS TABLE OF tt_fonts INDEX BY VARCHAR2(15);
         l_fonts t_font;
 
+        l_context website_font.context%type;
         l_italics_regex varchar2(12):='<i>(.+?)</i>';
         l_headings_regex varchar2(16):='<h\d>(.+?)</h\d>';
+        l_url_regex VARCHAR2(20):='url\(([^)]+)\)';
 
         TYPE tt_files IS RECORD (
             lastmod article.updated_date%type,
@@ -246,8 +239,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_jscode t_jscode:=t_jscode();
 
         l_style CLOB;
-        l_style_sha256_raw RAW(2000);
-        l_style_sha256_b64 VARCHAR2(2000);
         
         l_sitemap CLOB;
         l_robots CLOB;
@@ -285,9 +276,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
           FROM website
          WHERE id=pWebsiteId;
 
-        /* Build array of fonts */
+        /* Build array of fonts for each context */
         FOR C IN (
-            SELECT wf.context, f.family, wf.wght, wf.wdth, wf.opsz, wf.slnt, wf.ital
+            SELECT f.family, wf.context, wf.ital, wf.opsz, wf.slnt, wf.wdth, wf.wght
               FROM website_font wf, font f
              WHERE wf.website_id=pWebsiteId
                AND wf.font_id=f.id
@@ -476,14 +467,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_labels(i).body_html ||
             '</html>';
 
-            l_text:=utl_i18n.unescape_reference(apex_escape.striphtml(l_labels(i).body_html));
-            FOR i IN 1..LENGTH(l_text) LOOP
-                l_char:=SUBSTR(l_text,i,1);
-                IF (INSTR(l_chars,l_char)=0) THEN
-                    l_chars:=l_chars || l_char;
+            /* Identify italic and normal characters in the page in order to optimise font */
+
+            l_body_html:=l_labels(i).body_html;
+            n:=REGEXP_COUNT(l_body_html,l_italics_regex);
+            FOR i IN 1..n 
+            LOOP
+                l_fonts('prose').chars_italic:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_body_html,l_italics_regex,1,i,null,1)));
+                FOR j IN 1..LENGTH(l_fonts('prose').chars_italic) LOOP
+                    l_char:=SUBSTR(l_fonts('prose').chars_italic,j,1);
+                    IF (l_fonts('prose').chars_italic IS NULL OR INSTR(l_fonts('prose').chars_italic,l_char)=0) THEN
+                        l_fonts('prose').chars_italic:=l_fonts('prose').chars_italic || l_char;
+                    END IF;
+                END LOOP;
+            END LOOP;
+
+            FOR i IN 1..n 
+            LOOP
+                l_body_html:=REGEXP_REPLACE(l_body_html,'<i>.+?</i>',null,1,i);
+            END LOOP;
+            l_body_html:=utl_i18n.unescape_reference(apex_escape.striphtml(l_body_html));
+            FOR j IN 1..LENGTH(l_body_html) LOOP
+                l_char:=SUBSTR(l_body_html,j,1);
+                IF (l_fonts('prose').chars_normal IS NULL OR INSTR(l_fonts('prose').chars_normal,l_char)=0) THEN
+                    l_fonts('prose').chars_normal:=l_fonts('prose').chars_normal || l_char;
                 END IF;
             END LOOP;
-            
 
             l_sha1:=LOWER(dbms_crypto.hash(src=>l_page, typ=>dbms_crypto.hash_sh1));
 
@@ -562,68 +571,102 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         apex_web_service.clear_request_headers;
         apex_web_service.g_request_headers(1).name := 'User-Agent';
         apex_web_service.g_request_headers(1).value := 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
-        
-        IF (l_font_italic='YES') THEN 
-            l_googleapis_query:='ital';
-            l_googleapis_query_params:='0';
-        END IF;
-        IF (l_font_opsz_start IS NoT NULL) THEN 
-            l_googleapis_query:=l_googleapis_query || ',opsz';
-            l_googleapis_query_params:=l_googleapis_query_params || ',' || l_font_opsz_start || '..' || l_font_opsz_end;
-        END IF;
-        IF (l_font_slnt_start IS NoT NULL) THEN 
-            l_googleapis_query:=l_googleapis_query || ',slnt';
-            l_googleapis_query_params:=l_googleapis_query_params || ',' || l_font_slnt_start || '..' || l_font_slnt_end;
-        END IF;
-        IF (l_font_wdth_start IS NoT NULL) THEN 
-            l_googleapis_query:=l_googleapis_query || ',wdth';
-            l_googleapis_query_params:=l_googleapis_query_params || ',' || l_font_wdth_start || '..' || l_font_wdth_end;
-        END IF;
-        IF (l_font_wght_start IS NoT NULL) THEN 
-            l_googleapis_query:=l_googleapis_query || ',wght';
-            l_googleapis_query_params:=l_googleapis_query_params || ',' || l_font_wght_start || '..' || l_font_wght_end;
-        END IF;
 
-        l_googleapis_query:=LTRIM(l_googleapis_query,',');
-        l_googleapis_query:=l_googleapis_query || '@' || l_googleapis_query_params;
+        /* Google css API needs separate calls for distinct set of normal and italic characters used */
+        l_context:=l_fonts.FIRST;
+        WHILE l_context IS NOT NULL LOOP
+            IF (l_fonts(l_context).chars_italic IS NOT NULL) THEN
+                l_googleapis_query:='ital';
+                l_googleapis_query_params:='1';
+                IF (l_fonts(l_context).opsz IS NOT NULL) THEN
+                    l_googleapis_query:=l_googleapis_query || ',opsz';
+                    l_googleapis_query_params:=l_googleapis_query_params || ',' || l_fonts(l_context).opsz;
+                END IF;
+                IF (l_fonts(l_context).slnt IS NOT NULL) THEN
+                    l_googleapis_query:=l_googleapis_query || ',slnt';
+                    l_googleapis_query_params:=l_googleapis_query_params || ',' || l_fonts(l_context).slnt;
+                END IF;
+                IF (l_fonts(l_context).wdth IS NOT NULL) THEN
+                    l_googleapis_query:=l_googleapis_query || ',wdth';
+                    l_googleapis_query_params:=l_googleapis_query_params || ',' || l_fonts(l_context).wdth;
+                END IF;
+                IF (l_fonts(l_context).wdth IS NOT NULL) THEN
+                    l_googleapis_query:=l_googleapis_query || ',wght';
+                    l_googleapis_query_params:=l_googleapis_query_params || ',' || l_fonts(l_context).wght;
+                END IF;
+                l_fonts(l_context).chars_italic:=chars_used(l_fonts(l_context).chars_italic);
+                l_fonts(l_context).api_url_italic:='https://fonts.googleapis.com/css2?family=' || REPLACE(l_fonts(l_context).family,' ','+') || ':' || l_googleapis_query || '@' || l_googleapis_query_params || '&display=swap&text=' || utl_url.escape(l_fonts(l_context).chars_italic,TRUE,'UTF-8');
+                l_font_css:=apex_web_service.make_rest_request(p_url=>l_fonts(l_context).api_url_italic, p_http_method=>'GET');
+                l_fonts(l_context).font_url_italic:=REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1);
+            END IF;
 
-        IF (l_font_italic='YES') THEN 
-            l_googleapis_query:=l_googleapis_query || ';1' || SUBSTR(l_googleapis_query_params,2);
-        END IF;
+            IF (l_fonts(l_context).chars_normal IS NOT NULL) THEN
+                l_googleapis_query:='ital';
+                l_googleapis_query_params:='0';
+                IF (l_fonts(l_context).opsz IS NOT NULL) THEN
+                    l_googleapis_query:=l_googleapis_query || ',opsz';
+                    l_googleapis_query_params:=l_googleapis_query_params || ',' || l_fonts(l_context).opsz;
+                END IF;
+                IF (l_fonts(l_context).slnt IS NOT NULL) THEN
+                    l_googleapis_query:=l_googleapis_query || ',slnt';
+                    l_googleapis_query_params:=l_googleapis_query_params || ',' || l_fonts(l_context).slnt;
+                END IF;
+                IF (l_fonts(l_context).wdth IS NOT NULL) THEN
+                    l_googleapis_query:=l_googleapis_query || ',wdth';
+                    l_googleapis_query_params:=l_googleapis_query_params || ',' || l_fonts(l_context).wdth;
+                END IF;
+                IF (l_fonts(l_context).wdth IS NOT NULL) THEN
+                    l_googleapis_query:=l_googleapis_query || ',wght';
+                    l_googleapis_query_params:=l_googleapis_query_params || ',' || l_fonts(l_context).wght;
+                END IF;
+                l_fonts(l_context).chars_normal:=chars_used(l_fonts(l_context).chars_normal);
+                l_fonts(l_context).api_url_normal:='https://fonts.googleapis.com/css2?family=' || REPLACE(l_fonts(l_context).family,' ','+') || ':' || l_googleapis_query || '@' || l_googleapis_query_params 
+                    || '&text=' || utl_url.escape(l_fonts(l_context).chars_normal,TRUE,'UTF-8');
+                l_font_css:=apex_web_service.make_rest_request(p_url=>l_fonts(l_context).api_url_normal, p_http_method=>'GET');
+                l_fonts(l_context).font_url_normal:=REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1);
+            END IF;
 
-        l_googleapis_query:=l_googleapis_query || '&display=swap';
-
-        l_font_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(l_font,' ','+') || ':' || l_googleapis_query || '&text=' || utl_url.escape(l_chars,TRUE,'UTF-8');
-        pck_core.log('l_font_url:'||l_font_url);
-
-        /* Get @font_family declarations for all variants of Google font */
-        l_font_css:=apex_web_service.make_rest_request(p_url=>l_font_url, p_http_method=>'GET');
-        l_regex:='url\(([^)]+)\)';
-        n:=REGEXP_COUNT(l_font_css,l_regex);
-        pck_core.log('Number of font files to download:'||n);
-        
-        /* Host Google font files on Netlify */
-        FOR i IN 1..n 
-        LOOP
-            l_font_url:=REGEXP_SUBSTR(l_font_css,l_regex,1,i,null,1);
-            l_font_css:=REGEXP_REPLACE(l_font_css,l_regex,'url(./font_'||i||'.woff2)',1,i);
-            l_font_css:=REGEXP_REPLACE(l_font_css,'\(''woff2''\)','(''woff2-variations'')',1,i);
-            --pck_core.log(l_font_url);
-            l_font_download:=apex_web_service.make_rest_request_b(p_url=>l_font_url, p_http_method=>'GET');
-            l_sha1:=LOWER(dbms_crypto.hash(src => l_font_download, typ => dbms_crypto.hash_sh1));
-            l_deploy_files(l_sha1).file_name:='font_' || i || '.woff2';
-            l_deploy_files(l_sha1).file_content_b:=l_font_download;
-            l_files.put('font_' || i || '.woff2', l_sha1);
+            l_context := l_fonts.NEXT(l_context);
         END LOOP;
 
-        /* Append tech(variations) url for old browsers */
-        FOR i IN 1..n 
-        LOOP
-            l_font_css:=REGEXP_REPLACE(l_font_css,'}','src url(./font_'||i||'.woff2) format(''woff2'') tech(''variations'');}',1,i);
+        /* Download and self-host optimised Google font files */
+        l_context:=l_fonts.FIRST;
+        WHILE l_context IS NOT NULL LOOP
+            IF (l_fonts(l_context).font_url_normal IS NOT NULL) THEN
+                l_font_download:=apex_web_service.make_rest_request_b(p_url=>l_fonts(l_context).font_url_normal, p_http_method=>'GET');
+                l_sha1:=LOWER(dbms_crypto.hash(src => l_font_download, typ => dbms_crypto.hash_sh1));
+                l_deploy_files(l_sha1).file_name:=REPLACE(l_fonts(l_context).family,' ','_') || '_VF' || '.woff2';
+                l_deploy_files(l_sha1).file_content_b:=l_font_download;
+                l_files.put(l_deploy_files(l_sha1).file_name, l_sha1);
+                l_style:=l_style || 
+                '@font-face {' ||
+                    'font-family: "' || l_fonts(l_context).family || '";' ||
+                    'font-display: swap;' ||
+                    'src: url(./' || l_deploy_files(l_sha1).file_name ||') format(''woff2-variations'');' ||
+                    'src: url(./' || l_deploy_files(l_sha1).file_name ||') format(''woff2'') tech(''variations'');' ||
+                '};';
+            END IF;
+            IF (l_fonts(l_context).font_url_italic IS NOT NULL) THEN
+                l_font_download:=apex_web_service.make_rest_request_b(p_url=>l_fonts(l_context).font_url_italic, p_http_method=>'GET');
+                l_sha1:=LOWER(dbms_crypto.hash(src => l_font_download, typ => dbms_crypto.hash_sh1));
+                l_deploy_files(l_sha1).file_name:=REPLACE(l_fonts(l_context).family,' ','_') || '_ital_VF' || '.woff2';
+                l_deploy_files(l_sha1).file_content_b:=l_font_download;
+                l_files.put(l_deploy_files(l_sha1).file_name, l_sha1);
+                l_style:=l_style || 
+                '@font-face {' ||
+                    'font-family: "' || l_fonts(l_context).family || '";' ||
+                    'font-style: italic;' ||
+                    'font-display: swap;' ||
+                    'src: url(./' || l_deploy_files(l_sha1).file_name ||') format(''woff2-variations'');' ||
+                    'src: url(./' || l_deploy_files(l_sha1).file_name ||') format(''woff2'') tech(''variations'');' ||
+                '};';
+            END IF;
+            l_context := l_fonts.NEXT(l_context);
         END LOOP;
+        
 
         /* Assemble the complete css file including font-face */
-        l_style:=l_font_css || pck_core.buildCssRoot(pWebsiteId, pApplicationId, pDeploy=>TRUE);
+        l_style:=l_style || pck_core.buildCssRoot(pWebsiteId, pApplicationId, pDeploy=>TRUE);
 
         logDeployment(pWebsiteId, pSiteId, 'Building CSS website.css');
         l_sha1:=LOWER(dbms_crypto.hash(src => l_style, typ => dbms_crypto.hash_sh1));
