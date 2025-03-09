@@ -300,28 +300,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
 
     END;
 
-    /*
-     **  Get details of column to be edited
-     */
-    PROCEDURE getColumnDetails(pColumn IN VARCHAR2, pDataLength IN OUT user_tab_columns.data_length%type, pPopover IN OUT VARCHAR2 ) IS
-        l_comments user_col_comments.comments%type;
-        l_column_name user_tab_columns.column_name%type:=SUBSTR(pColumn,INSTR(pColumn,'.')+1);
-    BEGIN
-        SELECT c.data_length, i.comments
-          INTO pDataLength, l_comments
-          FROM user_tab_columns c, user_col_comments i
-         WHERE c.table_name=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1))
-           AND c.column_name=UPPER(l_column_name)
-           AND i.table_name=c.table_name
-           AND i.column_name=c.column_name;
-
-        IF (l_comments IS NOT NULL) THEN
-            pPopover:=
-            '<button type="button" popovertarget="' || l_column_name || '_popover" id="' || l_column_name || '_btn">&#9432;</button>
-            <div id="' || l_column_name || '_popover" popover anchor="' || l_column_name || '_btn">' || l_comments || '</div>';
-        END IF;
-    END;
-
     FUNCTION buildSelectFont(pFontId IN font.id%type) RETURN VARCHAR2 IS
         l_html LONG;
         l_selected_category font.category%type;
@@ -330,7 +308,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         SELECT category INTO l_selected_category FROM font WHERE id=pFontId;
         l_html:=
         '<label for="select-category">Font Category' ||
-          '<select id="select-category" style="min-width:10em">' ||
+          '<select id="select-category" name="font_category" style="min-width:10em">' ||
             '<button>' ||
               '<selectedcontent></selectedcontent>' ||
               '<span class="arrow"></span>' ||
@@ -349,7 +327,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         /* Fonts in category */
         l_html:=l_html || 
         '<label for="select-font">Font Family' ||
-        '<select id="select-font">' ||
+        '<select id="select-font" name="font_family">' ||
             '<button>' ||
               '<selectedcontent></selectedcontent>' ||
               '<span class="arrow"></span>' ||
@@ -374,7 +352,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_html LONG;
     BEGIN
         FOR C IN (
-            SELECT c.data_length, i.comments, wf.font_id, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt, wf.ital
+            SELECT c.data_length, i.comments, wf.font_id, f.ital_start, f.ital_end, wf.ital, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt
               FROM user_tab_columns c, user_col_comments i, website_font wf, font f
              WHERE c.table_name=l_table_name
                AND c.column_name=UPPER(l_column_name)
@@ -406,8 +384,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     '<input type="range" id="' || l_column_name || '-font-size" data-column="' || pColumn || '_font_size" min="4" max="6" value="' || pFontSize || '" step="1"/>' ||
                     '<label for="' || l_column_name || '-letter-spacing">Letter Spacing</label>' ||
                     '<input type="range" id="' || l_column_name || 'letter-spacing" data-column="' || pColumn || '_letter_spacing" min="0" max="0.75" value="' || pLetterSpacing || '" step="0.05"/>' ||
+                    CASE WHEN C.wght IS NOT NULL THEN
                     '<label for="' || l_column_name || '-font-weight">Font Weight</label>' ||
-                    '<input type="range" id="' || l_column_name || '-font-weight" data-column="' || pColumn || '_font_weight" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '" step="50"/>' ||
+                    '<input type="range" id="' || l_column_name || '-font-weight" data-column="' || pColumn || '_font_weight" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '" step="10"/>'
+                    END ||
+                    CASE WHEN C.wdth IS NOT NULL THEN
+                    '<label for="' || l_column_name || '-font-width">Font Width</label>' ||
+                    '<input type="range" id="' || l_column_name || '-font-width" data-column="' || pColumn || '_font_width" min="' || C.wdth_start || '" max="' || C.wdth_end || '" value="' || C.wdth || '" step="10"/>'
+                    END ||
+                    CASE WHEN C.opsz IS NOT NULL THEN
+                    '<label for="' || l_column_name || '-font-opsz">Optical Size</label>' ||
+                    '<input type="range" id="' || l_column_name || '-font-opsz" data-column="' || pColumn || '_font_opsz" min="' || C.opsz_start || '" max="' || C.opsz_end || '" value="' || C.opsz || '" step="10"/>'
+                    END ||
+                    CASE WHEN C.slnt IS NOT NULL THEN
+                    '<label for="' || l_column_name || '-font-slnt">Slant</label>' ||
+                    '<input type="range" id="' || l_column_name || '-font-slnt" data-column="' || pColumn || '_font_slnt" min="' || C.slnt_start || '" max="' || C.slnt_end || '" value="' || C.slnt || '" step="10"/>'
+                    END ||
+                    CASE WHEN C.ital IS NOT NULL THEN
+                    '<label for="' || l_column_name || '-font-ital">Italics</label>' ||
+                    '<input type="checkbox" id="' || l_column_name || '-font-ital" data-column="' || pColumn || '_font_ital"' || CASE WHEN C.ital=1 THEN ' checked' END || '/>'
+                    END ||
                 '</div>' ||
             '</fieldset>';
         END LOOP;
