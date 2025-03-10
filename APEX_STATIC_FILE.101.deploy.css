@@ -15,7 +15,7 @@
 body {
     background-color: var(--color-background);
     color: var(--color-text);
-    font-family: var(--font-family);
+    font-family: var(--font-family-subtitle);
     font-size: var(--step-0);
     line-height: 1.4;
 }
@@ -136,7 +136,8 @@ body>header>img {
   align-self: var(--align, center);
   justify-self: var(--justify, center);
   line-height: 1;
-  font-size: var(--title-font-size);
+  font-family: var(--font-family-title);
+  font-size: var(--title-font-size, var(--step-0));
 }
 
 .subtitle {
@@ -144,7 +145,8 @@ body>header>img {
   align-self: var(--align, center);
   justify-self: var(--justify, center);
   text-decoration: var(--text-decoration, none);
-  font-size: var(--subtitle-font-size);
+  font-family: var(--font-family-subtitle);
+  font-size: var(--subtitle-font-size, var(--step-0));
 }
 
 
@@ -182,13 +184,6 @@ nav a:not([aria-current="page"]):hover {
   text-decoration-skip-ink: none;
   text-underline-offset: 0.8ex;
   text-decoration-color: var(--color-primary);
-}
-
-.enclosure {
-  max-width: fit-content;
-  border: solid 2px #fff;
-  border-radius: 0.5em;
-  padding: 1em;
 }
 
 .curve {
@@ -270,12 +265,14 @@ small {
   font-size:var(--step--2);
   font-family: system-ui;
 }
-h1,
+
 h2,
 h3,
 h4 {
   text-wrap: balance;
+  font-family: var(--font-family-headings);
 }
+
 
 /* PROMOTION STYLES */
 .promotion {
