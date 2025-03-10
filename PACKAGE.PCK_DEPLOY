@@ -171,6 +171,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_sha1 VARCHAR2(40);
 
         TYPE tt_fonts IS RECORD (
+            id website_font.font_id%type,
             family font.family%type,
             ital website_font.ital%type,
             wdth website_font.wdth%type,
@@ -188,9 +189,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_fonts t_font;
 
         l_context website_font.context%type;
-        l_italics_regex varchar2(12):='<i>(.+?)</i>';
-        l_headings_regex varchar2(16):='<h\d>(.+?)</h\d>';
+        
+        l_headings_regex varchar2(20):='<h\d.*?>(.+?)</h\d>';
         l_url_regex VARCHAR2(20):='url\(([^)]+)\)';
+        l_heading LONG;
 
         TYPE tt_files IS RECORD (
             lastmod article.updated_date%type,
@@ -247,6 +249,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_url VARCHAR2(200);
         l_total_pages PLS_INTEGER;
         n PLS_INTEGER;
+        n2 PLS_INTEGER;
 
         /* Return distict characters sorted */
         FUNCTION chars_used (pCharacters IN VARCHAR2) RETURN VARCHAR2 IS
@@ -258,6 +261,39 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             FROM dual
             CONNECT BY LEVEL <= LENGTH(pCharacters);
             RETURN(l_chars);
+        END;
+
+
+        /* Extract distinct set of italic and normal characters in the context */
+        PROCEDURE extract_styles(pText IN VARCHAR2, pItalic IN OUt VARCHAR2, pNormal IN OUT VARCHAR2) IS
+            l_text LONG:=pText;
+            l_italics_regex varchar2(12):='<i>(.+?)</i>';
+            l_italics_substr LONG;
+            l_char VARCHAR2(4);
+            n PLS_INTEGER;
+        BEGIN
+            n:=REGEXP_COUNT(l_text,l_italics_regex);
+            FOR i IN 1..n LOOP
+                l_italics_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(pText,l_italics_regex,1,i,null,1)));
+                FOR k IN 1..LENGTH(l_italics_substr) LOOP
+                    l_char:=SUBSTR(l_italics_substr,k,1);
+                    IF (pItalic IS NULL OR INSTR(pItalic,l_char)=0) THEN
+                        pItalic:=pItalic || l_char;
+                    END IF;
+                END LOOP;
+            END LOOP;
+
+            FOR i IN 1..n LOOP
+                l_text:=REGEXP_REPLACE(l_text,l_italics_regex,null,1,i);
+            END LOOP;
+
+            l_text:=utl_i18n.unescape_reference(apex_escape.striphtml(l_text));
+            FOR i IN 1..LENGTH(l_text) LOOP
+                l_char:=SUBSTR(l_text,i,1);
+                IF (pNormal IS NULL OR INSTR(pNormal,l_char)=0) THEN
+                    pNormal:=pNormal || l_char;
+                END IF;
+            END LOOP;
         END;
 
         FUNCTION contactEmail RETURN VARCHAR2 IS
@@ -278,12 +314,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         /* Build array of fonts for each context */
         FOR C IN (
-            SELECT f.family, wf.context, wf.ital, wf.opsz, wf.slnt, wf.wdth, wf.wght
+            SELECT f.id, f.family, wf.context, wf.ital, wf.opsz, wf.slnt, wf.wdth, wf.wght
               FROM website_font wf, font f
              WHERE wf.website_id=pWebsiteId
                AND wf.font_id=f.id
         )
         LOOP
+            l_fonts(C.context).id:=C.id;
             l_fonts(C.context).family:=C.family;
             l_fonts(C.context).ital:=C.ital;
             l_fonts(C.context).wdth:=C.wdth;
@@ -293,23 +330,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END LOOP;
         IF NOT (l_fonts.EXISTS('headings')) THEN
             l_fonts('headings').family:=l_fonts('TITLE').family;
+            INSERT INTO website_font(website_id, font_id, context) VALUES (pWebsiteId, l_fonts('TITLE').id, 'headings');
         END IF;
         IF NOT (l_fonts.EXISTS('prose')) THEN
             l_fonts('prose').family:=l_fonts('SUBTITLE').family;
+            INSERT INTO website_font(website_id, font_id, context) VALUES (pWebsiteId, l_fonts('SUBTITLE').id, 'prose');
         END IF;
         
         IF (l_title IS NOT NULL) THEN
-            IF (l_fonts('TITLE').ital=0) THEN
-                l_fonts('TITLE').chars_normal:=chars_used(l_title);
-            ELSE
+            IF (l_fonts('TITLE').ital=1) THEN
                 l_fonts('TITLE').chars_italic:=chars_used(l_title);
+            ELSE
+                l_fonts('TITLE').chars_normal:=chars_used(l_title);
             END IF;
         END IF;
         IF (l_subtitle IS NOT NULL) THEN
-            IF (l_fonts('SUBTITLE').ital=0) THEN
-                l_fonts('SUBTITLE').chars_normal:=chars_used(l_subtitle);
-            ELSE
+            IF (l_fonts('SUBTITLE').ital=1) THEN
                 l_fonts('SUBTITLE').chars_italic:=chars_used(l_subtitle);
+            ELSE
+                l_fonts('SUBTITLE').chars_normal:=chars_used(l_subtitle);
             END IF;
         END IF;
 
@@ -467,32 +506,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_labels(i).body_html ||
             '</html>';
 
-            /* Identify italic and normal characters in the page in order to optimise font */
+            /* Forn eah context Identify italic and normal characters in the page in order to later optimise font */
 
             l_body_html:=l_labels(i).body_html;
-            n:=REGEXP_COUNT(l_body_html,l_italics_regex);
+            
+            n:=REGEXP_COUNT(l_body_html,l_headings_regex);
             FOR i IN 1..n 
             LOOP
-                l_fonts('prose').chars_italic:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_body_html,l_italics_regex,1,i,null,1)));
-                FOR j IN 1..LENGTH(l_fonts('prose').chars_italic) LOOP
-                    l_char:=SUBSTR(l_fonts('prose').chars_italic,j,1);
-                    IF (l_fonts('prose').chars_italic IS NULL OR INSTR(l_fonts('prose').chars_italic,l_char)=0) THEN
-                        l_fonts('prose').chars_italic:=l_fonts('prose').chars_italic || l_char;
-                    END IF;
-                END LOOP;
+                l_heading:=REGEXP_SUBSTR(l_body_html,l_headings_regex,1,i,null,1);
+                extract_styles(l_heading, l_fonts('headings').chars_italic, l_fonts('headings').chars_normal);
             END LOOP;
-
             FOR i IN 1..n 
             LOOP
-                l_body_html:=REGEXP_REPLACE(l_body_html,'<i>.+?</i>',null,1,i);
+                l_body_html:=REGEXP_REPLACE(l_body_html,l_headings_regex,null,1,i);
             END LOOP;
-            l_body_html:=utl_i18n.unescape_reference(apex_escape.striphtml(l_body_html));
-            FOR j IN 1..LENGTH(l_body_html) LOOP
-                l_char:=SUBSTR(l_body_html,j,1);
-                IF (l_fonts('prose').chars_normal IS NULL OR INSTR(l_fonts('prose').chars_normal,l_char)=0) THEN
-                    l_fonts('prose').chars_normal:=l_fonts('prose').chars_normal || l_char;
-                END IF;
-            END LOOP;
+            extract_styles(l_body_html, l_fonts('prose').chars_italic, l_fonts('prose').chars_normal);
 
             l_sha1:=LOWER(dbms_crypto.hash(src=>l_page, typ=>dbms_crypto.hash_sh1));
 
@@ -575,6 +603,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /* Google css API needs separate calls for distinct set of normal and italic characters used */
         l_context:=l_fonts.FIRST;
         WHILE l_context IS NOT NULL LOOP
+            UPDATE website_font 
+               SET chars_italic=l_fonts(l_context).chars_italic, chars_normal=l_fonts(l_context).chars_normal
+             WHERE website_id=pWebsiteId
+               AND context=l_context;
+            /*
             IF (l_fonts(l_context).chars_italic IS NOT NULL) THEN
                 l_googleapis_query:='ital';
                 l_googleapis_query_params:='1';
@@ -625,6 +658,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_font_css:=apex_web_service.make_rest_request(p_url=>l_fonts(l_context).api_url_normal, p_http_method=>'GET');
                 l_fonts(l_context).font_url_normal:=REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1);
             END IF;
+            */
 
             l_context := l_fonts.NEXT(l_context);
         END LOOP;
