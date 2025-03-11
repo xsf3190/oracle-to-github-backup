@@ -381,28 +381,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 
                 '<div class="flex-items" style="--flex-direction:row;--flex-gap:0.2em">' ||
                     '<label for="' || l_column_name || '-font-size">Size</label>' ||
-                    '<input type="range" id="' || l_column_name || '-font-size" data-column="' || pColumn || '_font_size" min="4" max="6" value="' || pFontSize || '" step="1"/>' ||
+                    '<input type="range" id="' || l_column_name || '-font-size" name="' || l_column_name || '_font_size" min="4" max="6" value="' || pFontSize || '" step="1"/>' ||
                     '<label for="' || l_column_name || '-letter-spacing">Letter Spacing</label>' ||
-                    '<input type="range" id="' || l_column_name || 'letter-spacing" data-column="' || pColumn || '_letter_spacing" min="0" max="0.75" value="' || pLetterSpacing || '" step="0.05"/>' ||
+                    '<input type="range" id="' || l_column_name || 'letter-spacing" name="' || l_column_name || '_letter_spacing" min="0" max="0.75" value="' || pLetterSpacing || '" step="0.05"/>' ||
                     CASE WHEN C.wght IS NOT NULL THEN
                     '<label for="' || l_column_name || '-font-weight">Font Weight</label>' ||
-                    '<input type="range" id="' || l_column_name || '-font-weight" data-column="' || pColumn || '_font_weight" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '" step="10"/>'
+                    '<input type="range" id="' || l_column_name || '-font-weight" name="' || l_column_name || '_font_weight" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '" step="10"/>'
                     END ||
                     CASE WHEN C.wdth IS NOT NULL THEN
                     '<label for="' || l_column_name || '-font-width">Font Width</label>' ||
-                    '<input type="range" id="' || l_column_name || '-font-width" data-column="' || pColumn || '_font_width" min="' || C.wdth_start || '" max="' || C.wdth_end || '" value="' || C.wdth || '" step="10"/>'
+                    '<input type="range" id="' || l_column_name || '-font-width" name="' || l_column_name || '_font_width" min="' || C.wdth_start || '" max="' || C.wdth_end || '" value="' || C.wdth || '" step="10"/>'
                     END ||
                     CASE WHEN C.opsz IS NOT NULL THEN
                     '<label for="' || l_column_name || '-font-opsz">Optical Size</label>' ||
-                    '<input type="range" id="' || l_column_name || '-font-opsz" data-column="' || pColumn || '_font_opsz" min="' || C.opsz_start || '" max="' || C.opsz_end || '" value="' || C.opsz || '" step="10"/>'
+                    '<input type="range" id="' || l_column_name || '-font-opsz" name="' || l_column_name || '_font_opsz" min="' || C.opsz_start || '" max="' || C.opsz_end || '" value="' || C.opsz || '" step="10"/>'
                     END ||
                     CASE WHEN C.slnt IS NOT NULL THEN
                     '<label for="' || l_column_name || '-font-slnt">Slant</label>' ||
-                    '<input type="range" id="' || l_column_name || '-font-slnt" data-column="' || pColumn || '_font_slnt" min="' || C.slnt_start || '" max="' || C.slnt_end || '" value="' || C.slnt || '" step="10"/>'
+                    '<input type="range" id="' || l_column_name || '-font-slnt" name="' || l_column_name || '_font_slnt" min="' || C.slnt_start || '" max="' || C.slnt_end || '" value="' || C.slnt || '" step="10"/>'
                     END ||
                     CASE WHEN C.ital IS NOT NULL THEN
                     '<label for="' || l_column_name || '-font-ital">Italics</label>' ||
-                    '<input type="checkbox" id="' || l_column_name || '-font-ital" data-column="' || pColumn || '_font_ital"' || CASE WHEN C.ital=1 THEN ' checked' END || '/>'
+                    '<input type="checkbox" id="' || l_column_name || '-font-ital" name="' || l_column_name || '_font_ital"' || CASE WHEN C.ital=1 THEN ' checked' END || '/>'
                     END ||
                 '</div>' ||
             '</fieldset>';
