@@ -25,20 +25,44 @@ export const init = (element) => {
 }
 
 editor.addEventListener("input", (e) => {
-    if (e.target.matches("[type='text']")) {
-        let numOfEnteredChars = e.target.value.length;
-        const charcounter = e.target.parentElement.querySelector(".charcounter");
-        const maxchars = e.target.getAttribute("maxlength");
-        charcounter.textContent = numOfEnteredChars + "/" + maxchars;
+    const name = e.target.getAttribute("name");
+    const type = e.target.getAttribute("type");
 
-        if (numOfEnteredChars === Number(maxchars)) {
-            charcounter.style.color = "red";
-        } else {
-            charcounter.style.color = "initial";
-        }
-    }
-    if (e.target.matches("[type='color']")) {
-        header.style.backgroundColor = e.target.value;
+    const target = header.querySelector("." + name.split("_")[0]);
+
+    switch (type) {
+        case "text":
+            target.textContent = e.target.value;
+            let numOfEnteredChars = e.target.value.length;
+            const charcounter = e.target.parentElement.querySelector(".charcounter");
+            const maxchars = e.target.getAttribute("maxlength");
+            charcounter.textContent = numOfEnteredChars + "/" + maxchars;
+
+            if (numOfEnteredChars === Number(maxchars)) {
+                charcounter.style.color = "red";
+            } else {
+                charcounter.style.color = "initial";
+            }
+            break;;
+        case "color":
+            header.style.backgroundColor = e.target.value;
+            break;;
+        case "range":
+            if (name.includes("font_size")) {
+                target.style.fontSize = "var(--step-" + e.target.value + ")";
+            } else if (name.includes("letter_spacing")) {
+                target.style.letterSpacing = e.target.value + "em";
+                target.style.marginRight = "-" + e.target.value + "em";
+            } else if (name.includes("font_wght")) {
+                target.style.fontWeight = e.target.value;
+            } else if (name.includes("font_wdth")) {
+                target.style.fontStretch = e.target.value + "%";
+            } else if (name.includes("font_opsz")) {
+                target.style.fontVariationSettings = '"opsz"' + e.target.value;
+            } else if (name.includes("font_slnt")) {
+                target.style.fontVariationSettings = '"slnt"' + e.target.value;
+            }
+            break;;
     }
 });
 
@@ -80,21 +104,27 @@ editor.addEventListener("change", (e) => {
             header.style.color = "#000000";
         }
     }
-    //const result = e.target.parentElement.querySelector(".result");
 
-    const column = e.target.dataset.column.split(".")[1];
-    const element = header.querySelector("." + column.split("_")[0]);
-
-    if (column==="title" || column==="subtitle") {
-        element.textContent = e.target.value;
-    } else if (column.includes("font_size")) {
-        element.style.fontSize = "var(--step-" + e.target.value + ")";
-    } else if (column.includes("letter_spacing")) {
-        element.style.letterSpacing = e.target.value + "em";
-        element.style.marginRight = "-" + e.target.value + "em";
-    } else if (column.includes("font_weight")) {
-        element.style.fontWeight = e.target.value;
+    const name = e.target.getAttribute("name");
+    const target = header.querySelector("." + name.split("_")[0]);
+    
+    if (name.includes("font_ital")) {
+        if (e.targetvalue==='on') {
+            target.style.fontStyle = "italic";
+        } else {
+            target.style.fontStyle = "normal";
+        }
+    } else if (name.includes("font_category")) {
+        const query = "?category=" + e.target.value + "&font=-1";
+        callAPI('fonts','GET', query)
+            .then((data) => {
+                console.log(data.content);
+            })
+            .catch((error) => {
+                console.error(error);
+            });
     }
+
 });
 
 const selectColorFromScreen = async (abortController) => {
@@ -128,7 +158,14 @@ editor.addEventListener("click", async (e) => {
     if (e.target.matches(".save-changes")) {
         const formData = new FormData(editor);
         const formObj = Object.fromEntries(formData);
-        console.log("formObj",formObj)
+        console.log("formObj",formObj);
+        callAPI(endpoint,'PUT', formObj)
+            .then(() => {
+                console.log("saved");
+            })
+            .catch((error) => {
+                console.error(error);
+            });
     }
 
 });
