@@ -8,7 +8,6 @@ CREATE TABLE "WEBSITE"
 	"UPDATED_DATE" TIMESTAMP (6) WITH TIME ZONE, 
 	"NETLIFY_DEPLOY_ID" VARCHAR2(40), 
 	"NETLIFY_SITE_ID_CUSTOM" VARCHAR2(40), 
-	"FONT" VARCHAR2(100) DEFAULT 'Roboto Serif', 
 	"CSS" CLOB, 
 	"MAX_WIDTH" VARCHAR2(10) DEFAULT '60rem', 
 	"COLOR_TEXT" VARCHAR2(7) DEFAULT '#404040' NOT NULL ENABLE, 
@@ -34,12 +33,6 @@ CREATE TABLE "WEBSITE"
 	"HEADER_EFFECT" VARCHAR2(10), 
 	"PROMOTION" VARCHAR2(1000), 
 	"HERO_ASSET_ID" NUMBER, 
-	"TITLE_COLOR" VARCHAR2(7), 
-	"TITLE_FONT_SIZE" NUMBER, 
-	"TITLE_LETTER_SPACING" NUMBER, 
-	"SUBTITLE_FONT_SIZE" NUMBER, 
-	"SUBTITLE_LETTER_SPACING" NUMBER, 
-	"TITLE_FONT_WGHT" NUMBER, 
 	"SUBTITLE_FONT_WGHT" NUMBER, 
 	 CONSTRAINT "LOGIN_FORM_VALUES" CHECK (login_form in ('YES','NO')) ENABLE, 
 	 CONSTRAINT "IMG_BORDER_RADIUS_CHECK" CHECK (img_border_radius in ('0.5em','0.75em','1em')) ENABLE, 
@@ -51,7 +44,6 @@ CREATE TABLE "WEBSITE"
    ) ;
 COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'TEST websites are always deployed as a subdomain of "netlify.app".<p>LIVE websites are deployed only if the Domain name has been purchased either through your Netlify subscription or transferred from a registrar.</p>';
    COMMENT ON COLUMN "WEBSITE"."CONTACT_EMAIL" IS 'Email address to which contact form details are sent';
-   COMMENT ON COLUMN "WEBSITE"."FONT" IS 'Google Web Font';
    COMMENT ON COLUMN "WEBSITE"."MAX_WIDTH" IS 'Maximum width of content expressed in CSS units, e.g. "65ch"';
    COMMENT ON COLUMN "WEBSITE"."COLOR_TEXT" IS '<p>Color code for text as it will appear in your website</p><p>Must be a valid hex value in format #RRGGBB</p><p>Modern browsers provide a color icon allowing you to select a color from anywhere on your screen.</p>';
    COMMENT ON COLUMN "WEBSITE"."COLOR_BACKGROUND" IS '<p>Color code for background as it will appear in your website.</p><p>Modern browsers provide a color icon allowing you to select a color from anywhere on your screen.</p>';
@@ -65,10 +57,10 @@ COMMENT ON COLUMN "WEBSITE"."DOMAIN_NAME" IS 'TEST websites are always deployed 
    COMMENT ON COLUMN "WEBSITE"."LOGIN_FORM" IS 'Enable login on all website pages - authentication with either through Email or Google';
    COMMENT ON COLUMN "WEBSITE"."IMG_BORDER_RADIUS" IS 'Rounded corners for images';
 
-  CREATE UNIQUE INDEX "IX_WEBSITE_DOMAIN_NAME" ON "WEBSITE" ("DOMAIN_NAME") 
+  CREATE UNIQUE INDEX "PK_WEBSITE" ON "WEBSITE" ("ID") 
   ;
 
-  CREATE UNIQUE INDEX "PK_WEBSITE" ON "WEBSITE" ("ID") 
+  CREATE UNIQUE INDEX "IX_WEBSITE_DOMAIN_NAME" ON "WEBSITE" ("DOMAIN_NAME") 
   ;
 
   ALTER TABLE "WEBSITE" MODIFY ("DOMAIN_NAME" NOT NULL ENABLE);
