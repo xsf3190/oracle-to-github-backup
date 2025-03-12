@@ -20,7 +20,7 @@ export const init = (element) => {
             dropdown_details.removeAttribute("open");
         })
         .catch((error) => {
-            header.insertAdjacentHTML('beforebegin','<div style="color:red">' + error + '</div>');
+            handle_error(error);
         });
 }
 
@@ -32,6 +32,7 @@ editor.addEventListener("input", (e) => {
 
     switch (type) {
         case "text":
+            target.style.display = "block";
             target.textContent = e.target.value;
             let numOfEnteredChars = e.target.value.length;
             const charcounter = e.target.parentElement.querySelector(".charcounter");
@@ -115,13 +116,20 @@ editor.addEventListener("change", (e) => {
             target.style.fontStyle = "normal";
         }
     } else if (name.includes("font_category")) {
-        const query = "?category=" + e.target.value + "&font=-1";
-        callAPI('fonts','GET', query)
+        const query = "?category=" + e.target.value + "&font=0";
+        callAPI('fonts/:ID','GET', query)
             .then((data) => {
-                console.log(data.content);
+                const family = e.target.parentElement.nextSibling.querySelector("select");
+                let index = family.options.length;
+                while (index--) {
+                    family.remove(index);
+                }
+                family.insertAdjacentHTML('beforeend',data.content);
+                const controls=e.target.closest("fieldset").querySelector(":last-child");
+                
             })
             .catch((error) => {
-                console.error(error);
+                handle_error(error);
             });
     }
 
@@ -164,8 +172,14 @@ editor.addEventListener("click", async (e) => {
                 console.log("saved");
             })
             .catch((error) => {
-                console.error(error);
+                handle_error(error);
             });
     }
 
 });
+
+const handle_error = (error) => {
+    const result = editor.querySelector(".result");
+    result.textContent = error;
+    result.style.color = "red";
+}
