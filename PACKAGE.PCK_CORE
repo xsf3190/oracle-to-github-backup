@@ -320,61 +320,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     ** Copy "adfreesites.edu" for new users
     */ 
     PROCEDURE createStarterWebsite(pUserId IN users.id%type) IS
-        l_domain_name website.domain_name%type;
-        l_username users.name%type;
-        l_email users.email%type;
-        l_json JSON_OBJECT_T;
-        l_clob CLOB;
-        l_netlify_site_id website.netlify_site_id%type;
-        l_website_id website.id%type;
-        l_parent_id article.id%type;
-        l_site_created BOOLEAN:=FALSE;
-        n PLS_INTEGER:=0;
     BEGIN
-        SELECT REPLACE(SUBSTR(email,1,INSTR(email,'@')-1),'.','-'), name, email INTO l_domain_name, l_username, l_email FROM users WHERE id=pUserId;
-
-        l_json:=new JSON_OBJECT_T;
-        WHILE TRUE LOOP
-            EXIT WHEN n>2;
-            l_json.put('name', l_domain_name);
-            pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pStatusAllowed=>422, pData=>l_clob);
-            EXIT WHEN apex_web_service.g_status_code<>422;
-            n:=n+1;
-            l_domain_name:=l_domain_name||TO_CHAR(n);
-        END LOOP;
-        SELECT site_id INTO l_netlify_site_id FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id));
-
-        SELECT id INTO l_website_id FROM website WHERE domain_name='jordanbyrne.com';
- 
-        INSERT INTO website(id, domain_name, user_id, contact_email, netlify_site_id,  updated_date, font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale)
-        SELECT seq_website.nextval, l_domain_name, pUserId, l_email, l_netlify_site_id, current_timestamp, font, max_width, color_text, color_background, color_primary, min_font_size, min_width_px, min_scale, max_font_size, max_width_px, max_scale
-          FROM website 
-         WHERE id=l_website_id;
-
-        FOR C IN (
-            SELECT article_id, display_order, created_date, navigation_label, updated_date, user_id, contact_form, collection_type, collection_date_format, page_title, page_description
-              FROM website_article 
-             WHERE website_id=l_website_id) 
-        LOOP
-            INSERT INTO article(id, title, excerpt, author_user_id, word_count, updated_date, body_html, nb_assets, display_order)
-            SELECT seq_article.nextval, title, excerpt, pUserId, word_count, current_timestamp, body_html, nb_assets, display_order
-              FROM article
-             WHERE id=C.article_id;
-            
-            INSERT INTO website_article(website_id, article_id, display_order, navigation_label, updated_date, user_id, contact_form, collection_type, collection_date_format, page_title, page_description)
-            VALUES (seq_website.currval, seq_article.currval, C.display_order, C.navigation_label, current_timestamp, pUserid, C.contact_form, C.collection_type, C.collection_date_format, C.page_title, C.page_description);
-
-            IF (C.collection_type<>'N/A') THEN
-                l_parent_id:=seq_article.currval;
-                FOR C1 IN (SELECT title, excerpt, word_count, updated_date, body_html, nb_assets, display_order
-                             FROM article
-                            WHERE parent_id=C.article_id)
-                LOOP
-                    INSERT INTO article(id, parent_id, title, author_user_id, excerpt, word_count, updated_date, body_html, nb_assets, display_order)
-                    VALUES (seq_article.nextval, l_parent_id, C1.title, pUserId, C1.excerpt, C1.word_count, current_timestamp, C1.body_html, C1.nb_assets, C1.display_order);
-                END LOOP;
-            END IF;
-        END LOOP;
+        null;
     END;
 
     /* 
@@ -426,12 +373,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 l_root_css:=l_root_css || l_fluid_types(i).property || ': ' || l_fluid_types(i).value || ';';
             END LOOP;
             FOR C1 IN (
-                SELECT '--font-family-' || LOWER(wf.context) || ':"' || f.family || '",' || CASE WHEN f.category IN ('serif','sans-serif') THEN f.category ELSE 'sans-serif' END || ';' css_variable
+                SELECT LOWER(wf.context) context, f.family, f.category, wf.step, wf.letter_spacing
                 FROM font f, website_font wf
                WHERE f.id=wf.font_id
                  AND wf.website_id=pWebsiteId
             ) LOOP
-                l_root_css:=l_root_css || C1.css_variable;
+                l_root_css:=l_root_css || 
+                '--font-family-' || C1.context || ':"' || C1.family || '",' || CASE WHEN C1.category IN ('serif','sans-serif') THEN C1.category ELSE 'sans-serif' END || ';' ||
+                '--font-size-' || C1.context || ': var(--step-' || C1.step || ');' || 
+                '--font-letter-spacing-' || C1.context || ': ' || C1.letter_spacing || 'em;';
             END LOOP;
             l_root_css:=l_root_css ||
             '--max-width: ' || C.max_width || ';' || 
