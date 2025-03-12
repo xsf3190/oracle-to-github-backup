@@ -310,7 +310,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         PROCEDURE download_font(pFamily IN font.family%type, pAxes IN VARCHAR2, pRanges IN VARCHAR2, pText IN VARCHAR2) IS
             l_api_url VARCHAR2(500);
             l_font_css CLOB;
-            l_download_url VARCHAR2(200);
+            l_download_url VARCHAR2(500);
             l_url_regex VARCHAR2(20):='url\(([^)]+)\)';
         BEGIN
             l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(pFamily,' ','+') || ':' || pAxes || '@' || pRanges || '&text=' || utl_url.escape(pText,TRUE,'UTF-8');
@@ -325,7 +325,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             pck_core.log(l_download_url);
             l_font_download:=apex_web_service.make_rest_request_b(p_url=>l_download_url, p_http_method=>'GET');
             l_sha1:=LOWER(dbms_crypto.hash(src => l_font_download, typ => dbms_crypto.hash_sh1));
-            l_deploy_files(l_sha1).file_name:=REPLACE(pFamily,' ','_') || CASE WHEN INSTR(pAxes,'ital')>0 THEN 'ital' END || '_VF' || '.woff2';
+            l_deploy_files(l_sha1).file_name:=REPLACE(pFamily,' ','_') || CASE WHEN INSTR(pAxes,'ital')>0 THEN '_ital' END || '_VF' || '.woff2';
             l_deploy_files(l_sha1).file_content_b:=l_font_download;
             l_files.put(l_deploy_files(l_sha1).file_name, l_sha1);
             logDeployment(pWebsiteId, pSiteId, 'Uploaded '|| l_deploy_files(l_sha1).file_name || ' ' || apex_string_util.to_display_filesize(dbms_lob.getlength(l_font_download)));
