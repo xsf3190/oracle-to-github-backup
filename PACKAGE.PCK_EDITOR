@@ -348,13 +348,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
-        IF (pFontId=-1) THEN /* Get all fonts for category*/
+        IF (pFontId=0) THEN /* Get all fonts for category*/
             FOR C IN (SELECT id, family FROM font WHERE category=pCategory ORDER BY 2)
             LOOP
-                l_html:=l_html || 
-                '<option value="' || C.id || '">' ||
-                    C.family ||
-                '</option>';
+                l_html:=l_html || '<option value="' || C.id || '">' || C.family || '</option>';
             END LOOP;
         END IF;
 
