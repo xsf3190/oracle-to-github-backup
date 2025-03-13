@@ -1131,6 +1131,10 @@ ol.deploy span + span {
 .editor > :last-child {
     grid-area: buttons;
 }
+.font-settings {
+    --flex-direction:row;
+    --flex-gap:0.2em;
+}
 
 select,
 ::picker(select) {
