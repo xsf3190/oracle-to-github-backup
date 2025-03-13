@@ -125,8 +125,45 @@ editor.addEventListener("change", (e) => {
                     family.remove(index);
                 }
                 family.insertAdjacentHTML('beforeend',data.content);
-                const controls=e.target.closest("fieldset").querySelector(":last-child");
                 
+            })
+            .catch((error) => {
+                handle_error(error);
+            });
+    } else if (name.includes("font_family")) {
+        const query = "?category=&font=" + e.target.value;
+        callAPI('fonts/:ID','GET', query)
+            .then((data) => {
+                const descriptors = {};
+                data.axes.forEach((axis) => {
+                    const label = e.target.closest("fieldset").querySelector("[for$='"+axis.name+"']");
+                    const input = label.querySelector("input");
+                    if (axis.max) {
+                        label.classList.remove("visually-hidden");
+                        input.setAttribute("min",axis.min);
+                        input.setAttribute("max",axis.max);
+                        input.value = axis.val;
+                        switch (axis) {
+                            case "wght":
+                                descriptors.weight = axis.min + " " + axis.max;
+                                break;;
+                            case "wdth":
+                                descriptors.stretch = axis.min + "% " + axis.max + "%";
+                                break;;
+                        }
+                    } else {
+                        label.classList.add("visually-hidden");
+                    }
+                })
+                const font_family = e.target.options[e.target.selectedIndex].text;
+                console.log("descriptors",descriptors)
+                const fontFile = new FontFace(font_family,data.url,descriptors);
+                document.fonts.add(fontFile);
+                fontFile.load();
+                document.fonts.ready.then(()=>{
+                    console.log("font " + font_family + " loaded");
+                    target.style.fontFamily = font_family;
+                });
             })
             .catch((error) => {
                 handle_error(error);
