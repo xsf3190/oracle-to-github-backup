@@ -240,7 +240,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         TYPE t_jscode IS TABLE OF VARCHAR2(30);
         l_jscode t_jscode:=t_jscode();
 
-        l_style CLOB;
+        l_styles CLOB;
         
         l_sitemap CLOB;
         l_robots CLOB;
@@ -310,8 +310,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         PROCEDURE download_font(pFamily IN font.family%type, pAxes IN VARCHAR2, pRanges IN VARCHAR2, pText IN VARCHAR2) IS
             l_api_url VARCHAR2(500);
             l_font_css CLOB;
-            l_download_url VARCHAR2(500);
-            l_url_regex VARCHAR2(20):='url\(([^)]+)\)';
+            l_download_url VARCHAR2(1000);
+            l_style VARCHAR2(50);
+            l_weight VARCHAR2(50);
+            l_stretch VARCHAR2(50);
+            l_url_regex VARCHAR2(50):='url\(([^)]+)\)';
+            l_weight_regex VARCHAR2(50):='font-weight:([^)]+);';
+            l_stretch_regex VARCHAR2(50):='font-stretch:([^)]+);';
+            l_style_regex VARCHAR2(50):='font-style:([^)]+);';
         BEGIN
             l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(pFamily,' ','+') || ':' || pAxes || '@' || pRanges || '&text=' || utl_url.escape(pText,TRUE,'UTF-8');
             
@@ -320,26 +326,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 pck_core.log(l_api_url);
                 pck_core.log(l_font_css);
             END IF;
-            pck_core.log(l_font_css);
+            l_weight:=REGEXP_SUBSTR(l_font_css,l_weight_regex,1,1,null,1);
+            l_stretch:=REGEXP_SUBSTR(l_font_css,l_stretch_regex,1,1,null,1);
             l_download_url:=REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1);
-            pck_core.log(l_download_url);
+
             l_font_download:=apex_web_service.make_rest_request_b(p_url=>l_download_url, p_http_method=>'GET');
             l_sha1:=LOWER(dbms_crypto.hash(src => l_font_download, typ => dbms_crypto.hash_sh1));
             l_deploy_files(l_sha1).file_name:=REPLACE(pFamily,' ','_') || CASE WHEN INSTR(pAxes,'ital')>0 THEN '_ital' END || '_VF' || '.woff2';
             l_deploy_files(l_sha1).file_content_b:=l_font_download;
             l_files.put(l_deploy_files(l_sha1).file_name, l_sha1);
             logDeployment(pWebsiteId, pSiteId, 'Uploaded '|| l_deploy_files(l_sha1).file_name || ' ' || apex_string_util.to_display_filesize(dbms_lob.getlength(l_font_download)));
-            l_style:=l_style || 
+            l_styles:=l_styles || 
             '@font-face {' ||
                 'font-family: "' || pFamily || '";' ||
                 'font-display: swap;' ||
                 'src: url(./' || l_deploy_files(l_sha1).file_name ||') format(''woff2-variations'');' ||
                 'src: url(./' || l_deploy_files(l_sha1).file_name ||') format(''woff2'') tech(''variations'');' ||
-                CASE WHEN INSTR(pAxes,'ital')>0 THEN
-                'font-style: italic;'
-                ELSE
-                'font-style: normal;'
-                END ||
+                CASE WHEN l_style IS NOT NULL THEN 'font-style: ' || l_style || ';' END ||
+                CASE WHEN l_weight IS NOT NULL THEN 'font-weight: ' || l_weight || ';' END ||
+                CASE WHEN l_stretch IS NOT NULL THEN 'font-stretch: ' || l_stretch || ';' END ||
             '}';
         END;
 
@@ -665,12 +670,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             FROM data
         )
         LOOP
-        /*
-            IF (C.ital IS NULL AND C.italic IS NOT NULL) THEN 
-                logDeployment(pWebsiteId, pSiteId, C.family || ' has no italics axis. Choose suitable font or remove italics.');
-                CONTINUE;
-            END IF;
-            */
             IF (C.italic IS NOT NULL) THEN 
                 download_font(C.family, 'ital' || C.axes, '1' || C.ranges, chars_used(C.italic));
             END IF;
@@ -678,16 +677,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             IF (C.normal IS NOT NULL) THEN 
                 download_font(C.family, LTRIM(C.axes,','), LTRIM(C.ranges,','), chars_used(C.normal));
             END IF;
-
         END LOOP;
 
         /* Assemble the complete css file including font-face */
-        l_style:=l_style || pck_core.buildCssRoot(pWebsiteId, pApplicationId, pDeploy=>TRUE);
+        l_styles:=l_styles || pck_core.buildCssRoot(pWebsiteId, pApplicationId, pDeploy=>TRUE);
 
         logDeployment(pWebsiteId, pSiteId, 'Building CSS website.css');
-        l_sha1:=LOWER(dbms_crypto.hash(src => l_style, typ => dbms_crypto.hash_sh1));
+        l_sha1:=LOWER(dbms_crypto.hash(src => l_styles, typ => dbms_crypto.hash_sh1));
         l_deploy_files(l_sha1).file_name:='website.css';
-        l_deploy_files(l_sha1).file_content:=l_style;
+        l_deploy_files(l_sha1).file_content:=l_styles;
         l_files.put('website.css', l_sha1);
 
 
