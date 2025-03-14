@@ -134,10 +134,16 @@ editor.addEventListener("change", (e) => {
         const query = "?category=&font=" + e.target.value;
         callAPI('fonts/:ID','GET', query)
             .then((data) => {
-                const descriptors = {};
+                const descriptors = {
+                    "style": "normal"
+                };
+                let ital = null;
                 data.axes.forEach((axis) => {
                     const label = e.target.closest("fieldset").querySelector("[for$='"+axis.name+"']");
                     const input = label.querySelector("input");
+                    if (axis.name==="ital") {
+                        ital = "italic";
+                    }
                     if (axis.max) {
                         label.classList.remove("visually-hidden");
                         input.setAttribute("min",axis.min);
@@ -156,10 +162,15 @@ editor.addEventListener("change", (e) => {
                     }
                 })
                 const font_family = e.target.options[e.target.selectedIndex].text;
-                console.log("descriptors",descriptors)
-                const fontFile = new FontFace(font_family,data.url,descriptors);
+                const fontFile = new FontFace(font_family,data.url_normal,descriptors);
                 document.fonts.add(fontFile);
                 fontFile.load();
+                if (ital) {
+                    descriptors.style = ital;
+                    const fontFileItal = new FontFace(font_family,data.url_italic,descriptors);
+                    document.fonts.add(fontFileItal);
+                    fontFileItal.load();
+                }
                 document.fonts.ready.then(()=>{
                     console.log("font " + font_family + " loaded");
                     target.style.fontFamily = font_family;
