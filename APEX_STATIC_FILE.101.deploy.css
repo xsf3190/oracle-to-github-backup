@@ -34,6 +34,7 @@ menu {
 
 main {
   padding-inline: 1rem;
+  container-type: inline-size;
 }
 
 [role="list"] {
@@ -274,7 +275,7 @@ h2,
 h3,
 h4 {
   text-wrap: balance;
-  font-family: var(--font-family-headings);
+  font-family: var(--font-family-title);
 }
 
 
@@ -1096,7 +1097,7 @@ ol.deploy span + span {
 
 /* HEADER EDITOR STYLES */
 
-.editor {
+.editor:has(*) {
     font-family: system-ui;
     font-size: var(--step--2);
     display: grid;
