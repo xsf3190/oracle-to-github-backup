@@ -340,7 +340,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     END;
 
     /* 
-    **  GET VARIABLE FONT LISTS AND PROPERTIES
+    **  GET VARIABLE FONT LISTS AND PROPERTIES (font_id=0) ELSE GET SETTING FOR SPECIFIC FONT
     */
     PROCEDURE getFonts(pWebsiteId IN website.id%type, pCategory IN font.category%type, pFontId IN font.id%type, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
@@ -348,17 +348,71 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
+        APEX_JSON.open_object; 
+
         IF (pFontId=0) THEN /* Get all fonts for category*/
-            FOR C IN (SELECT id, family FROM font WHERE category=pCategory ORDER BY 2)
+            FOR C IN (
+                SELECT id, family 
+                FROM font 
+                WHERE category=pCategory ORDER BY 2
+            )
             LOOP
+                
                 l_html:=l_html || '<option value="' || C.id || '">' || C.family || '</option>';
+            END LOOP;
+            APEX_JSON.write('content', l_html);
+        ELSE
+            FOR C IN (
+                SELECT menu FROM google_font_variable g, font f WHERE f.id=pFontId AND f.family=g.family
+            )
+            LOOP
+                APEX_JSON.write('url', 'url(' || C.menu || ')');
+            END LOOP;
+
+            FOR C IN (
+                SELECT f.ital_start, f.ital_end, f.wght_start, f.wght_end, f.wdth_start, f.wdth_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end
+                FROM font f
+                WHERE f.id=pFontid
+            ) 
+            LOOP
+                apex_json.open_array('axes');
+                apex_json.open_object;
+                apex_json.write('name','ital');
+                apex_json.write('min', C.ital_start);
+                apex_json.write('max', C.ital_end);
+                apex_json.write('val', 0);
+                apex_json.close_object;
+                apex_json.open_object;
+                apex_json.write('name','wght');
+                apex_json.write('min', C.wght_start);
+                apex_json.write('max', C.wght_end);
+                apex_json.write('val', 400);
+                apex_json.close_object;
+                apex_json.open_object;
+                apex_json.write('name','wdth');
+                apex_json.write('min', C.wdth_start);
+                apex_json.write('max', C.wdth_end);
+                apex_json.write('val', 100);
+                apex_json.close_object;
+                apex_json.open_object;
+                apex_json.write('name','opsz');
+                apex_json.write('min', C.opsz_start);
+                apex_json.write('max', C.opsz_end);
+                apex_json.write('val', 14);
+                apex_json.close_object;
+                apex_json.open_object;
+                apex_json.write('name','slnt');
+                apex_json.write('min', C.slnt_start);
+                apex_json.write('max', C.slnt_end);
+                apex_json.write('val', 0);
+                apex_json.close_object;
+                apex_json.close_array;
             END LOOP;
         END IF;
 
-        APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
-        APEX_JSON.write('content', l_html);
         APEX_JSON.close_object;
+        
 
         pStatus:=200;
 
@@ -415,7 +469,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     /*
      **  Create wrapper html for input text element
      */
-    FUNCTION buildInputWrapper(pWebsiteId IN website.id%type, pColumn IN VARCHAR2, pValue IN VARCHAR2) RETURN VARCHAR2 IS
+    FUNCTION buildFontWrapper(pWebsiteId IN website.id%type, pColumn IN VARCHAR2, pValue IN VARCHAR2) RETURN VARCHAR2 IS
         l_table_name user_tab_columns.table_name%type:=UPPER(SUBSTR(pColumn,1,INSTR(pColumn,'.')-1));
         l_column_name user_tab_columns.column_name%type:=SUBSTR(pColumn,INSTR(pColumn,'.')+1);
         l_html LONG;
@@ -445,38 +499,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     '<span class="charcounter" style="font-size:80%">' || NVL(LENGTH(pValue),0) ||  '/' || C.data_length || '</span>' ||
                 '</div>' ||
                 
-                '<div class="flex-items" style="--flex-direction:row;--flex-gap:0.2em">' ||
+                '<div class="flex-items font-settings">' ||
                     '<label for="' || l_column_name || '-font-size">Size' ||
                         '<input type="range" id="' || l_column_name || '-font-size" name="' || l_column_name || '_font_size" min="4" max="6" value="' || C.step || '" step="1"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-letter-spacing">Letter Spacing' ||
                         '<input type="range" id="' || l_column_name || '-letter-spacing" name="' || l_column_name || '_letter_spacing" min="0" max="0.75" value="' || C.letter_spacing || '" step="0.05"/>' ||
                     '</label>' ||
-                    CASE WHEN C.wght IS NOT NULL THEN
-                    '<label for="' || l_column_name || '-font-weight">Font Weight' ||
+                    
+                    '<label for="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' class="visually-hidden"' END || '>Font Weight' ||
                         '<input type="range" id="' || l_column_name || '-font-wght" name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '" step="10"/>' ||
-                    '</label>'
-                    END ||
-                    CASE WHEN C.wdth IS NOT NULL THEN
-                    '<label for="' || l_column_name || '-font-wdth">Font Width' ||
+                    '</label>' ||
+                    '<label for="' || l_column_name || '-font-wdth"' || CASE WHEN C.wdth_start IS NULL THEN ' class="visually-hidden"' END || '>Font Width' ||
                         '<input type="range" id="' || l_column_name || '-font-wdth" name="' || l_column_name || '_font_wdth" min="' || C.wdth_start || '" max="' || C.wdth_end || '" value="' || C.wdth || '" step="10"/>' ||
-                    '</label>'
-                    END ||
-                    CASE WHEN C.opsz IS NOT NULL THEN
-                    '<label for="' || l_column_name || '-font-opsz">Optical Size' ||
+                    '</label>' ||
+                    '<label for="' || l_column_name || '-font-opsz"' || CASE WHEN C.opsz_start IS NULL THEN ' class="visually-hidden"' END || '>Optical Size' ||
                         '<input type="range" id="' || l_column_name || '-font-opsz" name="' || l_column_name || '_font_opsz" min="' || C.opsz_start || '" max="' || C.opsz_end || '" value="' || C.opsz || '" step="10"/>' ||
-                    '</label>'
-                    END ||
-                    CASE WHEN C.slnt IS NOT NULL THEN
-                    '<label for="' || l_column_name || '-font-slnt">Slant' ||
+                    '</label>' ||
+                    '<label for="' || l_column_name || '-font-slnt"' || CASE WHEN C.slnt_start IS NULL THEN ' class="visually-hidden"' END || '>Slant' ||
                         '<input type="range" id="' || l_column_name || '-font-slnt" name="' || l_column_name || '_font_slnt" min="' || C.slnt_start || '" max="' || C.slnt_end || '" value="' || C.slnt || '" step="10"/>' ||
-                    '</label>'
-                    END ||
-                    CASE WHEN C.ital IS NOT NULL THEN
-                    '<label for="' || l_column_name || '-font-ital">Italics' ||
+                    '</label>' ||
+                    '<label for="' || l_column_name || '-font-ital"' || CASE WHEN C.ital_start IS NULL THEN ' class="visually-hidden"' END || '>Italics' ||
                         '<input type="checkbox" id="' || l_column_name || '-font-ital" name="' || l_column_name || '_font_ital"' || CASE WHEN C.ital=1 THEN ' checked' END || '/>' ||
-                    '</label>'
-                    END ||
+                    '</label>' ||
                 '</div>' ||
             '</fieldset>';
         END LOOP;
@@ -517,8 +562,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     '</button>' ||
                     '<span class="result"></span>' ||
                 '</fieldset>' ||
-                buildInputWrapper(pWebsiteId,'website.title', C.title) || 
-                buildInputWrapper(pWebsiteId,'website.subtitle',C.subtitle) ||
+                buildFontWrapper(pWebsiteId,'website.title', C.title) || 
+                buildFontWrapper(pWebsiteId,'website.subtitle',C.subtitle) ||
                 '<div class="flex-items space-between">' ||
                     '<button type="button" class="button publish-changes" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
                     '<button type="button" class="button save-changes" style="--button-bg:rebeccapurple">SAVE</button>' ||
