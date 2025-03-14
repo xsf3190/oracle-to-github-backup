@@ -1118,6 +1118,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_google_url VARCHAR2(250);
         l_clob CLOB;
         l_lastModified google_font_variable.lastModified%type;
+        l_axes VARCHAR2(25);
+        l_tuples VARCHAR2(50);
+        l_api_url VARCHAR2(300);
+        l_font_css VARCHAR2(500);
+        l_url_regex VARCHAR2(50):='url\(([^)]+)\)';
     BEGIN
         SELECT u.google_api_key 
           INTO l_google_api_key
@@ -1134,19 +1139,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         
         DELETE google_font_variable;
 
-        INSERT INTO google_font_variable(family,category,menu,lastModified,regular,italic,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end)
+        INSERT INTO google_font_variable(family,category,lastModified,regular,italic,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end)
         WITH data AS (
-            SELECT family, category, menu, lastModified, variant, tag,"start" as tag_start, "end" as tag_end
-              FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, menu, lastModified, NESTED '$.variants[*]' COLUMNS (variant PATH '$'), NESTED '$.axes[*]' COLUMNS(tag varchar2(4) PATH '$.tag', "start" number PATH '$.start', "end" number PATH '$.end'))) 
+            SELECT family, category, lastModified, variant, tag,"start" as tag_start, "end" as tag_end
+              FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, lastModified, NESTED '$.variants[*]' COLUMNS (variant PATH '$'), NESTED '$.axes[*]' COLUMNS(tag varchar2(4) PATH '$.tag', "start" number PATH '$.start', "end" number PATH '$.end'))) 
         )
-        SELECT family,category,menu,TO_DATE(lastModified,'YYYY-MM-DD'),
+        SELECT family,category,TO_DATE(lastModified,'YYYY-MM-DD'),
             max(decode(variant,'regular','YES')) as regular, max(decode(variant,'italic','YES')) as italic,
             max(decode(tag,'wght',tag_start)) as wght_start, max(decode(tag,'wght',tag_end)) as wght_end,
             max(decode(tag,'wdth',tag_start)) as wdth_start, max(decode(tag,'wdth',tag_end)) as wdth_end,
             max(decode(tag,'opsz',tag_start)) as opsz_start, max(decode(tag,'opsz',tag_end)) as opsz_end,
             max(decode(tag,'slnt',tag_start)) as slnt_start, max(decode(tag,'slnt',tag_end)) as slnt_end
         FROM data
-        GROUP BY family,category,menu,lastModified;
+        GROUP BY family,category,lastModified;
 
         DELETE google_font_variable WHERE COALESCE(wght_start,wdth_start,opsz_start,slnt_start) IS NULL;
 
@@ -1173,6 +1178,50 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             t.updated_date=current_timestamp
         WHEN NOT MATCHED THEN INSERT (id,family,category,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end,ital_start,ital_end,created_date) 
             VALUES (seq_font.nextval,s.family,s.category,s.wght_start,s.wght_end,s.wdth_start,s.wdth_end,s.opsz_start,s.opsz_end,s.slnt_start,s.slnt_end,s.ital_start,s.ital_end,current_timestamp);
+
+        /* Update font table with editor version of the url - i.e. full variants*/
+        FOR C IN (
+            SELECT id, family,ital_start,ital_end,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end
+            FROM font
+            WHERE url_edit_normal IS NULL OR updated_date IS NULL
+        ) LOOP
+            l_axes:=
+                CASE WHEN C.opsz_start IS NOT NULL THEN ',opsz' END ||
+                CASE WHEN C.slnt_start IS NOT NULL THEN ',slnt' END ||
+                CASE WHEN C.wdth_start IS NOT NULL THEN ',wdth' END ||
+                CASE WHEN C.wght_start IS NOT NULL THEN ',wght' END;
+            l_tuples:=
+                CASE WHEN C.opsz_start IS NOT NULL THEN ','||C.opsz_start||'..'||C.opsz_end END ||
+                CASE WHEN C.slnt_start IS NOT NULL THEN ','||C.slnt_start||'..'||C.slnt_end END ||
+                CASE WHEN C.wdth_start IS NOT NULL THEN ','||C.wdth_start||'..'||C.wdth_end END ||
+                CASE WHEN C.wght_start IS NOT NULL THEN ','||C.wght_start||'..'||C.wght_end END;
+
+            IF (C.ital_start IS NULL) THEN
+                l_axes:=LTRIM(l_axes,',');
+                l_tuples:=LTRIM(l_tuples,',');
+            ELSE
+                l_axes:='ital'||l_axes;
+                l_tuples:='0'||l_tuples||';'||'1'||l_tuples;
+            END IF;
+
+            l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || l_tuples || '&text=ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            
+            l_font_css:=apex_web_service.make_rest_request(p_url=>l_api_url, p_http_method=>'GET');
+            IF NOT (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
+                pck_core.log(l_api_url);
+                pck_core.log(l_font_css);
+                EXIT;
+            END IF;
+            
+            IF (C.ital_start IS NULL) THEN
+                UPDATE font SET url_edit_normal = REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1) 
+                WHERE id=C.id;
+            ELSE
+                UPDATE font SET url_edit_normal = REGEXP_SUBSTR(l_font_css,l_url_regex,2,1,null,1) ,url_edit_italic = REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1)
+                WHERE id=C.id;
+            END IF;
+
+        END LOOP;
     END;
 
     /*
