@@ -487,7 +487,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         '/*' || chr(10) || 
             q'[Content-Security-Policy: default-src 'none';]' ||
             q'[ img-src 'self' res.cloudinary.com;]' ||
-            q'[ font-src 'self';]' ||
+            q'[ font-src 'self' fonts.gstatic.com;]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com;]' ||
             q'[ script-src 'self' cdn.ckeditor.com upload-widget.cloudinary.com;]' ||
             q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
