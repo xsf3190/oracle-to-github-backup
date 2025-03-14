@@ -52,16 +52,16 @@ COMMENT ON COLUMN "USERS"."CLD_API_KEY" IS 'API key of your Cloudinary account u
    COMMENT ON COLUMN "USERS"."GOOGLE_API_KEY" IS 'Google API key used for accessing Web Fonts';
    COMMENT ON TABLE "USERS"  IS 'Log in accounts created through Social Sign-in (Facebook, Google) enabling secure access to user-created content.';
 
-  CREATE UNIQUE INDEX "PK_USERS" ON "USERS" ("ID") 
-  ;
-
-  CREATE UNIQUE INDEX "EMAIL_UNQ" ON "USERS" ("EMAIL") 
-  ;
-
   CREATE UNIQUE INDEX "HOSTING_USER" ON "USERS" ("HOSTING_USER_IND") 
   ;
 
   CREATE UNIQUE INDEX "UQ_APPROVED_SENDER_IND" ON "USERS" ("APPROVED_SENDER_IND") 
+  ;
+
+  CREATE UNIQUE INDEX "PK_USERS" ON "USERS" ("ID") 
+  ;
+
+  CREATE UNIQUE INDEX "EMAIL_UNQ" ON "USERS" ("EMAIL") 
   ;
 
   ALTER TABLE "USERS" MODIFY ("ID" NOT NULL ENABLE);
