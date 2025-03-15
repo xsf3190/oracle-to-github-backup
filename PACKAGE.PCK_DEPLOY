@@ -315,9 +315,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_weight VARCHAR2(50);
             l_stretch VARCHAR2(50);
             l_url_regex VARCHAR2(50):='url\(([^)]+)\)';
-            l_weight_regex VARCHAR2(50):='font-weight:([^)]+);';
-            l_stretch_regex VARCHAR2(50):='font-stretch:([^)]+);';
-            l_style_regex VARCHAR2(50):='font-style:([^)]+);';
+            l_url_regex_replace VARCHAR2(50):='\((\S*)\)';
         BEGIN
             l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(pFamily,' ','+') || ':' || pAxes || '@' || pRanges || '&text=' || utl_url.escape(pText,TRUE,'UTF-8');
             
@@ -326,8 +324,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 pck_core.log(l_api_url);
                 pck_core.log(l_font_css);
             END IF;
-            l_weight:=REGEXP_SUBSTR(l_font_css,l_weight_regex,1,1,null,1);
-            l_stretch:=REGEXP_SUBSTR(l_font_css,l_stretch_regex,1,1,null,1);
+            pck_core.log(l_font_css);
             l_download_url:=REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1);
 
             l_font_download:=apex_web_service.make_rest_request_b(p_url=>l_download_url, p_http_method=>'GET');
@@ -336,16 +333,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_deploy_files(l_sha1).file_content_b:=l_font_download;
             l_files.put(l_deploy_files(l_sha1).file_name, l_sha1);
             logDeployment(pWebsiteId, pSiteId, 'Uploaded '|| l_deploy_files(l_sha1).file_name || ' ' || apex_string_util.to_display_filesize(dbms_lob.getlength(l_font_download)));
-            l_styles:=l_styles || 
-            '@font-face {' ||
-                'font-family: "' || pFamily || '";' ||
-                'font-display: swap;' ||
-                'src: url(./' || l_deploy_files(l_sha1).file_name ||') format(''woff2-variations'');' ||
-                'src: url(./' || l_deploy_files(l_sha1).file_name ||') format(''woff2'') tech(''variations'');' ||
-                CASE WHEN l_style IS NOT NULL THEN 'font-style: ' || l_style || ';' END ||
-                CASE WHEN l_weight IS NOT NULL THEN 'font-weight: ' || l_weight || ';' END ||
-                CASE WHEN l_stretch IS NOT NULL THEN 'font-stretch: ' || l_stretch || ';' END ||
-            '}';
+            l_styles:=l_styles || REGEXP_REPLACE(l_font_css,l_url_regex_replace,'(./'||l_deploy_files(l_sha1).file_name||')',1,1);
+            pck_core.log(l_styles);
         END;
 
     BEGIN
@@ -370,17 +359,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_fonts(C.context).opsz:=C.opsz;
             l_fonts(C.context).slnt:=C.slnt;
         END LOOP;
-        IF NOT (l_fonts.EXISTS('headings')) THEN
-            l_fonts('headings').family:=l_fonts('TITLE').family;
-            INSERT INTO website_font(website_id, font_id, context) VALUES (pWebsiteId, l_fonts('TITLE').id, 'headings');
-        END IF;
-        IF NOT (l_fonts.EXISTS('prose')) THEN
-            l_fonts('prose').family:=l_fonts('SUBTITLE').family;
-            INSERT INTO website_font(website_id, font_id, context) VALUES (pWebsiteId, l_fonts('SUBTITLE').id, 'prose');
-        END IF;
         extract_styles(l_title, l_fonts('TITLE').chars_italic, l_fonts('TITLE').chars_normal);
         extract_styles(l_subtitle, l_fonts('SUBTITLE').chars_italic, l_fonts('SUBTITLE').chars_normal);
-
 
         /*
         ** Get all website content into collection
@@ -424,10 +404,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             FOR j IN 1..n 
             LOOP
                 l_heading:=REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j);
-                extract_styles(l_heading, l_fonts('headings').chars_italic, l_fonts('headings').chars_normal);
+                extract_styles(l_heading, l_fonts('TITLE').chars_italic, l_fonts('TITLE').chars_normal);
             END LOOP;
             l_body_html:=REGEXP_REPLACE(l_body_html,l_headings_regex,null);
-            extract_styles(l_body_html, l_fonts('prose').chars_italic, l_fonts('prose').chars_normal);
+            extract_styles(l_body_html, l_fonts('SUBTITLE').chars_italic, l_fonts('SUBTITLE').chars_normal);
             
             --apex_string.push(l_labels(i).modules,'web-vitals.js'); /* already inified from google download */
             --apex_string.push(l_labels(i).modules,'deploy_metric.min.js');
@@ -628,6 +608,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /* Google css API needs separate calls for distinct set of normal and italic characters used */
         l_context:=l_fonts.FIRST;
         WHILE l_context IS NOT NULL LOOP
+            /* Get unique set of characters used for each context */
             l_fonts(l_context).chars_italic:=chars_used(l_fonts(l_context).chars_italic);
             l_fonts(l_context).chars_normal:=chars_used(l_fonts(l_context).chars_normal);
 
