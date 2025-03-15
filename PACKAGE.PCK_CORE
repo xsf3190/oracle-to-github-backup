@@ -1111,7 +1111,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     END;
 
     /*
-    **  load Google font definitions into google_font table. wolf3 format only. Colummn url_regular used for dynamic font loading. Websites deployed with optimized foont.r 
+    **  load Google font definitions into google_font table. wolf3 format only. Websites deployed with optimized foont.r 
     */
     PROCEDURE loadGoogleFonts IS 
         l_google_api_key users.google_api_key%type;
@@ -1119,10 +1119,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_clob CLOB;
         l_lastModified google_font_variable.lastModified%type;
         l_axes VARCHAR2(25);
-        l_tuples VARCHAR2(50);
+        l_tuples VARCHAR2(100);
         l_api_url VARCHAR2(300);
-        l_font_css VARCHAR2(500);
+        l_font_css CLOB;
         l_url_regex VARCHAR2(50):='url\(([^)]+)\)';
+        l_chars VARCHAR2(500);
+
+        /* Collection to contains font edit url s*/
+        TYPE tt_edit_urls IS RECORD
+        (
+            font_id font.id%type,
+            url_edit_normal font.url_edit_normal%type,
+            url_edit_italic font.url_edit_italic%type
+        );
+        TYPE t_edit_urls IS TABLE OF tt_edit_urls INDEX BY PLS_INTEGER;
+        l_edit_urls t_edit_urls;
+
     BEGIN
         SELECT u.google_api_key 
           INTO l_google_api_key
@@ -1153,6 +1165,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         FROM data
         GROUP BY family,category,lastModified;
 
+        /* Variable fonts have at least one axis */
         DELETE google_font_variable WHERE COALESCE(wght_start,wdth_start,opsz_start,slnt_start) IS NULL;
 
         SELECT MAX(lastModified) INTO l_lastModified FROM google_font_variable;
@@ -1179,11 +1192,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         WHEN NOT MATCHED THEN INSERT (id,family,category,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end,ital_start,ital_end,created_date) 
             VALUES (seq_font.nextval,s.family,s.category,s.wght_start,s.wght_end,s.wdth_start,s.wdth_end,s.opsz_start,s.opsz_end,s.slnt_start,s.slnt_end,s.ital_start,s.ital_end,current_timestamp);
 
-        /* Update font table with editor version of the url - i.e. full variants*/
+        /* Build text characters to be used for this english-language only initial version */
+        FOR i IN 32..126 LOOP
+            l_chars:=l_chars || chr(i);
+        END LOOP;
+
+        /* Can extend this as necessary --> */
+        l_chars:=utl_url.escape(l_chars,TRUE,'UTF-8');
+
+        /* Update font table with editor version of the url - i.e. full variants and  all alphanumeric characterss*/
         FOR C IN (
             SELECT id, family,ital_start,ital_end,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end
             FROM font
-            WHERE url_edit_normal IS NULL OR updated_date IS NULL
+            WHERE url_edit_normal IS NULL
         ) LOOP
             l_axes:=
                 CASE WHEN C.opsz_start IS NOT NULL THEN ',opsz' END ||
@@ -1204,7 +1225,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 l_tuples:='0'||l_tuples||';'||'1'||l_tuples;
             END IF;
 
-            l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || l_tuples || '&text=ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || l_tuples 
+                || '&text=' || l_chars;
             
             l_font_css:=apex_web_service.make_rest_request(p_url=>l_api_url, p_http_method=>'GET');
             IF NOT (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
@@ -1213,15 +1235,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 EXIT;
             END IF;
             
+            /* Fonts with "ital" axis will have 2 font-face rukes and urls, one for "normal" and one for "italic" */
+            l_edit_urls(l_edit_urls.COUNT + 1).font_id:=C.id;
             IF (C.ital_start IS NULL) THEN
-                UPDATE font SET url_edit_normal = REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1) 
-                WHERE id=C.id;
+                l_edit_urls(l_edit_urls.COUNT).url_edit_normal:=REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1);
             ELSE
-                UPDATE font SET url_edit_normal = REGEXP_SUBSTR(l_font_css,l_url_regex,2,1,null,1) ,url_edit_italic = REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1)
-                WHERE id=C.id;
+                l_edit_urls(l_edit_urls.COUNT).url_edit_italic:=REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1);
+                l_edit_urls(l_edit_urls.COUNT).url_edit_normal:=REGEXP_SUBSTR(l_font_css,l_url_regex,1,2,null,1);
             END IF;
 
         END LOOP;
+
+        /* l_edit_urls Collection now contanis all fonts with edit urls that need to be updated */
+        FORALL indx IN 1..l_edit_urls.COUNT
+            UPDATE font
+               SET url_edit_normal=l_edit_urls(indx).url_edit_normal,
+                   url_edit_italic=l_edit_urls(indx).url_edit_italic
+             WHERE id=l_edit_urls(indx).font_id;
     END;
 
     /*
