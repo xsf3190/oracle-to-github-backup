@@ -363,18 +363,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             APEX_JSON.write('content', l_html);
         ELSE
             FOR C IN (
-                SELECT menu FROM google_font_variable g, font f WHERE f.id=pFontId AND f.family=g.family
-            )
-            LOOP
-                APEX_JSON.write('url', 'url(' || C.menu || ')');
-            END LOOP;
-
-            FOR C IN (
-                SELECT f.ital_start, f.ital_end, f.wght_start, f.wght_end, f.wdth_start, f.wdth_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end
+                SELECT f.ital_start, f.ital_end, f.wght_start, f.wght_end, f.wdth_start, f.wdth_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end, f.url_edit_normal, f.url_edit_italic
                 FROM font f
                 WHERE f.id=pFontid
             ) 
             LOOP
+                apex_json.write('url_normal', 'url(' || C.url_edit_normal || ')');
+                IF (C.url_edit_italic IS NOT NULL) THEN
+                    apex_json.write('url_italic', 'url(' || C.url_edit_italic || ')');
+                END IF;
                 apex_json.open_array('axes');
                 apex_json.open_object;
                 apex_json.write('name','ital');
