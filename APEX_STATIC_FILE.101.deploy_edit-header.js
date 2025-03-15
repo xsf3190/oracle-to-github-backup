@@ -134,21 +134,14 @@ editor.addEventListener("change", (e) => {
         const query = "?category=&font=" + e.target.value;
         callAPI('fonts/:ID','GET', query)
             .then((data) => {
-                const descriptors = {
-                    "style": "normal"
-                };
-                let ital = null;
                 data.axes.forEach((axis) => {
                     const label = e.target.closest("fieldset").querySelector("[for$='"+axis.name+"']");
                     const input = label.querySelector("input");
-                    if (axis.name==="ital") {
-                        ital = "italic";
-                    }
                     if (axis.max) {
                         label.classList.remove("visually-hidden");
                         input.setAttribute("min",axis.min);
                         input.setAttribute("max",axis.max);
-                        input.value = axis.val;
+                        input.value = axis.min;
                         switch (axis) {
                             case "wght":
                                 descriptors.weight = axis.min + " " + axis.max;
@@ -162,17 +155,17 @@ editor.addEventListener("change", (e) => {
                     }
                 })
                 const font_family = e.target.options[e.target.selectedIndex].text;
-                const fontFile = new FontFace(font_family,data.url_normal,descriptors);
+                const fontFile = new FontFace(font_family,data.url_normal,data.descriptor);
                 document.fonts.add(fontFile);
                 fontFile.load();
-                if (ital) {
-                    descriptors.style = ital;
-                    const fontFileItal = new FontFace(font_family,data.url_italic,descriptors);
-                    document.fonts.add(fontFileItal);
-                    fontFileItal.load();
-                }
                 document.fonts.ready.then(()=>{
-                    console.log("font " + font_family + " loaded");
+                    /*
+                    for (const fontFace of document.fonts.values()) {
+                        console.log("FontFace:");
+                        for (const property in fontFace) {
+                            console.log(`${property}: ${fontFace[property]}`);
+                        }
+                    }*/
                     target.style.fontFamily = font_family;
                 });
             })
