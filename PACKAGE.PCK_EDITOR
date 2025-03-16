@@ -368,10 +368,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 WHERE f.id=pFontid
             ) 
             LOOP
-                apex_json.write('url_normal', 'url(' || C.url_edit_normal || ')');
+                apex_json.write('url_normal', 'url(' || C.url_edit_normal || ') format("woff2")');
                 IF (C.url_edit_italic IS NOT NULL) THEN
-                    apex_json.write('url_italic', 'url(' || C.url_edit_italic || ')');
+                    apex_json.write('url_italic', 'url(' || C.url_edit_italic || ') format("woff2")');
                 END IF;
+
+                apex_json.open_object('descriptor');
+                apex_json.write('font-style','normal');
+                IF (C.wght_start IS NOT NULL) THEN
+                    apex_json.write('font-weight',C.wght_start || ' ' || C.wght_end);
+                END IF;
+                IF (C.wdth_start IS NOT NULL) THEN
+                    apex_json.write('font-stretch',C.wdth_start || '% ' || C.wght_end || '%');
+                END IF;
+                apex_json.close_object;
+
                 apex_json.open_array('axes');
                 apex_json.open_object;
                 apex_json.write('name','ital');
@@ -508,13 +519,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                         '<input type="range" id="' || l_column_name || '-font-wght" name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '" step="10"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-font-wdth"' || CASE WHEN C.wdth_start IS NULL THEN ' class="visually-hidden"' END || '>Font Width' ||
-                        '<input type="range" id="' || l_column_name || '-font-wdth" name="' || l_column_name || '_font_wdth" min="' || C.wdth_start || '" max="' || C.wdth_end || '" value="' || C.wdth || '" step="10"/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-wdth" name="' || l_column_name || '_font_wdth" min="' || C.wdth_start || '" max="' || C.wdth_end || '" value="' || C.wdth || '" step="1"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-font-opsz"' || CASE WHEN C.opsz_start IS NULL THEN ' class="visually-hidden"' END || '>Optical Size' ||
                         '<input type="range" id="' || l_column_name || '-font-opsz" name="' || l_column_name || '_font_opsz" min="' || C.opsz_start || '" max="' || C.opsz_end || '" value="' || C.opsz || '" step="10"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-font-slnt"' || CASE WHEN C.slnt_start IS NULL THEN ' class="visually-hidden"' END || '>Slant' ||
-                        '<input type="range" id="' || l_column_name || '-font-slnt" name="' || l_column_name || '_font_slnt" min="' || C.slnt_start || '" max="' || C.slnt_end || '" value="' || C.slnt || '" step="10"/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-slnt" name="' || l_column_name || '_font_slnt" min="' || C.slnt_start || '" max="' || C.slnt_end || '" value="' || C.slnt || '" step="1"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-font-ital"' || CASE WHEN C.ital_start IS NULL THEN ' class="visually-hidden"' END || '>Italics' ||
                         '<input type="checkbox" id="' || l_column_name || '-font-ital" name="' || l_column_name || '_font_ital"' || CASE WHEN C.ital=1 THEN ' checked' END || '/>' ||
