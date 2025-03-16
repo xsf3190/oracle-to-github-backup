@@ -59,9 +59,9 @@ editor.addEventListener("input", (e) => {
             } else if (name.includes("font_wdth")) {
                 target.style.fontStretch = e.target.value + "%";
             } else if (name.includes("font_opsz")) {
-                target.style.fontVariationSettings = '"opsz"' + e.target.value;
+                target.style.fontVariationSettings = '"opsz" ' + e.target.value;
             } else if (name.includes("font_slnt")) {
-                target.style.fontVariationSettings = '"slnt"' + e.target.value;
+                target.style.fontVariationSettings = '"slnt" ' + e.target.value;
             }
             break;;
     }
@@ -141,31 +141,17 @@ editor.addEventListener("change", (e) => {
                         label.classList.remove("visually-hidden");
                         input.setAttribute("min",axis.min);
                         input.setAttribute("max",axis.max);
-                        input.value = axis.min;
-                        switch (axis) {
-                            case "wght":
-                                descriptors.weight = axis.min + " " + axis.max;
-                                break;;
-                            case "wdth":
-                                descriptors.stretch = axis.min + "% " + axis.max + "%";
-                                break;;
-                        }
+                        input.value = Math.round(axis.min+((axis.max-axis.min)/2));
                     } else {
                         label.classList.add("visually-hidden");
                     }
                 })
                 const font_family = e.target.options[e.target.selectedIndex].text;
-                const fontFile = new FontFace(font_family,data.url_normal,data.descriptor);
+                const fontFile = new FontFace(font_family,data.url);
                 document.fonts.add(fontFile);
                 fontFile.load();
                 document.fonts.ready.then(()=>{
-                    /*
-                    for (const fontFace of document.fonts.values()) {
-                        console.log("FontFace:");
-                        for (const property in fontFace) {
-                            console.log(`${property}: ${fontFace[property]}`);
-                        }
-                    }*/
+                    console.log(`Loaded ${font_family}`);
                     target.style.fontFamily = font_family;
                 });
             })
