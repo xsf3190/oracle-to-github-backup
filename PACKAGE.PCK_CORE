@@ -1114,40 +1114,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     **  load Google font definitions into google_font table. wolf3 format only. Websites deployed with optimized foont.r 
     */
     PROCEDURE loadGoogleFonts IS 
-        l_google_api_key users.google_api_key%type;
-        l_google_url VARCHAR2(250);
         l_clob CLOB;
+        l_nb_fonts PLS_INTEGER;
         l_lastModified google_font_variable.lastModified%type;
-        l_axes VARCHAR2(25);
-        l_tuples VARCHAR2(100);
-        l_api_url VARCHAR2(300);
-        l_font_css CLOB;
-        l_url_regex VARCHAR2(50):='url\(([^)]+)\)';
-        l_chars VARCHAR2(500);
-
-        /* Collection to contains font edit url s*/
-        TYPE tt_edit_urls IS RECORD
-        (
-            font_id font.id%type,
-            url_edit_normal font.url_edit_normal%type,
-            url_edit_italic font.url_edit_italic%type
-        );
-        TYPE t_edit_urls IS TABLE OF tt_edit_urls INDEX BY PLS_INTEGER;
-        l_edit_urls t_edit_urls;
-
     BEGIN
-        SELECT u.google_api_key 
-          INTO l_google_api_key
-          FROM apex_workspace_apex_users w, users u 
-         WHERE w.email=u.email
-           AND w.is_admin='Yes'
-           FETCH FIRST ROW ONLY;
-
-        apex_web_service.clear_request_headers;
-        apex_web_service.g_request_headers(1).name := 'Content-Type';
-        apex_web_service.g_request_headers(1).value := 'application/json';
-        l_google_url:='https://www.googleapis.com/webfonts/v1/webfonts?key=' || l_google_api_key||'&capability=VF';
-        l_clob := apex_web_service.make_rest_request(p_url=>l_google_url, p_http_method=>'GET');
+        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts',l_clob);
         
         DELETE google_font_variable;
 
@@ -1168,8 +1139,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         /* Variable fonts have at least one axis */
         DELETE google_font_variable WHERE COALESCE(wght_start,wdth_start,opsz_start,slnt_start) IS NULL;
 
-        SELECT MAX(lastModified) INTO l_lastModified FROM google_font_variable;
-        pck_core.log('Google variable fonts loaded - last modified is ' || TO_CHAR(l_lastModified,'DD-MM-YYYY'));
+        SELECT COUNT(*), MAX(lastModified) INTO l_nb_fonts, l_lastModified FROM google_font_variable;
+        pck_core.log('Successfully loaded '|| l_nb_fonts || ' Google variable fonts  - last modified is ' || TO_CHAR(l_lastModified,'DD-MM-YYYY'));
 
         /* Update font table from staging table */
         MERGE INTO font t
@@ -1192,66 +1163,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         WHEN NOT MATCHED THEN INSERT (id,family,category,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end,ital_start,ital_end,created_date) 
             VALUES (seq_font.nextval,s.family,s.category,s.wght_start,s.wght_end,s.wdth_start,s.wdth_end,s.opsz_start,s.opsz_end,s.slnt_start,s.slnt_end,s.ital_start,s.ital_end,current_timestamp);
 
-        /* Build text characters to be used for this english-language only initial version */
-        FOR i IN 32..126 LOOP
-            l_chars:=l_chars || chr(i);
-        END LOOP;
-
-        /* Can extend this as necessary --> */
-        l_chars:=utl_url.escape(l_chars,TRUE,'UTF-8');
-
-        /* Update font table with editor version of the url - i.e. full variants and  all alphanumeric characterss*/
-        FOR C IN (
-            SELECT id, family,ital_start,ital_end,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end
-            FROM font
-            WHERE url_edit_normal IS NULL
-        ) LOOP
-            l_axes:=
-                CASE WHEN C.opsz_start IS NOT NULL THEN ',opsz' END ||
-                CASE WHEN C.slnt_start IS NOT NULL THEN ',slnt' END ||
-                CASE WHEN C.wdth_start IS NOT NULL THEN ',wdth' END ||
-                CASE WHEN C.wght_start IS NOT NULL THEN ',wght' END;
-            l_tuples:=
-                CASE WHEN C.opsz_start IS NOT NULL THEN ','||C.opsz_start||'..'||C.opsz_end END ||
-                CASE WHEN C.slnt_start IS NOT NULL THEN ','||C.slnt_start||'..'||C.slnt_end END ||
-                CASE WHEN C.wdth_start IS NOT NULL THEN ','||C.wdth_start||'..'||C.wdth_end END ||
-                CASE WHEN C.wght_start IS NOT NULL THEN ','||C.wght_start||'..'||C.wght_end END;
-
-            IF (C.ital_start IS NULL) THEN
-                l_axes:=LTRIM(l_axes,',');
-                l_tuples:=LTRIM(l_tuples,',');
-            ELSE
-                l_axes:='ital'||l_axes;
-                l_tuples:='0'||l_tuples||';'||'1'||l_tuples;
-            END IF;
-
-            l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || l_tuples 
-                || '&text=' || l_chars;
-            
-            l_font_css:=apex_web_service.make_rest_request(p_url=>l_api_url, p_http_method=>'GET');
-            IF NOT (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
-                pck_core.log(l_api_url);
-                pck_core.log(l_font_css);
-                EXIT;
-            END IF;
-            
-            /* Fonts with "ital" axis will have 2 font-face rukes and urls, one for "normal" and one for "italic" */
-            l_edit_urls(l_edit_urls.COUNT + 1).font_id:=C.id;
-            IF (C.ital_start IS NULL) THEN
-                l_edit_urls(l_edit_urls.COUNT).url_edit_normal:=REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1);
-            ELSE
-                l_edit_urls(l_edit_urls.COUNT).url_edit_italic:=REGEXP_SUBSTR(l_font_css,l_url_regex,1,1,null,1);
-                l_edit_urls(l_edit_urls.COUNT).url_edit_normal:=REGEXP_SUBSTR(l_font_css,l_url_regex,1,2,null,1);
-            END IF;
-
-        END LOOP;
-
-        /* l_edit_urls Collection now contanis all fonts with edit urls that need to be updated */
-        FORALL indx IN 1..l_edit_urls.COUNT
-            UPDATE font
-               SET url_edit_normal=l_edit_urls(indx).url_edit_normal,
-                   url_edit_italic=l_edit_urls(indx).url_edit_italic
-             WHERE id=l_edit_urls(indx).font_id;
     END;
 
     /*
