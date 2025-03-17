@@ -345,6 +345,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     PROCEDURE getFonts(pWebsiteId IN website.id%type, pCategory IN font.category%type, pFontId IN font.id%type, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
         l_html CLOB;
+        l_font_css CLOB;
+        l_api_url VARCHAR2(200);
+        l_url_regex VARCHAR2(50):='url.*;';
+        l_url VARCHAR2(500);
+        n PLS_INTEGER;
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
@@ -357,62 +362,54 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 WHERE category=pCategory ORDER BY 2
             )
             LOOP
-                
                 l_html:=l_html || '<option value="' || C.id || '">' || C.family || '</option>';
             END LOOP;
             APEX_JSON.write('content', l_html);
         ELSE
             FOR C IN (
-                SELECT f.ital_start, f.ital_end, f.wght_start, f.wght_end, f.wdth_start, f.wdth_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end, f.url_edit_normal, f.url_edit_italic
+                SELECT f.family, f.ital_start, f.ital_end, f.wght_start, f.wght_end, f.wdth_start, f.wdth_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end,
+                    LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.opsz_start,',opsz',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
+                        NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
+                    LTRIM(NVL2(f.opsz_start,f.opsz_start||'..'||f.opsz_end,NULL) || NVL2(f.slnt_start,','||f.slnt_start||'..'||f.slnt_end,NULL) || 
+                        NVL2(f.wdth_start,','||f.wdth_start||'..'||f.wdth_end,NULL) || NVL2(f.wght_start,','||f.wght_start||'..'||f.wght_end,NULL),',') ranges
                 FROM font f
                 WHERE f.id=pFontid
             ) 
             LOOP
-                apex_json.write('url_normal', 'url(' || C.url_edit_normal || ') format("woff2")');
-                IF (C.url_edit_italic IS NOT NULL) THEN
-                    apex_json.write('url_italic', 'url(' || C.url_edit_italic || ') format("woff2")');
+                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':' || C.axes || '@';
+                IF (INSTR(C.axes,'ital')>0) THEN
+                    l_api_url:=l_api_url || '0,' || C.ranges || ';1,' || C.ranges;
+                ELSE
+                    l_api_url:=l_api_url || C.ranges;
                 END IF;
+                
+                pck_api.callGoogleAPI(l_api_url,l_font_css);
 
-                apex_json.open_object('descriptor');
-                apex_json.write('font-style','normal');
-                IF (C.wght_start IS NOT NULL) THEN
-                    apex_json.write('font-weight',C.wght_start || ' ' || C.wght_end);
-                END IF;
-                IF (C.wdth_start IS NOT NULL) THEN
-                    apex_json.write('font-stretch',C.wdth_start || '% ' || C.wght_end || '%');
-                END IF;
-                apex_json.close_object;
+                /* Get url for Latin charcters ... but desperate but so far seems to be in last font-face */
+                n:=regexp_count(l_font_css,l_url_regex);
+                l_url:=regexp_substr(l_font_css,l_url_regex,1,n);
+                apex_json.write('url',RTRIM(l_url,';'));
 
                 apex_json.open_array('axes');
-                apex_json.open_object;
-                apex_json.write('name','ital');
-                apex_json.write('min', C.ital_start);
-                apex_json.write('max', C.ital_end);
-                apex_json.write('val', 0);
-                apex_json.close_object;
                 apex_json.open_object;
                 apex_json.write('name','wght');
                 apex_json.write('min', C.wght_start);
                 apex_json.write('max', C.wght_end);
-                apex_json.write('val', 400);
                 apex_json.close_object;
                 apex_json.open_object;
                 apex_json.write('name','wdth');
                 apex_json.write('min', C.wdth_start);
                 apex_json.write('max', C.wdth_end);
-                apex_json.write('val', 100);
                 apex_json.close_object;
                 apex_json.open_object;
                 apex_json.write('name','opsz');
                 apex_json.write('min', C.opsz_start);
                 apex_json.write('max', C.opsz_end);
-                apex_json.write('val', 14);
                 apex_json.close_object;
                 apex_json.open_object;
                 apex_json.write('name','slnt');
                 apex_json.write('min', C.slnt_start);
                 apex_json.write('max', C.slnt_end);
-                apex_json.write('val', 0);
                 apex_json.close_object;
                 apex_json.close_array;
             END LOOP;
@@ -483,7 +480,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_html LONG;
     BEGIN
         FOR C IN (
-            SELECT c.data_length, i.comments, wf.font_id, wf.step, wf.letter_spacing, f.ital_start, f.ital_end, wf.ital, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt
+            SELECT c.data_length, i.comments, wf.font_id, wf.step, wf.letter_spacing, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt
               FROM user_tab_columns c, user_col_comments i, website_font wf, font f
              WHERE c.table_name=l_table_name
                AND c.column_name=UPPER(l_column_name)
@@ -509,26 +506,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 
                 '<div class="flex-items font-settings">' ||
                     '<label for="' || l_column_name || '-font-size">Size' ||
-                        '<input type="range" id="' || l_column_name || '-font-size" name="' || l_column_name || '_font_size" min="4" max="6" value="' || C.step || '" step="1"/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-size" name="' || l_column_name || '_font_size" min="4" max="6" value="/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-letter-spacing">Letter Spacing' ||
                         '<input type="range" id="' || l_column_name || '-letter-spacing" name="' || l_column_name || '_letter_spacing" min="0" max="0.75" value="' || C.letter_spacing || '" step="0.05"/>' ||
                     '</label>' ||
                     
                     '<label for="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' class="visually-hidden"' END || '>Font Weight' ||
-                        '<input type="range" id="' || l_column_name || '-font-wght" name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '" step="10"/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-wght" name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-font-wdth"' || CASE WHEN C.wdth_start IS NULL THEN ' class="visually-hidden"' END || '>Font Width' ||
-                        '<input type="range" id="' || l_column_name || '-font-wdth" name="' || l_column_name || '_font_wdth" min="' || C.wdth_start || '" max="' || C.wdth_end || '" value="' || C.wdth || '" step="1"/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-wdth" name="' || l_column_name || '_font_wdth" min="' || C.wdth_start || '" max="' || C.wdth_end || '" value="' || C.wdth || '"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-font-opsz"' || CASE WHEN C.opsz_start IS NULL THEN ' class="visually-hidden"' END || '>Optical Size' ||
-                        '<input type="range" id="' || l_column_name || '-font-opsz" name="' || l_column_name || '_font_opsz" min="' || C.opsz_start || '" max="' || C.opsz_end || '" value="' || C.opsz || '" step="10"/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-opsz" name="' || l_column_name || '_font_opsz" min="' || C.opsz_start || '" max="' || C.opsz_end || '" value="' || C.opsz || '"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-font-slnt"' || CASE WHEN C.slnt_start IS NULL THEN ' class="visually-hidden"' END || '>Slant' ||
-                        '<input type="range" id="' || l_column_name || '-font-slnt" name="' || l_column_name || '_font_slnt" min="' || C.slnt_start || '" max="' || C.slnt_end || '" value="' || C.slnt || '" step="1"/>' ||
-                    '</label>' ||
-                    '<label for="' || l_column_name || '-font-ital"' || CASE WHEN C.ital_start IS NULL THEN ' class="visually-hidden"' END || '>Italics' ||
-                        '<input type="checkbox" id="' || l_column_name || '-font-ital" name="' || l_column_name || '_font_ital"' || CASE WHEN C.ital=1 THEN ' checked' END || '/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-slnt" name="' || l_column_name || '_font_slnt" min="' || C.slnt_start || '" max="' || C.slnt_end || '" value="' || C.slnt || '"/>' ||
                     '</label>' ||
                 '</div>' ||
             '</fieldset>';
