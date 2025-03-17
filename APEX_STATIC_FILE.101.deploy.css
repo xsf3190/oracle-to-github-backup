@@ -101,6 +101,7 @@ body>header {
     "subtitle";
   gap: var(--space-s);
   background-color: var(--color-primary);
+  color: var(--header-text-color);
 }
 
 body>header:has(img)>div {
@@ -139,6 +140,7 @@ body>header>img {
   line-height: 1;
   font-family: var(--font-family-title);
   font-size: var(--font-size-title);
+  font-style: var(--font-style-title);
 }
 
 .subtitle {
@@ -148,6 +150,7 @@ body>header>img {
   text-decoration: var(--text-decoration, none);
   font-family: var(--font-family-subtitle);
   font-size: var(--font-size-subtitle);
+  font-style: var(--font-style-subtitle);
 }
 
 .subtitle:empty {
@@ -850,7 +853,7 @@ pre:has(.language-sql)::after {
   position: absolute;
   min-inline-size: max-content;
   background-color: white;
-  color: var(--color-primary);
+  color: var(--color-text);
   border: 1px solid #9b7aba;
   border-radius: 0.5em;
   right: 0;
@@ -863,7 +866,7 @@ pre:has(.language-sql)::after {
 
 .dropdown .button {
   display: block;
-  color: var(--color-primary);
+  color: var(--color-text);
   background-color: transparent;
   margin-block: var(--space-3xs);
   padding: 0.5em 1.5em;
@@ -875,8 +878,8 @@ pre:has(.language-sql)::after {
 }
 
 .dropdown .button:hover, .dropdown .button:focus, .menulist:empty + li>.button {
-  background-color: var(--color-primary-lighter);
-  color: white;
+  background-color: var(--color-text);
+  color: var(--color-background);
 }
 
 .dropdown button:disabled {
