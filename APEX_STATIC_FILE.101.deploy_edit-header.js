@@ -62,6 +62,8 @@ editor.addEventListener("input", (e) => {
                 target.style.fontVariationSettings = '"opsz" ' + e.target.value;
             } else if (name.includes("font_slnt")) {
                 target.style.fontVariationSettings = '"slnt" ' + e.target.value;
+            } else if (name.includes("font_ital")) {
+                target.style.fontStyle = e.target.value==="0" ? "normal" : "italic";
             }
             break;;
     }
@@ -89,7 +91,9 @@ const luminance = (r, g, b) => {
 }
 
 editor.addEventListener("change", (e) => {
-    if (e.target.dataset.column==="website.color_primary") {
+    const name = e.target.getAttribute("name");
+
+    if (name.includes("color_primary")) {
         const whiteRGB = hexToRGB("#ffffff");
         const colorRGB = hexToRGB(e.target.value);
         const whiteluminance = luminance(whiteRGB.r, whiteRGB.g, whiteRGB.b);
@@ -98,24 +102,23 @@ editor.addEventListener("change", (e) => {
                 ? ((colorluminance + 0.05) / (whiteluminance + 0.05))
                 : ((whiteluminance + 0.05) / (colorluminance + 0.05));
 
-        header.style.backgroundColor = e.target.value;
+        //header.style.backgroundColor = e.target.value;
+        const root = document.documentElement;
+        root.style.setProperty('--color-primary', e.target.value);
+        const header_text_color = editor.querySelector("[name='header_text_color']");
         if (ratio < 1/4.5) {
-            header.style.color = "#ffffff";
+            root.style.setProperty('--header-text-color',"#ffffff");
+            header_text_color.value = "#ffffff";
         } else {
-            header.style.color = "#000000";
+            root.style.setProperty('--header-text-color',"#000000");
+            header_text_color.value = "#000000";
         }
     }
 
-    const name = e.target.getAttribute("name");
+    
     const target = header.querySelector("." + name.split("_")[0]);
     
-    if (name.includes("font_ital")) {
-        if (e.targetvalue==='on') {
-            target.style.fontStyle = "italic";
-        } else {
-            target.style.fontStyle = "normal";
-        }
-    } else if (name.includes("font_category")) {
+    if (name.includes("font_category")) {
         const query = "?category=" + e.target.value + "&font=0";
         callAPI('fonts/:ID','GET', query)
             .then((data) => {
@@ -131,6 +134,9 @@ editor.addEventListener("change", (e) => {
                 handle_error(error);
             });
     } else if (name.includes("font_family")) {
+        if (!e.target.value) {
+            return;
+        }
         const query = "?category=&font=" + e.target.value;
         callAPI('fonts/:ID','GET', query)
             .then((data) => {
@@ -139,11 +145,13 @@ editor.addEventListener("change", (e) => {
                     const input = label.querySelector("input");
                     if (axis.max) {
                         label.classList.remove("visually-hidden");
+                        input.disabled = false;
                         input.setAttribute("min",axis.min);
                         input.setAttribute("max",axis.max);
                         input.value = Math.round(axis.min+((axis.max-axis.min)/2));
                     } else {
                         label.classList.add("visually-hidden");
+                        input.disabled = true;
                     }
                 })
                 const font_family = e.target.options[e.target.selectedIndex].text;
@@ -187,19 +195,26 @@ editor.addEventListener("click", async (e) => {
     }
 
     if (e.target.matches(".publish-changes")) {
-        console.log("publish-changes");
-    }
-
-    if (e.target.matches(".save-changes")) {
         const formData = new FormData(editor);
         const formObj = Object.fromEntries(formData);
         console.log("formObj",formObj);
-        callAPI(endpoint,'PUT', formObj)
+        await callAPI(endpoint,'PUT', formObj)
             .then(() => {
-                console.log("saved");
+                console.log("Form changes saved");
             })
             .catch((error) => {
                 handle_error(error);
+            });
+
+        const module_name = e.target.dataset.endpoint;
+        const import_module_name = "./deploy_" + module_name.substring(0,module_name.indexOf("/")) + ".min.js";
+        await import(import_module_name)
+            .then((module) => {
+                module.init(e.target);
+            })
+            .catch((error) => {
+                console.error(error);
+                console.error("Failed to load " + import_module_name);
             });
     }
 
