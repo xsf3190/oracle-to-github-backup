@@ -346,7 +346,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     BEGIN
         FOR C IN (
             SELECT w.max_width, w.color_text, w.color_background, w.color_primary, w.css,
-                     w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, w.img_border_radius
+                     w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, w.img_border_radius, w.header_text_color
               FROM website w
              WHERE w.id=pWebsiteId
             )
@@ -373,19 +373,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 l_root_css:=l_root_css || l_fluid_types(i).property || ': ' || l_fluid_types(i).value || ';';
             END LOOP;
             FOR C1 IN (
-                SELECT LOWER(wf.context) context, f.family, f.category, wf.step, wf.letter_spacing
+                SELECT LOWER(wf.context) context, f.family, f.category, wf.font_size, wf.letter_spacing, CASE WHEN wf.ital=0 THEN 'normal' ELSE 'italic' END font_style
                 FROM font f, website_font wf
                WHERE f.id=wf.font_id
                  AND wf.website_id=pWebsiteId
             ) LOOP
                 l_root_css:=l_root_css || 
                 '--font-family-' || C1.context || ':"' || C1.family || '",' || CASE WHEN C1.category IN ('serif','sans-serif') THEN C1.category ELSE 'sans-serif' END || ';' ||
-                '--font-size-' || C1.context || ': var(--step-' || C1.step || ');' || 
+                '--font-size-' || C1.context || ': var(--step-' || C1.font_size || ');' || 
+                '--font-style-' || C1.context || ': ' || C1.font_style  || ';' || 
                 '--font-letter-spacing-' || C1.context || ': ' || C1.letter_spacing || 'em;';
             END LOOP;
             l_root_css:=l_root_css ||
             '--max-width: ' || C.max_width || ';' || 
             '--img-border-radius: ' || C.img_border_radius || ';' || 
+            '--header-text-color: ' || C.header_text_color || ';' || 
             '--color-text: ' || C.color_text || ';' || 
             '--color-background: ' || C.color_background || ';' || 
             '--color-primary: ' || C.color_primary || ';';
