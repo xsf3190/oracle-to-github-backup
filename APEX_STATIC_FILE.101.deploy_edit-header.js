@@ -54,6 +54,8 @@ editor.addEventListener("input", (e) => {
             } else if (name.includes("letter_spacing")) {
                 target.style.letterSpacing = e.target.value + "em";
                 target.style.marginRight = "-" + e.target.value + "em";
+            } else if (name.includes("line_height")) {
+                target.style.lineHeight = e.target.value;
             } else if (name.includes("font_wght")) {
                 target.style.fontWeight = e.target.value;
             } else if (name.includes("font_wdth")) {
@@ -148,7 +150,7 @@ editor.addEventListener("change", (e) => {
                         input.disabled = false;
                         input.setAttribute("min",axis.min);
                         input.setAttribute("max",axis.max);
-                        input.value = Math.round(axis.min+((axis.max-axis.min)/2));
+                        input.value = axis.name==="ital" ? 0 : Math.round(axis.min+((axis.max-axis.min)/2));
                     } else {
                         label.classList.add("visually-hidden");
                         input.disabled = true;
