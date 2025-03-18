@@ -312,7 +312,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     PROCEDURE initWebsiteFonts(pWebsiteId IN website.id%type, pTitleFont IN font.family%type, pSubTitleFont IN font.family%type DEFAULT NULL) IS
     BEGIN
         DELETE website_font WHERE website_id=pWebsiteId;
-        INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, step, letter_spacing)
+        INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, font_size, letter_spacing)
         SELECT pWebsiteId, id, 'TITLE', 
                 NVL2(ital_start,0,NULL), 
                 CASE WHEN wght_start IS NOT NULL THEN 400 END, 
@@ -325,7 +325,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
          WHERE family=pTitleFont;
         
         IF (pSubTitleFont IS NOT NULL) THEN
-            INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, step, letter_spacing)
+            INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, font_size, letter_spacing)
             SELECT pWebsiteId, id, 'SUBTITLE', 
                     NVL2(ital_start,0,NULL), 
                     CASE WHEN wght_start IS NOT NULL THEN 400 END, 
@@ -356,6 +356,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         APEX_JSON.open_object; 
 
         IF (pFontId=0) THEN /* Get all fonts for category*/
+            l_html:='<option value="">--Choose a Font--</option>';
             FOR C IN (
                 SELECT id, family 
                 FROM font 
@@ -410,6 +411,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 apex_json.write('name','slnt');
                 apex_json.write('min', C.slnt_start);
                 apex_json.write('max', C.slnt_end);
+                apex_json.close_object;
+                apex_json.open_object;
+                apex_json.write('name','ital');
+                apex_json.write('min', C.ital_start);
+                apex_json.write('max', C.ital_end);
                 apex_json.close_object;
                 apex_json.close_array;
             END LOOP;
@@ -480,13 +486,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_html LONG;
     BEGIN
         FOR C IN (
-            SELECT c.data_length, i.comments, wf.font_id, wf.step, wf.letter_spacing, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt
-              FROM user_tab_columns c, user_col_comments i, website_font wf, font f
+            SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.letter_spacing, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt, f.ital_start, f.ital_end, wf.ital
+              FROM user_tab_columns c, user_col_comments i, website w, website_font wf, font f
              WHERE c.table_name=l_table_name
                AND c.column_name=UPPER(l_column_name)
                AND i.table_name=c.table_name
                AND i.column_name=c.column_name
-               AND wf.website_id=pWebsiteId
+               AND w.id=pWebsiteId
+               AND wf.website_id=w.id
                AND wf.context=UPPER(l_column_name)
                AND wf.font_id=f.id
         )
@@ -506,23 +513,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 
                 '<div class="flex-items font-settings">' ||
                     '<label for="' || l_column_name || '-font-size">Size' ||
-                        '<input type="range" id="' || l_column_name || '-font-size" name="' || l_column_name || '_font_size" min="4" max="6" value="/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-size" name="' || l_column_name || '_font_size" ' ||
+                            'min="' || CASE WHEN l_column_name='title' THEN '4' ELSE '0' END || '" ' ||
+                            'max="' || CASE WHEN l_column_name='title' THEN '6' ELSE '4' END || '" ' ||
+                            ' value="' || C.font_size || '"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-letter-spacing">Letter Spacing' ||
                         '<input type="range" id="' || l_column_name || '-letter-spacing" name="' || l_column_name || '_letter_spacing" min="0" max="0.75" value="' || C.letter_spacing || '" step="0.05"/>' ||
                     '</label>' ||
                     
                     '<label for="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' class="visually-hidden"' END || '>Font Weight' ||
-                        '<input type="range" id="' || l_column_name || '-font-wght" name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '"/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-font-wdth"' || CASE WHEN C.wdth_start IS NULL THEN ' class="visually-hidden"' END || '>Font Width' ||
-                        '<input type="range" id="' || l_column_name || '-font-wdth" name="' || l_column_name || '_font_wdth" min="' || C.wdth_start || '" max="' || C.wdth_end || '" value="' || C.wdth || '"/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-wdth"' || CASE WHEN C.wdth_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_wdth" min="' || C.wdth_start || '" max="' || C.wdth_end || '" value="' || C.wdth || '"/>' ||
                     '</label>' ||
-                    '<label for="' || l_column_name || '-font-opsz"' || CASE WHEN C.opsz_start IS NULL THEN ' class="visually-hidden"' END || '>Optical Size' ||
-                        '<input type="range" id="' || l_column_name || '-font-opsz" name="' || l_column_name || '_font_opsz" min="' || C.opsz_start || '" max="' || C.opsz_end || '" value="' || C.opsz || '"/>' ||
+                    '<label for="' || l_column_name || '-font-ital"' || CASE WHEN C.ital_start IS NULL THEN ' class="visually-hidden"' END || '>Italics' ||
+                        '<input type="range" id="' || l_column_name || '-font-ital"' || CASE WHEN C.ital_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_ital" min="' || C.ital_start || '" max="' || C.ital_end || '" value="' || C.ital || '"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-font-slnt"' || CASE WHEN C.slnt_start IS NULL THEN ' class="visually-hidden"' END || '>Slant' ||
-                        '<input type="range" id="' || l_column_name || '-font-slnt" name="' || l_column_name || '_font_slnt" min="' || C.slnt_start || '" max="' || C.slnt_end || '" value="' || C.slnt || '"/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-slnt"' || CASE WHEN C.slnt_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_slnt" min="' || C.slnt_start || '" max="' || C.slnt_end || '" value="' || C.slnt || '"/>' ||
+                    '</label>' ||
+                    '<label for="' || l_column_name || '-font-opsz"' || CASE WHEN C.opsz_start IS NULL THEN ' class="visually-hidden"' END || '>Optical Size' ||
+                        '<input type="range" id="' || l_column_name || '-font-opsz"' || CASE WHEN C.opsz_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_opsz" min="' || C.opsz_start || '" max="' || C.opsz_end || '" value="' || C.opsz || '"/>' ||
                     '</label>' ||
                 '</div>' ||
             '</fieldset>';
@@ -540,16 +553,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
         FOR C IN (
-            SELECT w.color_primary, w.header_effect, w.title, w.subtitle
+            SELECT w.color_primary, w.header_effect, w.title, w.subtitle, w.header_text_color
               FROM website w
              WHERE w.id=pWebsiteId
         ) 
         LOOP
             l_html:=
-            '<form class="editor" style="font-family:sans-serif;font-size:var(--step--2)">' ||
+            '<form class="editor">' ||
                 '<fieldset>' ||
                     '<legend><strong>Change Background</strong></legend>' ||
-                    '<input type="color" class="background-color" data-column="website.color_primary" value="' || C.color_primary || '">' || 
+                    '<input type="hidden" name="header_text_color" value="' || C.header_text_color || '">' ||
+                    '<input type="color" class="background-color" name="color_primary" value="' || C.color_primary || '">' || 
                     CASE WHEN pEyeDropper='true' THEN
                     '<button type="button" class="button eyedropper" style="--button-bg:transparent;--button-hover-bg:transparent">' ||
                         '<svg class="icon" aria-hidden="true" focusable="false">' ||
@@ -567,8 +581,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 buildFontWrapper(pWebsiteId,'website.title', C.title) || 
                 buildFontWrapper(pWebsiteId,'website.subtitle',C.subtitle) ||
                 '<div class="flex-items space-between">' ||
-                    '<button type="button" class="button publish-changes" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
-                    '<button type="button" class="button save-changes" style="--button-bg:rebeccapurple">SAVE</button>' ||
+                    '<button type="button" class="button publish-changes" data-endpoint="publish-website/:ID" data-method="GET" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
+                    --'<button type="button" class="button save-changes" style="--button-bg:rebeccapurple">SAVE</button>' ||
                     '<button type="button" class="button cancel-changes" style="--button-bg:rebeccapurple">CANCEL</button>' ||
             '</form>';
         END LOOP;
@@ -601,39 +615,39 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
         
         FOR C IN (
-            SELECT title,title_font_family,title_font_size,title_letter_spacing,title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
+            SELECT color_primary, header_text_color, title,title_font_family,title_font_size,title_letter_spacing,title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
                 subtitle,subtitle_font_family,subtitle_font_size,subtitle_letter_spacing,subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
               FROM JSON_TABLE(l_bodytext, '$' 
-              COLUMNS(title,title_font_family,title_font_size,title_letter_spacing,title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
+              COLUMNS(color_primary,header_text_color,title,title_font_family,title_font_size,title_letter_spacing,title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
                 subtitle,subtitle_font_family,subtitle_font_size,subtitle_letter_spacing,subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
               ))
         ) LOOP
             UPDATE website
-               SET title=C.title, subtitle=C.subtitle,updated_date=current_timestamp
+               SET color_primary=C.color_primary, header_text_color=C.header_text_color, title=C.title, subtitle=C.subtitle,updated_date=current_timestamp
              WHERE id=pWebsiteId;
             
             UPDATE website_font
                SET font_id=C.title_font_family,
-                   step=C.title_font_size,
+                   font_size=C.title_font_size,
                    letter_spacing=C.title_letter_spacing,
                    wght=C.title_font_wght,
                    wdth=C.title_font_wdth,
                    opsz=C.title_font_opsz,
                    slnt=C.title_font_slnt,
-                   ital=CASE WHEN C.title_font_ital='on' THEN 1 ELSE 0 END,
+                   ital=C.title_font_ital,
                    updated_date=current_timestamp
              WHERE website_id=pWebsiteId
                AND context='TITLE';
 
             UPDATE website_font
                SET font_id=C.subtitle_font_family,
-                   step=C.subtitle_font_size,
+                   font_size=C.subtitle_font_size,
                    letter_spacing=C.subtitle_letter_spacing,
                    wght=C.subtitle_font_wght,
                    wdth=C.subtitle_font_wdth,
                    opsz=C.subtitle_font_opsz,
                    slnt=C.subtitle_font_slnt,
-                   ital=CASE WHEN C.subtitle_font_ital='on'  THEN 1 ELSE 0 END,
+                   ital=C.subtitle_font_ital,
                    updated_date=current_timestamp
              WHERE website_id=pWebsiteId
                AND context='SUBTITLE';
