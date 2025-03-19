@@ -392,7 +392,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
              WHERE w.email=u.email
                AND w.is_admin='Yes'
                FETCH FIRST ROW ONLY;
-            pck_core.log('l_netlify_token:'||l_netlify_token);
         END IF;
 
         apex_web_service.clear_request_headers;
