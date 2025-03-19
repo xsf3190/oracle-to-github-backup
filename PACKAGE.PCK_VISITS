@@ -1025,13 +1025,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     PROCEDURE daily_job IS
         l_content VARCHAR2(300);
     BEGIN
+        /* Set Administrator user id for logging */
+        FOR C IN (
+            SELECT u.id
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY
+        ) LOOP
+            pck_sec.g_session_user_id:=C.id;
+        END LOOP;
+
         FOR C IN (SELECT id, domain_name, login_form FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
             pck_core.log('START visit data processing for ' || C.domain_name);
-            /*IF (C.login_form='NO') THEN
-                l_content:='<p>Website Analytics is available directly on ' || C.domain_name || ', providing comprehensive details about your traffic. You should ask the CMS Admin to enable it.</p>';
-                sendmail(C.id, l_content);
-            END IF;
-            */
             uploadPageHits(C.id);
             COMMIT;
             pck_core.log('END visit data processing for ' || C.domain_name);
