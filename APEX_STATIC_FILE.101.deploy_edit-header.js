@@ -47,15 +47,15 @@ editor.addEventListener("input", (e) => {
             break;;
         case "color":
             header.style.backgroundColor = e.target.value;
+            headerTextColor(e.target.value);
             break;;
         case "range":
             if (name.includes("font_size")) {
-                target.style.fontSize = "var(--step-" + e.target.value + ")";
-            } else if (name.includes("letter_spacing")) {
-                target.style.letterSpacing = e.target.value + "em";
-                target.style.marginRight = "-" + e.target.value + "em";
-            } else if (name.includes("line_height")) {
-                target.style.lineHeight = e.target.value;
+                target.style.fontSize = e.target.value + "cqi";
+            } else if (name.includes("underline")) {
+                target.style.textDecoration = "underline";
+                target.style.textDecorationOffset = e.target.value + "%";
+                target.style.textDecorationThickness = e.target.value + "%";
             } else if (name.includes("font_wght")) {
                 target.style.fontWeight = e.target.value;
             } else if (name.includes("font_wdth")) {
@@ -70,6 +70,28 @@ editor.addEventListener("input", (e) => {
             break;;
     }
 });
+
+const headerTextColor = (color) => {
+    const whiteRGB = hexToRGB("#ffffff");
+    const colorRGB = hexToRGB(color);
+    const whiteluminance = luminance(whiteRGB.r, whiteRGB.g, whiteRGB.b);
+    const colorluminance = luminance(colorRGB.r, colorRGB.g, colorRGB.b);
+    const ratio = whiteluminance > colorluminance 
+            ? ((colorluminance + 0.05) / (whiteluminance + 0.05))
+            : ((whiteluminance + 0.05) / (colorluminance + 0.05));
+
+    //header.style.backgroundColor = e.target.value;
+    const root = document.documentElement;
+    root.style.setProperty('--color-primary', color);
+    const header_text_color = editor.querySelector("[name='header_text_color']");
+    if (ratio < 1/4.5) {
+        root.style.setProperty('--header-text-color',"#ffffff");
+        header_text_color.value = "#ffffff";
+    } else {
+        root.style.setProperty('--header-text-color',"#000000");
+        header_text_color.value = "#000000";
+    }
+}
 
 const hexToRGB = (hex) => {
     var shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
@@ -96,28 +118,9 @@ editor.addEventListener("change", (e) => {
     const name = e.target.getAttribute("name");
 
     if (name.includes("color_primary")) {
-        const whiteRGB = hexToRGB("#ffffff");
-        const colorRGB = hexToRGB(e.target.value);
-        const whiteluminance = luminance(whiteRGB.r, whiteRGB.g, whiteRGB.b);
-        const colorluminance = luminance(colorRGB.r, colorRGB.g, colorRGB.b);
-        const ratio = whiteluminance > colorluminance 
-                ? ((colorluminance + 0.05) / (whiteluminance + 0.05))
-                : ((whiteluminance + 0.05) / (colorluminance + 0.05));
-
-        //header.style.backgroundColor = e.target.value;
-        const root = document.documentElement;
-        root.style.setProperty('--color-primary', e.target.value);
-        const header_text_color = editor.querySelector("[name='header_text_color']");
-        if (ratio < 1/4.5) {
-            root.style.setProperty('--header-text-color',"#ffffff");
-            header_text_color.value = "#ffffff";
-        } else {
-            root.style.setProperty('--header-text-color',"#000000");
-            header_text_color.value = "#000000";
-        }
+        headerTextColor(e.target.value);
     }
 
-    
     const target = header.querySelector("." + name.split("_")[0]);
     
     if (name.includes("font_category")) {
