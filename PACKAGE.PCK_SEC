@@ -18,6 +18,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
         scope VARCHAR2(7),
         valid BOOLEAN
     );
+
+    g_session_user_id NUMBER;
     --
     PROCEDURE createAuthRequest(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
@@ -329,6 +331,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_session_data.scope:=l_JWT_data.aud;
         l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
         l_session_data.url:=OWA_UTIL.get_cgi_env('url');
+
+        g_session_user_id:=l_JWT_data.jti;
 
         RETURN l_session_data;
     END;
