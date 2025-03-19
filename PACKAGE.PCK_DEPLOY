@@ -300,6 +300,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
+        pck_sec.g_session_user_id:=pUserId;
         SELECT title, subtitle, SUBSTR(color_primary,2), favicon_asset_id
           INTO l_title, l_subtitle, l_color_primary, l_favicon_asset_id
           FROM website
@@ -838,6 +839,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     PROCEDURE runDelete(pUserId IN users.id%type, pWebsiteId IN website.id%type, pSiteId IN website.netlify_site_id%type) IS
         l_clob CLOB;
     BEGIN
+        pck_sec.g_session_user_id:=pUserId;
+        
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/'|| pSiteId || '/deploys', pMethod=>'GET', pData=>l_clob);
         FOR C IN (
             SELECT id, published_at, MAX(published_at) OVER() last_published_at 
