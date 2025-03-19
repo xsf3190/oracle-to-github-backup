@@ -323,7 +323,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         l_repo CLOB;
         n PLS_INTEGER;
     BEGIN
-       
+        /* Set Administrator user id for logging */
+        FOR C IN (
+            SELECT u.id
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY
+        ) LOOP
+            pck_sec.g_session_user_id:=C.id;
+        END LOOP;
 
         SELECT COUNT(*) INTO n
           FROM apex_applications
