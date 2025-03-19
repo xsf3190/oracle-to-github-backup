@@ -91,15 +91,13 @@ figure.image {
 }
 
 
-/* MAIN HEADER STYLES */
+/* HEADER STYLES */
 
 body>header {
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-areas:
-    "title"
-    "subtitle";
-  gap: var(--space-s);
+  grid-template: "container";
+  place-items: center;
   background-color: var(--color-primary);
   color: var(--header-text-color);
 }
@@ -108,19 +106,14 @@ body>header:has(img)>div {
   display:contents;
 }
 
-body>header:not(:has(img)) {
-  grid-template-areas: "div";
-}
-
 body>header>div {
-  align-self:center;
-  justify-self:center;
-  border:1px solid white;
-  padding:var(--space-s);
-  margin-block:var(--space-s);
+  border:1px solid var(--header-text-color);
+  padding:1em;
+  margin-block: 1em;
 }
 
 body>header>img {
+  grid-area: container;
   grid-column: 1/-1;
   grid-row: 1/-1;
   width:100%;
@@ -128,28 +121,28 @@ body>header>img {
   object-fit:cover;
 }
 
-.title, .subtitle {
-  text-align: center;
-}
-
 .title {
-  grid-area: title;
-  align-self: var(--align, center);
-  justify-self: var(--justify, center);
+  grid-area: container;
+  place-self: start center;
   line-height: 1;
   font-family: var(--font-family-title);
   font-size: var(--font-size-title);
   font-style: var(--font-style-title);
+  text-decoration: var(--text-decoration-title);
+  text-underline-offset: var(--text-underline-offset-title);
+  text-decoration-thickness: var(--text-underline-offset-title);
 }
 
 .subtitle {
-  grid-area: subtitle;
-  align-self: var(--align, center);
-  justify-self: var(--justify, center);
-  text-decoration: var(--text-decoration, none);
+  grid-area: container;
+  line-height: 1;
+  text-align: center;
   font-family: var(--font-family-subtitle);
   font-size: var(--font-size-subtitle);
   font-style: var(--font-style-subtitle);
+  text-decoration: var(--text-decoration-subtitle);
+  text-underline-offset: var(--text-underline-offset-subtitle);
+  text-decoration-thickness: var(--text-underline-offset-subtitle);
 }
 
 .subtitle:empty {
@@ -204,33 +197,6 @@ nav a:not([aria-current="page"]):hover {
 aside.login {
   padding-block-start: 0.25em;
   padding-inline-end: 0.5em;
-}
-
-/* HERO IMAGE STYLES */
-.hero {
-    display: grid;
-    grid-template: "container" 1fr;
-    place-items: center;
-    color: white;
-}
-.hero > * {
-    grid-area: container;
-}
-.hero > img {
-    width:100%;
-    height: auto;
-    object-fit: cover;
-  }
-.hero > .title {
-    font-size: var(--step-6);
-    letter-spacing: var(--space-xs);
-}
-.hero > .subtitle  {
-    place-self: end center;
-    font-size: var(--step-4);
-    text-decoration: overline underline;
-    text-underline-offset: var(--space-2xs);
-    letter-spacing: var(--space-2xs);
 }
 
 .align-center {
