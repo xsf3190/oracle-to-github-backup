@@ -35,6 +35,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     TYPE t_nav_labels IS TABLE OF tt_nav_labels;
     g_nav_labels t_nav_labels;
 
+    g_font_styles_title VARCHAR2(1000);
+    g_font_styles_subtitle VARCHAR2(1000);
+
     /*
      **  Build Login Component
      */
@@ -214,6 +217,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         pFooter IN CLOB, 
         pHtml IN OUt NOCOPY CLOB) 
     IS
+        l_font_styles VARCHAR2(500);
         l_header CLOB;
         l_footer CLOB;
         l_featured_id VARCHAR2(10);
@@ -237,6 +241,43 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
              WHERE w.id=pWebsiteId
                AND wa.website_id=w.id
              ORDER BY wa.display_order;
+        END IF;
+
+        /* Build font syles collection once */
+        IF (g_font_styles_title IS NULL) THEN
+            FOR C IN (
+                SELECT context, font_size, letter_spacing, line_height, ital, opsz, slnt, wdth, wght
+                  FROM website_font
+                 WHERE website_id=pWebsiteId
+            ) LOOP
+                l_font_styles:='font-size:var(--step-' || C.font_size || ')' || 
+                    ';letter-spacing:' || C.letter_spacing || 'em' ||
+                    ';line-height:' || C.line_height;
+
+                IF (C.ital=1) THEN
+                    l_font_styles:=l_font_styles || ';font-style:italic';
+                END IF;
+                IF (C.opsz IS NOT NULL) THEN
+                    l_font_styles:=l_font_styles || ';font-variation-settings:''opsz'''|| C.opsz;
+                END IF;
+                IF (C.slnt IS NOT NULL) THEN
+                    l_font_styles:=l_font_styles || ';font-variation-settings:''slnt'''|| C.slnt;
+                END IF;
+                IF (C.wdth IS NOT NULL) THEN
+                    l_font_styles:=l_font_styles || ';font-stretch:'|| C.wdth || '%';
+                END IF;
+                IF (C.wght IS NOT NULL) THEN
+                    l_font_styles:=l_font_styles || ';font-weight:'|| C.wght;
+                END IF;
+
+                CASE C.context
+                    WHEN 'TITLE' THEN
+                        g_font_styles_title:=l_font_styles;
+                    WHEN 'SUBTITLE' THEN
+                        g_font_styles_subtitle:=l_font_styles;
+                END CASE;
+
+            END LOOP;
         END IF;
 
         /* 
@@ -314,12 +355,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* 
         ** Build website header 
         */
+        
+
         l_header:=
             '<header>' ||
                 CASE WHEN pHeroAssetId IS NOT NULL THEN pck_media.getImageSrcset(pHeroAssetId) END ||
                 '<div>' ||
-                    '<h1 class="title">' || pTitle || '</h1>' ||
-                    '<p class="subtitle">' || pSubtitle || '</p>' ||
+                    '<h1 class="title" style="' || g_font_styles_title ||'">' || pTitle || '</h1>' ||
+                    '<p class="subtitle" style="' || g_font_styles_subtitle   ||'">' || pSubtitle || '</p>' ||
                 '</div>' ||
             '</header>' || 
             CASE WHEN pHeroAssetId IS NULL THEN g_curve END;
