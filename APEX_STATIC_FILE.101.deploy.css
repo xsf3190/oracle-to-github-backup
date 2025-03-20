@@ -108,11 +108,11 @@ body>header:has(img)>div {
 
 body>header>div {
   border:1px solid var(--header-text-color);
-  padding:1em;
+  padding: 1em;
   margin-block: 1em;
 }
 
-body>header>img {
+body>header img {
   grid-area: container;
   grid-column: 1/-1;
   grid-row: 1/-1;
@@ -125,12 +125,8 @@ body>header>img {
   grid-area: container;
   place-self: start center;
   line-height: 1;
+  text-align: center;
   font-family: var(--font-family-title);
-  font-size: var(--font-size-title);
-  font-style: var(--font-style-title);
-  text-decoration: var(--text-decoration-title);
-  text-underline-offset: var(--text-underline-offset-title);
-  text-decoration-thickness: var(--text-underline-offset-title);
 }
 
 .subtitle {
@@ -138,11 +134,8 @@ body>header>img {
   line-height: 1;
   text-align: center;
   font-family: var(--font-family-subtitle);
-  font-size: var(--font-size-subtitle);
-  font-style: var(--font-style-subtitle);
-  text-decoration: var(--text-decoration-subtitle);
-  text-underline-offset: var(--text-underline-offset-subtitle);
-  text-decoration-thickness: var(--text-underline-offset-subtitle);
+  margin-block: 1em;
+  place-self:end center;
 }
 
 .subtitle:empty {
