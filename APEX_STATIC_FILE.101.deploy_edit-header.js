@@ -53,9 +53,13 @@ editor.addEventListener("input", (e) => {
             if (name.includes("font_size")) {
                 target.style.fontSize = e.target.value + "cqi";
             } else if (name.includes("underline")) {
-                target.style.textDecoration = "underline";
-                target.style.textDecorationOffset = e.target.value + "%";
-                target.style.textDecorationThickness = e.target.value + "%";
+                if (e.target.value==="0") {
+                    target.style.textDecoration = "none";
+                } else {
+                    target.style.textDecoration = "underline";
+                    target.style.textUnderlineOffset = e.target.value + "%";
+                    target.style.textDecorationThickness = e.target.value + "%";
+                }
             } else if (name.includes("font_wght")) {
                 target.style.fontWeight = e.target.value;
             } else if (name.includes("font_wdth")) {
