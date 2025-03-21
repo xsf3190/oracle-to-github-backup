@@ -22,6 +22,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
     --
     PROCEDURE callGithubAPI(pUserId IN users.id%type, pRepository IN VARCHAR2 DEFAULT 'DEPLOY', pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
     --
+    PROCEDURE callGodaddyAPI(pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB);
+    --
     PROCEDURE callGoogleAPI(pUrl IN VARCHAR2, pData IN OUT NOCOPY CLOB);
     --
     PROCEDURE callIpdataAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB);
@@ -689,6 +691,47 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
             RAISE_APPLICATION_ERROR(-20050,l_error_message);
         END IF;
     END;
+
+    /*
+    **  GODADDY API
+    */
+    PROCEDURE callGodaddyAPI(pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB)
+    IS
+        l_godaddy_url VARCHAR2(100):='https://api.godaddy.com/vi/';
+        l_godaddy_api_key users.godaddy_api_key%type;
+        l_godaddy_api_secret users.godaddy_api_secret%type;
+        l_error_message LONG;
+    BEGIN
+        SELECT u.godaddy_api_key, u.godaddy_api_secret
+          INTO l_godaddy_api_key, l_godaddy_api_secret
+          FROM apex_workspace_apex_users w, users u 
+         WHERE w.email=u.email
+           AND w.is_admin='Yes'
+         FETCH FIRST ROW ONLY;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'Content-Type';
+        apex_web_service.g_request_headers(1).value := 'application/json';
+
+        l_godaddy_url:=l_godaddy_url || pEndpoint;
+
+        pData := apex_web_service.make_rest_request(p_url=>l_godaddy_url, p_http_method=>pMethod, p_username=>l_godaddy_api_key, p_password=>l_godaddy_api_secret,
+            p_parm_name=>apex_string.string_to_table('domain'),
+            p_parm_value=>apex_string.string_to_table('adfreesites.com'));
+
+        pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_godaddy_url);
+
+        IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
+            RETURN;
+        END IF;
+
+        l_error_message:=pMethod || ' ' || l_godaddy_url || ' https status:' || apex_web_service.g_status_code;
+        FOR C IN (SELECT message FROM JSON_TABLE(pData,'$.error' COLUMNS (message)) WHERE message IS NOT NULL) LOOP
+            l_error_message:=l_error_message || chr(10) || 'API message: ' || C.message;
+        END LOOP;
+        RAISE_APPLICATION_ERROR(-20040,l_error_message);
+    END;
+
         /*
         pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dns_zones', pMethod=>'GET', pData=>l_dns_zones);
         DELETE netlify_dns_zone;
