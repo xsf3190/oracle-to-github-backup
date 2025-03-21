@@ -142,13 +142,26 @@ body>header img {
     display: none;
 }
 
+/* FOOTER STYLES */
+body>footer {
+  background-color: var(--color-primary);
+  color: var(--header-text-color);
+  padding: 1em;
+}
+
+body>footer>a {
+  color: inherit;
+  text-decoration: none;
+}
+
 
 /* NAVIGATION STYLES */
-
 nav {
   --flex-wrap: no-wrap;
   padding: var(--space-3xs);
+  font-family: var(--font-family-ui);
   font-size: var(--step--1);
+  font-variant: all-small-caps;
   position: sticky;
   top: 0;
   background-color: var(--color-background);
@@ -158,17 +171,14 @@ nav {
 
 nav a {
   padding: max(var(--space-3xs),48px) var(--space-2xs);
-  text-decoration: underline overline;
-  text-decoration-color: transparent;
+  text-decoration: none;
+  color: var(--color-text);
   transition: 1s ease-in-out;
-  color: inherit;
+  font-variation-settings: "GRAD" 400;
 }
 
 nav a:not([aria-current="page"]):hover {
-  text-decoration-thickness: 0.5ex;
-  text-decoration-skip-ink: none;
-  text-underline-offset: 0.8ex;
-  text-decoration-color: var(--color-primary-lighter);
+  font-variation-settings: "GRAD" 800;
 }
 
 [aria-current="page"] {
@@ -176,7 +186,6 @@ nav a:not([aria-current="page"]):hover {
   text-decoration-thickness: 0.5ex;
   text-decoration-skip-ink: none;
   text-underline-offset: 0.8ex;
-  text-decoration-color: var(--color-primary);
 }
 
 .curve {
@@ -423,9 +432,6 @@ main a:hover {
   height: 1em;
   fill: currentColor;
 }
-footer .icon-with-text {
-    color: white;
-}
 
 /* VISUALLY-HIDDEN CAN'T BE SEEN EXCEPT TO ASSISTIVE TECHNOLOGY */
 
@@ -551,7 +557,7 @@ fieldset {
   font-weight: var(--button-font-weight, 700);
   font-size: var(--button-font-size, 1em);
   letter-spacing: 0.05ch;
-  font-family: system-ui;
+  font-family: var(--font-family-ui);
   line-height: 1.1;
 
   /* Interactive */
@@ -645,11 +651,8 @@ dialog {
   overflow: hidden;
 }
 
-dialog:not(.login-email) {
-   font-family:georgia,system-ui;
-}
-
 dialog > form {
+    font-family: var(--font-family-ui);
     display: grid;
     grid-template-rows: auto 1fr auto;
     align-items: start;
