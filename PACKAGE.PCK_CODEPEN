@@ -246,13 +246,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Build font syles collection once */
         IF (g_font_styles_title IS NULL) THEN
             FOR C IN (
-                SELECT context, font_size, letter_spacing, line_height, ital, opsz, slnt, wdth, wght
+                SELECT context, font_size, underline, ital, opsz, slnt, wdth, wght
                   FROM website_font
                  WHERE website_id=pWebsiteId
             ) LOOP
-                l_font_styles:='font-size:var(--step-' || C.font_size || ')' || 
-                    ';letter-spacing:' || C.letter_spacing || 'em' ||
-                    ';line-height:' || C.line_height;
+                l_font_styles:='font-size:clamp(2cqi,' || C.font_size || 'cqi,14cqi)';
+
+                IF (C.underline IS NOT NULL) THEN
+                    l_font_styles:=l_font_styles || ';text-decoration:underline;text-underline-offset:' || C.underline || '%;text-decoration-thickness:' || C.underline || '%' ;
+                END IF;
 
                 IF (C.ital=1) THEN
                     l_font_styles:=l_font_styles || ';font-style:italic';
@@ -359,10 +361,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         l_header:=
             '<header>' ||
-                CASE WHEN pHeroAssetId IS NOT NULL THEN pck_media.getImageSrcset(pHeroAssetId) END ||
                 '<div>' ||
+                    CASE WHEN pHeroAssetId IS NOT NULL THEN pck_media.getImageSrcset(pHeroAssetId) END ||
                     '<h1 class="title" style="' || g_font_styles_title ||'">' || pTitle || '</h1>' ||
-                    '<p class="subtitle" style="' || g_font_styles_subtitle   ||'">' || pSubtitle || '</p>' ||
+                    '<h2 class="subtitle" style="' || g_font_styles_subtitle   ||'">' || pSubtitle || '</h2>' ||
                 '</div>' ||
             '</header>' || 
             CASE WHEN pHeroAssetId IS NULL THEN g_curve END;
