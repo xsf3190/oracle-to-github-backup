@@ -307,6 +307,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
          WHERE id=pWebsiteId;
 
         /* Build array of fonts for each context */
+        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_font WHERE website_id=pWebsiteId);
+        IF (n=0) THEN
+            pck_editor.initWebsiteFonts(pWebsiteId, 'Playpen Sans', 'Asap');  -- NEED TO CHANGE THIS TO BE RANDOM
+        END IF;
         FOR C IN (
             SELECT f.id, f.family, wf.context, wf.ital
               FROM website_font wf, font f
@@ -369,12 +373,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             /* For each context collect distinct set of italic and normal characters in order to later optimise font if custom deploy */
             l_body_html:=l_labels(i).body_html;           
             n:=REGEXP_COUNT(l_body_html,l_headings_regex);
-            FOR j IN 1..n 
-            LOOP
-                l_heading:=REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j);
-                extract_styles(l_heading, l_fonts('TITLE').chars_italic, l_fonts('TITLE').chars_normal);
-            END LOOP;
-            l_body_html:=REGEXP_REPLACE(l_body_html,l_headings_regex,null);
+            IF (n>0) THEN
+                FOR j IN 1..n 
+                LOOP
+                    l_heading:=REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j);
+                    extract_styles(l_heading, l_fonts('TITLE').chars_italic, l_fonts('TITLE').chars_normal);
+                END LOOP;
+                l_body_html:=REGEXP_REPLACE(l_body_html,l_headings_regex,null);
+            END IF;
             extract_styles(l_body_html, l_fonts('SUBTITLE').chars_italic, l_fonts('SUBTITLE').chars_normal);
             
             --apex_string.push(l_labels(i).modules,'web-vitals.js'); /* already inified from google download */
