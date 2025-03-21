@@ -311,30 +311,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     PROCEDURE initWebsiteFonts(pWebsiteId IN website.id%type, pTitleFont IN font.family%type, pSubTitleFont IN font.family%type DEFAULT NULL) IS
     BEGIN
         DELETE website_font WHERE website_id=pWebsiteId;
-        INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, font_size, letter_spacing, line_height)
+        INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, font_size, underline)
         SELECT pWebsiteId, id, 'TITLE', 
                 NVL2(ital_start,0,NULL), 
                 CASE WHEN wght_start IS NOT NULL THEN 400 END, 
                 CASE WHEN wdth_start IS NOT NULL THEN 100 END, 
                 CASE WHEN opsz_start IS NOT NULL THEN 14 END, 
                 CASE WHEN slnt_start IS NOT NULL THEN 0 END,
-                4,
-                0,
-                1
+                6,
+                NULL
           FROM font
          WHERE family=pTitleFont;
         
         IF (pSubTitleFont IS NOT NULL) THEN
-            INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, font_size, letter_spacing, line_height)
+            INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, font_size, underline)
             SELECT pWebsiteId, id, 'SUBTITLE', 
                     NVL2(ital_start,0,NULL), 
                     CASE WHEN wght_start IS NOT NULL THEN 400 END, 
                     CASE WHEN wdth_start IS NOT NULL THEN 100 END, 
                     CASE WHEN opsz_start IS NOT NULL THEN 14 END, 
                     CASE WHEN slnt_start IS NOT NULL THEN 0 END,
-                    0,
-                    0,
-                    2
+                    6,
+                    NULL
               FROM font
              WHERE family=pSubTitleFont;
         END IF;
@@ -487,7 +485,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_html LONG;
     BEGIN
         FOR C IN (
-            SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.letter_spacing, wf.line_height, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt, f.ital_start, f.ital_end, wf.ital
+            SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.underline, /*wf.letter_spacing, wf.line_height,*/ f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt, f.ital_start, f.ital_end, wf.ital
               FROM user_tab_columns c, user_col_comments i, website w, website_font wf, font f
              WHERE c.table_name=l_table_name
                AND c.column_name=UPPER(l_column_name)
@@ -514,16 +512,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 
                 '<div class="flex-items" style="--flex-direction:row;--flex-gap:1em">' ||
                     '<label for="' || l_column_name || '-font-size">Size' ||
-                        '<input type="range" id="' || l_column_name || '-font-size" name="' || l_column_name || '_font_size" ' ||
-                            'min="' || CASE WHEN l_column_name='title' THEN '4' ELSE '0' END || '" ' ||
-                            'max="' || CASE WHEN l_column_name='title' THEN '6' ELSE '4' END || '" ' ||
-                            ' value="' || C.font_size || '"/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-size" name="' || l_column_name || '_font_size" min="6" max="14" value="' || C.font_size || '"/>' ||
                     '</label>' ||
-                    '<label for="' || l_column_name || '-letter-spacing">Spacing' ||
-                        '<input type="range" id="' || l_column_name || '-letter-spacing" name="' || l_column_name || '_letter_spacing" min="0" max="0.75" value="' || C.letter_spacing || '" step="0.05"/>' ||
-                    '</label>' ||
-                    '<label for="' || l_column_name || '-line-height">Height' ||
-                        '<input type="range" id="' || l_column_name || '-line-height" name="' || l_column_name || '_line_height" min="0" max="4" value="' || C.line_height || '" step="0.5"/>' ||
+                    '<label for="' || l_column_name || '-underline">Underline' ||
+                        '<input type="range" id="' || l_column_name || '-underline" name="' || l_column_name || '_underline" min="0" max="22" value="' || C.underline || '"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' class="visually-hidden"' END || '>Weight' ||
                         '<input type="range" id="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '"/>' ||
@@ -618,11 +610,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
         
         FOR C IN (
-            SELECT color_primary, header_text_color, title,title_font_family,title_font_size,title_letter_spacing,title_line_height,title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
-                subtitle,subtitle_font_family,subtitle_font_size,subtitle_letter_spacing,subtitle_line_height,subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
+            SELECT color_primary, header_text_color, title,title_font_family,title_font_size,NULLIF(title_underline,'0') title_underline, title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
+                subtitle,subtitle_font_family,subtitle_font_size,NULLIF(subtitle_underline,'0') subtitle_underline, subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
               FROM JSON_TABLE(l_bodytext, '$' 
-              COLUMNS(color_primary,header_text_color,title,title_font_family,title_font_size,title_letter_spacing,title_line_height,title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
-                subtitle,subtitle_font_family,subtitle_font_size,subtitle_letter_spacing,subtitle_line_height,subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
+              COLUMNS(color_primary,header_text_color,title,title_font_family,title_font_size,title_underline,title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
+                subtitle,subtitle_font_family,subtitle_font_size,subtitle_underline,subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
               ))
         ) LOOP
             UPDATE website
@@ -632,8 +624,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             UPDATE website_font
                SET font_id=C.title_font_family,
                    font_size=C.title_font_size,
-                   letter_spacing=C.title_letter_spacing,
-                   line_height=C.title_line_height,
+                   underline=C.title_underline,
                    wght=C.title_font_wght,
                    wdth=C.title_font_wdth,
                    opsz=C.title_font_opsz,
@@ -646,8 +637,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             UPDATE website_font
                SET font_id=C.subtitle_font_family,
                    font_size=C.subtitle_font_size,
-                   letter_spacing=C.subtitle_letter_spacing,
-                   line_height=C.subtitle_line_height,
+                   underline=C.subtitle_underline,
                    wght=C.subtitle_font_wght,
                    wdth=C.subtitle_font_wdth,
                    opsz=C.subtitle_font_opsz,
