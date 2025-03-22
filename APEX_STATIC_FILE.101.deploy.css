@@ -37,20 +37,25 @@ main {
   container-type: inline-size;
 }
 
+/* Prevent auto font increase on nested elements */
+li {
+    font-size: var(--step-0);
+}
+
 [role="list"] {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-blockquote {
-  font-style: italic;
-  background: #f9f9f9;
-  border-left: var(--space-3xs) solid var(--color-primary);
-  margin-inline-start: var(--space-m);
+.flow blockquote {
+  background: var(--color-primary-lightest);
+  border-left: 0.2em solid var(--color-primary)!important;
+  margin-inline-start: 1em;
+  font-stretch: 120%;
 }
 
-blockquote > * {
+.flow blockquote > * {
   padding: var(--space-s);
 }
 
@@ -1086,18 +1091,18 @@ ol.deploy span + span {
     margin-inline-start: 0.5em;
     font: inherit;
 }
-.editor > fieldset:nth-of-type(1) {
+.editor > fieldset.background-color {
     grid-area: background;
     align-self: start;
     justify-self: center;
 }
-.editor > fieldset:nth-of-type(2) {
+.editor > fieldset.title-font {
     grid-area: title;
 }
-.editor > fieldset:nth-of-type(3) {
+.editor > fieldset.subtitle-font {
     grid-area: subtitle;
 }
-.editor > div {
+.editor > div.buttons {
     grid-area: buttons;
 }
 .editor > svg {
