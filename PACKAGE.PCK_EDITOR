@@ -16,6 +16,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
     --
     PROCEDURE updateHeader(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
+    PROCEDURE getFooter(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
+    --
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
@@ -498,7 +500,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         )
         LOOP
             l_html:=
-            '<fieldset class="flex-items" style="--flex-direction:column; --flex-vertical-alignment:flex-start;--flex-gap:1em">' ||
+            '<fieldset class="flex-items '|| l_column_name || '-font" style="--flex-direction:column; --flex-vertical-alignment:flex-start;--flex-gap:1em">' ||
                 '<legend><strong>Change ' || INITCAP(REPLACE(l_column_name,'_',' ')) || '</strong></legend>' ||
                 '<div class="flex-items" style="--flex-direction:row;">' ||
                     buildSelectFont(C.font_id, l_column_name) ||
@@ -548,15 +550,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
         FOR C IN (
-            SELECT w.color_primary, w.header_effect, w.title, w.subtitle, w.header_text_color
+            SELECT w.color_primary, w.header_effect, w.header_text_color, w.title, w.subtitle
               FROM website w
              WHERE w.id=pWebsiteId
         ) 
         LOOP
             l_html:=
             '<form class="editor">' ||
-                '<fieldset>' ||
-                    '<legend><strong>Change Background</strong></legend>' ||
+                '<fieldset class="background-color">' ||
+                    '<legend><strong>Change Header</strong></legend>' ||
                     '<input type="hidden" name="header_text_color" value="' || C.header_text_color || '">' ||
                     '<input type="color" class="background-color" name="color_primary" value="' || C.color_primary || '">' || 
                     CASE WHEN pEyeDropper='true' THEN
@@ -575,7 +577,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 '</fieldset>' ||
                 buildFontWrapper(pWebsiteId,'website.title', C.title) || 
                 buildFontWrapper(pWebsiteId,'website.subtitle',C.subtitle) ||
-                '<div class="flex-items space-between">' ||
+                '<div class="flex-items space-between buttons">' ||
                     '<button type="button" class="button publish-changes" data-endpoint="publish-website/:ID" data-method="GET" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
                     '<button type="button" class="button cancel-changes" style="--button-bg:rebeccapurple">CANCEL</button>' ||
                 '</div>' ||
@@ -653,6 +655,72 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         
         apex_json.open_object;
         apex_json.write('success', TRUE);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
+    /* 
+    **  BUILD HTML INPUT ELEMENTS TO EDiT WEBSITE HEADER
+    */
+    PROCEDURE getFooter(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_html LONG;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        FOR C IN (
+            SELECT w.color_primary, w.header_effect, w.header_text_color, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name
+              FROM website w
+             WHERE w.id=pWebsiteId
+        ) 
+        LOOP
+            l_html:=
+            '<form class="editor">' ||
+                '<fieldset class="flex-items" style="--flex-gap:1em">' ||
+                    '<legend><strong>Change Footer</strong></legend>' ||
+                    
+                    '<div>' ||
+                        '<label for="contact-email">Contact Email</label>' ||
+                        '<input type="email" id="contact-email" name="contact_email" maxlength="50" value="' || C.contact_email || '">' ||
+                    '</div>' ||
+                    
+                    '<div>' ||
+                        '<label for="telephone-number">Telephone</label>' ||
+                        '<input type="tel" id="telephone-number" name="telephone_number" maxlength="20" value="' || C.telephone_number || '">' ||
+                    '</div>' ||
+
+                    '<div>' ||
+                        '<label for="mobile-number">Mobile</label>' ||
+                        '<input type="tel" id="mobile-number" name="mobile_number" maxlength="20" value="' || C.mobile_number || '">' ||
+                    '</div>' ||
+
+                    '<div>' ||
+                        '<label for="linkedin-name">LinkedIn</label>' ||
+                        '<input type="text" id="linkedin-name" name="linkedin_name" maxlength="50" autocapitalize="none" value="' || C.linkedin_name || '">' ||
+                    '</div>' ||
+                    
+                '</fieldset>' ||
+                '<div class="flex-items space-between">' ||
+                    '<button type="button" class="button publish-changes" data-endpoint="publish-website/:ID" data-method="GET" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
+                    '<button type="button" class="button cancel-changes" style="--button-bg:rebeccapurple">CANCEL</button>' ||
+                '</div>' ||
+            '</form>';
+        END LOOP;
+        /* Include SVG symbols in hidden element */
+        l_html:=l_html || '<svg width="0" height="0">';
+        FOR C IN (SELECT id, viewbox, svg FROM icon WHERE id IN ('eyedropper','image')) LOOP
+            l_html:=l_html || '<symbol id="' || C.id || '" viewBox="' || C.viewbox || '" preserveAspectRatio="">' || C.svg || '</symbol>';
+        END LOOP;
+        l_html:=l_html || '</svg>';
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE); 
+        apex_json.write('html', l_html);
         apex_json.close_object;
 
         pStatus:=200;
