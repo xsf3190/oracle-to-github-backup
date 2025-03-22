@@ -381,7 +381,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 l_root_css:=l_root_css || 
                 '--font-family-' || C1.context || ':"' || C1.family || '",' || CASE WHEN C1.category IN ('serif','sans-serif') THEN C1.category ELSE 'sans-serif' END || ';' ;
             END LOOP;
-            l_root_css:=l_root_css ||
+            l_root_css:=l_root_css || 
+            '--font-family-ui: system-ui, sans-serif;' ||
             '--max-width: ' || C.max_width || ';' || 
             '--img-border-radius: ' || C.img_border_radius || ';' || 
             '--header-text-color: ' || C.header_text_color || ';' || 
