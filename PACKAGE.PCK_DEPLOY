@@ -210,9 +210,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             subtitle website.subtitle%type,
             header_effect website.header_effect%type,
             hero_asset_id website.hero_asset_id%type,
+            contact_email website.contact_email%type,
+            telephone_number website.telephone_number%type,
+            mobile_number website.mobile_number%type,
+            linkedin_name website.linkedin_name%type,
             promotion website.promotion%type,
             body_html article.body_html%type,
-            footer website.footer%type,
             modules apex_t_varchar2
         );
         TYPE t_labels IS TABLE OF tt_labels INDEX BY PLS_INTEGER;
@@ -337,17 +340,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /*
         ** Get all website content into collection
         */
-        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count, title, subtitle, header_effect, hero_asset_id, promotion, body_html, footer, apex_t_varchar2()
+        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count, title, subtitle, header_effect, hero_asset_id, contact_email, telephone_number, mobile_number, linkedin_name, promotion, body_html, apex_t_varchar2()
           BULK COLLECT INTO l_labels
           FROM
           (
-        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, wa.display_order, NVL(a.updated_date,a.created_date) lastmod, a.word_count, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html body_html, w.footer
+        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, 
+            wa.display_order, NVL(a.updated_date,a.created_date) lastmod, a.word_count, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.promotion, a.body_html body_html
           FROM website w, website_article wa, article a
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
            AND wa.article_id=a.id
          UNION ALL
-        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, wa.display_order+NVL(a.display_order/100,0.001),  NVL(a.updated_date,a.created_date) lastmod, a.word_count, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.footer
+        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, 
+            wa.display_order+NVL(a.display_order/100,0.001),  NVL(a.updated_date,a.created_date) lastmod, a.word_count, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.promotion, a.body_html
           FROM website w, website_article wa, article a 
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
@@ -417,8 +422,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_subtitle,
                 l_labels(i).header_effect,
                 l_labels(i).hero_asset_id,
+                l_labels(i).contact_email,
+                l_labels(i).telephone_number,
+                l_labels(i).mobile_number,
+                l_labels(i).linkedin_name,
                 l_labels(i).promotion,
-                l_labels(i).footer, 
                 l_labels(i).body_html
             );
 
