@@ -17,8 +17,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
         pSubtitle website.subtitle%type,
         pHeaderEffect website.header_effect%type,
         pHeroAssetId website.hero_asset_id%type,
+        pContactEmail website.contact_email%type,
+        pTelephoneNumber website.telephone_number%type,
+        pMobileNumber website.mobile_number%type,
+        pLinkedinName website.linkedin_name%type,
         pPromotion website.promotion%type,
-        pFooter IN CLOB, 
         pHtml IN OUt NOCOPY CLOB
     );
 end;
@@ -179,11 +182,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                             '<input type="text" id="passcodeInput" name="passcode" pattern="\d{6}" inputmode="numeric" maxlength="6" autocomplete="6-digit-passcode">' ||
                             '<span class="passcode-result"></span>' ||
                         '</div>' ||
+                        '<div class="visually-hidden">' ||
+                            '<label for="domain">Enter Domain Name</label>' ||
+                            '<input type="text" id="domain" name="domain" maxlength="37" autocapitalize="none" autocorrect="off">' ||
+                            '<span class="domain-result"></span>' ||
+                        '</div>' ||
                     '</article>' ||
                     '<footer class="flex-items space-apart">' ||
                         '<button class="button sendmail-magic" type="button">Send a Link</button>' ||
                         '<button class="button sendmail-passcode" type="button">Send a Code</button>' ||
                         '<button class="button validate-passcode visually-hidden" type="button">Submit Passcode</button>' ||
+                        '<button class="button create-website visually-hidden" type="button">Create Website</button>' ||
                     '</footer>' ||
                 '</form>' ||
              '</dialog>');
@@ -213,8 +222,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         pSubtitle website.subtitle%type,
         pHeaderEffect website.header_effect%type,
         pHeroAssetId website.hero_asset_id%type,
+        pContactEmail website.contact_email%type,
+        pTelephoneNumber website.telephone_number%type,
+        pMobileNumber website.mobile_number%type,
+        pLinkedinName website.linkedin_name%type,
         pPromotion website.promotion%type,
-        pFooter IN CLOB, 
         pHtml IN OUt NOCOPY CLOB) 
     IS
         l_font_styles VARCHAR2(500);
@@ -369,10 +381,35 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             '</header>' || 
             CASE WHEN pHeroAssetId IS NULL THEN g_curve END;
 
+        l_footer:=
+            '<footer class="flex-items">' ||
+                CASE WHEN pContactEmail IS NOT NULL THEN
+                '<a class="icon-with-text" href="mailto:' || pContactEmail || '">' ||
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="#email"></use></svg><span>' || pContactEmail || '</span>' ||
+                '</a>'
+                END ||
+                CASE WHEN pTelephoneNumber IS NOT NULL THEN
+                '<a class="icon-with-text" href="tel:' || pTelephoneNumber || '">' ||
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="#phone"></use></svg><span>' || pTelephoneNumber || '</span>' ||
+                '</a>'
+                END ||
+                CASE WHEN pMobileNumber IS NOT NULL THEN
+                '<a class="icon-with-text" href="tel:' || pMobileNumber || '">' ||
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="#mobile"></use></svg><span>' || pMobileNumber || '</span>' ||
+                '</a>'
+                END ||
+                CASE WHEN pLinkedinName IS NOT NULL THEN
+                '<a class="icon-with-text" href="https://www.linkedin.com/in/' || pLinkedinName || '">' ||
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="#linkedin"></use></svg><span>' || pLinkedinName || '</span>' ||
+                '</a>'
+                END ||
+            '</footer>';
+
+
         /* 
         ** Build website footer 
         */
-        l_footer:='<footer class="section">' || pFooter || '</footer>';
+        --l_footer:='<footer class="section">' || pFooter || '</footer>';
 
         /* 
         ** Assemble content part of document 
@@ -386,6 +423,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 pHtml  || 
                 pPromotion ||
             '</main>' || 
+            '<form class="editor"></form>' ||
             l_footer;
 
         /* 
@@ -439,7 +477,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_header_effect website.header_effect%type;
         l_hero_asset_id website.hero_asset_id%type;
         l_promotion website.promotion%type;
-        l_footer CLOB;
+        l_contact_email website.contact_email%type;
+        l_telephone_number website.telephone_number%type;
+        l_mobile_number website.mobile_number%type;
+        l_linkedin_name website.linkedin_name%type;
         l_css CLOB;
         l_javascript CLOB;
         l_fluid_types pck_core.fluid_type_t;
@@ -483,14 +524,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Get page content */
 
         IF (l_is_blog OR l_is_media) THEN
-            SELECT w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.footer, null,null
-              INTO l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_footer, l_contact_form, l_collection_type
+            SELECT w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, null,null
+              INTO l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_contact_form, l_collection_type
               FROM website w, article a
              WHERE w.id=l_website_id
                AND a.id=pArticleId;
         ELSE
-            SELECT w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.footer, wa.contact_form, wa.collection_type
-              INTO l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_footer, l_contact_form, l_collection_type
+            SELECT w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, wa.contact_form, wa.collection_type
+              INTO l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_contact_form, l_collection_type
               FROM website w, website_article wa, article a
              WHERE w.id=l_website_id
                AND wa.website_id=w.id
@@ -511,8 +552,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             l_subtitle, 
             l_header_effect,
             l_hero_asset_id,
+            l_contact_email,
+            l_telephone_number, 
+            l_mobile_number, 
+            l_linkedin_name,
             l_promotion,
-            l_footer, 
             l_html);
 
         l_javascript:=
