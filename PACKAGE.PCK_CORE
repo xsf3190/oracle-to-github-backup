@@ -368,7 +368,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 END LOOP;
             END IF;
             l_root_css:=l_root_css ||
-            ':root {';
+            ':root {' ||
+                '-webkit-text-size-adjust: none;' ||
+                'text-size-adjust: none;';
             FOR i IN 1..l_fluid_types.COUNT LOOP
                 l_root_css:=l_root_css || l_fluid_types(i).property || ': ' || l_fluid_types(i).value || ';';
             END LOOP;
