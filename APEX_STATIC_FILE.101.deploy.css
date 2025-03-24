@@ -49,14 +49,16 @@ li {
 }
 
 .flow blockquote {
+  inline-size: fit-content;
   background: var(--color-primary-lightest);
-  border-left: 0.2em solid var(--color-primary)!important;
-  margin-inline-start: 1em;
-  font-stretch: 120%;
+  border-inline: 0.2em solid var(--color-primary)!important;
+  border-radius: 0.5em;
+  font-style: normal!important;
+  font-stretch: 200%;
 }
 
 .flow blockquote > * {
-  padding: var(--space-s);
+  padding: 1em;
 }
 
 img {
@@ -72,7 +74,7 @@ img {
   margin-inline: auto;
 }
 
-/* IMAGE STYLES (CLASSES SUPPLIED BY CKEDITOR) */
+/* NORMALIZE IMAGE INLINE STYLES AND CLASSES THAT ARE INCLUDED BY CKEDITOR */
 .image-style-align-left {
   float: left;
   margin-inline-end: 1em;
@@ -84,7 +86,8 @@ img {
 }
 
 figure.image {
-    margin: auto;
+    display: grid;
+    place-items: center;
 }
 
 .image>figcaption {
@@ -243,7 +246,6 @@ p {
 }
 small {
   font-size:var(--step--2);
-  font-family: system-ui;
 }
 
 h2,
@@ -650,6 +652,7 @@ html:has(dialog[open]) {
 }
 
 dialog {
+  font-family: var(--font-family-ui);
   border-radius: var(--space-s);
   padding: 0;
   inset: 0;
