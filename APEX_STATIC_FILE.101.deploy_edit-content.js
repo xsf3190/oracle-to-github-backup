@@ -48,7 +48,7 @@ export const init = async (element) => {
         });
     
     /* Get apprpriate set of plugins from CKEDITOR CDN */
-    const { ClassicEditor, Essentials, Alignment, Autosave, BlockQuote, Bold, ButtonView, Clipboard, Code, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine,
+    const { ClassicEditor, Essentials, Alignment, Autosave, BlockQuote, Bold, ButtonView, Clipboard, Code, CodeBlock, FontColor, GeneralHtmlSupport, Heading, HorizontalLine,
             Image, ImageCaption, ImageResize, ImageStyle, ImageToolbar, ImageInsert, ImageInsertViaUrl,
             Italic, Link, List, Paragraph, Plugin, SelectAll, SourceEditing, Underline, WordCount
             } = await import(CK_JS)
@@ -97,11 +97,11 @@ export const init = async (element) => {
         case 'admin':
             editor = await ClassicEditor.create( document.querySelector( '#editor' ), {
                 plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock,  
-                           Deploy, GeneralHtmlSupport, Heading, HorizontalLine, 
+                           Deploy, FontColor, GeneralHtmlSupport, Heading, HorizontalLine, 
                            Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, 
                            Italic, Link, List, Media, Paragraph, 
                            SelectAll, SourceEditing, Underline, WordCount ],
-                toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic',
+                toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'fontColor',
                            'underline', 'code', 'alignment', 'link', 
                             'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing', '|', 'media'],
                 initialData: initialdata,
