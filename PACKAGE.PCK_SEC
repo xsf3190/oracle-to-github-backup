@@ -20,6 +20,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
     );
 
     g_session_user_id NUMBER;
+    g_website_id NUMBER;
     --
     PROCEDURE createAuthRequest(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
@@ -333,6 +334,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_session_data.url:=OWA_UTIL.get_cgi_env('url');
 
         g_session_user_id:=l_JWT_data.jti;
+        g_website_id:=pWebsiteId;
 
         RETURN l_session_data;
     END;
