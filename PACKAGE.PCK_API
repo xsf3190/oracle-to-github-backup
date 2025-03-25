@@ -545,7 +545,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         pUrl IN VARCHAR2,
         pData IN OUT NOCOPY CLOB)
     IS
-        l_google_url VARCHAR2(200):='https://www.googleapis.com/webfonts/v1/webfonts';
+        l_google_url VARCHAR2(1000):='https://www.googleapis.com/webfonts/v1/webfonts';
         l_google_api_key users.google_api_key%type;
         l_error_message LONG;
     BEGIN
@@ -579,7 +579,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
 
         pck_core.log(pData);
 
-        RAISE_APPLICATION_ERROR(-20040,'');
+        RAISE_APPLICATION_ERROR(-20040,'Failure in call to Google Fonts API');
     END;    
 
     /*
