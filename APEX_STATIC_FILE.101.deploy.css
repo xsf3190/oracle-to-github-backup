@@ -15,7 +15,7 @@
 body {
     background-color: var(--color-background);
     color: var(--color-text);
-    font-family: var(--font-family-subtitle);
+    font-family: var(--font-family-ui);
     font-size: var(--step-0);
     line-height: 1.4;
 }
@@ -33,6 +33,7 @@ menu {
 }
 
 main {
+  font-family: var(--font-family-subtitle);
   padding-inline: 1rem;
   container-type: inline-size;
 }
@@ -142,7 +143,7 @@ body>header img {
   line-height: 1;
   text-align: center;
   font-family: var(--font-family-subtitle);
-  margin-block: 1em;
+  margin-block-start: 3vmin;
   place-self:end center;
 }
 
@@ -152,6 +153,7 @@ body>header img {
 
 /* FOOTER STYLES */
 body>footer {
+  font-family: var(--font-family-subtitle);
   background-color: var(--color-primary);
   color: var(--header-text-color);
   padding: 1em;
@@ -167,7 +169,6 @@ body>footer>a {
 nav {
   --flex-wrap: no-wrap;
   padding: var(--space-3xs);
-  font-family: var(--font-family-ui);
   font-size: var(--step--1);
   font-variant: all-small-caps;
   position: sticky;
@@ -224,10 +225,7 @@ article {
   margin-block-start: var(--flow-space, 1em);
 }
 
-.spaced-letters {
-  letter-spacing: 0.2em;
-}
-h1, input#title {
+h1 {
   font-size: var(--step-4);
   overflow-wrap: break-word;
 }
@@ -248,9 +246,9 @@ small {
   font-size:var(--step--2);
 }
 
-h2,
-h3,
-h4 {
+main h2,
+main h3,
+main h4 {
   text-wrap: balance;
   font-family: var(--font-family-title);
 }
@@ -564,7 +562,7 @@ fieldset {
   font-weight: var(--button-font-weight, 700);
   font-size: var(--button-font-size, 1em);
   letter-spacing: 0.05ch;
-  font-family: var(--font-family-ui);
+  font-family: inherit;
   line-height: 1.1;
 
   /* Interactive */
@@ -651,16 +649,18 @@ html:has(dialog[open]) {
   overflow: hidden;
 }
 
-dialog {
-  font-family: var(--font-family-ui);
-  border-radius: var(--space-s);
+dialog[class] {
+  border-radius: 0.5em;
   padding: 0;
   inset: 0;
   overflow: hidden;
 }
 
-dialog > form {
+/*dialog h2, dialog h3, dialog h4 {
     font-family: var(--font-family-ui);
+}*/
+
+dialog > form {
     display: grid;
     grid-template-rows: auto 1fr auto;
     align-items: start;
@@ -1070,7 +1070,6 @@ ol.deploy span + span {
 /* HEADER EDITOR STYLES */
 
 .editor:has(*) {
-    font-family: system-ui;
     font-size: var(--step--2);
     display: grid;
     grid-template-areas:
