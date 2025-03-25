@@ -209,7 +209,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             EXCEPTION WHEN subscript_beyond_count THEN
                 l_calling_subprogram2 := null;
         END;
-        INSERT INTO log(id, procedure_name, message, user_id) VALUES (seq_log.nextval, l_calling_subprogram1||l_calling_subprogram2, pMsg, pck_sec.g_session_user_id);
+        INSERT INTO log(id, procedure_name, message, user_id, website_id) VALUES (seq_log.nextval, l_calling_subprogram1||l_calling_subprogram2, pMsg, pck_sec.g_session_user_id, pck_sec.g_website_id);
         COMMIT;
     END;
 
@@ -223,7 +223,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             EXCEPTION WHEN subscript_beyond_count THEN
                 l_calling_subprogram2 := null;
         END;
-        INSERT INTO log(id, procedure_name, message, user_id) VALUES (seq_log.nextval, l_calling_subprogram1||l_calling_subprogram2, pMsg, pck_sec.g_session_user_id);
+        INSERT INTO log(id, procedure_name, message, user_id, website_id) VALUES (seq_log.nextval, l_calling_subprogram1||l_calling_subprogram2, pMsg, pck_sec.g_session_user_id, pck_sec.g_website_id);
         COMMIT;
     END;
 
