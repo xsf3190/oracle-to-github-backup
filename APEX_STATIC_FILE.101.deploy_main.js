@@ -1,6 +1,6 @@
 import "./deploy_metric.min.js";
 
-import { dropdown } from "./deploy_elements.min.js";
+import { dropdown, login_btn } from "./deploy_elements.min.js";
 
 
 /*
@@ -32,4 +32,9 @@ dropdown.addEventListener("click", async (e) => {
             console.error(error);
             console.error("Failed to load " + import_module_name);
         });
+})
+
+document.querySelector(".get-website").addEventListener("click", () => {
+    console.log("login_btn",login_btn)
+    login_btn.click();
 })
