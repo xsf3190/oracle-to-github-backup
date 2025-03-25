@@ -2,7 +2,7 @@
 **  EDIT WEBSITE HEADER
 */
 import { header, dropdown_details } from "./deploy_elements.min.js";
-import { callAPI } from "./deploy_callAPI.min.js";
+import { callAPI, handleError } from "./deploy_callAPI.min.js";
 
 const editor = header.previousElementSibling;
 
@@ -20,7 +20,7 @@ export const init = (element) => {
             dropdown_details.removeAttribute("open");
         })
         .catch((error) => {
-            handle_error(error);
+            handleError(error);
         });
 }
 
@@ -140,7 +140,7 @@ editor.addEventListener("change", (e) => {
                 
             })
             .catch((error) => {
-                handle_error(error);
+                handleError(error);
             });
     } else if (name.includes("font_family")) {
         if (!e.target.value) {
@@ -170,10 +170,11 @@ editor.addEventListener("change", (e) => {
                 document.fonts.ready.then(()=>{
                     console.log(`Loaded ${font_family}`);
                     target.style.fontFamily = font_family;
+                    document.documentElement.style.setProperty('--font-family-' + name.split("_")[0], font_family); 
                 });
             })
             .catch((error) => {
-                handle_error(error);
+                handleError(error);
             });
     }
 
@@ -212,7 +213,7 @@ editor.addEventListener("click", async (e) => {
                 console.log("Form changes saved");
             })
             .catch((error) => {
-                handle_error(error);
+                handleError(error);
             });
 
         const module_name = e.target.dataset.endpoint;
@@ -222,15 +223,8 @@ editor.addEventListener("click", async (e) => {
                 module.init(e.target);
             })
             .catch((error) => {
-                console.error(error);
-                console.error("Failed to load " + import_module_name);
+                handleError(error);
             });
     }
 
 });
-
-const handle_error = (error) => {
-    const result = editor.querySelector(".result");
-    result.textContent = error;
-    result.style.color = "red";
-}
