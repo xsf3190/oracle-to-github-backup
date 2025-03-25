@@ -351,6 +351,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             --l_javascript:=l_javascript || getJSCode('deploy_contact.js');
         END IF;
 
+        /* Remove all style="width:n%;" */
+        pHtml:=regexp_replace(pHtml,'style="width:.+?"',null);
+
         /* 
         ** All images lazy loaded except first
         */
