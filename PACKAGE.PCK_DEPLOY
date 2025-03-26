@@ -271,6 +271,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_italics_substr LONG;
             l_char VARCHAR2(4);
             n PLS_INTEGER;
+            len PLS_INTEGER;
         BEGIN
             IF (pText IS NULL) THEN
                 RETURN;
@@ -278,23 +279,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             n:=REGEXP_COUNT(l_text,l_italics_regex);
             FOR i IN 1..n LOOP
                 l_italics_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_italics_regex,1,i)));
-                FOR k IN 1..LENGTH(l_italics_substr) LOOP
-                    l_char:=SUBSTR(l_italics_substr,k,1);
-                    IF (pItalic IS NULL OR INSTR(pItalic,l_char)=0) THEN
-                        pItalic:=pItalic || l_char;
-                    END IF;
-                END LOOP;
+                len:=LENGTH(l_italics_substr);
+                IF (len>0) THEN
+                    FOR k IN 1..len LOOP
+                        l_char:=SUBSTR(l_italics_substr,k,1);
+                        IF (pItalic IS NULL OR INSTR(pItalic,l_char)=0) THEN
+                            pItalic:=pItalic || l_char;
+                        END IF;
+                    END LOOP;
+                END IF;
             END LOOP;
 
             l_text:=REGEXP_REPLACE(l_text,l_italics_regex,null);
 
             l_text:=utl_i18n.unescape_reference(apex_escape.striphtml(l_text));
-            FOR i IN 1..LENGTH(l_text) LOOP
-                l_char:=SUBSTR(l_text,i,1);
-                IF (pNormal IS NULL OR INSTR(pNormal,l_char)=0) THEN
-                    pNormal:=pNormal || l_char;
-                END IF;
-            END LOOP;
+            dbms_output.put_line('l_text:'||l_text);
+            len:=LENGTH(l_text);
+            
+            IF (len>0) THEN
+                FOR i IN 1..len LOOP
+                    l_char:=SUBSTR(l_text,i,1);
+                    IF (pNormal IS NULL OR INSTR(pNormal,l_char)=0) THEN
+                        pNormal:=pNormal || l_char;
+                    END IF;
+                END LOOP;
+            END IF;
         END;
 
         FUNCTION contactEmail RETURN VARCHAR2 IS
@@ -305,6 +314,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 SELECT email INTO l_contact_email FROM users WHERE id=pUserId;
             END IF;
             RETURN (l_contact_email);
+        END;
+
+        PROCEDURE logfont IS
+        BEGIN
+            l_context:=l_fonts.FIRST;
+            WHILE l_context IS NOT NULL LOOP
+                pck_core.log(l_context||':'||l_fonts(l_context).chars_normal||':'||l_fonts(l_context).chars_italic||':');
+                l_fonts(l_context).chars_italic:=chars_used(l_fonts(l_context).chars_italic);
+                l_fonts(l_context).chars_normal:=chars_used(l_fonts(l_context).chars_normal);
+                l_context := l_fonts.NEXT(l_context);
+            END LOOP;
         END;
 
     BEGIN
@@ -339,13 +359,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 ELSE l_fonts(C.context).chars_normal:=C.data;
             END CASE;
 
-            pck_core.log(C.context||':'||l_fonts(C.context).chars_normal||':'||l_fonts(C.context).chars_italic);
+            logfont;
 
         END LOOP;
 
         /* All footer elements are normal style characters */
         l_fonts('SUBTITLE').chars_normal:=l_fonts('SUBTITLE').chars_normal || l_contact_email || l_telephone_number || l_mobile_number || l_linkedin_name;
-
+        logfont;
         /*
         ** Get all website content into collection
         */
@@ -390,12 +410,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             IF (n>0) THEN
                 FOR j IN 1..n 
                 LOOP
-                    l_heading:=REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j);
-                    extract_styles(l_heading, l_fonts('TITLE').chars_italic, l_fonts('TITLE').chars_normal);
+                    extract_styles(REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j), l_fonts('TITLE').chars_italic, l_fonts('TITLE').chars_normal);
                 END LOOP;
                 l_body_html:=REGEXP_REPLACE(l_body_html,l_headings_regex,null);
             END IF;
             extract_styles(l_body_html, l_fonts('SUBTITLE').chars_italic, l_fonts('SUBTITLE').chars_normal);
+
+            logfont;
 
             --pck_core.log('SUBTITLE'||':'||l_fonts(C.context).chars_normal||':'||l_fonts(C.context).chars_italic);
             
@@ -640,26 +661,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         ) LOOP
             /* Seperate normal and italic according to actual usage */
             
-
-            IF (INSTR(C.axes,'ital')>0 AND C.italic IS NOT NULL) THEN
-                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':';
-                l_api_url:=l_api_url || C.axes || '@1,' || C.ranges || '&text=' || utl_url.escape(C.italic,TRUE,'UTF-8') || '&display=swap';
-                pck_api.callGoogleAPI(l_api_url,l_font_css);
-                l_styles:=l_styles || '/* ' || C.italic || ' */';
-                l_styles:=l_styles || l_font_css;
-            END IF;
-
-            IF (C.normal IS NOT NULL) THEN
-                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':';
-                l_api_url:=l_api_url || C.axes || '@' || CASE WHEN INSTR(C.axes,'ital')>0 THEN '0,' END || C.ranges || '&text=' || utl_url.escape(C.normal,TRUE,'UTF-8') || '&display=swap';
-                pck_api.callGoogleAPI(l_api_url,l_font_css);
-                l_styles:=l_styles || '/* ' || C.normal || ' */';
-                l_styles:=l_styles || l_font_css;
-            END IF;
-
-            logDeployment(pWebsiteId, pSiteId, ' - ' || C.family || ' (' || CASE WHEN C.italic IS NOT NULL THEN LENGTH(C.italic) || ' italic ' END || CASE WHEN C.normal IS NOT NULL THEN LENGTH(C.normal) || ' normal' END || ')');
-        END LOOP;
-
+                    
         IF (pEnv='TEST') THEN
             FOR C IN (
                 SELECT f.family,
@@ -683,6 +685,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_styles:=l_styles || l_font_css;
             END LOOP;
         END IF;
+        
+
+            IF (INSTR(C.axes,'ital')>0 AND C.italic IS NOT NULL) THEN
+                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':';
+                l_api_url:=l_api_url || C.axes || '@1,' || C.ranges || '&text=' || utl_url.escape(C.italic,TRUE,'UTF-8') || '&display=swap';
+                pck_api.callGoogleAPI(l_api_url,l_font_css);
+                l_styles:=l_styles || '/* ' || C.italic || ' */';
+                l_styles:=l_styles || l_font_css;
+            END IF;
+
+            IF (C.normal IS NOT NULL) THEN
+                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':';
+                l_api_url:=l_api_url || C.axes || '@' || CASE WHEN INSTR(C.axes,'ital')>0 THEN '0,' END || C.ranges || '&text=' || utl_url.escape(C.normal,TRUE,'UTF-8') || '&display=swap';
+                pck_api.callGoogleAPI(l_api_url,l_font_css);
+                l_styles:=l_styles || '/* ' || C.normal || ' */';
+                l_styles:=l_styles || l_font_css;
+            END IF;
+
+            logDeployment(pWebsiteId, pSiteId, ' - ' || C.family || ' (' || CASE WHEN C.italic IS NOT NULL THEN LENGTH(C.italic) || ' italic ' END || CASE WHEN C.normal IS NOT NULL THEN LENGTH(C.normal) || ' normal' END || ')');
+        END LOOP;
+
+
 
         /* Assemble the complete css file including font-face */
         l_styles:=l_styles || pck_core.buildCssRoot(pWebsiteId, pApplicationId, pDeploy=>TRUE);
