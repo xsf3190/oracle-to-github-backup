@@ -1,6 +1,6 @@
 import "./deploy_metric.min.js";
 
-import { dropdown, login_btn } from "./deploy_elements.min.js";
+import { dropdown, login_btn, login_dialog } from "./deploy_elements.min.js";
 
 
 /*
@@ -34,7 +34,7 @@ dropdown.addEventListener("click", async (e) => {
         });
 })
 
-document.querySelector(".get-website").addEventListener("click", () => {
-    console.log("login_btn",login_btn)
+document.querySelector(".promotion").addEventListener("click", () => {
+    login_btn.dataset.promotion = true;
     login_btn.click();
 })
