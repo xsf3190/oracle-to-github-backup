@@ -8,6 +8,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
     --
     PROCEDURE getFonts(pWebsiteId IN website.id%type, pCategory IN font.category%type, pFontId IN font.id%type, pStatus OUT NUMBER);
     --
+    FUNCTION getFontURL(pFontid IN font.id%type) RETURN VARCHAR2;
+    --
     PROCEDURE getHeader(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER);
     --
     PROCEDURE initWebsiteFonts(pWebsiteId IN website.id%type, pTitleFont IN font.family%type, pSubTitleFont IN font.family%type DEFAULT NULL);
@@ -340,17 +342,46 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         END IF;
     END;
 
+    FUNCTION getFontURL(pFontid IN font.id%type) RETURN VARCHAR2 IS
+        l_api_url VARCHAR2(250);
+        l_url VARCHAR2(500);
+        l_url_regex VARCHAR2(50):='url.*;';
+        l_font_css CLOB;
+        n PLS_INTEGER;
+    BEGIN
+        FOR C IN (
+                SELECT f.family, 
+                    LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.opsz_start,',opsz',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
+                        NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
+                    LTRIM(NVL2(f.opsz_start,f.opsz_start||'..'||f.opsz_end,NULL) || NVL2(f.slnt_start,','||f.slnt_start||'..'||f.slnt_end,NULL) || 
+                        NVL2(f.wdth_start,','||f.wdth_start||'..'||f.wdth_end,NULL) || NVL2(f.wght_start,','||f.wght_start||'..'||f.wght_end,NULL),',') ranges
+                FROM font f
+                WHERE f.id=pFontid) 
+        LOOP
+            l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':' || C.axes || '@';
+            IF (INSTR(C.axes,'ital')>0) THEN
+                l_api_url:=l_api_url || '0,' || C.ranges || ';1,' || C.ranges;
+            ELSE
+                l_api_url:=l_api_url || C.ranges;
+            END IF;
+            
+            pck_api.callGoogleAPI(l_api_url,l_font_css);
+            pck_core.log(l_font_css);
+
+            /* Get url for Latin charcters ... but desperate but so far seems to be in last font-face */
+            n:=regexp_count(l_font_css,l_url_regex);
+            l_url:=regexp_substr(l_font_css,l_url_regex,1,n);
+        END LOOP;
+
+        RETURN(RTRIM(l_url,';'));
+    END;
+
     /* 
     **  GET VARIABLE FONT LISTS AND PROPERTIES (font_id=0) ELSE GET SETTING FOR SPECIFIC FONT
     */
     PROCEDURE getFonts(pWebsiteId IN website.id%type, pCategory IN font.category%type, pFontId IN font.id%type, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
         l_html CLOB;
-        l_font_css CLOB;
-        l_api_url VARCHAR2(200);
-        l_url_regex VARCHAR2(50):='url.*;';
-        l_url VARCHAR2(500);
-        n PLS_INTEGER;
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
@@ -369,28 +400,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             APEX_JSON.write('content', l_html);
         ELSE
             FOR C IN (
-                SELECT f.family, f.ital_start, f.ital_end, f.wght_start, f.wght_end, f.wdth_start, f.wdth_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end,
-                    LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.opsz_start,',opsz',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
-                        NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
-                    LTRIM(NVL2(f.opsz_start,f.opsz_start||'..'||f.opsz_end,NULL) || NVL2(f.slnt_start,','||f.slnt_start||'..'||f.slnt_end,NULL) || 
-                        NVL2(f.wdth_start,','||f.wdth_start||'..'||f.wdth_end,NULL) || NVL2(f.wght_start,','||f.wght_start||'..'||f.wght_end,NULL),',') ranges
-                FROM font f
+                SELECT f.family, f.ital_start, f.ital_end, f.wght_start, f.wght_end, f.wdth_start, f.wdth_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end
+                 FROM font f
                 WHERE f.id=pFontid
             ) 
             LOOP
-                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':' || C.axes || '@';
-                IF (INSTR(C.axes,'ital')>0) THEN
-                    l_api_url:=l_api_url || '0,' || C.ranges || ';1,' || C.ranges;
-                ELSE
-                    l_api_url:=l_api_url || C.ranges;
-                END IF;
-                
-                pck_api.callGoogleAPI(l_api_url,l_font_css);
-
-                /* Get url for Latin charcters ... but desperate but so far seems to be in last font-face */
-                n:=regexp_count(l_font_css,l_url_regex);
-                l_url:=regexp_substr(l_font_css,l_url_regex,1,n);
-                apex_json.write('url',RTRIM(l_url,';'));
+                apex_json.write('url',getFontUrl(pFontid));
 
                 apex_json.open_array('axes');
                 apex_json.open_object;
@@ -424,7 +439,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
 
         APEX_JSON.write('success', TRUE);
         APEX_JSON.close_object;
-        
 
         pStatus:=200;
 
@@ -432,6 +446,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         pck_core.log_error(pStatus);
     END;
 
+    /* BUILD <select> elements for specified font */
     FUNCTION buildSelectFont(pFontId IN font.id%type, pColumnName IN VARCHAR2) RETURN VARCHAR2 IS
         l_html LONG;
         l_selected_category font.category%type;
@@ -546,6 +561,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     PROCEDURE getHeader(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
         l_html LONG;
+        l_title_font_url VARCHAR2(500);
+        l_subtitle_font_url VARCHAR2(500);
+        l_title_font_family font.family%type;
+        l_subtitle_font_family font.family%type;
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
