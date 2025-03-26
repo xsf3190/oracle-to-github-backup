@@ -18,6 +18,13 @@ const validate_msg = form.querySelector(".passcode-result");
 let endpoint, intervalId;
 
 export const init = (element) => {
+    if (login_btn.dataset.promotion) {
+        login_dialog.querySelector("h2").textContent = "Create My Website";
+        login_dialog.querySelector("div:has([name='domain'])").classList.remove("visually-hidden");
+        endpoint = element.dataset.endpoint;
+        login_dialog.showModal();
+        return;
+    }
     if (element.textContent==="Log Out") {
         sessionStorage.clear();
         localStorage.clear();
