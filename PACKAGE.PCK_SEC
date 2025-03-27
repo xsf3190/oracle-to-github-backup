@@ -351,6 +351,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_user_id users.id%type;
         l_ords_user_id user_ords_clients.id%type;
         l_jwt_enc_key user_ords_clients.client_secret%type;
+        l_domain website.domain_name%type;
         l_token VARCHAR2(4000);
         l_digits   CONSTANT VARCHAR2(10) := '0123456789';
         l_passcode VARCHAR2(6);
@@ -363,8 +364,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_sendmail_link VARCHAR2(500);
         l_clob CLOB;
     BEGIN
-        FOR C IN (SELECT o.client_secret, LOWER(j.email) email, j.url, j.request_type, NVL(u.id,0) user_id, NVL(o.id,0) ords_user_id
-                    FROM user_ords_clients o, users u, JSON_TABLE(pBodyText, '$' COLUMNS email, url, request_type) j
+        FOR C IN (SELECT o.client_secret, LOWER(j.email) email, j.url, j.request_type, NVL(u.id,0) user_id, NVL(o.id,0) ords_user_id, domain
+                    FROM user_ords_clients o, users u, JSON_TABLE(pBodyText, '$' COLUMNS email, url, request_type, domain) j
                    WHERE o.name(+)=LOWER(j.email)
                      AND u.email(+)=LOWER(j.email))
         LOOP
@@ -374,6 +375,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             l_user_id:=C.user_id;
             l_ords_user_id:=C.ords_user_id;
             l_jwt_enc_key:=C.client_secret;
+            l_domain:=C.domain;
         END LOOP;
 
         IF (l_ords_user_id=0) THEN
@@ -814,7 +816,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 issueJWTTokens(pWebsiteId, l_email, pUserId);
         END CASE;
 
-        UPDATE users SET login_status='AUTH OK' WHERE id=pUserId;
+        UPDATE users SET login_status='AUTH OK', last_login_date=current_timestamp, last_login_provider='JWT' WHERE id=pUserId;
 
         pStatus:=200;
 
