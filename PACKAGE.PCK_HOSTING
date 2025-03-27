@@ -1,0 +1,70 @@
+CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_HOSTING" is
+end;
+/
+CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
+
+    /* 
+    ** CREATE NEW WEBSITE ON NETLIFY HOSTING SERVICE.
+    ** PARAMETER pWebsiteid IS WEBSITE THROUGH WHICH PROSPECTIVE CLIENT MADE REQUEST
+    */
+    PROCEDURE createWebsite(pWebsiteId IN website.id%type, pBodytext IN CLOB, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_domain website.domain_name%type;
+        l_json JSON_OBJECT_T;
+        l_clob CLOB;
+        l_netlify_site_id website.netlify_site_id%type;
+        l_ssl_url VARCHAR2(100);
+        l_site_created BOOLEAN:=FALSE;
+        l_message VARCHAR2(100);
+        n PLS_INTEGER:=0;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        SELECT domain INTO l_domain FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (domain));
+
+        FOR C IN (SELECT w.domain_name, u.email FROM website w, users u  WHERE w.id=pWebsiteId AND u.id=l_session_data.user_id) LOOP
+            pck_core.log('Request from ' || C.domain_name || ' to create ' || l_domain || ' for ' || C.email);
+        END LOOP;
+
+        
+
+        /* Netlify API returns 422 if domain name unavailable as subdomain of "netlify.app" */
+        WHILE NOT l_site_created LOOP
+            l_json:=new JSON_OBJECT_T;
+            l_json.put('name', l_domain);
+            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pStatusAllowed=>422, pData=>l_clob);
+            
+            IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
+                l_site_created:=TRUE;
+            ELSIF (apex_web_service.g_status_code=422) THEN
+                l_domain:=l_domain || '-editor';
+            END IF;
+            n:=n+1;
+            EXIT WHEN n=2;
+        END LOOP;
+
+        /* Get Netlify site_id for EDITOR site */
+        IF l_site_created THEN
+            SELECT site_id, ssl_url INTO l_netlify_site_id, l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id, ssl_url));
+
+            INSERT INTO website
+                (id, domain_name, netlify_site_id, created_date, user_id)
+            VALUES 
+                (seq_website.nextval, l_domain, l_netlify_site_id, current_timestamp, l_session_data.user_id);
+
+            pck_deploy.runDeployment(seq_website.currval, l_session_data.user_id, 'TEST', l_netlify_site_id, pck_core.getRestUrl(), 101);
+        END IF;
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE);
+        apex_json.write('ssl_url', l_ssl_url);
+        apex_json.write('message', CASE WHEN NOT l_site_created THEN 'That domain already taken. Choose another.' END);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
+    END;
+end;
+/
