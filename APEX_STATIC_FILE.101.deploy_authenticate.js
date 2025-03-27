@@ -154,12 +154,17 @@ sendmail_magic.addEventListener("click", (e) => {
 });
 
 /* 
-** SET NEW TOKENS IN STORAGE AND MEMORY. UPDATE DROPDOWN MENULIST
+** SET NEW TOKENS IN STORAGE AND MEMORY. UPDATE DROPDOWN MENULIST. "URL" SENT FROM SERVER IS FOR A REQUESTED WEBSITE
 */
 const setTokens = (data) => {
-    sessionStorage.setItem("token",data.token);
+    
     localStorage.setItem("refresh",data.refresh);
+
+    if (data.url) {
+        window.location.replace(data.url);
+    }
   
+    sessionStorage.setItem("token",data.token);
     sessionStorage.setItem("menulist",data.menulist);
     sessionStorage.setItem("dialogs",data.dialogs);
 
