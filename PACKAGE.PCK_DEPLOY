@@ -293,7 +293,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_text:=REGEXP_REPLACE(l_text,l_italics_regex,null);
 
             l_text:=utl_i18n.unescape_reference(apex_escape.striphtml(l_text));
-            dbms_output.put_line('l_text:'||l_text);
             len:=LENGTH(l_text);
             
             IF (len>0) THEN
@@ -320,7 +319,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         BEGIN
             l_context:=l_fonts.FIRST;
             WHILE l_context IS NOT NULL LOOP
-                pck_core.log(l_context||':'||l_fonts(l_context).chars_normal||':'||l_fonts(l_context).chars_italic||':');
+                --pck_core.log(l_context||':'||l_fonts(l_context).chars_normal||':'||l_fonts(l_context).chars_italic||':');
                 l_fonts(l_context).chars_italic:=chars_used(l_fonts(l_context).chars_italic);
                 l_fonts(l_context).chars_normal:=chars_used(l_fonts(l_context).chars_normal);
                 l_context := l_fonts.NEXT(l_context);
@@ -359,13 +358,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 ELSE l_fonts(C.context).chars_normal:=C.data;
             END CASE;
 
-            logfont;
+            --logfont;
 
         END LOOP;
 
         /* All footer elements are normal style characters */
         l_fonts('SUBTITLE').chars_normal:=l_fonts('SUBTITLE').chars_normal || l_contact_email || l_telephone_number || l_mobile_number || l_linkedin_name;
-        logfont;
+        --logfont;
         /*
         ** Get all website content into collection
         */
@@ -416,7 +415,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END IF;
             extract_styles(l_body_html, l_fonts('SUBTITLE').chars_italic, l_fonts('SUBTITLE').chars_normal);
 
-            logfont;
+            --logfont;
 
             --pck_core.log('SUBTITLE'||':'||l_fonts(C.context).chars_normal||':'||l_fonts(C.context).chars_italic);
             
