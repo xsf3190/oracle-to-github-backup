@@ -1,4 +1,9 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_HOSTING" is
+    --
+    PROCEDURE createWebsite(pWebsiteId IN website.id%type, pDomain IN VARCHAR2, pUserid IN users.id%type, pEmail IN users.email%type, pUrl IN OUT VARCHAR2);
+    --
+    PROCEDURE deleteWebsite(pWebsiteid IN website.id%type);
+    --
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
@@ -7,64 +12,105 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
     ** CREATE NEW WEBSITE ON NETLIFY HOSTING SERVICE.
     ** PARAMETER pWebsiteid IS WEBSITE THROUGH WHICH PROSPECTIVE CLIENT MADE REQUEST
     */
-    PROCEDURE createWebsite(pWebsiteId IN website.id%type, pBodytext IN CLOB, pStatus OUT NUMBER) IS
-        l_session_data pck_sec.t_session_data;
-        l_domain website.domain_name%type;
+    PROCEDURE createWebsite(pWebsiteId IN website.id%type, pDomain IN VARCHAR2, pUserid IN users.id%type, pEmail IN users.email%type, pUrl IN OUT VARCHAR2) IS
+        l_domain website.domain_name%type:=pDomain;
         l_json JSON_OBJECT_T;
         l_clob CLOB;
         l_netlify_site_id website.netlify_site_id%type;
         l_ssl_url VARCHAR2(100);
-        l_site_created BOOLEAN:=FALSE;
-        l_message VARCHAR2(100);
-        n PLS_INTEGER:=0;
+        l_home_article_id article.id%type;
     BEGIN
-        l_session_data:=pck_sec.getSessionData(pWebsiteId);
-
-        SELECT domain INTO l_domain FROM JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (domain));
-
-        FOR C IN (SELECT w.domain_name, u.email FROM website w, users u  WHERE w.id=pWebsiteId AND u.id=l_session_data.user_id) LOOP
-            pck_core.log('Request from ' || C.domain_name || ' to create ' || l_domain || ' for ' || C.email);
-        END LOOP;
-
-        
-
-        /* Netlify API returns 422 if domain name unavailable as subdomain of "netlify.app" */
-        WHILE NOT l_site_created LOOP
-            l_json:=new JSON_OBJECT_T;
-            l_json.put('name', l_domain);
-            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pStatusAllowed=>422, pData=>l_clob);
-            
-            IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
-                l_site_created:=TRUE;
-            ELSIF (apex_web_service.g_status_code=422) THEN
-                l_domain:=l_domain || '-editor';
-            END IF;
-            n:=n+1;
-            EXIT WHEN n=2;
-        END LOOP;
-
-        /* Get Netlify site_id for EDITOR site */
-        IF l_site_created THEN
-            SELECT site_id, ssl_url INTO l_netlify_site_id, l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id, ssl_url));
-
-            INSERT INTO website
-                (id, domain_name, netlify_site_id, created_date, user_id)
-            VALUES 
-                (seq_website.nextval, l_domain, l_netlify_site_id, current_timestamp, l_session_data.user_id);
-
-            pck_deploy.runDeployment(seq_website.currval, l_session_data.user_id, 'TEST', l_netlify_site_id, pck_core.getRestUrl(), 101);
+        l_domain:=SUBSTR(l_domain,1,INSTR(l_domain,'.')-1) || '-editor';
+        IF (l_domain='-editor') THEN
+            RAISE_APPLICATION_ERROR(-20000,'Domain Name invalid: ' || pDomain);
         END IF;
 
-        apex_json.open_object;
-        apex_json.write('success', TRUE);
-        apex_json.write('ssl_url', l_ssl_url);
-        apex_json.write('message', CASE WHEN NOT l_site_created THEN 'That domain already taken. Choose another.' END);
-        apex_json.close_object;
+        l_json:=new JSON_OBJECT_T;
+        l_json.put('name', l_domain);
+        pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pStatusAllowed=>422, pData=>l_clob);
+        
+        IF (apex_web_service.g_status_code=422) THEN
+            RAISE_APPLICATION_ERROR(-20000,'Netlify 422 error creating: ' || pDomain);
+        END IF;
 
-        pStatus:=200;
+        /* Get Netlify site_id for EDITOR site */
+        
+        SELECT site_id, ssl_url INTO l_netlify_site_id, l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id, ssl_url));
 
-        EXCEPTION WHEN OTHERS THEN
-            pck_core.log_error(pStatus);
+        INSERT INTO website (id, domain_name, netlify_site_id, created_date, user_id, contact_email, title, subtitle, header_text_color, header_effect)
+        SELECT seq_website.nextval, pDomain, l_netlify_site_id, current_timestamp, pUserid, pEmail, pDomain, 'Use Edit Header', header_text_color, header_effect
+          FROM website WHERE id=pWebsiteId;
+
+        INSERT INTO website_font (website_id, context, font_id, ital, wdth, wght, opsz, slnt, font_size, underline)
+        SELECT seq_website.currval, context, font_id, ital, wdth, wght, opsz, slnt, font_size, underline
+          FROM website_font
+         WHERE website_id=pWebsiteId;
+
+        SELECT article_id INTO l_home_article_id FROM website_article WHERE website_id=pWebsiteId AND display_order=1;
+
+        INSERT INTO article (id, body_html, author_user_id)
+        SELECT seq_article.nextval, body_html, pUserid
+          FROM article
+         WHERE id=l_home_article_id;
+
+        INSERT INTO website_article (website_id, article_id, display_order, navigation_label)
+        VALUES (seq_website.currval, seq_article.currval, 1, 'Home');
+         
+
+        pck_deploy.runDeployment(seq_website.currval, pUserid, 'TEST', l_netlify_site_id, pck_core.getRestUrl(), 101);
+
+        pUrl:=l_ssl_url;
+    END;
+
+    /*
+     * DELETE WEBSITE INCLUDING HOSTING AND ANY ASSETS OWNED BY US
+    */
+    PROCEDURE deleteWebsite(pWebsiteid IN website.id%type) IS
+        TYPE t_website_article IS TABLE OF article.id%type INDEX BY PLS_INTEGER;
+        l_website_articles t_website_article;
+        l_clob CLOB;
+    BEGIN
+        FOR C IN (
+            SELECT w.user_id, w.netlify_site_id, w.netlify_site_id_custom, w.netlify_dns_zone_id, u.cld_api_key 
+              FROM website w, users u 
+             WHERE w.id=pWebsiteId
+               AND w.user_id=u.id
+        ) LOOP
+            /* DELETE NETLIFY SITES (NOTE THAT USER MAY HAVE DELETED THESE MANUALLY IF SELF-HOSTING)  */
+            IF (C.netlify_site_id_custom IS NOT NULL) THEN
+                pck_api.callNetlifyAPI(pUserId=>C.user_id, pEndpoint=>'sites/' || C.netlify_site_id_custom, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
+                pck_api.callNetlifyAPI(pUserId=>C.user_id, pEndpoint=>'dns_zones/' || C.netlify_dns_zone_id, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
+            END IF;
+            
+            IF (C.netlify_site_id IS NOT NULL) THEN
+                pck_api.callNetlifyAPI(pUserId=>C.user_id, pEndpoint=>'sites/' || C.netlify_site_id, pMethod=>'DELETE', pStatusAllowed=>404, pData=>l_clob);
+            END IF;
+
+            /* DELETE ALL DATABASE ROWS RELATED TO WEBSITE */
+
+            SELECT article_id BULK COLLECT INTO l_website_articles FROM website_article WHERE website_id=pWebsiteId;
+            
+            FOR i IN 1..l_website_articles.COUNT LOOP
+
+                /* DELETE ASSETS ON:Y IF WE ARE HOSTING THEM (USER OWNS THESE INDEPENDENTLY */
+                IF (C.cld_api_key IS NULL) THEN
+                    FOR C1 IN (SELECT DISTINCT cld_cloud_name, resource_type FROM asset WHERE article_id=l_website_articles(i)) LOOP
+                        pck_api.callCloudinaryAPI(pUserId=>C.user_id, pEndpoint=>C1.cld_cloud_name || '/resources/' || C1.resource_type || '/tags/' || l_website_articles(i), pMethod=>'DELETE', pData=>l_clob);
+                    END LOOP;
+                END IF;
+
+                /* DELETE ARTICLE (CASCADES TO ASSET AND WEBSITE_ARTICLE) */
+                DELETE article WHERE id=l_website_articles(i);
+
+                DELETE page_hit WHERE article_id=l_website_articles(i);
+                DELETE website_article_cwv WHERE article_id=l_website_articles(i);
+
+            END LOOP;
+
+            /* DELETE WEBSITE (CASCADES TO WEBSITE_FONT) */
+            DELETE website WHERE id=pWebsiteId;
+
+        END LOOP;
     END;
 end;
 /
