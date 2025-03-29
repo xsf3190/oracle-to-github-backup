@@ -469,11 +469,11 @@ form label {
   display: block;
   font-weight: 350;
 }
-form input[type="text"], form input[type="email"] {
+form input[type="text"], form input[type="email"], form input[type="tel"] {
   inline-size: 100%;
   font-size: var(--step-0);
   line-height: 2;
-  field-sizing: content;
+  /* field-sizing: content; */
 }
 
 form textarea {
@@ -941,16 +941,7 @@ ol.deploy span + span {
     margin-inline-start: 1em;
 }
 
-/* CKEDITOR STYLES */
-#editor-status {
-    color: green;
-}
 
-.ck-word-count {
-    display: flex;
-    gap: 1em;
-    font-size: var(--step--2);
-}
 
 /* Override MEDIA button styles in CKEDITOR toolbar */ 
 .show-media {
@@ -1065,53 +1056,4 @@ ol.deploy span + span {
 }
 .gallery-overlay  .next {
     place-self: center end;
-}
-
-/* HEADER EDITOR STYLES */
-
-.editor:has(*) {
-    font-size: var(--step--2);
-    display: grid;
-    grid-template-areas:
-        "background title"
-        "buttons subtitle";
-    grid-template-columns: max-content 1fr;
-    gap: 1em;
-    padding: 0.5em;
-}
-.editor > fieldset {
-    inline-size: fit-content;
-}
-.editor legend {
-    font-stretch: 125%;
-    font-weight: 600;
-}
-.editor label {
-    font-weight:550;
-}
-.editor label > * {
-    margin-inline-start: 0.5em;
-    font: inherit;
-}
-.editor > fieldset.background-color {
-    grid-area: background;
-    align-self: start;
-    justify-self: center;
-}
-.editor > fieldset.title-font {
-    grid-area: title;
-}
-.editor > fieldset.subtitle-font {
-    grid-area: subtitle;
-}
-.editor > div.buttons {
-    grid-area: buttons;
-}
-.editor > svg {
-    display: none;
-}
-
-select,
-::picker(select) {
-    appearance: base-select;
 }
