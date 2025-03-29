@@ -11,6 +11,13 @@ let endpoint;
 export const init = (element) => {
     endpoint = element.dataset.endpoint;
 
+    if (!document.querySelector("head > link[href='/website_edit.css']")) {
+        const link_edit = document.createElement('link');
+        link_edit.setAttribute('rel', 'stylesheet');
+        link_edit.setAttribute('href', '/website_edit.css');
+        document.head.appendChild(link_edit);
+    }
+
     callAPI(endpoint,'GET')
         .then((data) => {
             editor.insertAdjacentHTML('afterbegin',data.html);
