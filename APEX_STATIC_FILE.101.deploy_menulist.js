@@ -40,7 +40,7 @@ export const init = (endpoint) => {
 const closeBtnEvents = () => {
     document.querySelectorAll("dialog button.close").forEach((button) => {
         button.addEventListener("click", (e) => {
-        e.target.closest("dialog").close();
+            e.target.closest("dialog").close();
         });
     });
 }
