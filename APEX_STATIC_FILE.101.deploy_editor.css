@@ -1,4 +1,23 @@
-/* HEADER EDITOR STYLES */
+/* CKEDITOR STYLES */
+#editor-status {
+    color: green;
+}
+
+.ck-word-count {
+    display: flex;
+    gap: 1em;
+    font-size: var(--step--2);
+}
+
+/* ************* */
+/* EDITOR STYLES */
+/* ************* */
+
+select,
+::picker(select) {
+    appearance: base-select;
+    font: -webkit-small-control;
+}
 
 .editor {
     font-family: sans-serif;
@@ -26,8 +45,6 @@
     grid-area: buttons;
 }
 
-select,
-::picker(select) {
-    appearance: base-select;
-    font: -webkit-small-control;
+.edit-footer>div {
+    margin: 5vh;
 }
