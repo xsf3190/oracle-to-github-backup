@@ -10,6 +10,13 @@ let endpoint;
 
 export const init = (element) => {
     endpoint = element.dataset.endpoint;
+
+    if (!document.querySelector("head > link[href='/website_edit.css']")) {
+        const link_edit = document.createElement('link');
+        link_edit.setAttribute('rel', 'stylesheet');
+        link_edit.setAttribute('href', '/website_edit.css');
+        document.head.appendChild(link_edit);
+    }
     
     const eyedropper = window.EyeDropper ? true : false;
     const query = "?eyedropper="+eyedropper;
