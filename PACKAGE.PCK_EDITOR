@@ -502,7 +502,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_html LONG;
     BEGIN
         FOR C IN (
-            SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.underline, /*wf.letter_spacing, wf.line_height,*/ f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt, f.ital_start, f.ital_end, wf.ital
+            SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.underline, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt, f.ital_start, f.ital_end, wf.ital
               FROM user_tab_columns c, user_col_comments i, website w, website_font wf, font f
              WHERE c.table_name=l_table_name
                AND c.column_name=UPPER(l_column_name)
@@ -529,7 +529,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 
                 '<div class="flex-items" style="--flex-direction:row;--flex-gap:1em">' ||
                     '<label for="' || l_column_name || '-font-size">Size' ||
-                        '<input type="range" id="' || l_column_name || '-font-size" name="' || l_column_name || '_font_size" min="6" max="14" value="' || C.font_size || '"/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-size" name="' || l_column_name || '_font_size" min="2" max="14" value="' || C.font_size || '"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-underline">Underline' ||
                         '<input type="range" id="' || l_column_name || '-underline" name="' || l_column_name || '_underline" min="0" max="22" value="' || C.underline || '"/>' ||
