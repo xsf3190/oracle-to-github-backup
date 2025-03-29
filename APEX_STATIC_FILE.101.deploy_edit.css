@@ -1,0 +1,85 @@
+/* SELECT ELEMENT */
+
+select,
+::picker(select) {
+    appearance: base-select;
+}
+
+
+/* EDITOR STYLES */
+
+.edit-header:has(*) {
+    font-size: var(--step--2);
+    display: grid;
+    grid-template-areas:
+        "background title"
+        "buttons subtitle";
+    grid-template-columns: max-content 1fr;
+    gap: 1em;
+    padding: 0.5em;
+}
+.edit-header > fieldset {
+    inline-size: fit-content;
+}
+.edit-header legend {
+    font-stretch: 125%;
+    font-weight: 600;
+}
+.edit-header label {
+    font-weight:550;
+}
+.edit-header label > * {
+    margin-inline-start: 0.5em;
+    font: inherit;
+}
+.edit-header > fieldset.background-color {
+    grid-area: background;
+    align-self: start;
+    justify-self: center;
+}
+.edit-header > fieldset.title-font {
+    grid-area: title;
+}
+.edit-header > fieldset.subtitle-font {
+    grid-area: subtitle;
+}
+.edit-header > div.buttons {
+    grid-area: buttons;
+}
+.edit-header > svg {
+    display: none;
+}
+
+
+/* EDIT FOOTER STYLES */
+
+.editor-footer, .editor-footer>div {
+    margin: 3vh;
+}
+
+
+/* LOADER ICON WHILE CREATING WEBSITE */.
+
+.loader {
+  width: 150px; /* control the size */
+  aspect-ratio: 1;
+  display: grid;
+  -webkit-mask: conic-gradient(from 22deg, #0003,#000);
+          mask: conic-gradient(from 22deg, #0003,#000);
+  animation: load 1s steps(8) infinite;
+}
+.loader,
+.loader:before {
+  --_g: linear-gradient(#17177c 0 0) 50%; /* update the color here */
+  background: 
+    var(--_g)/34% 8%  space no-repeat,
+    var(--_g)/8%  34% no-repeat space;
+}
+.loader:before {
+  content: "";
+  transform: rotate(45deg);
+}
+@keyframes load {
+  from {transform: rotate(0turn)}
+  to   {transform: rotate(1turn)}
+}
