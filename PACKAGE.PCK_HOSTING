@@ -8,6 +8,33 @@ end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
 
+    PROCEDURE waitDeployment(pWebsiteId IN website.id%type, pUserid IN users.id%type) IS
+        l_clob CLOB;
+        n PLS_INTEGER:=0;
+    BEGIN
+        FOR C IN (
+            SELECT netlify_deploy_id, netlify_site_id FROM website WHERE id=pWebsiteId
+        ) LOOP
+            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/'|| C.netlify_site_id || '/deploys/' || C.netlify_deploy_id, pMethod=>'GET', pData=>l_clob);
+            FOR C1 IN (
+                SELECT state FROM JSON_TABLE(l_clob, '$' COLUMNS (state)) 
+            ) 
+            LOOP
+                n:=n+1;
+                IF (n>5) THEN
+                    RAISE_APPLICATION_ERROR(-20100,'Waited too long fo Netlify Deploy');
+                    EXIT;
+                END IF;
+                pck_core.log(C1.state);
+                IF (C1.state='ready') THEN
+                    EXIT;
+                ELSE
+                    dbms_session.sleep(1);
+                END IF;
+            END LOOP;
+        END LOOP;
+    END;
+
     /* 
     ** CREATE NEW WEBSITE ON NETLIFY HOSTING SERVICE.
     ** PARAMETER pWebsiteid IS WEBSITE THROUGH WHICH PROSPECTIVE CLIENT MADE REQUEST
@@ -20,18 +47,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         l_ssl_url VARCHAR2(100);
         l_home_article_id article.id%type;
     BEGIN
-        l_domain:=SUBSTR(l_domain,1,INSTR(l_domain,'.')-1) || '-editor';
-        IF (l_domain='-editor') THEN
-            RAISE_APPLICATION_ERROR(-20000,'Domain Name invalid: ' || pDomain);
-        END IF;
-
         l_json:=new JSON_OBJECT_T;
         l_json.put('name', l_domain);
-        pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pStatusAllowed=>422, pData=>l_clob);
-        
-        IF (apex_web_service.g_status_code=422) THEN
-            RAISE_APPLICATION_ERROR(-20000,'Netlify 422 error creating: ' || pDomain);
-        END IF;
+        pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
 
         /* Get Netlify site_id for EDITOR site */
         
@@ -58,6 +76,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
          
 
         pck_deploy.runDeployment(seq_website.currval, pUserid, 'TEST', l_netlify_site_id, pck_core.getRestUrl(), 101);
+        
+        /* Wait until the deployment is complete */
+        waitDeployment(seq_website.currval, pUserid);
 
         pUrl:=l_ssl_url;
     END;
@@ -101,13 +122,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
 
                 /* DELETE ARTICLE (CASCADES TO ASSET AND WEBSITE_ARTICLE) */
                 DELETE article WHERE id=l_website_articles(i);
-
                 DELETE page_hit WHERE article_id=l_website_articles(i);
                 DELETE website_article_cwv WHERE article_id=l_website_articles(i);
 
             END LOOP;
 
             /* DELETE WEBSITE (CASCADES TO WEBSITE_FONT) */
+            DELETE refresh_token WHEre website_id=pWebsiteId;
             DELETE website WHERE id=pWebsiteId;
 
         END LOOP;
