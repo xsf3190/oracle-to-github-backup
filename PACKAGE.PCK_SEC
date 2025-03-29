@@ -375,7 +375,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             l_user_id:=C.user_id;
             l_ords_user_id:=C.ords_user_id;
             l_jwt_enc_key:=C.client_secret;
-            l_domain:=C.domain;
+            l_domain:=CASE WHEN C.domain IS NOT NULL THEN RTRIM(LTRIM(REPLACE(C.domain,'.','-'),'-'),'-') ||'-edit' END;
         END LOOP;
 
         IF (l_ords_user_id=0) THEN
@@ -548,7 +548,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 l_menulist:=l_menulist || '<li><a class="button" data-button-variant="nav-item" href="https://' || REPLACE(SUBSTR(pUrl,1,INSTR(pUrl,'.',1,1)-1),'-','.') || '">Live Site</a></li>';
             END IF;
             IF NOT (l_test_site) THEN
-                l_menulist:=l_menulist || '<li><a class="button" data-button-variant="nav-item" href="https://' || REPLACE(pUrl,'.','-') || '.netlify.app' || '">Test Site</a></li>';
+                l_menulist:=l_menulist || '<li><a class="button" data-button-variant="nav-item" href="https://' || REPLACE(pUrl,'.','-') || '.netlify.app' || '">Edit Site</a></li>';
             END IF;
         END LOOP;
 
@@ -696,12 +696,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     PROCEDURE issueJWTTokens(pWebsiteId IN website.id%type, pEmail IN users.email%type, pUserId IN users.id%type, pDomain IN users.domain%type) IS 
         l_new_token VARCHAR2 (4000);
         l_new_refresh VARCHAR2 (4000);
+        l_new_token_domain VARCHAR2 (4000);
+        l_new_refresh_domain VARCHAR2 (4000);
+        l_new_refresh_domain_hash refresh_token.token_issued%type;
         l_jwt_enc_key user_ords_clients.client_secret%type;
         l_user_id users.id%type;
         l_issuer VARCHAR2(15);
         l_scope VARCHAR2(7);
         l_fingerprint fingerprint.fingerprint%type;
-        l_url VARCHAR2(50);
+        l_url VARCHAR2(1000);
         n PLS_INTEGER;
     BEGIN
         -- Check fingerprint is valid 
@@ -744,9 +747,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
         );
 
-        /* Create editor website if this was request to create website */
+        /* 
+         * 1. Create editor website if this was requested
+         * 2. Issue refresh token for user to access
+        */
         IF (pDomain IS NOT NULL) THEN
             pck_hosting.createWebsite(pWebsiteId, pDomain, pUserid, pEmail, l_url);
+            UPDATE users SET domain=null WHERE id=pUserid;
+            l_issuer:='ORDS.'|| seq_website.currval;
+            l_scope:=getScope(seq_website.currval,pEmail);
+            l_new_token_domain:=apex_jwt.ENCODE (
+                p_iss       =>l_issuer,
+                p_sub       => pEmail,
+                p_aud       => l_scope,
+                p_jti       => pUserId,
+                p_iat_ts    => current_timestamp,
+                p_exp_sec   => ACCESS_TOKEN_EXP,
+                p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
+            ); 
+            l_new_refresh_domain:=apex_jwt.ENCODE (
+                p_iss       => l_issuer,
+                p_sub       => pEmail,
+                p_aud       => l_scope,
+                p_jti       => pUserId,
+                p_iat_ts    => current_timestamp,
+                p_exp_sec   => REFRESH_TOKEN_EXP,
+                p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
+            );
+            l_url:=l_url || '?refresh=' || l_new_refresh_domain || '&token=' || l_new_token_domain;
+            l_new_refresh_domain_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh_domain,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+
+            INSERT INTO refresh_token(user_id, website_id, token_issued) VALUES (pUserId, seq_website.currval, l_new_refresh_domain_hash);
         END IF;
 
         APEX_JSON.open_object;
@@ -870,12 +901,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 pck_core.log_error(pStatus);
     END;
 
+        
     /*
     ** CREATE AND RETURN NEW ACCESS / REFRESH TOKEN PAIR
     ** CALLED WHEN CLIENT'S ACCESS TOKEN HAS EXPIRED
     ** CHECK REFRESH TOKEN HAS NOT PREVIOUSLY BEEN USED
     */
-    PROCEDURE refreshAuthToken(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+    PROCEDURE refreshAuthToken(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS 
         l_refresh_token VARCHAR2(4000);
         l_token_used refresh_token.token_used%type;
         l_token_issued refresh_token.token_issued%type;
@@ -889,34 +921,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_refresh_token:=SUBSTR(OWA_UTIL.get_cgi_env('Authorization'), 8);
         l_JWT_data:=decodeJWT(l_refresh_token);
 
-        l_token:=apex_jwt.DECODE (p_value => l_refresh_token, p_signature_key => UTL_RAW.cast_to_raw(l_JWT_data.client_secret));
-
-        apex_jwt.VALIDATE (p_token => l_token, p_iss => l_JWT_data.iss);
-
-        -- Check refresh token has not previously been used 
-        l_token_used:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_refresh_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
-        
-        SELECT COUNT(*)
-          INTO n
-          FROM refresh_token
-         WHERE token_used=l_token_used;
-
-        -- Refresh token has already been used - return access denied - disable use of the refresh token issued with compromised token
-        IF (n=1) THEN
-            pck_core.log('Attempted refresh token reuse in ' || pWebsiteId);
-            BEGIN 
-                INSERT INTO refresh_token(user_id, token_used, token_issued)
-                SELECT l_JWT_data.jti, token_issued, 'COMPROMISED'
-                  FROM refresh_token
-                 WHERE token_used=l_token_used
-                   AND token_issued<>'COMPROMISED';
-                
-                EXCEPTION WHEN dup_val_on_index THEN NULL;
-            END;
-            RAISE_APPLICATION_ERROR(-20000,'Attempt to reuse refresh token');
-        END IF;
-
-        -- Check fingerprint is valid 
+        -- Check user's fingerprint is known
         l_fingerprint:=getFingerprint;
         SELECT COUNT(*) 
           INTO n
@@ -925,8 +930,38 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
            AND fingerprint=l_fingerprint;
 
         IF (n=0) THEN
-            RAISE_APPLICATION_ERROR(-20000,'Access denied from unknown device or location. Login again.');
+            RAISE_APPLICATION_ERROR(-20000,'Access denied from previously unknown device or location. Login again.');
         END IF;
+
+        l_token:=apex_jwt.DECODE (p_value => l_refresh_token, p_signature_key => UTL_RAW.cast_to_raw(l_JWT_data.client_secret));
+
+        BEGIN
+            apex_jwt.VALIDATE (p_token => l_token, p_iss => l_JWT_data.iss);
+            EXCEPTION WHEN VALUE_ERROR THEN
+                pck_core.log('token invalid');
+                RAISE_APPLICATION_ERROR(-20000,'token invalid');
+        END;
+
+        -- Check refresh token has not previously been used to generate a new token pair  (nb : all tokens stored as hash values)
+        l_token_used:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_refresh_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+        
+        /*
+        FOR C IN (
+            SELECT token_issued 
+              FROM refresh_token 
+             WHERE token_used=l_token_used
+        ) LOOP
+            l_token_issued:=C.token_issued;
+        END LOOP;
+
+        -- Refresh token has already been used - return access denied - disable use of the refresh token issued with compromised token
+        IF (l_token_issued IS NOT NULL) THEN
+            INSERT INTO refresh_token(website_id, user_id, token_used)
+            VALUES (pWebsiteid, l_JWT_data.jti, l_token_issued);
+            COMMIT;
+            RAISE_APPLICATION_ERROR(-20000,'Attempt to reuse refresh token');
+        END IF;
+        */
 
         l_new_token:=apex_jwt.ENCODE (
             p_iss       => l_JWT_data.iss,
@@ -948,8 +983,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             p_signature_key => UTL_RAW.cast_to_raw (l_JWT_data.client_secret)
         );
 
-        INSERT INTO refresh_token(user_id, token_used, token_issued)
-            VALUES (l_JWT_data.jti, l_token_used, dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh,'AL32UTF8'), typ=>dbms_crypto.hash_sh256));
+        INSERT INTO refresh_token(website_id, user_id, token_used, token_issued)
+            VALUES (pWebsiteid, l_JWT_data.jti, l_token_used, dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh,'AL32UTF8'), typ=>dbms_crypto.hash_sh256));
 
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
