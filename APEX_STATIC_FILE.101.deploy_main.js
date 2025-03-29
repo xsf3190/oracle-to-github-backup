@@ -2,6 +2,18 @@ import "./deploy_metric.min.js";
 
 import { dropdown, login_btn } from "./deploy_elements.min.js";
 
+/*
+** NEW WEBSITE URL INCLUDES OWNER'S JWT TOKENS - SAVE THESE IN STORAGE AND REMOVE FROM URL
+*/
+const url = new URL(window.location.href);
+if (url.searchParams.has("refresh")) {
+    localStorage.setItem("refresh", url.searchParams.get("refresh"));
+    sessionStorage.setItem("token", url.searchParams.get("token"));
+    url.searchParams.delete('token');
+    url.searchParams.delete('refresh');
+    history.replaceState(history.state, '', url.href);
+}
+
 
 /*
 ** SET DROPDOWN ELEMENTS IF REFRESH TOKEN EXISTS
@@ -35,9 +47,9 @@ dropdown.addEventListener("click", async (e) => {
 })
 
 /*
-** SOMEONE CLICKS PROMOTION BUTTON - LOG IN 
+** PROMOTION BUTTON IS FOR VISITOR TO CREATE THEIR OWN WEBSITE - SIMULATE  LOG IN WITH DOMAIN NAME PROMPT
 */
-document.querySelector(".promotion").addEventListener("click", () => {
+document.querySelector(".promotion")?.addEventListener("click", () => {
     login_btn.dataset.promotion = true;
     login_btn.click();
 })
