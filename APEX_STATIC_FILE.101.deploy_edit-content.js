@@ -17,6 +17,13 @@ export const init = async (element) => {
     if (document.querySelector("head > link[href='" + CK_CSS + "']")) {
         return;
     }
+
+    if (!document.querySelector("head > link[href='/website_edit.min.css']")) {
+        const link_edit = document.createElement('link');
+        link_edit.setAttribute('rel', 'stylesheet');
+        link_edit.setAttribute('href', '/website_edit.css');
+        document.head.appendChild(link_edit);
+    }
     
     endpoint = element.dataset.endpoint;
     
@@ -182,12 +189,12 @@ export const init = async (element) => {
             
         case 'owner':
             editor = await ClassicEditor.create( document.querySelector( '#editor' ), {
-                plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard,
+                plugins: [ Essentials, Alignment, Autosave, BlockQuote, Bold, Clipboard,
                            Deploy, GeneralHtmlSupport, Heading, HorizontalLine,
                            Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl,  
                            Italic, Link, List, Media, Paragraph, 
-                           Underline, WordCount ],
-                toolbar: [ 'heading', '|', 'undo', 'redo', '|', 'horizontalLine', 'bold', 'italic',
+                           SelectAll, Underline, WordCount ],
+                toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic',
                            'underline', 'alignment', 'link', 
                            'bulletedList', 'numberedList', 'blockQuote', 'insertImage', '|', 'media'],
                 initialData: initialdata,
