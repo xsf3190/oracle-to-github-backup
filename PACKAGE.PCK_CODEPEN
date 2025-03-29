@@ -183,8 +183,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                             '<span class="passcode-result"></span>' ||
                         '</div>' ||
                         '<div class="visually-hidden">' ||
-                            '<label for="domain">Domain Name</label>' ||
-                            '<input type="text" id="domain" name="domain" required maxlength="37" autocapitalize="none" autocorrect="off">' ||
+                            '<label for="domainInput">Domain Name</label>' ||
+                            '<input type="text" id="domainInput" name="domain" required pattern="([\da-z-.])+" maxlength="37" spellcheck="false" autocapitalize="none" autocorrect="off">' ||
                             '<span class="domain-result"></span>' ||
                         '</div>' ||
                     '</article>' ||
