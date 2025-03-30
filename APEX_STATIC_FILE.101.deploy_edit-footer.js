@@ -22,6 +22,7 @@ export const init = (element) => {
         .then((data) => {
             editor.insertAdjacentHTML('afterbegin',data.html);
             dropdown_details.removeAttribute("open");
+            editor.scrollIntoView();
         })
         .catch((error) => {
             handle_error(error);
