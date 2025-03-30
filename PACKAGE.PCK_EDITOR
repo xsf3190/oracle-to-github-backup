@@ -699,10 +699,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         ) 
         LOOP
             l_html:=
-            '<form class="editor">' ||
-                '<fieldset class="flex-items" style="--flex-gap:1em">' ||
+            '<form>' ||
+                '<fieldset class="flex-items">' ||
                     '<legend><strong>Change Footer</strong></legend>' ||
-                    
                     '<div>' ||
                         '<label for="contact-email">Contact Email</label>' ||
                         '<input type="email" id="contact-email" name="contact_email" maxlength="50" value="' || C.contact_email || '">' ||
@@ -722,7 +721,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                         '<label for="linkedin-name">LinkedIn</label>' ||
                         '<input type="text" id="linkedin-name" name="linkedin_name" maxlength="50" autocapitalize="none" value="' || C.linkedin_name || '">' ||
                     '</div>' ||
-                    
                 '</fieldset>' ||
                 '<div class="flex-items space-between">' ||
                     '<button type="button" class="button publish-changes" data-endpoint="publish-website/:ID" data-method="GET" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
