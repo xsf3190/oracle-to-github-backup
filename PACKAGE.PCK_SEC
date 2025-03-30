@@ -463,9 +463,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                AND w.contact_email=pEmail) LOOP
             l_scope:=C.scope;
         END LOOP;
-            
+
         IF (l_scope IS NULL) THEN
-            FOR C IN (SELECT 'admin' as scope FROM website w, users u WHERE w.id=pWebsiteId AND u.id=w.user_id AND u.email=pEmail) LOOP
+            FOR C IN (
+                SELECT 'admin' as scope 
+                  FROM apex_workspace_apex_users
+                 WHERE is_admin='Yes'
+                   AND email=pEmail
+            ) LOOP
                 l_scope:=C.scope;
             END LOOP;
         END IF;
@@ -611,7 +616,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             '<dialog class="message">' ||
                 '<form>' ||
                     '<header class="flex-items space-between">' ||
-                        '<h2>Leave a Review</h2>' ||
+                        '<h2>Send Message</h2>' ||
                         '<button type="button" class="button close no-focus" data-button-variant="round-icon">' ||
                             '<svg class="icon" aria-hidden="true" focusable="false">' ||
                                 '<use href="#cross"></use>' ||
@@ -620,7 +625,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                     '</header>' ||
                     '<article class="flow">' ||
                          '<div>' ||
-                            '<label for="messageInput">Review</label>' ||
+                            '<label for="messageInput">Message</label>' ||
                             '<textarea id="messageInput" name="message" required minlength="1" maxlength="400" rows="5" cols="40"></textarea>' ||
                             '<div class="flex-items space-between">' ||
                                 '<span class="messageInput-result"></span>' ||
@@ -696,9 +701,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     PROCEDURE issueJWTTokens(pWebsiteId IN website.id%type, pEmail IN users.email%type, pUserId IN users.id%type, pDomain IN users.domain%type) IS 
         l_new_token VARCHAR2 (4000);
         l_new_refresh VARCHAR2 (4000);
+        l_new_refresh_hash refresh_token.token_issued%type;
+
         l_new_token_domain VARCHAR2 (4000);
         l_new_refresh_domain VARCHAR2 (4000);
         l_new_refresh_domain_hash refresh_token.token_issued%type;
+        
         l_jwt_enc_key user_ords_clients.client_secret%type;
         l_user_id users.id%type;
         l_issuer VARCHAR2(15);
@@ -747,6 +755,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
         );
 
+        IF (pDomain IS NULL) THEN
+            l_new_refresh_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+            INSERT INTO refresh_token(user_id, website_id, token_issued) VALUES (pUserId, pWebsiteId, l_new_refresh_hash);
+            APEX_JSON.open_object;
+            APEX_JSON.write ('success', TRUE);
+            APEX_JSON.write ('token', l_new_token);
+            APEX_JSON.write ('refresh', l_new_refresh);
+            APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_scope, OWA_UTIL.get_cgi_env('url')));
+            APEX_JSON.write ('dialogs',  buildContentDialog || buildInfoDialog || buildMessageDialog || buildErrorDialog);
+            APEX_JSON.close_object;
+        END IF;
+
         /* 
          * 1. Create editor website if this was requested
          * 2. Issue refresh token for user to access
@@ -778,18 +798,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             l_new_refresh_domain_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh_domain,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
 
             INSERT INTO refresh_token(user_id, website_id, token_issued) VALUES (pUserId, seq_website.currval, l_new_refresh_domain_hash);
-        END IF;
-
-        APEX_JSON.open_object;
-        APEX_JSON.write ('success', TRUE);
-        APEX_JSON.write ('token', l_new_token);
-        APEX_JSON.write ('refresh', l_new_refresh);
-        APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_scope, OWA_UTIL.get_cgi_env('url')));
-        APEX_JSON.write ('dialogs',  buildContentDialog || buildInfoDialog || buildMessageDialog || buildErrorDialog);
-        IF (l_url IS NOT NULL) THEN
+        
+            APEX_JSON.open_object;
+            APEX_JSON.write ('success', TRUE);
+            APEX_JSON.write ('dialogs',  buildContentDialog || buildInfoDialog || buildMessageDialog || buildErrorDialog);
             APEX_JSON.write ('url', l_url);
+            APEX_JSON.close_object;
         END IF;
-        APEX_JSON.close_object;
     END;
 
     /*
