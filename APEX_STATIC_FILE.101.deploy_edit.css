@@ -1,5 +1,15 @@
-/* SELECT ELEMENT */
+/* CKEDITOR STYLES */
+#editor-status {
+    color: green;
+}
 
+.ck-word-count {
+    display: flex;
+    gap: 1em;
+    font-size: var(--step--2);
+}
+
+/* SELECT ELEMENT */
 select,
 ::picker(select) {
     appearance: base-select;
@@ -7,7 +17,6 @@ select,
 
 
 /* EDITOR STYLES */
-
 .edit-header:has(*) {
     font-size: var(--step--2);
     display: grid;
@@ -52,34 +61,6 @@ select,
 
 
 /* EDIT FOOTER STYLES */
-
-.editor-footer, .editor-footer>div {
+.edit-footer, .edit-footer>div {
     margin: 3vh;
-}
-
-
-/* LOADER ICON WHILE CREATING WEBSITE */.
-
-.loader {
-  width: 150px; /* control the size */
-  aspect-ratio: 1;
-  display: grid;
-  -webkit-mask: conic-gradient(from 22deg, #0003,#000);
-          mask: conic-gradient(from 22deg, #0003,#000);
-  animation: load 1s steps(8) infinite;
-}
-.loader,
-.loader:before {
-  --_g: linear-gradient(#17177c 0 0) 50%; /* update the color here */
-  background: 
-    var(--_g)/34% 8%  space no-repeat,
-    var(--_g)/8%  34% no-repeat space;
-}
-.loader:before {
-  content: "";
-  transform: rotate(45deg);
-}
-@keyframes load {
-  from {transform: rotate(0turn)}
-  to   {transform: rotate(1turn)}
 }
