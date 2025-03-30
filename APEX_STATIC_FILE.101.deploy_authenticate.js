@@ -17,11 +17,13 @@ const validate_passcode =  form.querySelector(".validate-passcode");
 const validate_msg = form.querySelector(".passcode-result");
 const domainInput = form.querySelector("[name='domain']");
 const domainError = form.querySelector("#domainInput + span");
+const loader = form.querySelector(".loader");
 
 let endpoint, intervalId;
 let domain = false;
 
 export const init = (element) => {
+    console.log("deploy_authenticate",element.textContent)
     if (element.textContent==="Log Out") {
         sessionStorage.clear();
         localStorage.clear();
@@ -88,9 +90,8 @@ const callAuthAPI = async (method, data) => {
 */
 emailInput.addEventListener("input", () => {
   if (emailInput.validity.valid) {
-    emailError.textContent = ""; // Remove the message content
+    emailError.textContent = "";
   } else {
-    // If there is still an error, show the correct error
     showError();
   }
 });
@@ -100,9 +101,8 @@ emailInput.addEventListener("input", () => {
 */
 passcodeInput.addEventListener("input", () => {
   if (passcodeInput.validity.valid) {
-    passcodeInput.textContent = ""; // Remove the message content
+    passcodeError.textContent = "";
   } else {
-    // If there is still an error, show the correct error
     showError();
   }
 });
@@ -112,9 +112,8 @@ passcodeInput.addEventListener("input", () => {
 */
 domainInput.addEventListener("input", () => {
   if (domainInput.validity.valid) {
-    domainInput.textContent = ""; // Remove the message content
+    domainError.textContent = "";
   } else {
-    // If there is still an error, show the correct error
     showError();
   }
 });
@@ -154,9 +153,11 @@ const showError = () => {
 /*
 ** USER REQUESTS MAGIC LINK TO BE EMAILED TO THEIR INBOX.
 ** WHEN USER CLICKS MAGIC LINK THEIR USER RECORD IN DATABASE IS UPDATED
-** WE POLL DATABASE FOR SUCCESSFUL AUTHENTICATION
+** IF NORMAL LOGIN - POLL DATABASE FOR SUCCESSFUL AUTHENTICATION
+** IF REQUEST FOR WEBSITE
 */
-sendmail_magic.addEventListener("click", (e) => {
+sendmail_magic.addEventListener("click", () => {
+    console.log("emailInput.validity.valid",emailInput.validity.valid);
     if (!emailInput.validity.valid) {
         showError();
         return;
@@ -169,8 +170,10 @@ sendmail_magic.addEventListener("click", (e) => {
         .then((data) => {
             sendmail_msg.textContent = data.message;
             sendmail_msg.style.color = "green";
-            clearInterval(intervalId);
-            intervalId = setInterval(checkAuthStatus,3000, formObj);
+            if (!domain) {
+                clearInterval(intervalId);
+                intervalId = setInterval(checkAuthStatus,3000, formObj);
+            }
         })
         .catch((error) => {
             sendmail_msg.textContent = error;
@@ -222,9 +225,9 @@ const checkAuthStatus = (formObj) => {
               setTokens(data);
               sendmail_msg.textContent = "Logged on!";
               sendmail_msg.style.color = "green";
-              clearInterval(intervalId);
               sendmail_magic.classList.add("visually-hidden");
               sendmail_passcode.classList.add("visually-hidden");
+              clearInterval(intervalId);
             } else if (data.expired) {
               sendmail_msg.textContent = "Expired";
               sendmail_msg.style.color = "red";
@@ -269,7 +272,7 @@ sendmail_passcode.addEventListener("click", (e) => {
 **  CHECK PASSCODE ENTERED BY USER MATCHES PASSCODE SENT TO THEIR INBOX
 */
 validate_passcode.addEventListener("click", (e) => {
-    if (!emailInput.validity.valid || !passcodeInput.validity.valid) {
+    if (!emailInput.validity.valid) {
         showError();
         return;
     }
@@ -277,7 +280,6 @@ validate_passcode.addEventListener("click", (e) => {
     const query = "?request=passcode&user=" + e.target.dataset.userid 
                   + "&verify=" + form.querySelector("[name='passcode']").value;
     if (domain) {
-        const loader = form.querySelector(".loader");
         loader.classList.remove("visually-hidden");
     }
     callAuthAPI("GET", query)
