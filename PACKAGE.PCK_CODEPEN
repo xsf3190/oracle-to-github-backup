@@ -182,6 +182,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                             '<input type="text" id="passcodeInput" name="passcode" pattern="\d{6}" inputmode="numeric" maxlength="6" autocomplete="6-digit-passcode">' ||
                             '<span class="passcode-result"></span>' ||
                         '</div>' ||
+                        '<div class="loader visually-hidden"></div>' ||
                         '<div class="visually-hidden">' ||
                             '<label for="domainInput">Domain Name</label>' ||
                             '<input type="text" id="domainInput" name="domain" required pattern="([\da-z-.])+" maxlength="37" spellcheck="false" autocapitalize="none" autocorrect="off">' ||
@@ -418,14 +419,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         */
         pHtml:=
             buildNavLabels(pWebsiteId,pArticleId) || 
-            '<form class="editor"></form>' ||
+            '<form class="edit-header"></form>' ||
             l_header || 
             '<main class="wrapper flow">' || 
                 '<div id="editor"></div>' ||
                 pHtml  || 
                 pPromotion ||
             '</main>' || 
-            '<form class="editor"></form>' ||
+            '<form class="edit-footer"></form>' ||
             l_footer;
 
         /* 
