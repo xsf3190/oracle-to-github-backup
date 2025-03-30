@@ -241,6 +241,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_api_url VARCHAR2(500);
         l_message VARCHAR2(100);
         l_styles CLOB;
+        l_styles_edit CLOB;
         
         l_sitemap CLOB;
         l_robots CLOB;
@@ -681,7 +682,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     
                 pck_api.callGoogleAPI(l_api_url,l_font_css);
                 
-                l_styles:=l_styles || l_font_css;
+                l_styles_edit:=l_styles_edit || l_font_css;
             END LOOP;
         END IF;
         
@@ -710,11 +711,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /* Assemble the complete css file including font-face */
         l_styles:=l_styles || pck_core.buildCssRoot(pWebsiteId, pApplicationId, pDeploy=>TRUE);
 
-        logDeployment(pWebsiteId, pSiteId, 'Building CSS website.css');
+        logDeployment(pWebsiteId, pSiteId, 'Building CSS');
         l_sha1:=LOWER(dbms_crypto.hash(src => l_styles, typ => dbms_crypto.hash_sh1));
         l_deploy_files(l_sha1).file_name:='website.css';
         l_deploy_files(l_sha1).file_content:=l_styles;
         l_files.put('website.css', l_sha1);
+
+        IF (pEnv='TEST') THEN
+            FOR C IN (
+                SELECT apex_util.blob_to_clob(file_content) file_content
+                  FROM apex_application_static_files 
+                 WHERE application_id=101
+                   AND file_name='deploy_edit.min.css'
+            ) LOOP
+                l_styles_edit:=l_styles_edit || C.file_content;
+                logDeployment(pWebsiteId, pSiteId, 'Building CSS edit styles');
+                l_sha1:=LOWER(dbms_crypto.hash(src => l_styles_edit, typ => dbms_crypto.hash_sh1));
+                l_deploy_files(l_sha1).file_name:='website_edit.css';
+                l_deploy_files(l_sha1).file_content:=l_styles_edit;
+                l_files.put('website_edit.css', l_sha1);
+            END LOOP;
+        END IF;
 
 
         l_json.put('files',l_files);
