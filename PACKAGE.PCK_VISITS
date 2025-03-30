@@ -1005,11 +1005,73 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     */
     PROCEDURE insertMessage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NuMBER) IS
         l_session_data pck_sec.t_session_data;
+        l_message_id article_message.id%type;
+        l_json JSON_OBJECT_T;
+        l_clob CLOB;
+        l_payload CLOB;
+        l_body_html CLOB:=
+        '<!DOCTYPE html>
+         <html>
+            <head>
+                <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta name="format-detection" content="telephone=no">
+                <meta name="format-detection" content="date=no">
+                <meta name="format-detection" content="address=no">
+                <meta name="format-detection" content="email=no">
+                <style type="text/css">
+                    body {
+                        font-family: system-ui,sans-serif;
+                        font-size: 1rem;
+                    }
+                    td,
+                    th {
+                        border: 1px solid rgb(190, 190, 190);
+                        padding: 0.5rem;
+                    }
+                    table {
+                        border-collapse: collapse;
+                        border: 2px solid rgb(200, 200, 200);
+                        width: 100%;
+                    }
+                    thead {
+                        background-color: #d7d9f2;
+                    }
+                </style>
+            </head>
+        <body>';
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
+        l_message_id:=seq_article_message.nextval;
+
         INSERT INTO article_message (id, article_id, sending_user_id, message)
-        SELECT seq_article_message.nextval, pArticleId, l_session_data.user_id, message FROM JSON_TABLE(pBodyText,  '$' COLUMNS (message));
+        SELECT l_message_id, pArticleId, l_session_data.user_id, message FROM JSON_TABLE(pBodyText,  '$' COLUMNS (message));
+
+        FOR C IN (
+            SELECT m.message, w.contact_email, w.domain_name, u.email 
+              FROM article_message m, website w, users u
+             WHERE w.id=pWebsiteId 
+               AND m.id=l_message_id
+               AND u.id=l_session_data.user_id
+        ) LOOP
+            l_body_html:=l_body_html || 
+            '<table role="presentation">' ||
+                '<thead><tr><th>Message Content</th></tr></thead>' ||
+                '<tbody>' ||
+                    '<tr><td>' || C.message || '</td></tr>' ||
+                '</tbody>' ||
+            '</table></body></html>';          
+
+            l_json:=new JSON_OBJECT_T; 
+            l_json.put('contactEmail',C.contact_email);
+            l_json.put('subject','Message sent by ' || C.email || ' via ' || C.domain_name);
+            l_json.put('body', l_body_html);
+            l_json.put('sourceEmail','message@adfreesites.com');
+            l_payload:=l_json.stringify;
+            pck_core.log('Sending email to ' || C.contact_email || ' from ' || C.email);
+            pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_payload, pData=>l_clob);
+        END LOOP;
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
