@@ -8,31 +8,43 @@ end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
 
+    /*
+    ** POLL NETLIFY "deploys" API FOR STATUS=ready.
+    */
     PROCEDURE waitDeployment(pWebsiteId IN website.id%type, pUserid IN users.id%type) IS
+        l_netlify_deploy_id website.netlify_deploy_id%type;
+        l_netlify_site_id website.netlify_site_id%type;
         l_clob CLOB;
+        l_state VARCHAR2(20);
+        l_done BOOLEAN:=FALSE;
         n PLS_INTEGER:=0;
     BEGIN
-        FOR C IN (
-            SELECT netlify_deploy_id, netlify_site_id FROM website WHERE id=pWebsiteId
-        ) LOOP
-            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/'|| C.netlify_site_id || '/deploys/' || C.netlify_deploy_id, pMethod=>'GET', pData=>l_clob);
-            FOR C1 IN (
-                SELECT state FROM JSON_TABLE(l_clob, '$' COLUMNS (state)) 
-            ) 
-            LOOP
-                n:=n+1;
-                IF (n>5) THEN
-                    RAISE_APPLICATION_ERROR(-20100,'Waited too long fo Netlify Deploy');
-                    EXIT;
-                END IF;
-                pck_core.log(C1.state);
-                IF (C1.state='ready') THEN
-                    EXIT;
-                ELSE
-                    dbms_session.sleep(1);
-                END IF;
-            END LOOP;
+        SELECT netlify_deploy_id, netlify_site_id INTO l_netlify_deploy_id, l_netlify_site_id FROM website WHERE id=pWebsiteId;
+
+        WHILE NOT l_done 
+        LOOP
+            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites/'|| l_netlify_site_id || '/deploys/' || l_netlify_deploy_id, pMethod=>'GET', pData=>l_clob);
+            
+            SELECT state INTO l_state FROM JSON_TABLE(l_clob, '$' COLUMNS (state));
+
+            n:=n+1;
+            IF (n=5) THEN
+                l_done:=TRUE;
+                EXIT;
+            END IF;
+
+            pck_core.log(l_state);
+            IF (l_state='ready') THEN
+                l_done:=TRUE;
+            ELSE
+                dbms_session.sleep(1);
+            END IF;
+
         END LOOP;
+
+        IF (n=5) THEN
+            RAISE_APPLICATION_ERROR(-20100,'Waited too long for Netlify Deploy');
+        END IF;
     END;
 
     /* 
@@ -56,7 +68,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         SELECT site_id, ssl_url INTO l_netlify_site_id, l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id, ssl_url));
 
         INSERT INTO website (id, domain_name, netlify_site_id, created_date, user_id, contact_email, title, subtitle, header_text_color, header_effect)
-        SELECT seq_website.nextval, pDomain, l_netlify_site_id, current_timestamp, pUserid, pEmail, pDomain, 'Use Edit Header', header_text_color, header_effect
+        SELECT seq_website.nextval, pDomain, l_netlify_site_id, current_timestamp, pUserid, pEmail, 'TITLE', 'subtitle', header_text_color, header_effect
           FROM website WHERE id=pWebsiteId;
 
         INSERT INTO website_font (website_id, context, font_id, ital, wdth, wght, opsz, slnt, font_size, underline)
@@ -128,7 +140,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
             END LOOP;
 
             /* DELETE WEBSITE (CASCADES TO WEBSITE_FONT) */
-            DELETE refresh_token WHEre website_id=pWebsiteId;
+            DELETE refresh_token WHERE website_id=pWebsiteId;
             DELETE website WHERE id=pWebsiteId;
 
         END LOOP;
