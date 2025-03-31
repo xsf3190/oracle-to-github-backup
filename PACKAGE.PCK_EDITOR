@@ -10,16 +10,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
     --
     FUNCTION getFontURL(pFontid IN font.id%type) RETURN VARCHAR2;
     --
+    PROCEDURE getFooter(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
+    --
     PROCEDURE getHeader(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER);
     --
     PROCEDURE initWebsiteFonts(pWebsiteId IN website.id%type, pTitleFont IN font.family%type, pSubTitleFont IN font.family%type DEFAULT NULL);
     --
     PROCEDURE updateEditorContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
+    PROCEDURE updateFooter(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
+    --
     PROCEDURE updateHeader(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
-    PROCEDURE getFooter(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
-    --
+   
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
@@ -738,6 +741,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         apex_json.open_object;
         apex_json.write('success', TRUE); 
         apex_json.write('html', l_html);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
+    PROCEDURE updateFooter(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_bodytext CLOB:=pBodyText;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+        
+        FOR C IN (
+            SELECT contact_email, telephone_number, mobile_number, linkedin_name
+              FROM JSON_TABLE(l_bodytext, '$' 
+              COLUMNS(contact_email, telephone_number, mobile_number, linkedin_name))
+        ) LOOP
+            UPDATE website
+               SET contact_email=contact_email, telephone_number=C.telephone_number, mobile_number=C.mobile_number, linkedin_name=C.linkedin_name, updated_date=current_timestamp
+             WHERE id=pWebsiteId;
+        END LOOP;
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE);
         apex_json.close_object;
 
         pStatus:=200;
