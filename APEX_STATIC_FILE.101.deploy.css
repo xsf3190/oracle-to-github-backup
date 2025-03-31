@@ -15,7 +15,6 @@
 body {
     background-color: var(--color-background);
     color: var(--color-text);
-    font-family: var(--font-family-ui);
     font-size: var(--step-0);
     line-height: 1.4;
 }
@@ -562,7 +561,7 @@ fieldset {
   font-weight: var(--button-font-weight, 700);
   font-size: var(--button-font-size, 1em);
   letter-spacing: 0.05ch;
-  font-family: inherit;
+  font-family: var(--font-family-ui);
   line-height: 1.1;
 
   /* Interactive */
@@ -693,6 +692,12 @@ dialog > form > article {
 
 dialog > form > footer {
     padding-block-end: var(--space-s);
+}
+
+dialog hr {
+  margin: initial;
+  height: 0.2rem;
+  background-color: var(--color-text);
 }
 
 
