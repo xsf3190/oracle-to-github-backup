@@ -185,7 +185,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                         '<div class="loader visually-hidden"></div>' ||
                         '<div class="visually-hidden">' ||
                             '<label for="domainInput">Domain Name</label>' ||
-                            '<input type="text" id="domainInput" name="domain" required pattern="([\da-z-.])+" maxlength="37" spellcheck="false" autocapitalize="none" autocorrect="off">' ||
+                            '<input type="text" id="domainInput" name="domain" required pattern="[a-z0-9\-.]+" maxlength="37" spellcheck="false" autocapitalize="none" autocorrect="off">' ||
                             '<span class="domain-result"></span>' ||
                         '</div>' ||
                     '</article>' ||
