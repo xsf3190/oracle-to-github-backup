@@ -913,6 +913,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_clob CLOB;
     BEGIN
         pck_sec.g_session_user_id:=pUserId;
+        pck_sec.g_website_id:=pWebsiteId;
         
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/'|| pSiteId || '/deploys', pMethod=>'GET', pData=>l_clob);
         FOR C IN (
