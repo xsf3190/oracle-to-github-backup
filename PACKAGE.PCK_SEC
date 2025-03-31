@@ -362,6 +362,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_sendmail_subject VARCHAR2(200);
         l_sendmail_body LONG;
         l_sendmail_link VARCHAR2(500);
+        l_return_message VARCHAR2(100);
         l_clob CLOB;
     BEGIN
         FOR C IN (SELECT o.client_secret, LOWER(j.email) email, j.url, j.request_type, NVL(u.id,0) user_id, NVL(o.id,0) ords_user_id, j.domain
@@ -436,10 +437,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_json.put('sourceEmail','login@adfreesites.com');
         l_email_payload:=l_json.stringify;
         pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_email_payload, pData=>l_clob);
+
+        IF (l_request_type='passcode') THEN
+            l_return_message:='Passcode sent to your inbox';
+        ELSE
+            l_return_message:='Link sent to your inbox';
+            IF (l_domain IS NOT NULL) THEN
+                l_return_message:=l_return_message || '. Click to create ' || l_domain;
+            END if;
+        END IF;
         
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
-        APEX_JSON.write ('message', CASE l_request_type WHEN 'magic' THEN 'Link sent to your inbox' WHEN 'passcode' THEN 'Passcode sent to your inbox' END);
+        APEX_JSON.write ('message', l_return_message);
         APEX_JSON.write ('userid', l_user_id);
         APEX_JSON.close_object;
 
@@ -695,6 +705,44 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         RETURN (l_fingerprint);
     END;
 
+    FUNCTION createWebsite(pWebsiteId IN website.id%type, pEmail IN users.email%type, pUserId IN users.id%type, pDomain IN users.domain%type, pEncKey IN user_ords_clients.client_secret%type) RETURN VARCHAR2 IS
+        l_url VARCHAR2(1000);
+        l_issuer VARCHAR2(15);
+        l_scope VARCHAR2(7);
+        l_new_token_domain VARCHAR2 (4000);
+        l_new_refresh_domain VARCHAR2 (4000);
+        l_new_refresh_domain_hash refresh_token.token_issued%type;
+    BEGIN
+        pck_hosting.createWebsite(pWebsiteId, pDomain, pUserid, pEmail, l_url);
+        UPDATE users SET domain=null WHERE id=pUserid;
+        l_issuer:='ORDS.'|| seq_website.currval;
+        l_scope:=getScope(seq_website.currval,pEmail);
+        l_new_token_domain:=apex_jwt.ENCODE (
+            p_iss       =>l_issuer,
+            p_sub       => pEmail,
+            p_aud       => l_scope,
+            p_jti       => pUserId,
+            p_iat_ts    => current_timestamp,
+            p_exp_sec   => ACCESS_TOKEN_EXP,
+            p_signature_key => UTL_RAW.cast_to_raw (pEncKey)
+        ); 
+        l_new_refresh_domain:=apex_jwt.ENCODE (
+            p_iss       => l_issuer,
+            p_sub       => pEmail,
+            p_aud       => l_scope,
+            p_jti       => pUserId,
+            p_iat_ts    => current_timestamp,
+            p_exp_sec   => REFRESH_TOKEN_EXP,
+            p_signature_key => UTL_RAW.cast_to_raw (pEncKey)
+        );
+        l_url:=l_url || '?refresh=' || l_new_refresh_domain || '&token=' || l_new_token_domain;
+        l_new_refresh_domain_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh_domain,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+
+        INSERT INTO refresh_token(user_id, website_id, token_issued) VALUES (pUserId, seq_website.currval, l_new_refresh_domain_hash);
+
+        RETURN (l_url);
+    END;
+
     /*
     ** USER AUTHENTICATED SUCCESSFULLY. CREATE FINGERPRINT AND ISSUE NEW PAIR OF TOKENS FOR CLIENT
     */
@@ -702,60 +750,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_new_token VARCHAR2 (4000);
         l_new_refresh VARCHAR2 (4000);
         l_new_refresh_hash refresh_token.token_issued%type;
-
-        l_new_token_domain VARCHAR2 (4000);
-        l_new_refresh_domain VARCHAR2 (4000);
-        l_new_refresh_domain_hash refresh_token.token_issued%type;
-        
+        l_url VARCHAR2(1000);
         l_jwt_enc_key user_ords_clients.client_secret%type;
-        l_user_id users.id%type;
         l_issuer VARCHAR2(15);
         l_scope VARCHAR2(7);
-        l_fingerprint fingerprint.fingerprint%type;
-        l_url VARCHAR2(1000);
-        n PLS_INTEGER;
     BEGIN
-        -- Check fingerprint is valid 
-        l_fingerprint:=getFingerprint;
-        SELECT COUNT(*) 
-          INTO n
-          FROM fingerprint
-         WHERE user_id=pUserId
-           AND fingerprint=l_fingerprint;
-
-        IF (n=0) THEN
-            INSERT INTO fingerprint (user_id, fingerprint) VALUES (pUserId, l_fingerprint);
-        END IF;
 
         SELECT client_secret 
           INTO l_jwt_enc_key
           FROM user_ords_clients
          WHERE name=pEmail;
 
-        l_issuer:='ORDS.'||pWebsiteId;
-        l_scope:=getScope(pWebsiteId,pEmail);
-
-        l_new_token:=apex_jwt.ENCODE (
-            p_iss       =>l_issuer,
-            p_sub       => pEmail,
-            p_aud       => l_scope,
-            p_jti       => pUserId,
-            p_iat_ts    => current_timestamp,
-            p_exp_sec   => ACCESS_TOKEN_EXP,
-            p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
-        );
-
-        l_new_refresh:=apex_jwt.ENCODE (
-            p_iss       => l_issuer,
-            p_sub       => pEmail,
-            p_aud       => l_scope,
-            p_jti       => pUserId,
-            p_iat_ts    => current_timestamp,
-            p_exp_sec   => REFRESH_TOKEN_EXP,
-            p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
-        );
-
         IF (pDomain IS NULL) THEN
+            l_issuer:='ORDS.'||pWebsiteId;
+            l_scope:=getScope(pWebsiteId,pEmail);
+
+            l_new_token:=apex_jwt.ENCODE (
+                p_iss       =>l_issuer,
+                p_sub       => pEmail,
+                p_aud       => l_scope,
+                p_jti       => pUserId,
+                p_iat_ts    => current_timestamp,
+                p_exp_sec   => ACCESS_TOKEN_EXP,
+                p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
+            );
+
+            l_new_refresh:=apex_jwt.ENCODE (
+                p_iss       => l_issuer,
+                p_sub       => pEmail,
+                p_aud       => l_scope,
+                p_jti       => pUserId,
+                p_iat_ts    => current_timestamp,
+                p_exp_sec   => REFRESH_TOKEN_EXP,
+                p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
+            );
+
             l_new_refresh_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
             INSERT INTO refresh_token(user_id, website_id, token_issued) VALUES (pUserId, pWebsiteId, l_new_refresh_hash);
             APEX_JSON.open_object;
@@ -772,36 +801,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
          * 2. Issue refresh token for user to access
         */
         IF (pDomain IS NOT NULL) THEN
-            pck_hosting.createWebsite(pWebsiteId, pDomain, pUserid, pEmail, l_url);
-            UPDATE users SET domain=null WHERE id=pUserid;
-            l_issuer:='ORDS.'|| seq_website.currval;
-            l_scope:=getScope(seq_website.currval,pEmail);
-            l_new_token_domain:=apex_jwt.ENCODE (
-                p_iss       =>l_issuer,
-                p_sub       => pEmail,
-                p_aud       => l_scope,
-                p_jti       => pUserId,
-                p_iat_ts    => current_timestamp,
-                p_exp_sec   => ACCESS_TOKEN_EXP,
-                p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
-            ); 
-            l_new_refresh_domain:=apex_jwt.ENCODE (
-                p_iss       => l_issuer,
-                p_sub       => pEmail,
-                p_aud       => l_scope,
-                p_jti       => pUserId,
-                p_iat_ts    => current_timestamp,
-                p_exp_sec   => REFRESH_TOKEN_EXP,
-                p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
-            );
-            l_url:=l_url || '?refresh=' || l_new_refresh_domain || '&token=' || l_new_token_domain;
-            l_new_refresh_domain_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh_domain,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
-
-            INSERT INTO refresh_token(user_id, website_id, token_issued) VALUES (pUserId, seq_website.currval, l_new_refresh_domain_hash);
-        
+            l_url:=createWebsite(pWebsiteId, pEmail, pUserid, pDomain, l_jwt_enc_key);
             APEX_JSON.open_object;
             APEX_JSON.write ('success', TRUE);
-            APEX_JSON.write ('dialogs',  buildContentDialog || buildInfoDialog || buildMessageDialog || buildErrorDialog);
             APEX_JSON.write ('url', l_url);
             APEX_JSON.close_object;
         END IF;
@@ -815,13 +817,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     */
     PROCEDURE verifyAuthRequest(pWebsiteId IN website.id%type, pRequestType IN VARCHAR2, pUserId IN NUMBER, pVerifyData IN VARCHAR2, pStatus OUT NUMBER) IS
         l_email users.email%type;
-        l_user_id users.id%type;
         l_domain users.domain%type;
         l_jwt_enc_key user_ords_clients.client_secret%type;
         l_verify_data_hash RAW(32);
         l_token APEX_JWT.T_TOKEN;
         l_token_issued refresh_token.token_issued%type;
-        l_scope VARCHAR2 (7);
+        l_url VARCHAR2(1000);
     BEGIN
         /* 
         ** Check issued and received tokens are the same 
@@ -842,10 +843,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             END IF;
         END LOOP;
 
-        /* 
-        ** Decode and Validate token has not expired etc.
-        */
+        
         CASE pRequestType
+            /* 
+            ** Decode and Validate the token returned from email client
+            */
             WHEN 'magic' THEN
                 SELECT o.client_secret INTO l_jwt_enc_key FROM user_ords_clients o, users u WHERE o.name=u.email AND u.id=pUserId;
 
@@ -859,15 +861,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                     EXCEPTION 
                         WHEN VALUE_ERROR THEN
                             htp.p('<h1>Token expired or not current. Check you sent from most recent message received. Login again</h1>');
-                            --sendMessage(FALSE,pRequestType || ' token expired. Login again.');
                             RETURN;
                         WHEN OTHERS THEN 
                             pck_core.log(sqlerrm);
                             htp.p('<h1>' || sqlerrm || '</h1>');
                             RETURN;
                 END;
-
-                htp.p('<h1>Authenticated Successfully</h1>');
+                
+                htp.p('<h1>Authenticated Successfully. </h1>');
+                htp.p('<p>Building your website...</p>');
+                l_url:=createWebsite(pWebsiteId, l_email, pUserid, l_domain, l_jwt_enc_key);
+                htp.p('<p>Website built successfully...</p>');
+                htp.p('<a href="' || l_url || '">' || l_domain || '</a>');
             
             WHEN 'passcode' THEN
                 issueJWTTokens(pWebsiteId, l_email, pUserId, l_domain);
@@ -959,24 +964,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         -- Check refresh token has not previously been used to generate a new token pair  (nb : all tokens stored as hash values)
         l_token_used:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_refresh_token,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
-        
-        /*
-        FOR C IN (
-            SELECT token_issued 
-              FROM refresh_token 
-             WHERE token_used=l_token_used
-        ) LOOP
-            l_token_issued:=C.token_issued;
-        END LOOP;
-
-        -- Refresh token has already been used - return access denied - disable use of the refresh token issued with compromised token
-        IF (l_token_issued IS NOT NULL) THEN
-            INSERT INTO refresh_token(website_id, user_id, token_used)
-            VALUES (pWebsiteid, l_JWT_data.jti, l_token_issued);
-            COMMIT;
-            RAISE_APPLICATION_ERROR(-20000,'Attempt to reuse refresh token');
-        END IF;
-        */
 
         l_new_token:=apex_jwt.ENCODE (
             p_iss       => l_JWT_data.iss,
