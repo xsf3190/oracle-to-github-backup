@@ -370,6 +370,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                    WHERE o.name(+)=LOWER(j.email)
                      AND u.email(+)=LOWER(j.email))
         LOOP
+            pck_core.log('C.domain:'||C.domain);
             l_email:=C.email;
             l_url:=C.url;
             l_request_type:=C.request_type;
@@ -443,7 +444,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         ELSE
             l_return_message:='Link sent to your inbox';
             IF (l_domain IS NOT NULL) THEN
-                l_return_message:=l_return_message || '. Click to create ' || l_domain;
+                l_return_message:=l_return_message || '. Click to create https://' || l_domain || '.netlify.app';
             END if;
         END IF;
         
@@ -868,11 +869,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                             RETURN;
                 END;
                 
-                htp.p('<h1>Authenticated Successfully. </h1>');
-                htp.p('<p>Building your website...</p>');
-                l_url:=createWebsite(pWebsiteId, l_email, pUserid, l_domain, l_jwt_enc_key);
-                htp.p('<p>Website built successfully...</p>');
-                htp.p('<a href="' || l_url || '">' || l_domain || '</a>');
+                htp.p('<h1 style="font-family:system-ui;font-size:2rem;color:rebeccapurple">Authenticated Successfully</h1>');
+                IF (l_domain IS NOT NULL) THEN
+                    l_url:=createWebsite(pWebsiteId, l_email, pUserid, l_domain, l_jwt_enc_key);
+                    htp.p('<p style="font-family:system-ui;font-size:2rem;color:rebeccapurple">Website built successfully - <a style="text-decoration:underline;text-underline-offset:10%;text-decoration-thickness:10%;" href="' || l_url || '">' || SUBSTR(l_url,1,INSTR(l_url,'?')-1) || '</a></p>');
+                END IF;
             
             WHEN 'passcode' THEN
                 issueJWTTokens(pWebsiteId, l_email, pUserId, l_domain);
