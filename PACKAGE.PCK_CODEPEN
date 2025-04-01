@@ -191,6 +191,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                     '</article>' ||
                     '<footer class="flex-items space-apart">' ||
                         '<button class="button sendmail-magic" type="button">Send a Link</button>' ||
+                        '<div><hr><span>OR</span><hr></div>' ||
                         '<button class="button sendmail-passcode" type="button">Send a Code</button>' ||
                         '<button class="button validate-passcode visually-hidden" type="button">Submit Passcode</button>' ||
                     '</footer>' ||
@@ -422,9 +423,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             '<form class="edit-header"></form>' ||
             l_header || 
             '<main class="wrapper flow">' || 
+                pPromotion ||
                 '<div id="editor"></div>' ||
                 pHtml  || 
-                pPromotion ||
             '</main>' || 
             '<form class="edit-footer"></form>' ||
             l_footer;
