@@ -314,9 +314,9 @@ const saveData = async ( data, endpoint ) => {
 }
 
 /*
-** USER CLICKS MEDIA BUTTON. SHOW LIST OF MEDIA. ALLOW USER T COPY URL AND DELETE.
+** USER CLICKS MEDIA BUTTON. SHOW LIST OF MEDIA. ALLOW USER TO COPY URL
 */
-const show_media = async () => {
+export const show_media = async () => {
     callAPI("cloudinary/:ID/:PAGE","GET","?request=list")
         .then( (data) => {
             const header = info_dialog.querySelector("header>h4");
@@ -326,19 +326,6 @@ const show_media = async () => {
             media.replaceChildren();
             media.insertAdjacentHTML('afterbegin',data.thumbnails);
             info_dialog.showModal();
-            /*
-            const dialog = info_dialog.getBoundingClientRect();
-            const aside = document.querySelector("aside").getBoundingClientRect();
-
-            console.log("dialog.height:",dialog.height);
-            console.log("aside.bottom:",aside.bottom);
-            console.log("window.innerHeight:",window.innerHeight);
-
-            const top = (window.innerHeight - dialog.height - aside.bottom)*-1;
-            console.log("top",top);
-            
-            info_dialog.style.top = `${top}`+"px";
-            */
 
             media.querySelectorAll(".copy-url").forEach( (button) => {
                 button.addEventListener("click", async (e) => {
