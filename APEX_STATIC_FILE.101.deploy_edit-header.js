@@ -1,7 +1,7 @@
 /*
 **  EDIT WEBSITE HEADER
 */
-import { header, dropdown_details } from "./deploy_elements.min.js";
+import { header, dropdown_details, menulist } from "./deploy_elements.min.js";
 import { callAPI, handleError } from "./deploy_callAPI.min.js";
 
 const editor = header.previousElementSibling;
@@ -127,12 +127,8 @@ const luminance = (r, g, b) => {
 }
 
 editor.addEventListener("change", (e) => {
+    
     const name = e.target.getAttribute("name");
-
-    if (name.includes("color_primary")) {
-        headerTextColor(e.target.value);
-    }
-
     const target = header.querySelector("." + name.split("_")[0]);
     
     if (name.includes("font_category")) {
@@ -209,8 +205,15 @@ editor.addEventListener("click", async (e) => {
         const newColor = await selectColorFromScreen(abortController);
         const colorInput = editor.querySelector(".background-color");
         colorInput.value = newColor;
-        colorInput.dispatchEvent(new Event('change', { 'bubbles': true }));
+        header.style.backgroundColor = newColor;
+        headerTextColor(newColor);
     }
+
+    if (e.target.matches(".background-image")) {
+        const media = menulist.querySelector(".upload-media");
+        media.click();
+    }
+
 
     if (e.target.matches(".publish-changes")) {
         const formData = new FormData(editor);
