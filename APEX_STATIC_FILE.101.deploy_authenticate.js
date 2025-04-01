@@ -23,7 +23,6 @@ let endpoint, intervalId;
 let domain = false;
 
 export const init = (element) => {
-    console.log("deploy_authenticate",element.textContent)
     if (element.textContent==="Log Out") {
         sessionStorage.clear();
         localStorage.clear();
@@ -41,6 +40,11 @@ export const init = (element) => {
     }
     endpoint = element.dataset.endpoint;
     form.reset();
+    emailError.textContent = "";
+    sendmail_msg.textContent = ""; 
+    passcodeError.textContent = ""; 
+    validate_msg.textContent = ""; 
+    domainError.textContent = ""; 
     login_dialog.showModal();
 }
 
