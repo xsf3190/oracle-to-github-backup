@@ -15,8 +15,6 @@ const passcodeInput = form.querySelector("[name='passcode']");
 const passcodeError = form.querySelector("#passcodeInput + span");
 const validate_passcode =  form.querySelector(".validate-passcode");
 const validate_msg = form.querySelector(".passcode-result");
-const domainInput = form.querySelector("[name='domain']");
-const domainError = form.querySelector("#domainInput + span");
 const loader = form.querySelector(".loader");
 
 let endpoint, intervalId;
@@ -35,7 +33,6 @@ export const init = (element) => {
     if (login_btn.dataset.promotion) {
         domain = true;
         login_dialog.querySelector("h2").textContent = "Create My Website";
-        login_dialog.querySelector("div:has([name='domain'])").classList.remove("visually-hidden");
         delete login_btn.dataset.promotion;
     }
     endpoint = element.dataset.endpoint;
@@ -44,7 +41,6 @@ export const init = (element) => {
     sendmail_msg.textContent = ""; 
     passcodeError.textContent = ""; 
     validate_msg.textContent = ""; 
-    domainError.textContent = ""; 
     login_dialog.showModal();
 }
 
@@ -111,17 +107,6 @@ passcodeInput.addEventListener("input", () => {
   }
 });
 
-/*
-** VALIDATE DOMAIN NAME INPUT BY USER
-*/
-domainInput.addEventListener("input", () => {
-  if (domainInput.validity.valid) {
-    domainError.textContent = "";
-  } else {
-    showError();
-  }
-});
-
 
 const showError = () => {
     let errors = false;
@@ -143,15 +128,6 @@ const showError = () => {
     }
     
     passcodeError.style.color = errors ? "red" : "green";
-
-    errors = false;
-      
-    if (domainInput.validity.patternMismatch) {
-        domainError.textContent = "Domain is alphanumeric, period and hyphen";
-        errors = true;
-    }
-    
-    domainError.style.color = errors ? "red" : "green";
 }
 
 /*
@@ -161,13 +137,15 @@ const showError = () => {
 ** IF REQUEST FOR WEBSITE
 */
 sendmail_magic.addEventListener("click", () => {
-    console.log("emailInput.validity.valid",emailInput.validity.valid);
     if (!emailInput.validity.valid) {
         showError();
         return;
     }
     form.querySelector("[name='url']").value = window.location.hostname;
     form.querySelector("[name='request_type']").value = "magic";
+    if (domain) {
+        form.querySelector("[name='domain']").value = emailInput.value;
+    }
     const formData = new FormData(form);
     const formObj = Object.fromEntries(formData);
     callAuthAPI("POST", formObj)
@@ -231,6 +209,7 @@ const checkAuthStatus = (formObj) => {
               sendmail_msg.style.color = "green";
               sendmail_magic.classList.add("visually-hidden");
               sendmail_passcode.classList.add("visually-hidden");
+              sendmail_passcode.previousElementSibling.classList.add("visually-hidden");
               clearInterval(intervalId);
             } else if (data.expired) {
               sendmail_msg.textContent = "Expired";
@@ -255,6 +234,9 @@ sendmail_passcode.addEventListener("click", (e) => {
     }
     form.querySelector("[name='url']").value = window.location.hostname;
     form.querySelector("[name='request_type']").value = "passcode";
+    if (domain && !domainInput.value) {
+        domainInput.value = emailInput.value;
+    }
     const formData = new FormData(form);
     callAuthAPI("POST", Object.fromEntries(formData))
         .then((data) => {
@@ -296,6 +278,7 @@ validate_passcode.addEventListener("click", (e) => {
                 validate_msg.textContent = "Logged In!";
                 validate_msg.style.color = "green";
                 validate_passcode.classList.add("visually-hidden");
+                validate_passcode.previousElementSibling.classList.add("visually-hidden");
             }
         })
         .catch((error) => {
