@@ -580,7 +580,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             l_html:=
             '<form class="editor">' ||
                 '<fieldset class="background-color">' ||
-                    '<legend><strong>Change Header</strong></legend>' ||
+                    '<legend><strong>Change Background</strong></legend>' ||
                     '<input type="hidden" name="header_text_color" value="' || C.header_text_color || '">' ||
                     '<input type="color" class="background-color" name="color_primary" value="' || C.color_primary || '">' || 
                     CASE WHEN pEyeDropper='true' THEN
