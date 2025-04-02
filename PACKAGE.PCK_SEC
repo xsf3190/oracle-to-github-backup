@@ -501,8 +501,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         n PLS_INTEGER;
 
         FUNCTION addButton(pUriTemplate IN VARCHAR2, pMethod IN VARCHAR2, pLabel IN VARCHAR2) RETURN VARCHAR2 IS
+            l_class VARCHAR2(30);
         BEGIN
-            RETURN ('<li><button type="button" data-endpoint="' || pUriTemplate || '" data-method="' ||pMethod || '" data-reports="' || l_reports || '" class="button">' || pLabel || '</button></li>');
+            l_class:=LOWER(REPLACE(pLabel,' ','-'));
+            RETURN ('<li><button type="button" class="button ' || l_class || '"data-endpoint="' || pUriTemplate || '" data-method="' ||pMethod || '" data-reports="' || l_reports || '">' || pLabel || '</button></li>');
         END;
 
     BEGIN
