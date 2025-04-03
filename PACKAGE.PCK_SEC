@@ -47,7 +47,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     REFRESH_TOKEN_EXP CONSTANT PLS_INTEGER:=(24*60*60)*90; --90 DAYS
     ACCESS_TOKEN_EXP CONSTANT PLS_INTEGER:=60*5; -- 5 MINUTES
 
-    FUNCTION emailTemplate(pAuthMethod IN VARCHAR2, pWebsite IN VARCHAR2, pAuthData IN VARCHAR2) RETURN VARCHAR2 IS
+    FUNCTION emailTemplate(pAuthMethod IN VARCHAR2, pWebsite IN VARCHAR2, pAuthData IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
         l_html LONG;
     BEGIN
     l_html:=
@@ -154,13 +154,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
               <!-- START MAIN CONTENT AREA -->
               <tr>
                 <td class="wrapper" style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top; box-sizing: border-box; padding: 24px;" valign="top">
-                  <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: bold; margin: 0; margin-bottom: 16px;">Your Login request to ' || pWebsite || '</p>
-                  <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: normal; margin: 0; margin-bottom: 16px;">';
+                  <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: bold; margin: 0; margin-bottom: 16px;">' || 
                   CASE pAuthMethod 
-                    WHEN 'magic' THEN l_html:=l_html || 'Click the button below to log in. Your link expires in 5 minutes.';
-                    WHEN 'passcode' THEN l_html:=l_html || 'Enter this passcode to log in. Expires in 5 minutes.';
-                  END CASE;
-                  l_html:=l_html ||
+                    WHEN 'website' THEN 'Your new website is ' || SUBSTR(pWebsite,1,INSTR(pWebsite,'?')-1) ELSE 'Your Login request to ' || pWebsite
+                  END ||
+                  '</p>
+                  <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: normal; margin: 0; margin-bottom: 16px;">' ||
+                  CASE pAuthMethod 
+                    WHEN 'magic' THEN 'Click the button below to log in. Your link expires in 5 minutes.'
+                    WHEN 'passcode' THEN 'Enter this passcode to log in. Expires in 5 minutes.'
+                    WHEN 'website' THEN 'Click button below to open website.'
+                  END ||
                   '</p>
                   <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="btn btn-primary" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; box-sizing: border-box; width: 100%; min-width: 100%;" width="100%">
                     <tbody>
@@ -169,14 +173,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                           <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: auto;">
                             <tbody>
                               <tr>
-                                <td style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top; border-radius: 4px; text-align: center; background-color: #0867ec;" valign="top" align="center" bgcolor="#0867ec">';
+                                <td style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top; border-radius: 4px; text-align: center; background-color: #0867ec;" valign="top" align="center" bgcolor="#0867ec">' ||
                                 CASE pAuthMethod 
-                                    WHEN 'magic' THEN l_html:=l_html || 
-                                        '<a href="' || pAuthData || '" target="_blank" style="border: solid 2px #0867ec; border-radius: 4px; box-sizing: border-box; cursor: pointer; display: inline-block; font-size: 16px; font-weight: bold; margin: 0; padding: 12px 24px; text-decoration: none; text-transform: capitalize; background-color: #0867ec; border-color: #0867ec; color: #ffffff;">Login</a>';
-                                    WHEN 'passcode' THEN l_html:=l_html || 
-                                        '<span style="border: solid 2px #0867ec; border-radius: 4px; box-sizing: border-box; display: inline-block; font-size: 24px; letter-spacing: 8px; font-weight: bold; margin: 0; padding: 12px 24px; text-transform: capitalize; background-color: #0867ec; border-color: #0867ec; color: #ffffff;">' || pAuthData || '</span>';
-                                END CASE;
-                                l_html:=l_html ||
+                                    WHEN 'magic' THEN '<a href="' || pAuthData || '" target="_blank" style="border: solid 2px #0867ec; border-radius: 4px; box-sizing: border-box; cursor: pointer; display: inline-block; font-size: 16px; font-weight: bold; margin: 0; padding: 12px 24px; text-decoration: none; text-transform: capitalize; background-color: #0867ec; border-color: #0867ec; color: #ffffff;">Login</a>'
+                                    WHEN 'passcode' THEN '<span style="border: solid 2px #0867ec; border-radius: 4px; box-sizing: border-box; display: inline-block; font-size: 24px; letter-spacing: 8px; font-weight: bold; margin: 0; padding: 12px 24px; text-transform: capitalize; background-color: #0867ec; border-color: #0867ec; color: #ffffff;">' || pAuthData || '</span>'
+                                    WHEN 'website' THEN '<a href="' || pWebsite || '" target="_blank" style="border: solid 2px #0867ec; border-radius: 4px; box-sizing: border-box; cursor: pointer; display: inline-block; font-size: 16px; font-weight: bold; margin: 0; padding: 12px 24px; text-decoration: none; text-transform: capitalize; background-color: #0867ec; border-color: #0867ec; color: #ffffff;">' || SUBSTR(pWebsite,1,INSTR(pWebsite,'?')-1) || '</a>'
+                                END ||
                                 '</td>
                               </tr>
                             </tbody>
@@ -339,11 +341,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         RETURN l_session_data;
     END;
 
+    PROCEDURE sendmail(pEmail IN VARCHAR2, pSubject IN VARCHAR2, pBody IN VARCHAR2) IS
+        l_json JSON_OBJECT_T;
+        l_email_payload CLOB;
+        l_clob CLOB;
+    BEGIN
+        l_json:=new JSON_OBJECT_T; 
+        l_json.put('contactEmail',pEmail);
+        l_json.put('subject',pSubject);
+        l_json.put('body', pBody);
+        l_json.put('sourceEmail','login@adfreesites.com');
+        l_email_payload:=l_json.stringify;
+        pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_email_payload, pData=>l_clob);
+    END;
+
     /*
     ** USER SUBMITS EMAIL ADDRESS TO BE AUTHENTICATED
     ** - CREATE RANDOM PASSCODE OR MAGIC LINK AND SEND TO EMAIL ADDRESS
     */
-
     PROCEDURE createAuthRequest(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
         l_email users.email%type;
         l_url varchar2(100);
@@ -357,28 +372,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_passcode VARCHAR2(6);
         l_passcode_hash raw(32);
         l_token_hash raw(32);
-        l_json JSON_OBJECT_T;
-        l_email_payload CLOB;
+        
+        
         l_sendmail_subject VARCHAR2(200);
         l_sendmail_body LONG;
         l_sendmail_link VARCHAR2(500);
         l_return_message VARCHAR2(100);
-        l_clob CLOB;
+        
     BEGIN
-        FOR C IN (SELECT o.client_secret, LOWER(j.email) email, j.url, j.request_type, NVL(u.id,0) user_id, NVL(o.id,0) ords_user_id, j.domain
-                    FROM user_ords_clients o, users u, JSON_TABLE(pBodyText, '$' COLUMNS email, url, request_type, domain) j
-                   WHERE o.name(+)=LOWER(j.email)
-                     AND u.email(+)=LOWER(j.email))
-        LOOP
-            pck_core.log('C.domain:'||C.domain);
-            l_email:=C.email;
-            l_url:=C.url;
-            l_request_type:=C.request_type;
-            l_user_id:=C.user_id;
-            l_ords_user_id:=C.ords_user_id;
-            l_jwt_enc_key:=C.client_secret;
-            l_domain:=CASE WHEN C.domain IS NOT NULL THEN RTRIM(LTRIM(REPLACE(C.domain,'.','-'),'-'),'-') ||'-edit' END;
-        END LOOP;
+        SELECT o.client_secret, LOWER(j.email) email, j.url, j.request_type, NVL(u.id,0) user_id, NVL(o.id,0) ords_user_id, j.domain
+          INTO l_jwt_enc_key, l_email, l_url, l_request_type, l_user_id, l_ords_user_id, l_domain
+          FROM user_ords_clients o, users u, JSON_TABLE(pBodyText, '$' COLUMNS email, url, request_type, domain) j
+         WHERE o.name(+)=LOWER(j.email)
+           AND u.email(+)=LOWER(j.email);
+
+        /* GET WEBSITE REQUESTS PUT EMAIL ADDRESS IN THE domain FIELD, WHICH WE CONVERT TO A PROPER SUBDOMAIN NAME */
+        IF (l_domain IS NOT NULL) THEN
+            l_domain:=SUBSTR(l_domain,1,INSTR(l_domain,'@')-1);
+            l_domain:=REPLACE(l_domain,'.','-');
+        END IF;
 
         IF (l_ords_user_id=0) THEN
             OAUTH.create_client(
@@ -431,21 +443,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 l_sendmail_body:=emailTemplate(l_request_type, l_url, l_passcode);
         END CASE;
 
-        l_json:=new JSON_OBJECT_T; 
-        l_json.put('contactEmail',l_email);
-        l_json.put('subject','Login to ' || l_url);
-        l_json.put('body', l_sendmail_body);
-        l_json.put('sourceEmail','login@adfreesites.com');
-        l_email_payload:=l_json.stringify;
-        pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_email_payload, pData=>l_clob);
+        sendmail(l_email, 'Login to ' || l_url, l_sendmail_body);
 
         IF (l_request_type='passcode') THEN
             l_return_message:='Passcode sent to your inbox';
         ELSE
             l_return_message:='Link sent to your inbox';
-            IF (l_domain IS NOT NULL) THEN
-                l_return_message:=l_return_message || '. Click to create https://' || l_domain || '.netlify.app';
-            END if;
         END IF;
         
         APEX_JSON.open_object;
@@ -826,6 +829,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_token APEX_JWT.T_TOKEN;
         l_token_issued refresh_token.token_issued%type;
         l_url VARCHAR2(1000);
+        l_url_base VARCHAR2(100);
+        l_sendmail_body LONG;
     BEGIN
         /* 
         ** Check issued and received tokens are the same 
@@ -871,10 +876,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                             RETURN;
                 END;
                 
-                htp.p('<h1 style="font-family:system-ui;font-size:2rem;color:rebeccapurple">Authenticated Successfully</h1>');
-                IF (l_domain IS NOT NULL) THEN
+                IF (l_domain IS NULL) THEN
+                    htp.p('<h1 style="font-family:system-ui;font-size:2rem;color:rebeccapurple">Authenticated Successfully</h1>');
+                ELSE
                     l_url:=createWebsite(pWebsiteId, l_email, pUserid, l_domain, l_jwt_enc_key);
-                    htp.p('<p style="font-family:system-ui;font-size:2rem;color:rebeccapurple">Website built successfully - <a style="text-decoration:underline;text-underline-offset:10%;text-decoration-thickness:10%;" href="' || l_url || '">' || SUBSTR(l_url,1,INSTR(l_url,'?')-1) || '</a></p>');
+                    l_url_base:=SUBSTR(l_url,1,INSTR(l_url,'?')-1);
+                    l_sendmail_body:=emailTemplate('website', l_url);
+                    sendmail(l_email, 'Link to your website ' || l_url_base, l_sendmail_body);
+                    htp.p('<h1 style="font-family:system-ui;font-size:2rem;color:rebeccapurple">Website Created Successfully</h1>');
+                    htp.p('<a style="font-family:system-ui;font-size:1.5rem;color:rebeccapurple;text-decoration:underline;text-underline-offset:25%;text-decoration-thickness:15%;" href="' || l_url || '">' || l_url_base || '</a>');
                 END IF;
             
             WHEN 'passcode' THEN
