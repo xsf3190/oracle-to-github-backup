@@ -47,6 +47,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         END IF;
     END;
 
+    FUNCTION urlExists(pUrl IN VARCHAR2) RETURN BOOLEAN IS
+        l_clob CLOB;
+        l_not_found EXCEPTION;
+        PRAGMA EXCEPTION_INIT(l_not_found,-29273);
+    BEGIN
+        apex_web_service.clear_request_headers;
+        l_clob:=apex_web_service.make_rest_request(p_url=>'https://' || pUrl, p_http_method=>'HEAD');
+        IF (apex_web_service.g_status_code=200) THEN
+            RETURN (TRUE);
+        ELSE
+            RETURN (FALSE);
+        END IF;
+        EXCEPTION
+            WHEN l_not_found then
+                RETURN (FALSE);
+    END;
+
+
+
     /* 
     ** CREATE NEW WEBSITE ON NETLIFY HOSTING SERVICE.
     ** PARAMETER pWebsiteid IS WEBSITE THROUGH WHICH PROSPECTIVE CLIENT MADE REQUEST
@@ -60,8 +79,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         l_home_article_id article.id%type;
     BEGIN
         l_json:=new JSON_OBJECT_T;
-        l_json.put('name', l_domain);
-        pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+        IF (urlExists(l_domain || '.netlify.app')) THEN
+            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+        ELSE
+            l_json.put('name', l_domain);
+            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+        END IF;
+
 
         /* Get Netlify site_id for EDITOR site */
         
