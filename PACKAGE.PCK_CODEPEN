@@ -163,6 +163,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 '<form class="flow">' ||
                     '<input type="hidden" name="url" value="">' ||
                     '<input type="hidden" name="request_type" value="">' ||
+                    '<input type="hidden" name="domain" value="">' ||
                     '<header class="flex-items space-between">' ||
                         '<h2>Sign up or log in</h2>' ||
                         '<button type="button" class="button close no-focus" data-button-variant="round-icon">' ||
@@ -183,11 +184,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                             '<span class="passcode-result"></span>' ||
                         '</div>' ||
                         '<div class="loader visually-hidden"></div>' ||
-                        '<div class="visually-hidden">' ||
-                            '<label for="domainInput">Domain Name</label>' ||
-                            '<input type="text" id="domainInput" name="domain" required pattern="[a-z0-9\-.]+" maxlength="37" spellcheck="false" autocapitalize="none" autocorrect="off">' ||
-                            '<span class="domain-result"></span>' ||
-                        '</div>' ||
+                        --'<div class="visually-hidden">' ||
+                          --  '<label for="domainInput">Domain Name</label>' ||
+                            --'<input type="text" id="domainInput" name="domain" required pattern="[a-z0-9\-.]+" maxlength="37" spellcheck="false" autocapitalize="none" autocorrect="off">' ||
+                            --'<span class="domain-result"></span>' ||
+                        --'</div>' ||
                     '</article>' ||
                     '<footer class="flex-items space-apart">' ||
                         '<button class="button sendmail-magic" type="button">Send a Link</button>' ||
