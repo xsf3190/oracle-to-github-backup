@@ -389,7 +389,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         /* GET WEBSITE REQUESTS PUT EMAIL ADDRESS IN THE domain FIELD, WHICH WE CONVERT TO A PROPER SUBDOMAIN NAME */
         IF (l_domain IS NOT NULL) THEN
             l_domain:=SUBSTR(l_domain,1,INSTR(l_domain,'@')-1);
-            l_domain:=REPLACE(l_domain,'.','-');
+            l_domain:=REPLACE(REPLACE(l_domain,'.','-'),'_','-');
+            pck_core.log('Creating website converting email ' || l_email || ' to subdomain ' || l_domain);
+            IF (pck_hosting.urlExists(l_domain || '.netlify.app')) THEN
+                APEX_JSON.open_object;
+                APEX_JSON.write ('success', TRUE);
+                APEX_JSON.write ('message', l_domain || '.netlify.app already exists');
+                APEX_JSON.close_object;
+                pStatus:=200;
+                RETURN;
+            END IF;
         END IF;
 
         IF (l_ords_user_id=0) THEN
@@ -515,10 +524,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         ** ENABLE ALL EDITING AND REPORTING FUNCTIONS ON TEST SITE 
         ** ENABLE REPORTING AND PUBLISH (IF QUALIFYING) ON LIVE SITE 
         */
+        l_test_site:=INSTR(pUrl,'netlify.app')>0;
 
-        IF (INSTR(pUrl,'netlify.app')>0) THEN
-            l_test_site:=TRUE;
-        END IF;
+        --IF (INSTR(pUrl,'netlify.app')>0) THEN
+        --    l_test_site:=TRUE;
+        --END IF;
 
         SELECT netlify_site_id_custom, CASE WHEN netlify_site_id_custom IS NOT NULL AND NVL(netlify_last_published_custom,created_date) < netlify_last_published THEN 'OK'  ELSE 'NOK' END 
           INTO l_netlify_site_id_custom, l_can_publish
