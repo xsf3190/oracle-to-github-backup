@@ -1,8 +1,12 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_HOSTING" is
     --
+    PROCEDURE changeURL(pWebsiteId IN website.id%type, pBodytext IN CLOB, pStatus OUT NUMBER);
+    --
     PROCEDURE createWebsite(pWebsiteId IN website.id%type, pDomain IN VARCHAR2, pUserid IN users.id%type, pEmail IN users.email%type, pUrl IN OUT VARCHAR2);
     --
     PROCEDURE deleteWebsite(pWebsiteid IN website.id%type);
+    --
+    FUNCTION urlExists(pUrl IN VARCHAR2) RETURN BOOLEAN;
     --
 end;
 /
@@ -64,6 +68,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
                 RETURN (FALSE);
     END;
 
+    
+
 
 
     /* 
@@ -78,10 +84,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         l_ssl_url VARCHAR2(100);
         l_home_article_id article.id%type;
     BEGIN
-        l_json:=new JSON_OBJECT_T;
         IF (urlExists(l_domain || '.netlify.app')) THEN
-            pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+            RAISE_APPLICATION_ERROR(-20040,l_domain || '.netlify.app already exists');
         ELSE
+            l_json:=new JSON_OBJECT_T;
             l_json.put('name', l_domain);
             pck_api.callNetlifyAPI(pUserId=>pUserid, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
         END IF;
@@ -168,6 +174,42 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
             DELETE website WHERE id=pWebsiteId;
 
         END LOOP;
+    END;
+
+    /*
+    ** CHANGE NETLIFY SUBDOMAIN NAME IF AVAILABLE
+    */
+    PROCEDURE changeURL(pWebsiteId IN website.id%type, pBodytext IN CLOB, pStatus OUT NUMBER) IS
+        l_subdomain website.domain_name%type;
+        l_session_data pck_sec.t_session_data;
+        l_json JSON_OBJECT_T;
+        l_clob CLOB;
+        l_message VARCHAR2(50);
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        SELECT subdomain INTO l_subdomain FROM JSON_TABLE(pBodytext, '$' COLUMNS (subdomain));
+        l_json:=new JSON_OBJECT_T;
+        l_json.put('name', l_subdomain);
+
+        apex_web_service.clear_request_headers;
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pStatusAllowed=>422, pData=>l_clob);
+
+        IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
+            l_message:='URL successfully changed';
+        ELSIF (apex_web_service.g_status_code=422) THEN
+            l_message:='Name already taken. Try another.';
+        END IF;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('message', l_message);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
     END;
 end;
 /
