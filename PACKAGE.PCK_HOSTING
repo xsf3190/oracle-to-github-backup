@@ -8,6 +8,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_HOSTING" is
     --
     FUNCTION urlExists(pUrl IN VARCHAR2) RETURN BOOLEAN;
     --
+    PROCEDURE waitDeployment(pWebsiteId IN website.id%type, pUserid IN users.id%type, pWaitSeconds IN NUMBER DEFAULT 5);
+    --
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
@@ -15,7 +17,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
     /*
     ** POLL NETLIFY "deploys" API FOR STATUS=ready.
     */
-    PROCEDURE waitDeployment(pWebsiteId IN website.id%type, pUserid IN users.id%type) IS
+    PROCEDURE waitDeployment(pWebsiteId IN website.id%type, pUserid IN users.id%type, pWaitSeconds IN NUMBER) IS
         l_netlify_deploy_id website.netlify_deploy_id%type;
         l_netlify_site_id website.netlify_site_id%type;
         l_clob CLOB;
@@ -32,7 +34,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
             SELECT state INTO l_state FROM JSON_TABLE(l_clob, '$' COLUMNS (state));
 
             n:=n+1;
-            IF (n=5) THEN
+            IF (n=pWaitSeconds) THEN
                 l_done:=TRUE;
                 EXIT;
             END IF;
@@ -46,11 +48,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
 
         END LOOP;
 
-        IF (n=5) THEN
+        IF (n=pWaitSeconds) THEN
             RAISE_APPLICATION_ERROR(-20100,'Waited too long for Netlify Deploy');
         END IF;
     END;
 
+    /* 
+    ** CHECKS URL EXISTS
+    */
     FUNCTION urlExists(pUrl IN VARCHAR2) RETURN BOOLEAN IS
         l_clob CLOB;
         l_not_found EXCEPTION;
@@ -189,16 +194,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
         SELECT subdomain INTO l_subdomain FROM JSON_TABLE(pBodytext, '$' COLUMNS (subdomain));
-        l_json:=new JSON_OBJECT_T;
-        l_json.put('name', l_subdomain);
 
-        apex_web_service.clear_request_headers;
-        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pStatusAllowed=>422, pData=>l_clob);
-
-        IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
-            l_message:='URL successfully changed';
-        ELSIF (apex_web_service.g_status_code=422) THEN
-            l_message:='Name already taken. Try another.';
+        IF (urlExists(l_subdomain || '.netlify.app')) THEN
+            l_message:='URL already in use. Try again';
+        ELSE
+            l_json:=new JSON_OBJECT_T;
+            l_json.put('name', l_subdomain);
+            apex_web_service.clear_request_headers;
+            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pStatusAllowed=>422, pData=>l_clob);
+            IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
+                l_message:='URL successfully changed';
+            ELSIF (apex_web_service.g_status_code=422) THEN
+                l_message:='Name already taken. Try again';
+            END IF;
         END IF;
 
         apex_json.open_object; 
