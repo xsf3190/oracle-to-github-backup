@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
     --
+    PROCEDURE deletePage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
+    --
     PROCEDURE deployWebsite(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
     --
     PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
@@ -16,13 +18,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
     --
     PROCEDURE initWebsiteFonts(pWebsiteId IN website.id%type, pTitleFont IN font.family%type, pSubTitleFont IN font.family%type DEFAULT NULL);
     --
+    PROCEDURE insertPage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
+    --
     PROCEDURE updateEditorContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
     PROCEDURE updateFooter(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
     PROCEDURE updateHeader(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
-   
+    PROCEDURE updatePage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
+    --
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
@@ -159,8 +164,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         IF (l_netlify_deploy_id IS NOT NULL) THEN
             pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys/' || l_netlify_deploy_id, pMethod=>'GET', pData=>l_clob);
             FOR C IN (SELECT state, ssl_url, TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR') updated_at
-                        FROM JSON_TABLE(l_clob, '$' COLUMNS (state, ssl_url, updated_at)) 
-                       WHERE state='ready') 
+                        FROM JSON_TABLE(l_clob, '$' COLUMNS (state, ssl_url, updated_at)) ) 
             LOOP
                 pck_deploy.logDeployment(pWebsiteId, l_site_id, C.state, pLogTime=>C.updated_at);
                 l_ssl_url:=C.ssl_url;
@@ -297,12 +301,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                   FROM article x, JSON_TABLE(pBodyText FORMAT JSON, '$' COLUMNS (word_count, body_html CLOB)) j
                  WHERE x.id=pArticleId
             )
-        WHERE t.id=pArticleId
-        RETURNING t.word_count INTO l_word_count;
+        WHERE t.id=pArticleId;
+        --RETURNING t.word_count INTO l_word_count;
 
         APEX_JSON.open_object; 
         APEX_JSON.write('success', TRUE);
-        APEX_JSON.write('message', 'Saved ' || l_word_count || ' words');
+        APEX_JSON.write('message', 'Saved');
         APEX_JSON.close_object;
 
         pStatus:=200;
@@ -769,6 +773,128 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         apex_json.open_object;
         apex_json.write('success', TRUE);
         apex_json.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
+    /* 
+    **  INSERT NEW PAGE
+    */
+    PROCEDURE insertPage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_navigation_label website_article.navigation_label%type;
+        l_display_order website_article.display_order%type;
+        l_netlify_site_id website.netlify_site_id%type;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        SELECT navigation_label INTO l_navigation_label FROM JSON_TABLE(pBodyText, '$' COLUMNS(navigation_label));
+        SELECT display_order INTO l_display_order FROM website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
+
+        INSERT INTO article (id, author_user_id) VALUES (seq_article.nextval, l_session_data.user_id);
+        INSERT INTO website_article (website_id, article_id, user_id, display_order, navigation_label) VALUES (pWebsiteId, seq_article.currval, l_session_data.user_id, l_display_order*1.1, l_navigation_label);
+
+        SELECT netlify_site_id INTO l_netlify_site_id FROM website WHERE id=pWebsiteId;
+        pck_deploy.runDeployment(pWebsiteId, l_session_data.user_id, 'TEST', l_netlify_site_id, pck_core.getRestUrl(), 101);
+        
+        /* Wait until the deployment is complete */
+        pck_hosting.waitDeployment(pWebsiteId, l_session_data.user_id, 10);
+
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.write('href','/' || apex_string_util.get_slug(l_navigation_label));
+        APEX_JSON.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
+    /* 
+    **  UPDATE PAGE LABEL
+    */
+    PROCEDURE updatePage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_navigation_label website_article.navigation_label%type;
+        l_netlify_site_id website.netlify_site_id%type;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        SELECT navigation_label INTO l_navigation_label FROM JSON_TABLE(pBodyText, '$' COLUMNS(navigation_label));
+        
+        UPDATE website_article SET navigation_label=l_navigation_label WHERE website_id=pWebsiteId AND article_id=pArticleId;
+
+        SELECT netlify_site_id INTO l_netlify_site_id FROM website WHERE id=pWebsiteId;
+        pck_deploy.runDeployment(pWebsiteId, l_session_data.user_id, 'TEST', l_netlify_site_id, pck_core.getRestUrl(), 101);
+        
+        /* Wait until the deployment is complete */
+        pck_hosting.waitDeployment(pWebsiteId, l_session_data.user_id, 10);
+
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.write('href','/' || apex_string_util.get_slug(l_navigation_label));
+        APEX_JSON.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
+    /* 
+    **  DELETE PAGE
+    */
+    PROCEDURE deletePage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_netlify_site_id website.netlify_site_id%type;
+        TYPE tt_labels IS RECORD (
+            article_id website_article.article_id%type,
+            navigation_label website_article.navigation_label%type
+        );
+        TYPE t_labels IS TABLE OF tt_labels;
+        l_labels t_labels;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        SELECT article_id, navigation_label BULK COLLECT INTO l_labels FROM website_article WHERE website_id=pWebsiteId ORDER BY display_order;
+
+        IF (l_labels.COUNT=1) THEN
+            APEX_JSON.open_object; 
+            APEX_JSON.write('success', TRUE);
+            APEX_JSON.write('href','/');
+            APEX_JSON.close_object;
+            pStatus:=200;
+            RETURN;
+        END IF;
+
+        DELETE website_article WHERE website_id=pWebsiteId AND article_id=pArticleId;
+
+        SELECT netlify_site_id INTO l_netlify_site_id FROM website WHERE id=pWebsiteId;
+        pck_deploy.runDeployment(pWebsiteId, l_session_data.user_id, 'TEST', l_netlify_site_id, pck_core.getRestUrl(), 101);
+        
+        /* Wait until the deployment is complete */
+        pck_hosting.waitDeployment(pWebsiteId, l_session_data.user_id, 10);
+
+        APEX_JSON.open_object; 
+        APEX_JSON.write('success', TRUE);
+        FOR i IN 1..l_labels.COUNT LOOP
+            IF (l_labels(i).article_id=pArticleId) THEN
+                IF (i<l_labels.COUNT) THEN
+                    APEX_JSON.write('href','/' || apex_string_util.get_slug(l_labels(i+1).navigation_label));
+                ELSE
+                    APEX_JSON.write('href','/' || apex_string_util.get_slug(l_labels(1).navigation_label));
+                END IF;
+                EXIT;
+            END IF;
+        END LOOP;
+        APEX_JSON.close_object;
 
         pStatus:=200;
 
