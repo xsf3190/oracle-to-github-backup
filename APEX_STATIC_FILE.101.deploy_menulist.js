@@ -12,6 +12,13 @@ export const init = (endpoint) => {
     expires.textContent = new Date(parsedToken.exp*1000).toLocaleString();
     login_btn.textContent="Log Out";
 
+    if (!document.querySelector("head > link[href='/website_edit.min.css']")) {
+        const link_edit = document.createElement('link');
+        link_edit.setAttribute('rel', 'stylesheet');
+        link_edit.setAttribute('href', '/website_edit.min.css');
+        document.head.appendChild(link_edit);
+    }
+
     if (sessionStorage.getItem("menulist")) {
         menulist.replaceChildren();
         menulist.insertAdjacentHTML('afterbegin',sessionStorage.getItem("menulist"));
