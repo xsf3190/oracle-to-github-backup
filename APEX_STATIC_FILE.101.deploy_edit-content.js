@@ -17,13 +17,6 @@ export const init = async (element) => {
     if (document.querySelector("head > link[href='" + CK_CSS + "']")) {
         return;
     }
-
-    if (!document.querySelector("head > link[href='/website_edit.min.css']")) {
-        const link_edit = document.createElement('link');
-        link_edit.setAttribute('rel', 'stylesheet');
-        link_edit.setAttribute('href', '/website_edit.css');
-        document.head.appendChild(link_edit);
-    }
     
     endpoint = element.dataset.endpoint;
     
