@@ -476,6 +476,10 @@ form input[type="text"], form input[type="email"], form input[type="tel"] {
   /* field-sizing: content; */
 }
 
+form input+div {
+    block-size: 2lh;
+}
+
 form textarea {
   resize: vertical;
   min-block-size: 7rem;
@@ -655,10 +659,6 @@ dialog[class] {
   inset: 0;
   overflow: hidden;
 }
-
-/*dialog h2, dialog h3, dialog h4 {
-    font-family: var(--font-family-ui);
-}*/
 
 dialog > form {
     display: grid;
