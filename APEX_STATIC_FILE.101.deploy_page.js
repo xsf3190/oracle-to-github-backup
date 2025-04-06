@@ -19,7 +19,10 @@ export const init = (element) => {
     endpoint = element.dataset.endpoint;
     form.reset();
     currentPage = document.querySelector("[aria-current='page']");
-    pageInput.value = currentPage.textContent;
+    if (currentPage) {
+        pageInput.value = currentPage.textContent;
+    }
+    
     pageResult.textContent = "";
     page_dialog.showModal();
 }
@@ -40,7 +43,7 @@ footer.addEventListener("click", (e) => {
         pageResult.style.color = "red";
         return;
     }
-    loader.classList.remove("visually-hidden");
+    loader.style.display = "block";
     const formData = new FormData(form);
     const formObj = Object.fromEntries(formData);
     callAPI(endpoint, e.target.dataset.method, formObj)
@@ -48,6 +51,7 @@ footer.addEventListener("click", (e) => {
             window.location.replace(data.href);
         })
         .catch((error) => {
+            loader.style.display = "none";
             pageResult.textContent = error;
             pageResult.style.color = "red";
         });
