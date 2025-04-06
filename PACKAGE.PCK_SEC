@@ -1043,9 +1043,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
          WHERE user_id=l_JWT_data.jti
            AND fingerprint=l_fingerprint;
 
-        IF (n=0) THEN
-            RAISE_APPLICATION_ERROR(-20000,'Access denied from previously unknown device or location. Login again.');
-        END IF;
+        --IF (n=0) THEN
+        --    RAISE_APPLICATION_ERROR(-20000,'Access denied from previously unknown device or location. Login again.');
+        --END IF;
 
         l_token:=apex_jwt.DECODE (p_value => l_refresh_token, p_signature_key => UTL_RAW.cast_to_raw(l_JWT_data.client_secret));
 
