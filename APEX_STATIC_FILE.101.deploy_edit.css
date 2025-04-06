@@ -27,6 +27,18 @@ select,
     gap: 1em;
     padding: 0.5em;
 }
+
+@media (width <= 600px) {
+    .edit-header {
+        grid-template-areas: 
+            "background"
+            "buttons"
+            "title"
+            "subtitle";
+        grid-template-columns: 1fr;
+    }
+}
+
 .edit-header > fieldset {
     inline-size: fit-content;
 }
@@ -61,6 +73,36 @@ select,
 
 
 /* EDIT FOOTER STYLES */
-.edit-footer, .edit-footer>div {
+form.edit-footer, form.edit-footer>div {
     margin: 3vh;
+}
+
+.loader {
+  position: fixed;
+  inset: 0;
+  display: none;
+  inline-size: 100%;
+  block-size: 100%;
+  z-index: 2;
+  -webkit-mask: conic-gradient(from 22deg, #0003,#000);
+          mask: conic-gradient(from 22deg, #0003,#000);
+  animation: load 1s steps(8) infinite;
+}
+
+.loader,
+.loader:before {
+  --_g: linear-gradient(#17177c 0 0) 50%;
+  background: 
+    var(--_g)/34% 8%  space no-repeat,
+    var(--_g)/8%  34% no-repeat space;
+}
+
+.loader:before {
+  content: "";
+  transform: rotate(45deg);
+}
+
+@keyframes load {
+  from {transform: rotate(0turn)}
+  to   {transform: rotate(1turn)}
 }
