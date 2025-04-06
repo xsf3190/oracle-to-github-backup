@@ -111,7 +111,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
           FROM website_font
          WHERE website_id=pWebsiteId;
 
-        SELECT article_id INTO l_home_article_id FROM website_article WHERE website_id=pWebsiteId AND display_order=1;
+        SELECT article_id INTO l_home_article_id FROM website_article WHERE website_id=pWebsiteId AND UPPER(navigation_label)='EDITOR';
 
         INSERT INTO article (id, body_html, author_user_id)
         SELECT seq_article.nextval, body_html, pUserid
