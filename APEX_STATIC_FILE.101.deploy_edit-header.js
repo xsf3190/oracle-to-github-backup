@@ -207,11 +207,23 @@ editor.addEventListener("click", async (e) => {
         media.click();
     }
 
+    if (e.target.matches(".save-changes")) {
+        const formData = new FormData(editor);
+        const formObj = Object.fromEntries(formData);
+        await callAPI(endpoint,'PUT', formObj)
+            .then(() => {
+                const result = editor.querySelector(".result");
+                result.textContent = "Changes Saved";
+                result.style.color = "green";
+            })
+            .catch((error) => {
+                handleError(error);
+            });
+    }
 
     if (e.target.matches(".publish-changes")) {
         const formData = new FormData(editor);
         const formObj = Object.fromEntries(formData);
-        console.log("formObj",formObj);
         await callAPI(endpoint,'PUT', formObj)
             .then(() => {
                 console.log("Form changes saved");
