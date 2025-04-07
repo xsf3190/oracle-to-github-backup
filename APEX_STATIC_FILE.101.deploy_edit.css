@@ -77,6 +77,10 @@ form.edit-footer, form.edit-footer>div {
     margin: 3vh;
 }
 
+.icon-with-text:has(span:empty) {
+    display: none;
+}
+
 .loader {
   position: fixed;
   inset: 0;
