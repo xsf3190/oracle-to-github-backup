@@ -683,7 +683,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                             '</svg>' ||
                         '</button>' ||
                     '</header>' ||
-                    '<div class="loader visually-hidden"></div>' ||
+                    '<div class="loader"></div>' ||
                     '<article class="flow">' ||
                          '<div>' ||
                             '<label for="pageInput">Page Label</label>' ||
@@ -964,8 +964,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                     l_url_base:=SUBSTR(l_url,1,INSTR(l_url,'?')-1);
                     l_sendmail_body:=emailTemplate('website', l_url);
                     sendmail(l_email, 'Link to your website ' || l_url_base, l_sendmail_body);
-                    htp.p('<h1 style="font-family:system-ui;font-size:2rem;color:rebeccapurple">Website Created Successfully</h1>');
-                    htp.p('<a style="font-family:system-ui;font-size:1.5rem;color:rebeccapurple;text-decoration:underline;text-underline-offset:25%;text-decoration-thickness:15%;" href="' || l_url || '">' || l_url_base || '</a>');
+                    htp.p('<div style="display:grid;place-items:center;block-size:30dvh">');
+                    htp.p('<h1 style="font-family:system-ui;font-size:10vmin;color:rebeccapurple">WEBSITE CREATED</h1>');
+                    htp.p('<a style="font-family:system-ui;font-size:10vmin;align-self:start;color:rebeccapurple;text-decoration:underline;text-underline-offset:25%;text-decoration-thickness:15%;" href="' || l_url || '">' || l_url_base || '</a>');
+                    htp.p('</div>');
                 END IF;
             
             WHEN 'passcode' THEN
