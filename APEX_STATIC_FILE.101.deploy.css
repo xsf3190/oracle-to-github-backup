@@ -458,6 +458,7 @@ pre {
 }
 form {
   --border: solid 1px var(--color-primary);
+  font-family: var(--font-family-ui);
   display: flex;
   flex-direction: column;
   border: var(--border);
@@ -471,7 +472,7 @@ form label {
 }
 form input[type="text"], form input[type="email"], form input[type="tel"] {
   inline-size: 100%;
-  font-size: var(--step-0);
+  font: inherit;
   line-height: 2;
   /* field-sizing: content; */
 }
