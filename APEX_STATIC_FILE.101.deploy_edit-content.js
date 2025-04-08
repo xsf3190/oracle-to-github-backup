@@ -3,7 +3,7 @@
 ** INCLUDE DEPLOY BUTTON IN CKEDITOR TOOLBAR
 */
 
-import { dropdown_details } from "./deploy_elements.min.js";
+import { dropdown_details, header } from "./deploy_elements.min.js";
 import { callAPI, handleError } from "./deploy_callAPI.min.js";
 
 const CK_CSS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css";
@@ -271,7 +271,7 @@ export const init = async (element) => {
 
     /* Listen for request to show MEDIA  */
     toolbar_items.querySelector(".show-media").addEventListener("click", () => {
-        show_media();
+        show_media("copy");
     });
 
     /* Listen for DEPLOY requests */
@@ -309,47 +309,52 @@ const saveData = async ( data, endpoint ) => {
 /*
 ** USER CLICKS MEDIA BUTTON. SHOW LIST OF MEDIA. ALLOW USER TO COPY URL
 */
-export const show_media = async () => {
-    callAPI("cloudinary/:ID/:PAGE","GET","?request=list")
+export const show_media = async (request) => {
+    callAPI("cloudinary/:ID/:PAGE","GET","?request="+request)
         .then( (data) => {
-            const header = info_dialog.querySelector("header>h4");
-            header.textContent = data.heading;
+            info_dialog.querySelector("header>h4").textContent = data.heading;
 
             const media = info_dialog.querySelector("article");
             media.replaceChildren();
             media.insertAdjacentHTML('afterbegin',data.thumbnails);
             info_dialog.showModal();
 
-            media.querySelectorAll(".copy-url").forEach( (button) => {
-                button.addEventListener("click", async (e) => {
-                    const src = e.target.closest("li").querySelector("img").src;
-                    try {
-                        await navigator.clipboard.writeText(src);
-                        media.querySelectorAll(".copied").forEach((copied) => {
-                          copied.textContent = "COPY";
-                          copied.classList.toggle("copied");
+            switch (request) {
+                case "copy":
+                    media.querySelectorAll(".copy-url").forEach( (button) => {
+                        button.addEventListener("click", async (e) => {
+                            const src = e.target.closest("li").querySelector("img").src;
+                            try {
+                                await navigator.clipboard.writeText(src);
+                                media.querySelectorAll(".copied").forEach((copied) => {
+                                copied.textContent = "COPY";
+                                copied.classList.toggle("copied");
+                                });
+                                if (e.target.textContent = "COPY") {
+                                e.target.textContent = "copied";
+                                e.target.classList.toggle("copied");
+                                }
+                            } catch (error) {
+                                handleError(error);
+                            }
                         });
-                        if (e.target.textContent = "COPY") {
-                          e.target.textContent = "copied";
-                          e.target.classList.toggle("copied");
-                        }
-                    } catch (error) {
-                        handleError(error);
-                    }
-                });
-            });
-            media.querySelectorAll(".delete-media").forEach( (button) => {
-                button.addEventListener("click", async (e) => {
-                    const asset = e.target.closest("li");
-                    callAPI("cloudinary/:ID/:PAGE","DELETE",{asset_id:asset.dataset.id})
-                    .then( () => {
-                        asset.remove();
-                    })
-                    .catch((error) => {
-                        handleError(error);
                     });
-                });
-            });
+                    break;
+                case "hero":
+                    media.querySelectorAll(".copy-url").forEach( (button) => {
+                        button.addEventListener("click", async (e) => {
+                            const hero_asset_id = e.target.closest("li").dataset.id;
+                            callAPI("edit-header/:ID","POST",{hero_asset_id: hero_asset_id})
+                                .then( (data) => {
+                                    header.querySelector("div").insertAdjacentHTML('afterbegin',data.img);
+                                })
+                                .catch((error) => {
+                                    handleError(error);
+                                })
+                        });
+                    });
+                    break;
+                }
         })
         .catch((error) => {
             handleError(error);
