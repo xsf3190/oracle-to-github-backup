@@ -73,10 +73,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
                 RETURN (FALSE);
     END;
 
-    
-
-
-
     /* 
     ** CREATE NEW WEBSITE ON NETLIFY HOSTING SERVICE.
     ** PARAMETER pWebsiteid IS WEBSITE THROUGH WHICH PROSPECTIVE CLIENT MADE REQUEST
@@ -103,7 +99,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         SELECT site_id, ssl_url INTO l_netlify_site_id, l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id, ssl_url));
 
         INSERT INTO website (id, domain_name, netlify_site_id, created_date, user_id, contact_email, title, subtitle, header_text_color, header_effect)
-        SELECT seq_website.nextval, pDomain, l_netlify_site_id, current_timestamp, pUserid, pEmail, 'TITLE', 'subtitle', header_text_color, header_effect
+        SELECT seq_website.nextval, pDomain, l_netlify_site_id, current_timestamp, pUserid, pEmail, pDomain, 'Edit this website', header_text_color, header_effect
           FROM website WHERE id=pWebsiteId;
 
         INSERT INTO website_font (website_id, context, font_id, ital, wdth, wght, opsz, slnt, font_size, underline)
@@ -111,7 +107,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
           FROM website_font
          WHERE website_id=pWebsiteId;
 
-        SELECT article_id INTO l_home_article_id FROM website_article WHERE website_id=pWebsiteId AND UPPER(navigation_label)='EDITOR';
+        SELECT article_id 
+          INTO l_home_article_id 
+          FROM website_article 
+         WHERE website_id=pWebsiteId 
+           AND UPPER(navigation_label)='EDITOR';
 
         INSERT INTO article (id, body_html, author_user_id)
         SELECT seq_article.nextval, body_html, pUserid
@@ -120,11 +120,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
 
         INSERT INTO website_article (website_id, article_id, display_order, navigation_label)
         VALUES (seq_website.currval, seq_article.currval, 1, 'Home');
-         
 
         pck_deploy.runDeployment(seq_website.currval, pUserid, 'TEST', l_netlify_site_id, pck_core.getRestUrl(), 101);
         
-        /* Wait until the deployment is complete */
         waitDeployment(seq_website.currval, pUserid);
 
         pUrl:=l_ssl_url;
