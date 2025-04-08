@@ -32,7 +32,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
     --
     PROCEDURE refreshAuthToken(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
     --
-    PROCEDURE refreshOrdsEndpoints;
+    PROCEDURE refreshOrdsEndpoints(pWebsiteId IN website.id%type);
     --
     FUNCTION getSessionData(pWebsiteId IN website.id%type) RETURN t_session_data;
     --
@@ -233,45 +233,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     /* 
     ** TEMPORARY SOLUTION TO POPULATE ENDPOINT TABLES
     */
-    PROCEDURE refreshOrdsEndpoints IS 
+    PROCEDURE refreshOrdsEndpoints(pWebsiteId IN website.id%type) IS 
         n pls_integer;
     BEGIN
-        DELETE api_endpoint;
-        DELETE ords_endpoints;
+        DELETE api_endpoint WHERE website_id=pWebsiteId;
 
-        INSERT INTO ords_endpoints (template_id, uri_template, method, label, priority)
-        SELECT t.id template_id, t.uri_template, MIN(h.method) as method, NVL(t.comments,h.comments) as label, t.priority
-          FROM user_ords_modules m, user_ords_templates t, user_ords_handlers h, user_ords_parameters p
-         WHERE m.name='public'
-           AND m.id=t.module_id
-           AND t.id=h.template_id
-           AND h.id=p.handler_id
-           AND NVL(t.comments,h.comments) IS NOT NULL
-           AND p.name='X-ORDS-STATUS-CODE'
-          GROUP BY t.id, t.uri_template, NVL(t.comments,h.comments), t.priority;
-
-        DELETE website_role;
+        DELETE website_role WHERE website_id=pWebsiteId;
         
-        insert into website_role(website_id, role_id)
-        select w.id, r.id
-        from website w, role r
-        where r.name in ('admin','owner');
+        INSERT INTO website_role(website_id, role_id)
+        SELECT w.id, r.id
+          FROM website w, role r
+         WHERE w.id=pWebsiteId
+           AND r.name in ('admin','owner');
 
-        insert into api_endpoint(website_id, role_id, template_id)
-        select w.id, r.id, o.template_id 
-        from website w, role r, ords_endpoints o
-        where r.name in ('admin','owner');
+        INSERT INTO api_endpoint(website_id, role_id, template_id)
+        SELECT w.id, r.id, o.template_id 
+          FROM website w, role r, ords_endpoints o
+         WHERE w.id=pWebsiteId
+           AND r.name in ('admin','owner');
 
-        insert into website_role(website_id, role_id)
-        select w.id, r.id
-        from website w, role r
-        where r.name='visitor';
+        INSERT INTO website_role(website_id, role_id)
+        SELECT w.id, r.id
+          FROM website w, role r
+         WHERE w.id=pWebsiteId
+           AND r.name='visitor';
 
-        insert into api_endpoint(website_id, role_id, template_id)
-        select w.id, r.id, o.template_id 
-        from website w, role r, ords_endpoints o
-        where r.name='visitor'
-         and (INSTR(o.uri_template,'message')>0 or INSTR(o.uri_template,'authenticate')>0);
+        INSERT INTO api_endpoint(website_id, role_id, template_id)
+        SELECT w.id, r.id, o.template_id 
+          FROM website w, role r, ords_endpoints o
+         WHERE w.id=pWebsiteId
+           AND r.name='visitor'
+           AND (INSTR(o.uri_template,'message')>0 or INSTR(o.uri_template,'authenticate')>0);
 
     END;
 
@@ -372,8 +364,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_passcode VARCHAR2(6);
         l_passcode_hash raw(32);
         l_token_hash raw(32);
-        
-        
         l_sendmail_subject VARCHAR2(200);
         l_sendmail_body LONG;
         l_sendmail_link VARCHAR2(500);
@@ -386,19 +376,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
          WHERE o.name(+)=LOWER(j.email)
            AND u.email(+)=LOWER(j.email);
 
-        /* GET WEBSITE REQUESTS PUT EMAIL ADDRESS IN THE domain FIELD, WHICH WE CONVERT TO A PROPER SUBDOMAIN NAME */
+        /* NEW WEBSITE REQUESTS PUT EMAIL ADDRESS IN THE domain FIELD, WHICH WE CONVERT TO A PROPER SUBDOMAIN NAME */
         IF (l_domain IS NOT NULL) THEN
             l_domain:=SUBSTR(l_domain,1,INSTR(l_domain,'@')-1);
-            l_domain:=REPLACE(REPLACE(l_domain,'.','-'),'_','-');
-            pck_core.log('Creating website converting email "' || l_email || '" to subdomain "' || l_domain || '"');
+            l_domain:=REPLACE(REPLACE(l_domain,'.','-'),'_','-');           
             IF (pck_hosting.urlExists(l_domain || '.netlify.app')) THEN
                 APEX_JSON.open_object;
-                APEX_JSON.write ('success', TRUE);
+                APEX_JSON.write ('success', FALSE);
                 APEX_JSON.write ('message', l_domain || '.netlify.app already exists');
                 APEX_JSON.close_object;
                 pStatus:=200;
                 RETURN;
             END IF;
+            pck_core.log('Creating website converting email "' || l_email || '" to subdomain "' || l_domain || '"');
         END IF;
 
         IF (l_ords_user_id=0) THEN
@@ -535,7 +525,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
           FROM website
          WHERE id=pWebsiteId;
 
-        refreshOrdsEndpoints;
+        refreshOrdsEndpoints(pWebsiteId);
 
         FOR C IN (
             SELECT o.label, o.uri_template, o.method, o.priority
@@ -965,8 +955,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                     l_sendmail_body:=emailTemplate('website', l_url);
                     sendmail(l_email, 'Link to your website ' || l_url_base, l_sendmail_body);
                     htp.p('<div style="display:grid;place-items:center;block-size:30dvh">');
-                    htp.p('<h1 style="font-family:system-ui;font-size:10vmin;color:rebeccapurple">WEBSITE CREATED</h1>');
-                    htp.p('<a style="font-family:system-ui;font-size:10vmin;align-self:start;color:rebeccapurple;text-decoration:underline;text-underline-offset:25%;text-decoration-thickness:15%;" href="' || l_url || '">' || l_url_base || '</a>');
+                    htp.p('<h1 style="font-family:system-ui;font-size:5vmin;color:rebeccapurple">WEBSITE CREATED</h1>');
+                    htp.p('<a style="font-family:system-ui;font-size:5vmin;align-self:start;color:rebeccapurple;text-decoration:underline;text-underline-offset:25%;text-decoration-thickness:15%;" href="' || l_url || '">' || l_url_base || '</a>');
                     htp.p('</div>');
                 END IF;
             
