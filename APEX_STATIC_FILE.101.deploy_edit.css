@@ -81,6 +81,7 @@ form.edit-footer, form.edit-footer>div {
     display: none;
 }
 
+/* SPINNING LOADER STYLES */
 .loader {
   position: fixed;
   inset: 0;
@@ -109,4 +110,27 @@ form.edit-footer, form.edit-footer>div {
 @keyframes load {
   from {transform: rotate(0turn)}
   to   {transform: rotate(1turn)}
+}
+
+
+/* ALERT STYLES - CHANGE SAVE BUTTON TEXT AND BACKGROUND COLOR WHEN CLICKED */
+
+ul[class] {
+  list-style:none;
+}
+
+li:has([role='alert']) {
+  position: relative;
+}
+
+[role='alert'] {
+  position: absolute;
+  inset:0;
+  align-content: center;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+[role='alert']:empty {
+  display: none;
 }
