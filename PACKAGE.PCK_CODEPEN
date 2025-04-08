@@ -23,6 +23,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
         pTelephoneNumber website.telephone_number%type,
         pMobileNumber website.mobile_number%type,
         pLinkedinName website.linkedin_name%type,
+        pInstagramName website.instagram_name%type,
         pPromotion website.promotion%type,
         pHtml IN OUt NOCOPY CLOB
     );
@@ -436,6 +437,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         pTelephoneNumber website.telephone_number%type,
         pMobileNumber website.mobile_number%type,
         pLinkedinName website.linkedin_name%type,
+        pInstagramName website.instagram_name%type,
         pPromotion website.promotion%type,
         pHtml IN OUt NOCOPY CLOB) 
     IS
@@ -613,7 +615,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 END ||
                 CASE WHEN pLinkedinName IS NOT NULL THEN
                 '<a class="icon-with-text" href="https://www.linkedin.com/in/' || pLinkedinName || '">' ||
-                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="#linkedin"></use></svg><span>' || pLinkedinName || '</span>' ||
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="#linkedin"></use></svg><span>Let''s Connect</span>' ||
+                '</a>'
+                END ||
+                CASE WHEN pInstagramName IS NOT NULL THEN
+                '<a class="icon-with-text" href="https://www.instagram.com/' || pInstagramName || '">' ||
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="#instagram"></use></svg><span>Instagram</span>' ||
                 '</a>'
                 END ||
             '</footer>';
@@ -694,6 +701,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_telephone_number website.telephone_number%type;
         l_mobile_number website.mobile_number%type;
         l_linkedin_name website.linkedin_name%type;
+        l_instagram_name website.instagram_name%type;
         l_css CLOB;
         l_javascript CLOB;
         l_fluid_types pck_core.fluid_type_t;
@@ -737,14 +745,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Get page content */
 
         IF (l_is_blog OR l_is_media) THEN
-            SELECT w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, null,null
-              INTO l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_contact_form, l_collection_type
+            SELECT w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, null,null
+              INTO l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_contact_form, l_collection_type
               FROM website w, article a
              WHERE w.id=l_website_id
                AND a.id=pArticleId;
         ELSE
-            SELECT w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, wa.contact_form, wa.collection_type
-              INTO l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_contact_form, l_collection_type
+            SELECT w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, wa.contact_form, wa.collection_type
+              INTO l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_contact_form, l_collection_type
               FROM website w, website_article wa, article a
              WHERE w.id=l_website_id
                AND wa.website_id=w.id
@@ -769,6 +777,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             l_telephone_number, 
             l_mobile_number, 
             l_linkedin_name,
+            l_instagram_name,
             l_promotion,
             l_html);
 
