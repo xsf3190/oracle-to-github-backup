@@ -1,8 +1,8 @@
 /*
 **  EDIT WEBSITE FOOTER
 */
-import { footer, dropdown_details } from "./deploy_elements.min.js";
-import { callAPI } from "./deploy_callAPI.min.js";
+import { footer, dropdown_details, set_alert } from "./deploy_elements.min.js";
+import { callAPI, handleError } from "./deploy_callAPI.min.js";
 
 const editor = footer.previousElementSibling;
 
@@ -20,7 +20,7 @@ export const init = (element) => {
             footer.insertAdjacentHTML('afterbegin',data.footer);
         })
         .catch((error) => {
-            handle_error(error);
+            handleError(error);
         });
 }
 
@@ -35,10 +35,10 @@ editor.addEventListener("input", (e) => {
     */
     switch (name) {
         case "linkedin_name":
-            target.childNodes[1].textContent = "Let's Connect";
+            target.childNodes[1].textContent = e.target.value.length ? "Let's Connect" : "";
             break;
         case "instagram_name":
-            target.childNodes[1].textContent = "Connect Instagram";
+            target.childNodes[1].textContent = e.target.value.length ? "Connect Instagram" : "";
             break;
         default:
             target.childNodes[1].textContent = e.target.value;
@@ -51,8 +51,6 @@ editor.addEventListener("input", (e) => {
 editor.addEventListener("change", (e) => {
     const name = e.target.getAttribute("name");
     const target = footer.querySelector("[data-" + name + "]");
-
-    target.target = "_blank";
 
     switch (name) {
         case "contact_email":
@@ -86,12 +84,10 @@ editor.addEventListener("click", async (e) => {
         const formObj = Object.fromEntries(formData);
         await callAPI(endpoint,'PUT', formObj)
             .then(() => {
-                const result = editor.querySelector(".result");
-                result.textContent = 'Changes Saved';
-                result.style.color = "green";
+                set_alert(editor.querySelector("[role='alert']"));
             })
             .catch((error) => {
-                handle_error(error);
+                handleError(error);
             });
     }
 
@@ -103,7 +99,7 @@ editor.addEventListener("click", async (e) => {
                 console.log("Form changes saved");
             })
             .catch((error) => {
-                handle_error(error);
+                handleError(error);
             });
 
         const import_module_name = "./deploy_publish-website.min.js";
@@ -112,15 +108,8 @@ editor.addEventListener("click", async (e) => {
                 module.init(e.target);
             })
             .catch((error) => {
-                console.error(error);
-                console.error("Failed to load " + import_module_name);
+                handleError(error);
             });
     }
 
 });
-
-const handle_error = (error) => {
-    const result = editor.querySelector(".result");
-    result.textContent = error;
-    result.style.color = "red";
-}
