@@ -1,8 +1,9 @@
 /*
 **  EDIT WEBSITE HEADER
 */
-import { header, dropdown_details, menulist } from "./deploy_elements.min.js";
+import { header, dropdown_details, menulist, set_alert } from "./deploy_elements.min.js";
 import { callAPI, handleError } from "./deploy_callAPI.min.js";
+import { show_media } from  "./deploy_edit-content.min.js";
 
 const editor = header.previousElementSibling;
 
@@ -203,8 +204,7 @@ editor.addEventListener("click", async (e) => {
     }
 
     if (e.target.matches(".background-image")) {
-        const media = menulist.querySelector(".upload-media");
-        media.click();
+        show_media("hero");
     }
 
     if (e.target.matches(".save-changes")) {
@@ -212,9 +212,7 @@ editor.addEventListener("click", async (e) => {
         const formObj = Object.fromEntries(formData);
         await callAPI(endpoint,'PUT', formObj)
             .then(() => {
-                const result = editor.querySelector(".result");
-                result.textContent = "Changes Saved";
-                result.style.color = "green";
+                set_alert(editor.querySelector("[role='alert']"));
             })
             .catch((error) => {
                 handleError(error);
