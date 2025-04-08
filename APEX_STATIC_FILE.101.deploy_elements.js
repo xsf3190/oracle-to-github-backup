@@ -12,6 +12,14 @@ export const header = document.querySelector("body>header");
 export const main = document.querySelector("main");
 export const footer = document.querySelector("body>footer");
 
+export const set_alert = (alert) => {
+    alert.textContent = "SAVED";
+    alert.style.background="green";
+    setTimeout(() => {
+        alert.textContent = "";
+        alert.style.background="rebeccapurple";
+    }, 1500);
+}
 
 login_dialog.querySelector("button.close").addEventListener("click", () => {
     login_dialog.close();
