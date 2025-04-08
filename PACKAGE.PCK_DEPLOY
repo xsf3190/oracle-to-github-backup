@@ -193,6 +193,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_telephone_number website.telephone_number%type;
         l_mobile_number website.mobile_number%type;
         l_linkedin_name website.linkedin_name%type;
+        l_instagram_name website.instagram_name%type;
         l_color_primary website.color_primary%type;
         l_favicon_asset_id website.favicon_asset_id%type;
         l_body_html article.body_html%type;
@@ -249,6 +250,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             telephone_number website.telephone_number%type,
             mobile_number website.mobile_number%type,
             linkedin_name website.linkedin_name%type,
+            instagram_name website.instagram_name%type,
             promotion website.promotion%type,
             body_html article.body_html%type,
             modules apex_t_varchar2
@@ -363,8 +365,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         pck_sec.g_session_user_id:=pUserId;
         pck_sec.g_website_id:=pWebsiteId;
 
-        SELECT title, subtitle, contact_email, telephone_number, mobile_number, linkedin_name, SUBSTR(color_primary,2), favicon_asset_id
-          INTO l_title, l_subtitle, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_color_primary, l_favicon_asset_id
+        SELECT title, subtitle, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, SUBSTR(color_primary,2), favicon_asset_id
+          INTO l_title, l_subtitle, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_color_primary, l_favicon_asset_id
           FROM website
          WHERE id=pWebsiteId;
 
@@ -400,19 +402,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /*
         ** Get all website content into collection
         */
-        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count, title, subtitle, header_effect, hero_asset_id, contact_email, telephone_number, mobile_number, linkedin_name, promotion, body_html, apex_t_varchar2()
+        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count, title, subtitle, header_effect, hero_asset_id, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, promotion, body_html, apex_t_varchar2()
           BULK COLLECT INTO l_labels
           FROM
           (
         SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, 
-            wa.display_order, NVL(a.updated_date,a.created_date) lastmod, a.word_count, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.promotion, a.body_html body_html
+            wa.display_order, NVL(a.updated_date,a.created_date) lastmod, a.word_count, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, w.promotion, a.body_html body_html
           FROM website w, website_article wa, article a
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
            AND wa.article_id=a.id
          UNION ALL
         SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, 
-            wa.display_order+NVL(a.display_order/100,0.001),  NVL(a.updated_date,a.created_date) lastmod, a.word_count, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.promotion, a.body_html
+            wa.display_order+NVL(a.display_order/100,0.001),  NVL(a.updated_date,a.created_date) lastmod, a.word_count, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, w.promotion, a.body_html
           FROM website w, website_article wa, article a 
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
@@ -426,7 +428,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM api_endpoint WHERE website_id=pWebsiteId);
         IF (n=0) THEN
-            pck_sec.refreshOrdsEndpoints;
+            pck_sec.refreshOrdsEndpoints(pWebsiteId);
         END IF;
 
         /* Get URL of site to be deployed */
@@ -489,6 +491,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_labels(i).telephone_number,
                 l_labels(i).mobile_number,
                 l_labels(i).linkedin_name,
+                l_labels(i).instagram_name,
                 l_labels(i).promotion,
                 l_labels(i).body_html
             );
@@ -651,7 +654,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END LOOP;
         END LOOP;
         
-        logDeployment(pWebsiteId, pSiteId, 'Configuring FONTS');
+        logDeployment(pWebsiteId, pSiteId, 'Configuring FONTS for distinct characters');
 
         /* Google css API needs separate calls for distinct set of normal and italic characters used */
         l_context:=l_fonts.FIRST;
