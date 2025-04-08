@@ -125,18 +125,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     END;
 
     /*
-     **  Get deployment status from website_deploy logging table - called from Javascript every 3 seconds
+     ** Get deployment status from website_deploy logging table - called from Javascript every 3 seconds
+     ** Have to poll Netlify deployment status 
      */
     PROCEDURE getDeploymentStatus(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS 
         l_site_id website_deploy.site_id%type;
         l_content CLOB;
         l_clob CLOB;
-        l_ssl_url VARCHAR2(100);
         l_deployment_complete BOOLEAN:=FALSE;
         l_netlify_status website_deploy.status%type;
         l_netlify_deploy_id website.netlify_deploy_id%type;
         l_state VARCHAR2(200);
-        l_updated_at website.netlify_last_published%type;
         l_job_name VARCHAR2(30);
         l_session_data pck_sec.t_session_data;
         TYPE t_deploy_log IS RECORD(
@@ -147,9 +146,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         TYPE tt_deploy_log IS TABLE OF t_deploy_log;
         l_deploy_log tt_deploy_log;          
         l_env VARCHAR2(4);
-        l_is_live BOOLEAN;
-        cert_not_ready exception;
-        pragma exception_init( cert_not_ready, -29273 );
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
@@ -164,17 +160,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
           FROM website
          WHERE id=pWebsiteId;
 
-        l_is_live:=l_env='LIVE';
-
         /* Get latest deployment status if started */
         IF (l_netlify_deploy_id IS NOT NULL) THEN
             pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys/' || l_netlify_deploy_id, pMethod=>'GET', pData=>l_clob);
-            FOR C IN (SELECT state, ssl_url, TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR') updated_at
-                        FROM JSON_TABLE(l_clob, '$' COLUMNS (state, ssl_url, updated_at)) ) 
-            LOOP
-                pck_deploy.logDeployment(pWebsiteId, l_site_id, C.state, pLogTime=>C.updated_at);
-                l_ssl_url:=C.ssl_url;
-            END LOOP;
+            SELECT 'Netlify is ' || state INTO l_state FROM JSON_TABLE(l_clob, '$' COLUMNS (state)); 
+            pck_deploy.logDeployment(pWebsiteId, l_site_id, l_state, pLogTime=>current_date);
         END IF;
 
         SELECT id, TO_CHAR(log_time,'hh24:mi:ss') log_time, message, status
@@ -188,23 +178,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         /* Now return list of all deployment status messages to client */
         FOR i IN 1..l_deploy_log.COUNT
         LOOP
-            IF (l_deploy_log(i).message='ready') THEN 
-                l_content:=l_content ||'<li><span>' || l_deploy_log(i).log_time || '</span><span>Successful deployment</span></li>'; 
-                IF (l_is_live) THEN
-                    BEGIN
-                        l_clob:=apex_web_service.make_rest_request(p_url=>l_ssl_url, p_http_method=>'GET');
-                        EXCEPTION WHEN cert_not_ready THEN
-                            l_content:=l_content ||'<li><span></span><span style="color:red">Certificate in process of being issued</span></li>'; 
-                    END;
-                END If;
-                l_deployment_complete:=TRUE;
-                EXIT;
-            END IF;
-
-            IF (l_deploy_log(i).status='OK') THEN 
-                l_content:=l_content ||'<li><span>' || l_deploy_log(i).log_time || '</span><span>' || l_deploy_log(i).message || '</span></li>'; 
-            ELSE
-                l_content:=l_content ||'<li class="nok"><span>' || l_deploy_log(i).log_time || '</span><span>' || l_deploy_log(i).message || '</span></li>'; 
+            l_content:=l_content ||'<li' || CASE WHEN l_deploy_log(i).status='NOK' THEN ' style="color:red"' END || '><span>' || l_deploy_log(i).log_time || '</span><span>' || l_deploy_log(i).message || '</span></li>'; 
+            IF (l_deploy_log(i).message='Netlify is ready') THEN 
+                l_content:=l_content ||'<li style="color:green"><span>' || l_deploy_log(i).log_time || '</span><span>SUCCESSFUL DEPLOYMENT</span></li>'; 
                 l_deployment_complete:=TRUE;
             END IF;
         END LOOP;
@@ -219,7 +195,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             UPDATE website_deploy SET sent_ind='Y' WHERE id=l_deploy_log(i).id;
 
         IF (l_deployment_complete) THEN
-            IF (l_is_live) THEN
+            IF (l_env='LIVE') THEN
                 UPDATE website 
                    SET netlify_last_published_custom = current_timestamp
                  WHERE id=pWebsiteId;
@@ -605,14 +581,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                             '<use href="#image"></use>' ||
                         '</svg>' ||
                     '</button>' ||
-                    '<span class="result"></span>' ||
                 '</fieldset>' ||
                 buildFontWrapper(pWebsiteId,'website.title', C.title) || 
                 buildFontWrapper(pWebsiteId,'website.subtitle',C.subtitle) ||
                 '<div class="flex-items space-between buttons">' ||
-                    '<button type="button" class="button publish-changes" data-endpoint="publish-website/:ID" data-method="GET" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
+                    '<button type="button" class="button publish-changes" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
+                    '<button type="button" class="button save-changes" style="--button-bg:rebeccapurple">SAVE</button>' ||
                     '<button type="button" class="button cancel-changes" style="--button-bg:rebeccapurple">CANCEL</button>' ||
                 '</div>' ||
+                '<div class="result"></div>' ||
             '</form>';
         END LOOP;
         /* Include SVG symbols in hidden element */
@@ -697,16 +674,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     END;
 
     /* 
-    **  BUILD HTML INPUT ELEMENTS TO EDiT WEBSITE HEADER
+    **  BUILD HTML INPUT ELEMENTS TO EDiT WEBSITE FOOTER
     */
     PROCEDURE getFooter(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
         l_html LONG;
+        l_footer LONG;
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
         FOR C IN (
-            SELECT w.color_primary, w.header_effect, w.header_text_color, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name
+            SELECT w.color_primary, w.header_effect, w.header_text_color, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name
               FROM website w
              WHERE w.id=pWebsiteId
         ) 
@@ -731,19 +709,46 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     '</div>' ||
 
                     '<div>' ||
-                        '<label for="linkedin-name">LinkedIn</label>' ||
+                        '<label for="linkedin-name">LinkedIn Name</label>' ||
                         '<input type="text" id="linkedin-name" name="linkedin_name" maxlength="50" autocapitalize="none" value="' || C.linkedin_name || '">' ||
                     '</div>' ||
+
+                    '<div>' ||
+                        '<label for="instagram-name">Instagram Name</label>' ||
+                        '<input type="text" id="instagram-name" name="instagram_name" maxlength="50" autocapitalize="none" value="' || C.instagram_name || '">' ||
+                    '</div>' ||
+
                 '</fieldset>' ||
                 '<div class="flex-items space-between">' ||
-                    '<button type="button" class="button publish-changes" data-endpoint="publish-website/:ID" data-method="GET" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
+                    '<button type="button" class="button publish-changes" style="--button-bg:rebeccapurple">PUBLISH</button>' ||
+                    '<button type="button" class="button save-changes" style="--button-bg:rebeccapurple">SAVE</button>' ||
                     '<button type="button" class="button cancel-changes" style="--button-bg:rebeccapurple">CANCEL</button>' ||
                 '</div>' ||
+                '<div class="result"></div>' ||
             '</form>';
+
+            l_footer:=
+            '<a class="icon-with-text" href="mailto:' || C.contact_email || '" data-contact_email>' ||
+                '<svg class="icon" aria-hidden="true" focusable="false"><use href="#email"></use></svg><span>' || C.contact_email || '</span>' ||
+            '</a>' ||
+            '<a class="icon-with-text" href="tel:' || C.telephone_number || '" data-telephone_number>' ||
+                '<svg class="icon" aria-hidden="true" focusable="false"><use href="#phone"></use></svg><span>' || C.telephone_number || '</span>' ||
+            '</a>' ||
+            '<a class="icon-with-text" href="tel:' || C.mobile_number || '" data-mobile_number>' ||
+                '<svg class="icon" aria-hidden="true" focusable="false"><use href="#mobile"></use></svg><span>' || C.mobile_number || '</span>' ||
+            '</a>' ||
+            '<a class="icon-with-text" href="https://www.linkedin.com/in/' || C.linkedin_name || '" data-linkedin_name>' ||
+                '<svg class="icon" aria-hidden="true" focusable="false"><use href="#linkedin"></use></svg><span>' || CASE WHEN C.linkedin_name IS NOT NULL THEN 'Let''s Connect' END || '</span>' ||
+            '</a>' ||
+            '<a class="icon-with-text" href="https://www.instagram.com/' || C.instagram_name || '" data-instagram_name>' ||
+                '<svg class="icon" aria-hidden="true" focusable="false"><use href="#instagram"></use></svg><span>' || CASE WHEN C.instagram_name IS NOT NULL THEN 'Connect Instagram' END || '</span>' ||
+            '</a>';
+
         END LOOP;
+
         /* Include SVG symbols in hidden element */
         l_html:=l_html || '<svg width="0" height="0">';
-        FOR C IN (SELECT id, viewbox, svg FROM icon WHERE id IN ('eyedropper','image')) LOOP
+        FOR C IN (SELECT id, viewbox, svg FROM icon WHERE id IN ('email','phone','mobile','linkedin','instagram')) LOOP
             l_html:=l_html || '<symbol id="' || C.id || '" viewBox="' || C.viewbox || '" preserveAspectRatio="">' || C.svg || '</symbol>';
         END LOOP;
         l_html:=l_html || '</svg>';
@@ -751,6 +756,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         apex_json.open_object;
         apex_json.write('success', TRUE); 
         apex_json.write('html', l_html);
+        apex_json.write('footer', l_footer);
         apex_json.close_object;
 
         pStatus:=200;
@@ -767,12 +773,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
         
         FOR C IN (
-            SELECT contact_email, telephone_number, mobile_number, linkedin_name
+            SELECT contact_email, telephone_number, mobile_number, linkedin_name, instagram_name
               FROM JSON_TABLE(l_bodytext, '$' 
-              COLUMNS(contact_email, telephone_number, mobile_number, linkedin_name))
+              COLUMNS(contact_email, telephone_number, mobile_number, linkedin_name, instagram_name))
         ) LOOP
             UPDATE website
-               SET contact_email=contact_email, telephone_number=C.telephone_number, mobile_number=C.mobile_number, linkedin_name=C.linkedin_name, updated_date=current_timestamp
+               SET contact_email=C.contact_email, 
+                    telephone_number=C.telephone_number,
+                    mobile_number=C.mobile_number, 
+                    linkedin_name=C.linkedin_name, 
+                    instagram_name=C.instagram_name,
+                    updated_date=current_timestamp
              WHERE id=pWebsiteId;
         END LOOP;
 
