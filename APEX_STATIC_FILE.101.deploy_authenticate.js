@@ -234,9 +234,6 @@ sendmail_passcode.addEventListener("click", (e) => {
     }
     form.querySelector("[name='url']").value = window.location.hostname;
     form.querySelector("[name='request_type']").value = "passcode";
-    if (domain && !domainInput.value) {
-        domainInput.value = emailInput.value;
-    }
     const formData = new FormData(form);
     callAuthAPI("POST", Object.fromEntries(formData))
         .then((data) => {
@@ -263,14 +260,17 @@ validate_passcode.addEventListener("click", (e) => {
         return;
     }
   
-    const query = "?request=passcode&user=" + e.target.dataset.userid 
-                  + "&verify=" + form.querySelector("[name='passcode']").value;
+    let query = "?request=passcode&user=" + e.target.dataset.userid 
+            + "&verify=" + form.querySelector("[name='passcode']").value;
     if (domain) {
+        query+="&domain=" + form.querySelector("[name='email']").value;
         loader.classList.remove("visually-hidden");
+    } else {
+        query+="&domain=NO";
     }
     callAuthAPI("GET", query)
         .then((data) => {
-            /* data.url is the requested editor website */
+            /* data.url is the editor website if requested */
             if (data.url) {
                 window.location.replace(data.url);
             } else {
