@@ -134,3 +134,17 @@ li:has([role='alert']) {
 [role='alert']:empty {
   display: none;
 }
+
+/* EYEDROPPER STYLE - SAD EFFORT TO EMULATE INPUT COLOR TYPE*/
+
+.eyedropper {
+  width: 50px;
+  block-size: 27px;
+  background-color: rebeccapurple;
+  border-width:5px;
+  border-color:pink;
+}
+
+.eyedropper:hover {
+  border-color:red;
+}
