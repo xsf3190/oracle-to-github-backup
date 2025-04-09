@@ -35,24 +35,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
-        CASE pRequest
-            WHEN 'details' THEN
-                pck_api.getCloudinaryData(pUserId=>l_session_data.user_id, pCloudName=>l_cld_cloud_name, pCldApiKey=>l_cld_api_key, pCldImageMaxSize=>l_image_max_size, pCldVideoMaxSize=>l_video_max_size, pGoogleApiKey=>l_google_api_key);
-                apex_json.open_object; 
-                apex_json.write('success', TRUE);
-                apex_json.write('cloudname', l_cld_cloud_name);
-                apex_json.write('apikey', l_cld_api_key);
-                apex_json.write('maxImageFileSize', l_image_max_size);
-                apex_json.write('maxVideoFileSize', l_video_max_size);
-                apex_json.write('googleApiKey', l_google_api_key);
-                apex_json.close_object;
-            WHEN 'list' THEN
-                APEX_JSON.open_object; 
-                APEX_JSON.write('success', TRUE);
-                APEX_JSON.write('thumbnails', pck_media.getThumbnails(pArticleId));
-                APEX_JSON.write('heading','Copy image URL');
-                APEX_JSON.close_object;
-        END CASE;
+        IF (pRequest='details') THEN
+            pck_api.getCloudinaryData(pUserId=>l_session_data.user_id, pCloudName=>l_cld_cloud_name, pCldApiKey=>l_cld_api_key, pCldImageMaxSize=>l_image_max_size, pCldVideoMaxSize=>l_video_max_size, pGoogleApiKey=>l_google_api_key);
+            apex_json.open_object; 
+            apex_json.write('success', TRUE);
+            apex_json.write('cloudname', l_cld_cloud_name);
+            apex_json.write('apikey', l_cld_api_key);
+            apex_json.write('maxImageFileSize', l_image_max_size);
+            apex_json.write('maxVideoFileSize', l_video_max_size);
+            apex_json.write('googleApiKey', l_google_api_key);
+            apex_json.close_object;
+        ELSE
+            APEX_JSON.open_object; 
+            APEX_JSON.write('success', TRUE);
+            APEX_JSON.write('thumbnails', pck_media.getThumbnails(pArticleId));
+            APEX_JSON.write('heading',CASE WHEN pRequest='copy' THEN 'Copy image URL' WHEN pRequest='hero' THEN 'Set as Hero Image' END);
+            APEX_JSON.close_object;
+        END IF;
 
         pStatus:=200;
         
@@ -365,7 +364,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
         IF (n=0) THEN
             l_clob:=
                 '<p class="align-center">NO IMAGES UPLOADED FOR THIS PAGE</p>' ||
-                '<p class="align-center">Use Upload Media option from hamburger menu</p>';
+                '<p class="align-center">Use Upload Media option from editor menu</p>';
         END IF;
 
         RETURN (l_clob);
