@@ -567,22 +567,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         LOOP
             l_html:=
             '<form class="editor">' ||
-                '<fieldset class="background-color">' ||
+                '<fieldset class="background-color flex-items" style="--flex-direction:column">' ||
                     '<legend><strong>Change Background</strong></legend>' ||
                     '<input type="hidden" name="header_text_color" value="' || C.header_text_color || '">' ||
-                    '<input type="color" class="background-color" name="color_primary" value="' || C.color_primary || '">' || 
+                    '<div>' ||
+                        '<label for="background-color-1">Pick Color</label>' || 
+                        '<input type="color" id="background-color-1" class="background-color" name="color_primary" value="' || C.color_primary || '">' || 
+                    '</div>' ||
                     CASE WHEN pEyeDropper='true' THEN
-                    '<button type="button" class="button eyedropper" style="--button-bg:transparent;--button-hover-bg:transparent">' ||
-                        '<svg class="icon" aria-hidden="true" focusable="false">' ||
-                            '<use href="#eyedropper"></use>' ||
-                        '</svg>' ||
-                    '</button>'
+                    '<div>' ||
+                        '<label for="background-color-2">Pick from Screen</label>' ||
+                        '<button type="button" class="eyedropper"></button>' ||
+                    '</div>'
                     END ||
+                    /*
                     '<button type="button" class="button background-image" style="--button-bg:transparent;--button-hover-bg:transparent">' ||
                         '<svg class="icon" aria-hidden="true" focusable="false">' ||
                             '<use href="#image"></use>' ||
                         '</svg>' ||
                     '</button>' ||
+                    */
                 '</fieldset>' ||
                 buildFontWrapper(pWebsiteId,'website.title', C.title) || 
                 buildFontWrapper(pWebsiteId,'website.subtitle',C.subtitle) ||
