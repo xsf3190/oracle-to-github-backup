@@ -2,9 +2,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_HOSTING" is
     --
     PROCEDURE changeURL(pWebsiteId IN website.id%type, pBodytext IN CLOB, pStatus OUT NUMBER);
     --
-    PROCEDURE createWebsite(pWebsiteId IN website.id%type, pDomain IN VARCHAR2, pUserid IN users.id%type, pEmail IN users.email%type, pUrl IN OUT VARCHAR2);
+    PROCEDURE createWebsite(pWebsiteId IN website.id%type, pUserid IN users.id%type, pEmail IN users.email%type, pUrl IN OUT VARCHAR2);
     --
     PROCEDURE deleteWebsite(pWebsiteid IN website.id%type);
+    --
+    FUNCTION getEditorDomain(pEmail IN users.email%type) RETURN VARCHAR2;
     --
     FUNCTION urlExists(pUrl IN VARCHAR2) RETURN BOOLEAN;
     --
@@ -73,18 +75,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
                 RETURN (FALSE);
     END;
 
+    FUNCTION getEditorDomain(pEmail IN users.email%type) RETURN VARCHAR2 IS
+        l_domain VARCHAR2(100);
+    BEGIN
+        l_domain:=SUBSTR(pEmail,1,INSTR(pEmail,'@')-1);
+        l_domain:=REPLACE(REPLACE(l_domain,'.','-'),'_','-');
+        RETURN(l_domain);
+    END;
     /* 
     ** CREATE NEW WEBSITE ON NETLIFY HOSTING SERVICE.
     ** PARAMETER pWebsiteid IS WEBSITE THROUGH WHICH PROSPECTIVE CLIENT MADE REQUEST
     */
-    PROCEDURE createWebsite(pWebsiteId IN website.id%type, pDomain IN VARCHAR2, pUserid IN users.id%type, pEmail IN users.email%type, pUrl IN OUT VARCHAR2) IS
-        l_domain website.domain_name%type:=pDomain;
+    PROCEDURE createWebsite(pWebsiteId IN website.id%type, pUserid IN users.id%type, pEmail IN users.email%type, pUrl IN OUT VARCHAR2) IS
+        l_domain website.domain_name%type;
         l_json JSON_OBJECT_T;
         l_clob CLOB;
         l_netlify_site_id website.netlify_site_id%type;
         l_ssl_url VARCHAR2(100);
         l_home_article_id article.id%type;
     BEGIN
+        l_domain:=getEditorDomain(pEmail);
         IF (urlExists(l_domain || '.netlify.app')) THEN
             RAISE_APPLICATION_ERROR(-20040,l_domain || '.netlify.app already exists');
         ELSE
@@ -99,7 +109,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         SELECT site_id, ssl_url INTO l_netlify_site_id, l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id, ssl_url));
 
         INSERT INTO website (id, domain_name, netlify_site_id, created_date, user_id, contact_email, title, subtitle, header_text_color, header_effect)
-        SELECT seq_website.nextval, pDomain, l_netlify_site_id, current_timestamp, pUserid, pEmail, pDomain, 'Edit this website', header_text_color, header_effect
+        SELECT seq_website.nextval, l_domain, l_netlify_site_id, current_timestamp, pUserid, pEmail, l_domain, 'Edit this website', header_text_color, header_effect
           FROM website WHERE id=pWebsiteId;
 
         INSERT INTO website_font (website_id, context, font_id, ital, wdth, wght, opsz, slnt, font_size, underline)
