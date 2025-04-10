@@ -493,6 +493,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
             apex_json.write('color_primary', C.color_primary);
             apex_json.write('max_width', C.max_width_px);
 
+            /*
             l_fluid_types:=pck_core.getFluidTypes(C.min_font_size, C.min_width_px, C.min_scale, C.max_font_size, C.max_width_px, C.max_scale);
             apex_json.open_array('fluid_types');
             FOR i IN 1..l_fluid_types.COUNT LOOP
@@ -504,6 +505,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CMS_UPDATE" IS
                 END IF;
             END LOOP;
             apex_json.close_array;
+            */
 
             apex_json.write('success', TRUE);
             apex_json.close_object;        
