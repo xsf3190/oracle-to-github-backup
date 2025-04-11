@@ -426,10 +426,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
 
-        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM api_endpoint WHERE website_id=pWebsiteId);
-        IF (n=0) THEN
-            pck_sec.refreshOrdsEndpoints(pWebsiteId);
-        END IF;
+        pck_sec.refreshOrdsEndpoints(pWebsiteId);
 
         /* Get URL of site to be deployed */
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId, pMethod=>'GET', pData=>l_clob);
@@ -449,12 +446,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END IF;
             extract_styles(l_body_html, l_fonts('SUBTITLE').chars_italic, l_fonts('SUBTITLE').chars_normal);
 
-            --logfont;
-
-            --pck_core.log('SUBTITLE'||':'||l_fonts(C.context).chars_normal||':'||l_fonts(C.context).chars_italic);
-            
-            --apex_string.push(l_labels(i).modules,'web-vitals.js'); /* already inified from google download */
-            --apex_string.push(l_labels(i).modules,'deploy_metric.min.js');
             apex_string.push(l_labels(i).modules,'deploy_main.min.js');
 
             IF (l_labels(i).collection_type='BLOG') THEN
@@ -624,7 +615,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         ) LOOP
             l_jscode.EXTEND();
             l_jscode(l_jscode.LAST):='deploy_' || SUBSTR(C.uri_template,1,INSTR(C.uri_template,'/')-1) || '.min.js';
-            pck_core.log(l_jscode(l_jscode.LAST));
         END LOOP;
 
         /* Utility javascript modules */
