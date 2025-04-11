@@ -207,6 +207,19 @@ editor.addEventListener("click", async (e) => {
         show_media("hero");
     }
 
+    if (e.target.matches(".delete-image")) {
+        const img = header.querySelector("img");
+        if (img) {
+            callAPI("edit-header/:ID","DELETE",{})
+                .then( () => {
+                    img.remove();
+                })
+                .catch((error) => {
+                    handleError(error);
+                })
+        }
+    }
+
     if (e.target.matches(".save-changes")) {
         const formData = new FormData(editor);
         const formObj = Object.fromEntries(formData);
