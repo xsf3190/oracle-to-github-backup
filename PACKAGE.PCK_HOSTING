@@ -4,9 +4,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_HOSTING" is
     --
     PROCEDURE createWebsite(pWebsiteId IN website.id%type, pUserid IN users.id%type, pEmail IN users.email%type, pUrl IN OUT VARCHAR2);
     --
+    PROCEDURE deleteDNS(pWebsiteId IN website.id%type);
+    --
     PROCEDURE deleteWebsite(pWebsiteid IN website.id%type);
     --
+    PROCEDURE getDNS(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
+    --
     FUNCTION getEditorDomain(pEmail IN users.email%type) RETURN VARCHAR2;
+    --
+    PROCEDURE linkDNS(pWebsiteId IN website.id%type, pBodytext IN CLOB, pStatus OUT NUMBER);
     --
     FUNCTION urlExists(pUrl IN VARCHAR2) RETURN BOOLEAN;
     --
@@ -75,6 +81,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
                 RETURN (FALSE);
     END;
 
+    /* 
+    ** CONVERT EMAIL ACCOUNT NAME INTO VALID SUBDOMAIN NAME
+    */
     FUNCTION getEditorDomain(pEmail IN users.email%type) RETURN VARCHAR2 IS
         l_domain VARCHAR2(100);
     BEGIN
@@ -82,6 +91,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         l_domain:=REPLACE(REPLACE(l_domain,'.','-'),'_','-');
         RETURN(l_domain);
     END;
+
     /* 
     ** CREATE NEW WEBSITE ON NETLIFY HOSTING SERVICE.
     ** PARAMETER pWebsiteid IS WEBSITE THROUGH WHICH PROSPECTIVE CLIENT MADE REQUEST
@@ -109,7 +119,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         SELECT site_id, ssl_url INTO l_netlify_site_id, l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id, ssl_url));
 
         INSERT INTO website (id, domain_name, netlify_site_id, created_date, user_id, contact_email, title, subtitle, header_text_color, header_effect)
-        SELECT seq_website.nextval, l_domain, l_netlify_site_id, current_timestamp, pUserid, pEmail, l_domain, 'Edit this website', header_text_color, header_effect
+        SELECT seq_website.nextval, l_domain, l_netlify_site_id, current_timestamp, pUserid, pEmail, l_domain, 'Editor website', header_text_color, header_effect
           FROM website WHERE id=pWebsiteId;
 
         INSERT INTO website_font (website_id, context, font_id, ital, wdth, wght, opsz, slnt, font_size, underline)
@@ -227,5 +237,137 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         EXCEPTION WHEN OTHERS THEN
             pck_core.log_error(pStatus);
     END;
+
+    /*
+    ** LINK EDITOR WEBSITE TO CUSTOM DOMAIN
+    */
+    PROCEDURE linkDNS(pWebsiteId IN website.id%type, pBodytext IN CLOB, pStatus OUT NUMBER) IS
+        l_domain_name_custom website.domain_name_custom%type;
+        l_domain_name website.domain_name%type;
+        l_user_id website.user_id%type;
+        l_session_data pck_sec.t_session_data;
+        l_json JSON_OBJECT_T;
+        l_clob CLOB;
+        l_netlify_account_slug users.netlify_account_slug%type;
+        l_netlify_site_id_custom website.netlify_site_id_custom%type;
+        l_netlify_dns_zone_id website.netlify_dns_zone_id%type;
+        l_article VARCHAR2(1000);
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        SELECT j.domain_name_custom, w.domain_name, w.user_id INTO l_domain_name_custom, l_domain_name, l_user_id FROM website w, JSON_TABLE(pBodytext, '$' COLUMNS (domain_name_custom)) j WHERE w.id=pWebsiteId;
+
+        pck_core.log('l_domain_name:'|| l_domain_name);
+        pck_core.log('l_domain_name_custom:'||l_domain_name_custom);
+
+        /* Create NETLIFY site object for LIVE site connected to custom domain */
+        l_json:=new JSON_OBJECT_T;
+        l_json.put('name', l_domain_name || ' linked to ' || l_domain_name_custom);
+        l_json.put('custom_domain', l_domain_name_custom);
+
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'POST', pStatusAllowed=>422, pBody=>l_json.stringify, pData=>l_clob);
+
+        IF (apex_web_service.g_status_code=422) THEN
+            apex_json.open_object;
+            apex_json.write('success', TRUE);
+            apex_json.write('error', 'Domain Name invalid. Must include top level domain, eg ".com", ".co.uk"');
+            apex_json.close_object;
+            RETURN;
+        END IF;
+
+        SELECT id, account_slug 
+          INTO l_netlify_site_id_custom, l_netlify_account_slug
+          FROM JSON_TABLE(l_clob, '$' COLUMNS (id, account_slug));
+
+        /* Create NETLIFY DNS ZONE for LIVE site */
+        l_json:=new JSON_OBJECT_T;
+        l_json.put('account_slug', l_netlify_account_slug);
+        l_json.put('site_id', l_netlify_site_id_custom);
+        l_json.put('name', l_domain_name_custom);
+
+        pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'dns_zones', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+
+        /* 
+        ** Get dns zone id and Netlify DNS server names to be updated in user's domain registrar 
+        */
+        FOR C IN (SELECT id, dns_server  FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED PATH '$.dns_servers[*]' COLUMNS (dns_server PATH '$'))) ) 
+        LOOP
+            l_netlify_dns_zone_id:=C.id;
+            l_article:=l_article || '<li>' || C.dns_server || '</li>';
+        END LOOP;
+        l_article:='<ul role="list">' || l_article || '</ul>';
+
+        UPDATE website 
+           SET netlify_site_id_custom=l_netlify_site_id_custom, netlify_dns_zone_id=l_netlify_dns_zone_id, updated_date=current_timestamp 
+         WHERE id=pWebsiteId;
+
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('article', l_article);
+        apex_json.write('footer', 'Update your domain''s nameservers');
+        apex_json.close_object;
+
+        pStatus:=200;
+
+        /*
+        ** Deploy LIVE website
+        */
+        pck_deploy.runDeployment(pWebsiteId, l_user_id, 'LIVE', l_netlify_site_id_custom, pck_core.getRestUrl(), 101);
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
+    END;
+
+    /*
+    ** GET ALL DNS ZONE SERVERS REGISTERED FOR A CUSTOM DOMAIN
+    ** IF NOT REGISTERED RETURN INPUT ELEMENT AND BUTTON TO CREATE
+    */
+    PROCEDURE getDNS(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_clob CLOB;
+        l_netlify_site_id_custom website.netlify_site_id_custom%type;
+        l_html VARCHAR2(500);
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        SELECT netlify_site_id_custom INTO l_netlify_site_id_custom  FROM website WHERE id=pWebsiteId;
+
+        apex_json.open_object; 
+        IF (l_netlify_site_id_custom IS NULL) THEN
+            apex_json.write('article', '<label for="domain">Domain Name purchased from GoDaddy, IONOS, 123Reg etc</label><input type="text" name="domain_name_custom" required><span class="result"></span>');
+            apex_json.write('footer', '<button type="button" class="button create-dns">GET NAMESERVERS</button><div class="loader visually-hidden"></div>');
+        ELSE
+            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/' || l_netlify_site_id_custom || '/dns', pMethod=>'GET', pData=>l_clob);
+            FOR C IN (SELECT dns_server  FROM JSON_TABLE(l_clob, '$' COLUMNS (NESTED PATH '$.dns_servers[*]' COLUMNS (dns_server PATH '$'))) ) 
+            LOOP
+                l_html:=l_html || '<li>' || C.dns_server || '</li>';
+            END LOOP;
+            apex_json.write('article', '<ul>' || l_html || '</ul>');
+            apex_json.write('footer', '<p>Update your domain''s nameservers</p>');
+        END IF;
+
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
+    END;
+
+    /*
+    ** DELETE DNS ZONE REGISTERED FOR A CUSTOM DOMAIN - CALLED AS PART OF WEBSITE DELETE PROCESS
+    */
+    PROCEDURE deleteDNS(pWebsiteId IN website.id%type) IS
+        l_clob CLOB;
+    BEGIN
+        FOR C IN (
+            SELECT netlify_dns_zone_id, user_id FROM website WHERE id=pWebsiteId AND netlify_dns_zone_id IS NOT NULL
+        )
+        LOOP
+            pck_api.callNetlifyAPI(pUserId=>C.user_id, pEndpoint=>'dns_zones/' || C.netlify_dns_zone_id, pMethod=>'DELETE', pData=>l_clob);
+        END LOOP;
+    END;
+
 end;
 /
