@@ -114,6 +114,10 @@ body>header:has(img)>div {
   display:contents;
 }
 
+body>header:has(img)+svg {
+  display:none;
+}
+
 body>header>div {
   border:1px solid var(--header-text-color);
   padding: 1em;
@@ -127,6 +131,8 @@ body>header img {
   width:100%;
   height:auto;
   object-fit:cover;
+  max-height: 60dvh;
+  border-radius: initial;
 }
 
 .title {
@@ -258,6 +264,7 @@ main h4 {
 .promotion {
     display:grid;
     place-items:center;
+    margin-block: 1rem;
 }
 .promotion img {
     inline-size: var(--space-3xl);
