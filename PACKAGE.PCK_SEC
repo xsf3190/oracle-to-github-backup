@@ -199,12 +199,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
               <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%;" width="100%">
                 <tr>
                   <td class="content-block" style="font-family: Helvetica, sans-serif; vertical-align: top; color: #9a9ea6; font-size: 16px; text-align: center;" valign="top" align="center">
-                    <span class="apple-link" style="color: #9a9ea6; font-size: 16px; text-align: center;">Email sent through adfreesites.com</span>
+                    <span class="apple-link" style="color: #9a9ea6; font-size: 16px; text-align: center;">Email signed by adfreesites.com</span>
                   </td>
                 </tr>
                 <tr>
                   <td class="content-block powered-by" style="font-family: Helvetica, sans-serif; vertical-align: top; color: #9a9ea6; font-size: 16px; text-align: center;" valign="top" align="center">
-                    Powered by <a href="https://docs.aws.amazon.com/ses/latest/dg/Welcome.html" style="color: #9a9ea6; font-size: 16px; text-align: center; text-decoration: none;">Amazon Simple Email Service(SES)</a>
+                    Engineered by Florent Meijer using <a href="https://docs.aws.amazon.com/ses/latest/dg/Welcome.html" style="color: #9a9ea6; font-size: 16px; text-align: center; text-decoration: none;">Amazon Simple Email Service</a>
                   </td>
                 </tr>
               </table>
@@ -220,14 +220,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
   </body>
 </html>';
         RETURN (l_html);
-    END;
-
-    PROCEDURE sendMessage(pSuccess IN BOOLEAN, pMessage IN VARCHAR2) IS
-    BEGIN
-        APEX_JSON.open_object;
-        APEX_JSON.write ('success', pSuccess);
-        APEX_JSON.write ('message', pMessage);
-        APEX_JSON.close_object;
     END;
 
     /* 
@@ -873,7 +865,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     END;
 
     /*
-    ** VERIFY PASSCODE OR TOKEN ENTERED BY USER MATCHES DATA ORIGINALLY SENT BY EMAIL
+    ** VERIFY PASSCODE OR TOKEN SENT BY USER MATCHES THOSE ORIGINALLY SENT BY EMAIL
     ** SET STATUS IN USERS TABLE TO "AUTH OK"
     **  - FOR VERIFIED PASSCODE, RETURN JWT ACCESS AND REFRESH TOKENS
     **  - FOR VERIFIED TOKEN, SEND MESSAGE IN NEW WINDOWS TAB
@@ -891,21 +883,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     BEGIN
         /* 
         ** Check issued and received tokens are the same 
-        */
-        pck_core.log('verifyAuthRequest.pDomain:'||pDomain);
-
-        
-        FOR C IN (SELECT email, DECODE(pRequestType,'magic',token,'passcode',passcode) original_data_hash FROM users WHERE id=pUserId) 
+        */        
+        FOR C IN (
+            SELECT u.email, DECODE(pRequestType,'magic',token,'passcode',passcode) original_data_hash, o.client_secret 
+              FROM users u, user_ords_clients o
+             WHERE u.id=pUserId
+               AND o.name=u.email
+        ) 
         LOOP
             l_email:=C.email;
             l_verify_data_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(pVerifyData,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+            l_jwt_enc_key:=C.client_secret;
             IF (l_verify_data_hash<>C.original_data_hash) THEN
-                IF (pRequestType='passcode') THEN
-                    sendMessage(FALSE,'Passcode does not match.');
-                END IF;
-                IF (pRequestType='magic') THEN
-                    htp.p('<h1>Token expired. Login again.</h1>');
-                END IF;
+                CASE pRequestType
+                    WHEN 'passcode' THEN
+                        APEX_JSON.open_object;
+                        APEX_JSON.write ('success', FALSE);
+                        APEX_JSON.write ('message', 'Passcode does not match');
+                        APEX_JSON.close_object;
+                    WHEN 'magic' THEN
+                        htp.p('<h1>Token expired. Login again.</h1>');
+                END CASE;
                 RETURN;
             END IF;
         END LOOP;
@@ -916,8 +914,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             ** Decode and Validate the token returned from email client
             */
             WHEN 'magic' THEN
-                SELECT o.client_secret INTO l_jwt_enc_key FROM user_ords_clients o, users u WHERE o.name=u.email AND u.id=pUserId;
-
+                
                 l_token:=apex_jwt.DECODE (
                     p_value   => pVerifyData,
                     p_signature_key   => UTL_RAW.cast_to_raw (l_jwt_enc_key)
