@@ -183,11 +183,11 @@ export const init = async (element) => {
         case 'owner':
             editor = await ClassicEditor.create( document.querySelector( '#editor' ), {
                 plugins: [ Essentials, Alignment, Autosave, BlockQuote, Bold, Clipboard,
-                           Deploy, GeneralHtmlSupport, Heading, HorizontalLine,
+                           Deploy, FontColor, GeneralHtmlSupport, Heading, HorizontalLine,
                            Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl,  
                            Italic, Link, List, Media, Paragraph, 
                            SelectAll, Underline, WordCount ],
-                toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic',
+                toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'fontColor',
                            'underline', 'alignment', 'link', 
                            'bulletedList', 'numberedList', 'blockQuote', 'insertImage', '|', 'media'],
                 initialData: initialdata,
@@ -346,6 +346,7 @@ export const show_media = async (request) => {
                             const hero_asset_id = e.target.closest("li").dataset.id;
                             callAPI("edit-header/:ID","POST",{hero_asset_id: hero_asset_id})
                                 .then( (data) => {
+                                    header.querySelector("img")?.remove();
                                     header.querySelector("div").insertAdjacentHTML('afterbegin',data.img);
                                 })
                                 .catch((error) => {
