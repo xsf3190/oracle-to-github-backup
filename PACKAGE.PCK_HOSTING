@@ -18,6 +18,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_HOSTING" is
     --
     PROCEDURE waitDeployment(pWebsiteId IN website.id%type, pUserid IN users.id%type, pWaitSeconds IN NUMBER DEFAULT 5);
     --
+    PROCEDURE createURLExistsJob(pUrl IN VARCHAR2, pUserid IN website.user_id%type);
+
+    PROCEDURE runURLExists(pUrl IN VARCHAR2, pUserid IN website.user_id%type);
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
@@ -314,8 +317,54 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         */
         pck_deploy.runDeployment(pWebsiteId, l_user_id, 'LIVE', l_netlify_site_id_custom, pck_core.getRestUrl(), 101);
 
+        createURLExistsJob(l_domain_name_custom, l_user_id);
+
         EXCEPTION WHEN OTHERS THEN
             pck_core.log_error(pStatus);
+    END;
+
+    /*
+    ** SUBMIT JOB TO RUN EVERY 10 MINUTES CHECKING URL IS ACTIVE.
+    ** RUNS AT NEXT 10 MINUTE BOUNDARY AND THEN EVERY 10 MINUTES UNTIL URL EXISTS
+    */
+    PROCEDURE createURLExistsJob(pUrl IN VARCHAR2, pUserId IN website.user_id%type) IS
+        l_job_name VARCHAR2(30);
+    BEGIN
+        l_job_name:=dbms_scheduler.generate_job_name('URLEXISTS_');
+        dbms_scheduler.create_job(
+            job_name   => l_job_name,
+            job_type   =>'STORED_PROCEDURE',
+            job_action =>'pck_hosting.runURLExists',
+            number_of_arguments=>1,
+            start_date=>systimestamp,
+            repeat_interval   => 'FREQ=minutely;BYMINUTE=0,10,20,30,40,50;BYSECOND=0'
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 1,
+            argument_value => pUrl
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 2,
+            argument_value => pUserId
+        );
+        dbms_scheduler.enable(l_job_name);
+    END;
+
+    /*
+    ** CHECK URL IS ACTIVE - I.E. DNS HAS SUFFICIENTLY PROPAGATED AND NETLIFY SSL CERTIFICATE HAS BEEN ISSUED
+    */
+    PROCEDURE runURLExists(pUrl IN VARCHAR2, pUserId IN website.user_id%type) IS
+        l_job_name VARCHAR2(30);
+    BEGIN
+        IF (urlExists(pUrl)) THEN
+            pck_core.log('URL ' || pUrl || ' OK. Send mail and drop job');
+            SELECT job_name INTO l_job_name FROM user_scheduler_running_jobs WHERE session_id = sys_context('USERENV', 'SID');
+            dbms_scheduler.drop_job(l_job_name,defer=>true);
+        ELSE
+            pck_core.log('URL ' || pUrl || ' NOK. Retry in 10 minutes');
+        END IF;
     END;
 
     /*
