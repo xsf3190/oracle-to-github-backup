@@ -25,13 +25,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
     ** GET AUTHENTICATED USER'S CLOUDINARY DETAILS IN ORDER TO PREPARE UPLOAD WIDGET
     */
     PROCEDURE getCldDetails(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pRequest IN VARCHAR2, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
         l_cld_cloud_name users.cld_cloud_name%type;
         l_cld_api_key users.cld_api_key%type;
         l_cld_api_secret users.cld_api_secret%type;
         l_image_max_size INTEGER;
         l_video_max_size INTEGER;
         l_google_api_key users.google_api_key%type;
-        l_session_data pck_sec.t_session_data;
+        l_thumbnails CLOB;
+        l_heading VARCHAR2(50);
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
@@ -46,10 +48,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             apex_json.write('googleApiKey', l_google_api_key);
             apex_json.close_object;
         ELSE
+            l_thumbnails:=pck_media.getThumbnails(pArticleId);
+            IF (SUBSTR(l_thumbnails,1,3)='<ul') THEN
+                IF (pRequest='copy') THEN 
+                    l_heading:='Copy image URL';
+                ELSIF (pRequest='hero') THEN
+                    l_heading:='Select Hero Image';
+                END IF;
+            END IF;
+
             APEX_JSON.open_object; 
             APEX_JSON.write('success', TRUE);
-            APEX_JSON.write('thumbnails', pck_media.getThumbnails(pArticleId));
-            APEX_JSON.write('heading',CASE WHEN pRequest='copy' THEN 'Copy image URL' WHEN pRequest='hero' THEN 'Set as Hero Image' END);
+            APEX_JSON.write('thumbnails', l_thumbnails);
+            APEX_JSON.write('heading',l_heading);
             APEX_JSON.close_object;
         END IF;
 
@@ -364,7 +375,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
         IF (n=0) THEN
             l_clob:=
                 '<p class="align-center">NO IMAGES UPLOADED FOR THIS PAGE</p>' ||
-                '<p class="align-center">Use Upload Media option from editor menu</p>';
+                '<p class="align-center">Upload Media from editor menu</p>';
         END IF;
 
         RETURN (l_clob);
