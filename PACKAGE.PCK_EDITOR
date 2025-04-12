@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
     --
+    PROCEDURE deleteHero(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
+    --
     PROCEDURE deletePage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
     PROCEDURE deployWebsite(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
@@ -513,9 +515,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 '</div>' ||
 
                 '<div style="width:100%">' ||
-                    '<input type="text" style="font:inherit;font-size:120%" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || l_column_name || 
-                        '" size="20" maxlength="' || C.data_length || '" value="' || pValue || '">' ||
-                    '<span class="charcounter" style="font-size:80%">' || NVL(LENGTH(pValue),0) ||  '/' || C.data_length || '</span>' ||
+                    '<input type="text" style="font:inherit;font-size:120%;max-inline-size:50%" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || l_column_name || 
+                        '" maxlength="' || C.data_length || '" value="' || pValue || '">' ||
+                    '<span class="charcounter" style="font-size:80%;margin-inline-start:0.2em">' || NVL(LENGTH(pValue),0) ||  '/' || C.data_length || '</span>' ||
                 '</div>' ||
                 
                 '<div class="flex-items" style="--flex-direction:row;--flex-gap:1em">' ||
@@ -570,16 +572,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 '<fieldset class="background-color flex-items" style="--flex-direction:column">' ||
                     '<legend><strong>Change Background</strong></legend>' ||
                     '<input type="hidden" name="header_text_color" value="' || C.header_text_color || '">' ||
-                    '<div>' ||
-                        '<label for="background-color-1">Pick Color</label>' || 
-                        '<input type="color" id="background-color-1" class="background-color" name="color_primary" value="' || C.color_primary || '">' || 
-                    '</div>' ||
+                    '<div class="flex-items" style="--flex-direction:row">' ||
+                        '<label for="background-color-1">Pick Color' || 
+                            '<input type="color" id="background-color-1" class="background-color" name="color_primary" value="' || C.color_primary || '">' || 
+                        '</label>' ||
                     CASE WHEN pEyeDropper='true' THEN
-                    '<div>' ||
-                        '<label for="background-color-2">Pick from Screen</label>' ||
-                        '<button type="button" class="eyedropper"></button>' ||
-                    '</div>'
+                        '<label for="background-color-2">Pick from Screen' ||
+                            '<button type="button" class="eyedropper"></button>' ||
+                        '</label>'
                     END ||
+                    '</div>' ||
+                    '<div class="flex-items" style="--flex-direction:row">' ||
+                        '<button type="button" class="button background-image">Select Image</button>' || 
+                        '<button type="button" class="button delete-image">No Image</button>' || 
+                    '</div>' ||
                     /*
                     '<button type="button" class="button background-image" style="--button-bg:transparent;--button-hover-bg:transparent">' ||
                         '<svg class="icon" aria-hidden="true" focusable="false">' ||
@@ -714,6 +720,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         pck_core.log_error(pStatus);
 
     END;
+
+    /* 
+    **  DELETE HERO IMAGE
+    */
+    PROCEDURE deleteHero(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+        
+       UPDATE website SET hero_asset_id=NULL, updated_date=current_timestamp WHERE id=pWebsiteId;
+        
+        apex_json.open_object;
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+    END;
+
 
 
     /* 
