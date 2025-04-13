@@ -1,58 +1,143 @@
 /*
 **  ADD / CHANGE / DELETE PAGES
 */
-import { callAPI } from "./deploy_callAPI.min.js";
+import { nav, dropdown_details } from "./deploy_elements.min.js";
+import { callAPI, handleError } from "./deploy_callAPI.min.js";
 
-const page_dialog = document.querySelector("dialog.page");
-const form = page_dialog.querySelector("form");
-const pageInput = form.querySelector("[name='navigation_label']");
-const pageResult = form.querySelector(".pageInput-result");
-const footer = form.querySelector("footer");
-const charcounter = form.querySelector(".charcounter");
-const maxchars = pageInput.getAttribute("maxlength");
-const loader = form.querySelector(".loader");
+const nav_items = nav.querySelector("div");
+const editor = nav.nextElementSibling;
 
 let endpoint;
-let currentPage;
 
 export const init = (element) => {
     endpoint = element.dataset.endpoint;
-    form.reset();
-    currentPage = document.querySelector("[aria-current='page']");
-    if (currentPage) {
-        pageInput.value = currentPage.textContent;
-    }
-    
-    pageResult.textContent = "";
-    page_dialog.showModal();
-}
-
-pageInput.addEventListener("input", () => {
-    let numOfEnteredChars = pageInput.value.length;
-    charcounter.textContent = numOfEnteredChars + "/" + maxchars;
-    if (numOfEnteredChars === Number(maxchars)) {
-        charcounter.style.color = "red";
-    } else {
-        charcounter.style.color = "initial";
-    }
-});
-
-footer.addEventListener("click", (e) => {
-    if (pageInput.validity.valueMissing) {
-        pageResult.textContent = "You need to enter a page label";
-        pageResult.style.color = "red";
-        return;
-    }
-    loader.style.display = "block";
-    const formData = new FormData(form);
-    const formObj = Object.fromEntries(formData);
-    callAPI(endpoint, e.target.dataset.method, formObj)
+    callAPI(endpoint,'GET')
         .then((data) => {
-            window.location.replace(data.href);
+            editor.insertAdjacentHTML('afterbegin',data.html);
+            dropdown_details.removeAttribute("open");
+            editor.scrollIntoView();
+            const edit = editor.querySelector("input[name='navigation_label']");
+            const current = nav_items.querySelector("[aria-current='page']")
+            edit.value = current.textContent;
+            setCollectionType(current.dataset.collection);
         })
         .catch((error) => {
-            loader.style.display = "none";
-            pageResult.textContent = error;
-            pageResult.style.color = "red";
+            handleError(error);
         });
-});
+}
+
+let tmp = 0;
+
+const removeAriaCurrent = () => {
+  nav.querySelectorAll("a").forEach( (a) => {
+    a.removeAttribute("aria-current");
+  })
+}
+
+const setCollectionType = (data) => {
+    const collection = editor.querySelectorAll("[name='collection_type']");
+    switch (data) {
+        case "N/A":
+            collection[0].checked = true;
+            break;
+        case "BLOG":
+            collection[1].checked = true;
+            break;
+        case "PORTFOLIO":
+            collection[2].checked = true;
+            break;
+    }
+}
+
+/*
+** USER CLICKS A NAVIGATION LABEL WHICH WE USE TO CAPTURE ANY CHANGES (LABEL TEXT, COLLECTION_TYPE)
+*/
+nav_items.addEventListener("click", (e) => {
+  e.preventDefault();
+  removeAriaCurrent();
+  e.target.setAttribute("aria-current","page");
+  const edit = editor.querySelector("input[name='navigation_label']");
+  edit.value = e.target.textContent;
+  setCollectionType(e.target.dataset.collection);
+})
+
+/*
+** REFLECT CHANGES IMMEDIATELY IN NAV ELEMENTS
+*/
+editor.addEventListener("input", (e) => {
+    if (e.target.matches("[name='navigation_label']")) {
+        nav.querySelector("[aria-current='page']").textContent = e.target.value;
+    }
+
+    if (e.target.matches("[name='collection_type']")) {
+        nav.querySelector("[aria-current='page']").dataset.collection = e.target.value;
+    }
+})
+
+/*
+** BUTTON CLICK EVENT HANDLERS
+*/
+editor.addEventListener("click", async (e) => {
+    if (e.target.matches(".add-page")) {
+        const target = nav.querySelector("[aria-current='page']");
+        removeAriaCurrent();
+        const clone = target.cloneNode();
+        clone.textContent = "[NEW PAGE]";
+        clone.dataset.id = tmp--;
+        clone.dataset.collection = "N/A";
+        clone.setAttribute("aria-current","page");
+        
+        nav_items.insertBefore(clone, target.nextSibling);
+        const edit = editor.querySelector("input[name='navigation_label']");
+        edit.value = "[NEW PAGE]";
+        return;
+    }
+
+    if (e.target.matches(".delete-page")) {
+        if (nav_items.childElementCount === 1) {
+            return;
+        }
+        const target = nav.querySelector("[aria-current='page']");
+        if (target.nextElementSibling) {
+            target.nextElementSibling.setAttribute("aria-current","page");
+        } else {
+            target.previousElementSibling.setAttribute("aria-current","page");
+        }
+        const edit = editor.querySelector("input[name='navigation_label']");
+        edit.value = nav_items.querySelector("[aria-current='page']").textContent;
+        target.remove();
+        return;
+    }
+
+    if (e.target.matches(".cancel-changes")) {
+        window.location.reload();
+        return;
+    }
+
+    if (e.target.matches(".publish-changes")) {
+        const arr = [];
+        nav_items.querySelectorAll("a").forEach ((item) => {
+            const obj = {};
+            obj.article_id = item.dataset.id;
+            obj.collection_type = item.dataset.collection;
+            obj.navigation_label = item.textContent;
+            arr.push(obj);
+        })
+        await callAPI(endpoint,'POST', arr)
+            .then(() => {
+                console.log("Form changes saved. Now deploy.");
+            })
+            .catch((error) => {
+                handleError(error);
+            });
+
+        const import_module_name = "./deploy_publish-website.min.js";
+        await import(import_module_name)
+            .then((module) => {
+                module.init(e.target);
+            })
+            .catch((error) => {
+                handleError(error);
+            });
+    }
+})
