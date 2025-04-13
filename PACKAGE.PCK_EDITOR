@@ -18,6 +18,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
     --
     PROCEDURE getHeader(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER);
     --
+    PROCEDURE getPages(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
+    --
     PROCEDURE initWebsiteFonts(pWebsiteId IN website.id%type, pTitleFont IN font.family%type, pSubTitleFont IN font.family%type DEFAULT NULL);
     --
     PROCEDURE insertPage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
@@ -240,6 +242,55 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         EXCEPTION
             WHEN OTHERS THEN
                 pck_core.log_error(pStatus);
+    END;
+
+    /* 
+    **  BUILD FIELDSET TO EDIT WEBSITE PAGES
+    */
+    PROCEDURE getPages(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_html LONG;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+            
+        l_html:=
+            '<fieldset class="flex-items">' ||
+                '<legend><strong>Change / Add / Delete Pages</strong></legend>' ||
+                '<div>' ||
+                    '<label for="navigation-label">Change Label</label>' ||
+                    '<input type="text" id="navigation-label" name="navigation_label" maxlength="30" value="">' ||
+                '</div>' ||
+
+                --'<div>' ||
+                --    '<label for="page-title">Page Title (SEO)</label>' ||
+                --    '<input type="text" id="page-title" name="page_title" maxlength="60" value="">' ||
+                --    '<span class=charcounter"></span>' ||
+                --'</div>' ||
+
+                '<fieldset class="flex-items">' ||
+                    '<legend>Page Type</legend>' ||
+                    '<label for="collection_type-normal">Normal</label>' ||
+                    '<input type="radio" id="collection_type-normal" name="collection_type" value="N/A">' ||
+                    '<label for="collection_type-blog">Blog</label>' ||
+                    '<input type="radio" id="collection_type-blog" name="collection_type" value="BLOG">' ||
+                    '<label for="collection_type-portfolio">Portfolio</label>' ||
+                    '<input type="radio" id="collection_type-portfolio" name="collection_type" value="PORTFOLIO">' ||
+                '</fieldset>' ||
+
+                '<button type="button" class="button add-page">Add Page</button>' ||
+                '<button type="button" class="button delete-page">Delete Page</button>' ||
+            '</fieldset>';
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE); 
+        apex_json.write('html', l_html);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
     END;
 
     /* 
