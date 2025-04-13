@@ -357,14 +357,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
     */
     PROCEDURE runURLExists(pUrl IN VARCHAR2, pUserId IN website.user_id%type) IS
         l_job_name VARCHAR2(30);
+        l_sendmail_body LONG;
     BEGIN
-        IF (urlExists(pUrl)) THEN
-            pck_core.log('URL ' || pUrl || ' OK. Send mail and drop job');
-            SELECT job_name INTO l_job_name FROM user_scheduler_running_jobs WHERE session_id = sys_context('USERENV', 'SID');
-            dbms_scheduler.drop_job(l_job_name,defer=>true);
-        ELSE
+        IF NOT (urlExists(pUrl)) THEN
             pck_core.log('URL ' || pUrl || ' NOK. Retry in 10 minutes');
+            RETURN;
         END IF;
+
+        pck_core.log('URL ' || pUrl || ' OK. Send mail and drop job');
+        l_sendmail_body:=pck_email.emailTemplate('website',pUrl);
+        FOR C IN (SELECT email FROM users WHERE id=pUserId) LOOP
+            pck_email.sendmail(C.email, pUrl || ' is deployed', l_sendmail_body);
+        END LOOP;
+
+        SELECT job_name INTO l_job_name FROM user_scheduler_running_jobs WHERE session_id = sys_context('USERENV', 'SID');
+        dbms_scheduler.drop_job(l_job_name,defer=>true);
+
     END;
 
     /*
@@ -383,7 +391,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
 
         apex_json.open_object; 
         IF (l_netlify_site_id_custom IS NULL) THEN
-            apex_json.write('article', '<label for="domain">Domain Name purchased from GoDaddy, IONOS, 123Reg etc</label><input type="text" name="domain_name_custom" required><span class="result"></span>');
+            apex_json.write('article', '<label for="domain">Enter Domain Name</label><input type="text" name="domain_name_custom" required><span class="result"></span>');
             apex_json.write('footer', '<button type="button" class="button create-dns">GET NAMESERVERS</button><div class="loader visually-hidden"></div>');
         ELSE
             pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/' || l_netlify_site_id_custom || '/dns', pMethod=>'GET', pData=>l_clob);
