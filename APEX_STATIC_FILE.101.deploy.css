@@ -86,14 +86,19 @@ img {
 }
 
 figure.image {
-    display: grid;
-    place-items: center;
+  display:table;
+  margin-inline:auto;
+}
+
+figure.image>img{
+  height: auto;
+  width: 100%;
 }
 
 .image>figcaption {
   background-color: #f7f7f7;
   font-size: var(--step--2);
-  padding: 0.6em;
+  padding: 0.5em;
   text-align: center;
   word-break: break-word;
 }
