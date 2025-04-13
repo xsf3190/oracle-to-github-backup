@@ -47,181 +47,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     REFRESH_TOKEN_EXP CONSTANT PLS_INTEGER:=(24*60*60)*90; --90 DAYS
     ACCESS_TOKEN_EXP CONSTANT PLS_INTEGER:=60*5; -- 5 MINUTES
 
-    FUNCTION emailTemplate(pAuthMethod IN VARCHAR2, pWebsite IN VARCHAR2, pAuthData IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
-        l_html LONG;
-    BEGIN
-    l_html:=
-'<!doctype html>
-<html lang="en">
-  <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <title>Simple Transactional Email</title>
-    <style media="all" type="text/css">
-@media all {
-  .btn-primary table td:hover {
-    background-color: #ec0867 !important;
-  }
-
-  .btn-primary a:hover {
-    background-color: #ec0867 !important;
-    border-color: #ec0867 !important;
-  }
-}
-@media only screen and (max-width: 640px) {
-  .main p,
-.main td,
-.main span {
-    font-size: 16px !important;
-  }
-
-  .wrapper {
-    padding: 8px !important;
-  }
-
-  .content {
-    padding: 0 !important;
-  }
-
-  .container {
-    padding: 0 !important;
-    padding-top: 8px !important;
-    width: 100% !important;
-  }
-
-  .main {
-    border-left-width: 0 !important;
-    border-radius: 0 !important;
-    border-right-width: 0 !important;
-  }
-
-  .btn table {
-    max-width: 100% !important;
-    width: 100% !important;
-  }
-
-  .btn a {
-    font-size: 16px !important;
-    max-width: 100% !important;
-    width: 100% !important;
-  }
-}
-@media all {
-  .ExternalClass {
-    width: 100%;
-  }
-
-  .ExternalClass,
-.ExternalClass p,
-.ExternalClass span,
-.ExternalClass font,
-.ExternalClass td,
-.ExternalClass div {
-    line-height: 100%;
-  }
-
-  .apple-link a {
-    color: inherit !important;
-    font-family: inherit !important;
-    font-size: inherit !important;
-    font-weight: inherit !important;
-    line-height: inherit !important;
-    text-decoration: none !important;
-  }
-
-  #MessageViewBody a {
-    color: inherit;
-    text-decoration: none;
-    font-size: inherit;
-    font-family: inherit;
-    font-weight: inherit;
-    line-height: inherit;
-  }
-}
-</style>
-  </head>
-  <body style="font-family: Helvetica, sans-serif; -webkit-font-smoothing: antialiased; font-size: 16px; line-height: 1.3; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; background-color: #f4f5f6; margin: 0; padding: 0;">
-    <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="body" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; background-color: #f4f5f6; width: 100%;" width="100%" bgcolor="#f4f5f6">
-      <tr>
-        <td style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top;" valign="top">&nbsp;</td>
-        <td class="container" style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top; max-width: 600px; padding: 0; padding-top: 24px; width: 600px; margin: 0 auto;" width="600" valign="top">
-          <div class="content" style="box-sizing: border-box; display: block; margin: 0 auto; max-width: 600px; padding: 0;">
-
-            <!-- START CENTERED WHITE CONTAINER -->
-            <span class="preheader" style="color: transparent; display: none; height: 0; max-height: 0; max-width: 0; opacity: 0; overflow: hidden; mso-hide: all; visibility: hidden; width: 0;">Your Login request to ' || pWebsite || '</span>
-            <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="main" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; background: #ffffff; border: 1px solid #eaebed; border-radius: 16px; width: 100%;" width="100%">
-
-              <!-- START MAIN CONTENT AREA -->
-              <tr>
-                <td class="wrapper" style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top; box-sizing: border-box; padding: 24px;" valign="top">
-                  <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: bold; margin: 0; margin-bottom: 16px;">' || 
-                  CASE pAuthMethod 
-                    WHEN 'website' THEN 'Your new website is ' || SUBSTR(pWebsite,1,INSTR(pWebsite,'?')-1) ELSE 'Your Login request to ' || pWebsite
-                  END ||
-                  '</p>
-                  <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: normal; margin: 0; margin-bottom: 16px;">' ||
-                  CASE pAuthMethod 
-                    WHEN 'magic' THEN 'Click the button below to log in. Your link expires in 5 minutes.'
-                    WHEN 'passcode' THEN 'Enter this passcode to log in. Expires in 5 minutes.'
-                    WHEN 'website' THEN 'Click button below to open website.'
-                  END ||
-                  '</p>
-                  <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="btn btn-primary" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; box-sizing: border-box; width: 100%; min-width: 100%;" width="100%">
-                    <tbody>
-                      <tr>
-                        <td align="left" style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top; padding-bottom: 16px;" valign="top">
-                          <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: auto;">
-                            <tbody>
-                              <tr>
-                                <td style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top; border-radius: 4px; text-align: center; background-color: #0867ec;" valign="top" align="center" bgcolor="#0867ec">' ||
-                                CASE pAuthMethod 
-                                    WHEN 'magic' THEN '<a href="' || pAuthData || '" target="_blank" style="border: solid 2px #0867ec; border-radius: 4px; box-sizing: border-box; cursor: pointer; display: inline-block; font-size: 16px; font-weight: bold; margin: 0; padding: 12px 24px; text-decoration: none; text-transform: capitalize; background-color: #0867ec; border-color: #0867ec; color: #ffffff;">Login</a>'
-                                    WHEN 'passcode' THEN '<span style="border: solid 2px #0867ec; border-radius: 4px; box-sizing: border-box; display: inline-block; font-size: 24px; letter-spacing: 8px; font-weight: bold; margin: 0; padding: 12px 24px; text-transform: capitalize; background-color: #0867ec; border-color: #0867ec; color: #ffffff;">' || pAuthData || '</span>'
-                                    WHEN 'website' THEN '<a href="' || pWebsite || '" target="_blank" style="border: solid 2px #0867ec; border-radius: 4px; box-sizing: border-box; cursor: pointer; display: inline-block; font-size: 16px; font-weight: bold; margin: 0; padding: 12px 24px; text-decoration: none; text-transform: capitalize; background-color: #0867ec; border-color: #0867ec; color: #ffffff;">' || SUBSTR(pWebsite,1,INSTR(pWebsite,'?')-1) || '</a>'
-                                END ||
-                                '</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <p style="font-family: Helvetica, sans-serif; font-size: 16px; font-weight: normal; margin: 0; margin-bottom: 16px;">Thank you.</p>
-                </td>
-              </tr>
-
-              <!-- END MAIN CONTENT AREA -->
-              </table>
-
-            <!-- START FOOTER -->
-            <div class="footer" style="clear: both; padding-top: 24px; text-align: center; width: 100%;">
-              <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%;" width="100%">
-                <tr>
-                  <td class="content-block" style="font-family: Helvetica, sans-serif; vertical-align: top; color: #9a9ea6; font-size: 16px; text-align: center;" valign="top" align="center">
-                    <span class="apple-link" style="color: #9a9ea6; font-size: 16px; text-align: center;">Email signed by adfreesites.com</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td class="content-block powered-by" style="font-family: Helvetica, sans-serif; vertical-align: top; color: #9a9ea6; font-size: 16px; text-align: center;" valign="top" align="center">
-                    Engineered by Florent Meijer using <a href="https://docs.aws.amazon.com/ses/latest/dg/Welcome.html" style="color: #9a9ea6; font-size: 16px; text-align: center; text-decoration: none;">Amazon Simple Email Service</a>
-                  </td>
-                </tr>
-              </table>
-            </div>
-
-            <!-- END FOOTER -->
-            
-<!-- END CENTERED WHITE CONTAINER --></div>
-        </td>
-        <td style="font-family: Helvetica, sans-serif; font-size: 16px; vertical-align: top;" valign="top">&nbsp;</td>
-      </tr>
-    </table>
-  </body>
-</html>';
-        RETURN (l_html);
-    END;
-
     /* 
     ** TEMPORARY SOLUTION TO POPULATE ENDPOINT TABLES
     */
@@ -325,20 +150,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         RETURN l_session_data;
     END;
 
-    PROCEDURE sendmail(pEmail IN VARCHAR2, pSubject IN VARCHAR2, pBody IN VARCHAR2) IS
-        l_json JSON_OBJECT_T;
-        l_email_payload CLOB;
-        l_clob CLOB;
-    BEGIN
-        l_json:=new JSON_OBJECT_T; 
-        l_json.put('contactEmail',pEmail);
-        l_json.put('subject',pSubject);
-        l_json.put('body', pBody);
-        l_json.put('sourceEmail','login@adfreesites.com');
-        l_email_payload:=l_json.stringify;
-        pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_email_payload, pData=>l_clob);
-    END;
-
     /*
     ** USER SUBMITS EMAIL ADDRESS TO BE AUTHENTICATED
     ** - CREATE RANDOM PASSCODE OR MAGIC LINK AND SEND TO EMAIL ADDRESS
@@ -414,7 +225,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 END IF;
                 
                 l_sendmail_link:=pck_core.getRestUrl || 'authenticate/' || pWebsiteId || '?request=magic&user=' || l_user_id || '&verify=' || l_token || '&domain=' || NVL(l_domain,'NO');
-                l_sendmail_body:=emailTemplate(l_request_type, l_url, l_sendmail_link);
+                l_sendmail_body:=pck_email.emailTemplate(l_request_type, l_url, l_sendmail_link);
 
             WHEN 'passcode' THEN
                 FOR i IN 1..6 LOOP
@@ -430,10 +241,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                     UPDATE users SET login_status='AUTH WAITING', passcode=l_passcode_hash, domain=l_domain, updated_date=current_timestamp WHERE id=l_user_id;
                 END IF;
 
-                l_sendmail_body:=emailTemplate(l_request_type, l_url, l_passcode);
+                l_sendmail_body:=pck_email.emailTemplate(l_request_type, l_url, l_passcode);
         END CASE;
 
-        sendmail(l_email, 'Login to ' || l_url, l_sendmail_body);
+        pck_email.sendmail(l_email, 'Login to ' || l_url, l_sendmail_body);
 
         IF (l_request_type='passcode') THEN
             l_return_message:='Passcode sent to your inbox';
@@ -773,15 +584,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         RETURN (l_fingerprint);
     END;
 
+    /*
+    ** CREATE WEBSITE FOR AUTHENTICATED VISITOR 
+    */
     FUNCTION createWebsite(pWebsiteId IN website.id%type, pEmail IN users.email%type, pUserId IN users.id%type, pEncKey IN user_ords_clients.client_secret%type) RETURN VARCHAR2 IS
         l_url VARCHAR2(1000);
         l_issuer VARCHAR2(15);
         l_scope VARCHAR2(7);
         l_new_token_domain VARCHAR2 (4000);
         l_new_refresh_domain VARCHAR2 (4000);
-        l_new_refresh_domain_hash refresh_token.token_issued%type;
+        --l_new_refresh_domain_hash refresh_token.token_issued%type;
     BEGIN
+        -- create website on hosting platform returning its URL
         pck_hosting.createWebsite(pWebsiteId, pUserid, pEmail, l_url);
+
+        -- issue JWT tokens to be attached to URL
         l_issuer:='ORDS.'|| seq_website.currval;
         l_scope:=getScope(seq_website.currval,pEmail);
         l_new_token_domain:=apex_jwt.ENCODE (
@@ -802,16 +619,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             p_exp_sec   => REFRESH_TOKEN_EXP,
             p_signature_key => UTL_RAW.cast_to_raw (pEncKey)
         );
-        l_url:=l_url || '?refresh=' || l_new_refresh_domain || '&token=' || l_new_token_domain;
-        l_new_refresh_domain_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh_domain,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
 
-        INSERT INTO refresh_token(user_id, website_id, token_issued) VALUES (pUserId, seq_website.currval, l_new_refresh_domain_hash);
+        -- attach tokens as URL search parameters in order to auto-login the requesting user 
+        l_url:=l_url || '?refresh=' || l_new_refresh_domain || '&token=' || l_new_token_domain;
+        
+        --l_new_refresh_domain_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh_domain,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
 
         RETURN (l_url);
     END;
 
     /*
-    ** USER AUTHENTICATED SUCCESSFULLY. CREATE FINGERPRINT AND ISSUE NEW PAIR OF TOKENS FOR CLIENT
+    ** USER AUTHENTICATED SUCCESSFULLY 
+    ** - CREATE FINGERPRINT
+    ** - ISSUE NEW PAIR OF TOKENS TO RETURN TO CLIENT
     */
     PROCEDURE issueJWTTokens(pWebsiteId IN website.id%type, pEmail IN users.email%type, pUserId IN users.id%type) IS 
         l_new_token VARCHAR2 (4000);
@@ -822,13 +642,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_issuer VARCHAR2(15);
         l_scope VARCHAR2(7);
     BEGIN
-
         SELECT client_secret 
           INTO l_jwt_enc_key
           FROM user_ords_clients
          WHERE name=pEmail;
 
-        
         l_issuer:='ORDS.'||pWebsiteId;
         l_scope:=getScope(pWebsiteId,pEmail);
 
@@ -853,7 +671,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         );
 
         l_new_refresh_hash:=dbms_crypto.hash(src=>UTL_I18N.STRING_TO_RAW(l_new_refresh,'AL32UTF8'), typ=>dbms_crypto.hash_sh256);
+
         INSERT INTO refresh_token(user_id, website_id, token_issued) VALUES (pUserId, pWebsiteId, l_new_refresh_hash);
+        
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('token', l_new_token);
@@ -868,7 +688,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     ** VERIFY PASSCODE OR TOKEN SENT BY USER MATCHES THOSE ORIGINALLY SENT BY EMAIL
     ** SET STATUS IN USERS TABLE TO "AUTH OK"
     **  - FOR VERIFIED PASSCODE, RETURN JWT ACCESS AND REFRESH TOKENS
-    **  - FOR VERIFIED TOKEN, SEND MESSAGE IN NEW WINDOWS TAB
+    **  - FOR VERIFIED TOKEN, MESSAGE IS SENT IN NEW WINDOWS TAB
     */
     PROCEDURE verifyAuthRequest(pWebsiteId IN website.id%type, pRequestType IN VARCHAR2, pUserId IN NUMBER, pVerifyData IN VARCHAR2, pDomain IN VARCHAR2, pStatus OUT NUMBER) IS
         l_email users.email%type;
@@ -937,8 +757,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 ELSE
                     l_url:=createWebsite(pWebsiteId, l_email, pUserid, l_jwt_enc_key);
                     l_url_base:=SUBSTR(l_url,1,INSTR(l_url,'?')-1);
-                    l_sendmail_body:=emailTemplate('website', l_url_base);
-                    sendmail(l_email, 'Link to your website ' || l_url_base, l_sendmail_body);
+                    l_sendmail_body:=pck_email.emailTemplate('website', l_url_base);
+                    pck_email.sendmail(l_email, 'Link to your website ' || l_url_base, l_sendmail_body);
                     htp.p('<div style="display:grid;place-items:center;block-size:30dvh">');
                     htp.p('<h1 style="font-family:system-ui;font-size:5vmin;color:rebeccapurple">WEBSITE CREATED</h1>');
                     htp.p('<a style="font-family:system-ui;font-size:5vmin;align-self:start;color:rebeccapurple;text-decoration:underline;text-underline-offset:25%;text-decoration-thickness:15%;" href="' || l_url || '">' || l_url_base || '</a>');
@@ -951,8 +771,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 ELSE
                     l_url:=createWebsite(pWebsiteId, l_email, pUserid, l_jwt_enc_key);
                     l_url_base:=SUBSTR(l_url,1,INSTR(l_url,'?')-1);
-                    l_sendmail_body:=emailTemplate('website', l_url_base);
-                    sendmail(l_email, 'Link to your website ' || l_url_base, l_sendmail_body);
+                    l_sendmail_body:=pck_email.emailTemplate('website', l_url_base);
+                    pck_email.sendmail(l_email, 'Link to your website ' || l_url_base, l_sendmail_body);
                     APEX_JSON.open_object;
                     APEX_JSON.write ('success', TRUE);
                     APEX_JSON.write ('url', l_url);
