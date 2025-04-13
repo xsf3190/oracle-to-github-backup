@@ -307,8 +307,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         END IF;
 
         l_nav_labels:=
-            '<nav class="flex-items space-between" aria-label="Main Navigation">' ||
-                '<span class="logo"></span>';
+            '<nav class="flex-items space-between" aria-label="Main Navigation">';
+                --'<span class="logo"></span>';
         IF (g_nav_labels.COUNT>1) THEN
             FOR i IN 1..g_nav_labels.COUNT LOOP
                 IF (i=1) THEN
@@ -318,7 +318,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 l_nav_labels:=l_nav_labels || 
                     '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '"' ||
                         CASE WHEN g_nav_labels(i).article_id=l_article_id THEN ' aria-current="page"' END  || 
-                        ' data-id="' || g_nav_labels(i).article_id || '">' || g_nav_labels(i).navigation_label || '</a>';
+                        ' data-id="' || g_nav_labels(i).article_id || '" data-collection="' || g_nav_labels(i).collection_type || '">' || g_nav_labels(i).navigation_label || '</a>';
                 IF (i=g_nav_labels.COUNT) THEN
                     l_nav_labels:=l_nav_labels || 
                     '</div>';
