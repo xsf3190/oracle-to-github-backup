@@ -1,7 +1,7 @@
 /*
 **  EDIT WEBSITE HEADER
 */
-import { header, dropdown_details, menulist, set_alert } from "./deploy_elements.min.js";
+import { header, footer, dropdown_details, set_alert } from "./deploy_elements.min.js";
 import { callAPI, handleError } from "./deploy_callAPI.min.js";
 import { show_media } from  "./deploy_edit-content.min.js";
 
@@ -48,8 +48,11 @@ editor.addEventListener("input", (e) => {
             }
             break;;
         case "color":
-            header.style.backgroundColor = e.target.value;
-            headerTextColor(e.target.value);
+            if (name === "color_primary") {
+                setBackgroundColor(e.target.value);
+            } else if (name.includes("color")) {
+                target.style.color = e.target.value;
+            }
             break;;
         case "range":
             if (name.includes("font_size")) {
@@ -76,49 +79,6 @@ editor.addEventListener("input", (e) => {
             break;;
     }
 });
-
-const headerTextColor = (color) => {
-    const whiteRGB = hexToRGB("#ffffff");
-    const colorRGB = hexToRGB(color);
-    const whiteluminance = luminance(whiteRGB.r, whiteRGB.g, whiteRGB.b);
-    const colorluminance = luminance(colorRGB.r, colorRGB.g, colorRGB.b);
-    const ratio = whiteluminance > colorluminance 
-            ? ((colorluminance + 0.05) / (whiteluminance + 0.05))
-            : ((whiteluminance + 0.05) / (colorluminance + 0.05));
-
-    //header.style.backgroundColor = e.target.value;
-    const root = document.documentElement;
-    root.style.setProperty('--color-primary', color);
-    const header_text_color = editor.querySelector("[name='header_text_color']");
-    if (ratio < 1/4.5) {
-        root.style.setProperty('--header-text-color',"#ffffff");
-        header_text_color.value = "#ffffff";
-    } else {
-        root.style.setProperty('--header-text-color',"#000000");
-        header_text_color.value = "#000000";
-    }
-}
-
-const hexToRGB = (hex) => {
-    var shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
-    hex = hex.replace(shorthandRegex, function(m, r, g, b) {
-        return r + r + g + g + b + b;
-    });
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-    };
-}
-
-const luminance = (r, g, b) => {
-    const a = [r, g, b].map(function (v) {
-        v /= 255;
-        return v <= 0.03928 ? v / 12.92 : Math.pow( (v + 0.055) / 1.055, 2.4 );
-    });
-    return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
-}
 
 editor.addEventListener("change", (e) => {
     
@@ -199,8 +159,8 @@ editor.addEventListener("click", async (e) => {
         const newColor = await selectColorFromScreen(abortController);
         const colorInput = editor.querySelector(".background-color");
         colorInput.value = newColor;
-        header.style.backgroundColor = newColor;
-        headerTextColor(newColor);
+        setBackgroundColor(newColor);
+
     }
 
     if (e.target.matches(".background-image")) {
@@ -253,5 +213,15 @@ editor.addEventListener("click", async (e) => {
                 handleError(error);
             });
     }
-
 });
+
+/*
+** SET BACKGROUND COLOR OF ALL RELEVANT ELEMENTS
+*/
+const setBackgroundColor = (color) => {
+    header.style.backgroundColor = color;
+    footer.style.backgroundColor = color;
+    document.querySelectorAll(".curve").forEach ((curve) => {
+        curve.style.fill = color;
+    });
+}
