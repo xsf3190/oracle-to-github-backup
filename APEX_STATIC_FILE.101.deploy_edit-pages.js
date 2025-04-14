@@ -20,6 +20,7 @@ export const init = (element) => {
             const current = nav_items.querySelector("[aria-current='page']")
             edit.value = current.textContent;
             setCollectionType(current.dataset.collection);
+            nav_items.querySelector(".visually-hidden")?.classList.remove("visually-hidden");
         })
         .catch((error) => {
             handleError(error);
