@@ -460,43 +460,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     END;
 
     /*
-     **  Build Page Dialog
-     */
-    FUNCTION buildPageDialog RETURN VARCHAR2 IS
-    BEGIN
-        RETURN(
-            '<dialog class="page">' ||
-                '<form>' ||
-                    '<header class="flex-items space-between">' ||
-                        '<h2>Page Actions</h2>' ||
-                        '<button type="button" class="button close no-focus" data-button-variant="round-icon">' ||
-                            '<svg class="icon" aria-hidden="true" focusable="false">' ||
-                                '<use href="#cross"></use>' ||
-                            '</svg>' ||
-                        '</button>' ||
-                    '</header>' ||
-                    '<div class="loader"></div>' ||
-                    '<article class="flow">' ||
-                         '<div>' ||
-                            '<label for="pageInput">Page Label</label>' ||
-                            '<input type="text" id="pageInput" name="navigation_label" required minlength="1" maxlength="30" pellcheck="false" autocapitalize="none" autocorrect="off">' ||
-                            '<div class="flex-items space-between">' ||
-                                '<span class="pageInput-result"></span>' ||
-                                '<span class="charcounter"></span>' ||
-                            '</div>' ||
-                        '</div>' ||
-                    '</article>' ||
-                    '<footer class="flex-items space-between">' ||
-                        '<button type="button" class="button" data-method="POST">NEW PAGE</button>' ||
-                        '<button type="button" class="button" data-method="PUT">CHANGE LABEL</button>' ||
-                        '<button type="button" class="button" data-method="DELETE">DELETE PAGE</button>' ||
-                        '<span class="send-result"></span>' ||
-                    '</footer>' ||
-                '</form>' ||
-             '</dialog>');
-    END;
-
-    /*
      **  Build Change URL Dialog
      */
     FUNCTION buildChangeURLDialog RETURN VARCHAR2 IS
@@ -565,7 +528,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_session_data.scope, l_session_data.url));
-        APEX_JSON.write ('dialogs', buildContentDialog || buildInfoDialog || buildMessageDialog || buildPageDialog || buildChangeURLDialog || buildErrorDialog);
+        APEX_JSON.write ('dialogs', buildContentDialog || buildInfoDialog || buildMessageDialog || buildChangeURLDialog || buildErrorDialog);
         APEX_JSON.close_object;
 
         EXCEPTION WHEN OTHERS THEN
@@ -679,7 +642,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.write ('token', l_new_token);
         APEX_JSON.write ('refresh', l_new_refresh);
         APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_scope, OWA_UTIL.get_cgi_env('url')));
-        APEX_JSON.write ('dialogs',  buildContentDialog || buildInfoDialog || buildMessageDialog || buildPageDialog || buildChangeURLDialog || buildErrorDialog);
+        APEX_JSON.write ('dialogs',  buildContentDialog || buildInfoDialog || buildMessageDialog || buildChangeURLDialog || buildErrorDialog);
         APEX_JSON.close_object;
             
     END;
