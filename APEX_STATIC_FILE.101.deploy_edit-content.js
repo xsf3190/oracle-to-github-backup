@@ -83,7 +83,7 @@ export const init = async (element) => {
                 button.set( {
                     label: 'MEDIA',
                     class: 'show-media',
-                    tooltip: 'Show Uploaded Media',
+                    tooltip: 'Select Uploaded Image',
                     withText: true
                 } );
                 return button;
@@ -374,6 +374,7 @@ export const deploy_website = async () => {
         .then( (data) => {
             content.replaceChildren();
             content.insertAdjacentHTML('afterbegin',data.content);
+            info_dialog.querySelector("h4").textContent = "";
             info_dialog.showModal();
             if (data.stop) return;
             if (intervalId) {
