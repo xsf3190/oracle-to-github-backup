@@ -143,7 +143,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     BEGIN
         FOR C IN (
             SELECT w.max_width, w.color_text, w.color_background, w.color_primary, w.css,
-                     w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, w.img_border_radius, w.header_text_color
+                     w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, w.img_border_radius
               FROM website w
              WHERE w.id=pWebsiteId
             )
@@ -183,8 +183,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             l_root_css:=l_root_css || 
             '--font-family-ui: system-ui, sans-serif;' ||
             '--max-width: ' || C.max_width || ';' || 
-            '--img-border-radius: ' || C.img_border_radius || ';' || 
-            '--header-text-color: ' || C.header_text_color || ';' || 
+            '--img-border-radius: ' || C.img_border_radius || ';' ||
             '--color-text: ' || C.color_text || ';' || 
             '--color-background: ' || C.color_background || ';' || 
             '--color-primary: ' || C.color_primary || ';';
@@ -288,26 +287,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         END IF;
 
         l_nav_labels:=
-            '<nav class="flex-items space-between" aria-label="Main Navigation">';
-                --'<span class="logo"></span>';
-        IF (g_nav_labels.COUNT>1) THEN
-            FOR i IN 1..g_nav_labels.COUNT LOOP
-                IF (i=1) THEN
-                    l_nav_labels:=l_nav_labels ||
-                    '<div>';
-                END IF;
-                l_nav_labels:=l_nav_labels || 
-                    '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '"' ||
-                        CASE WHEN g_nav_labels(i).article_id=l_article_id THEN ' aria-current="page"' END  || 
-                        ' data-id="' || g_nav_labels(i).article_id || '" data-collection="' || g_nav_labels(i).collection_type || '">' || g_nav_labels(i).navigation_label || '</a>';
-                IF (i=g_nav_labels.COUNT) THEN
-                    l_nav_labels:=l_nav_labels || 
-                    '</div>';
-                END IF;
-            END LOOP;
-        END IF;
+        '<nav class="flex-items space-between" aria-label="Main Navigation">' ||
+            '<span class="logo"></span>' ||
+            '<div>';
+        FOR i IN 1..g_nav_labels.COUNT LOOP
+            l_nav_labels:=l_nav_labels || 
+                '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '"' ||
+                    CASE WHEN g_nav_labels(i).article_id=l_article_id THEN ' aria-current="page"' END  || 
+                    CASE WHEN g_nav_labels.COUNT=1 THEN ' class="visually-hidden"' END ||
+                    ' data-id="' || g_nav_labels(i).article_id || '" data-collection="' || g_nav_labels(i).collection_type || '">' || g_nav_labels(i).navigation_label || '</a>';
+        END LOOP;
+        l_nav_labels:=l_nav_labels || 
+            '</div>';
         l_nav_labels:=l_nav_labels || buildLoginAside(pWebsiteId) ||
-            '</nav>';
+        '</nav>';
 
         RETURN (l_nav_labels);
     END;
@@ -451,13 +444,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Build font syles collection once */
         IF (g_font_styles_title IS NULL) THEN
             FOR C IN (
-                SELECT context, font_size, underline, ital, opsz, slnt, wdth, wght
+                SELECT context, font_size, color, underline, ital, opsz, slnt, wdth, wght
                   FROM website_font
                  WHERE website_id=pWebsiteId
             ) LOOP
                 l_font_styles:='font-size:clamp(2cqi,' || C.font_size || 'cqi,14cqi)';
+                
+                l_font_styles:=l_font_styles || ';color:' || C.color;
 
-                IF (C.underline IS NOT NULL) THEN
+                IF (C.underline>0) THEN
                     l_font_styles:=l_font_styles || ';text-decoration:underline;text-underline-offset:' || C.underline || '%;text-decoration-thickness:' || C.underline || '%' ;
                 END IF;
 
