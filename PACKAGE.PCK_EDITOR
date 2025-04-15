@@ -425,7 +425,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 CASE WHEN opsz_start IS NOT NULL THEN 14 END, 
                 CASE WHEN slnt_start IS NOT NULL THEN 0 END,
                 6,
-                NULL
+                0
           FROM font
          WHERE family=pTitleFont;
         
@@ -438,7 +438,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     CASE WHEN opsz_start IS NOT NULL THEN 14 END, 
                     CASE WHEN slnt_start IS NOT NULL THEN 0 END,
                     6,
-                    NULL
+                    0
               FROM font
              WHERE family=pSubTitleFont;
         END IF;
@@ -604,7 +604,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_html LONG;
     BEGIN
         FOR C IN (
-            SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.underline, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt, f.ital_start, f.ital_end, wf.ital
+            SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.color, wf.margin, wf.underline, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt, f.ital_start, f.ital_end, wf.ital
               FROM user_tab_columns c, user_col_comments i, website w, website_font wf, font f
              WHERE c.table_name=l_table_name
                AND c.column_name=UPPER(l_column_name)
@@ -623,10 +623,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     buildSelectFont(C.font_id, l_column_name) ||
                 '</div>' ||
 
-                '<div style="width:100%">' ||
+                '<div style="--flex-direction:row;--flex-vertical-alignment:center;width:100%" class="flex-items">' ||
                     '<input type="text" style="font:inherit;font-size:120%;max-inline-size:50%" placeholder="Enter new ' || REPLACE(l_column_name,'_',' ') || '" id="' || l_column_name || '" name="' || l_column_name || 
                         '" maxlength="' || C.data_length || '" value="' || pValue || '">' ||
                     '<span class="charcounter" style="font-size:80%;margin-inline-start:0.2em">' || NVL(LENGTH(pValue),0) ||  '/' || C.data_length || '</span>' ||
+                    '<label for="' || l_column_name || '-color">Color' || 
+                        '<input type="color" id="' || l_column_name || '-color" name="' || l_column_name || '_color" value="' || C.color || '">' || 
+                    '</label>' ||
                 '</div>' ||
                 
                 '<div class="flex-items" style="--flex-direction:row;--flex-gap:1em">' ||
@@ -671,7 +674,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
         FOR C IN (
-            SELECT w.color_primary, w.header_effect, w.header_text_color, w.title, w.subtitle
+            SELECT w.color_primary, w.header_effect, w.title, w.subtitle
               FROM website w
              WHERE w.id=pWebsiteId
         ) 
@@ -680,7 +683,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             '<form class="editor">' ||
                 '<fieldset class="background-color flex-items" style="--flex-direction:column">' ||
                     '<legend><strong>Change Background</strong></legend>' ||
-                    '<input type="hidden" name="header_text_color" value="' || C.header_text_color || '">' ||
                     '<div class="flex-items" style="--flex-direction:row">' ||
                         '<label for="background-color-1">Pick Color' || 
                             '<input type="color" id="background-color-1" class="background-color" name="color_primary" value="' || C.color_primary || '">' || 
@@ -695,13 +697,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                         '<button type="button" class="button background-image">Select Image</button>' || 
                         '<button type="button" class="button delete-image">No Image</button>' || 
                     '</div>' ||
-                    /*
-                    '<button type="button" class="button background-image" style="--button-bg:transparent;--button-hover-bg:transparent">' ||
-                        '<svg class="icon" aria-hidden="true" focusable="false">' ||
-                            '<use href="#image"></use>' ||
-                        '</svg>' ||
-                    '</button>' ||
-                    */
                 '</fieldset>' ||
                 buildFontWrapper(pWebsiteId,'website.title', C.title) || 
                 buildFontWrapper(pWebsiteId,'website.subtitle',C.subtitle) ||
@@ -744,20 +739,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
         
         FOR C IN (
-            SELECT color_primary, header_text_color, title,title_font_family,title_font_size,NULLIF(title_underline,'0') title_underline, title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
-                subtitle,subtitle_font_family,subtitle_font_size,NULLIF(subtitle_underline,'0') subtitle_underline, subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
+            SELECT color_primary, title,title_font_family,title_font_size, title_color, title_underline, title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
+                subtitle,subtitle_font_family,subtitle_font_size, subtitle_color, subtitle_underline, subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
               FROM JSON_TABLE(l_bodytext, '$' 
-              COLUMNS(color_primary,header_text_color,title,title_font_family,title_font_size,title_underline,title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
-                subtitle,subtitle_font_family,subtitle_font_size,subtitle_underline,subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
+              COLUMNS(color_primary,title,title_font_family,title_font_size,title_color,title_underline,title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
+                subtitle,subtitle_font_family,subtitle_font_size,subtitle_color,subtitle_underline,subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
               ))
         ) LOOP
             UPDATE website
-               SET color_primary=C.color_primary, header_text_color=C.header_text_color, title=C.title, subtitle=C.subtitle,updated_date=current_timestamp
+               SET color_primary=C.color_primary, title=C.title, subtitle=C.subtitle, updated_date=current_timestamp
              WHERE id=pWebsiteId;
             
             UPDATE website_font
                SET font_id=C.title_font_family,
                    font_size=C.title_font_size,
+                   color=C.title_color,
                    underline=C.title_underline,
                    wght=C.title_font_wght,
                    wdth=C.title_font_wdth,
@@ -771,6 +767,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             UPDATE website_font
                SET font_id=C.subtitle_font_family,
                    font_size=C.subtitle_font_size,
+                   color=C.subtitle_color,
                    underline=C.subtitle_underline,
                    wght=C.subtitle_font_wght,
                    wdth=C.subtitle_font_wdth,
@@ -863,7 +860,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
         FOR C IN (
-            SELECT w.color_primary, w.header_effect, w.header_text_color, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name
+            SELECT w.color_primary, w.header_effect, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name
               FROM website w
              WHERE w.id=pWebsiteId
         ) 
