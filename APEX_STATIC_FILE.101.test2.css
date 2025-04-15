@@ -1,6 +1,5 @@
-@container (width>=0) {
-    p {
-      font-weight: bold;
-      color: red;
+.image{
+    &.image-style-block-align-right {
+        max-width: calc(100% - var(--ck-image-style-spacing));
     }
-  }
+}
