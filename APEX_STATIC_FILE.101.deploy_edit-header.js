@@ -1,7 +1,7 @@
 /*
 **  EDIT WEBSITE HEADER
 */
-import { header, footer, dropdown_details, set_alert } from "./deploy_elements.min.js";
+import { header, dropdown_details, set_alert, selectColorFromScreen } from "./deploy_elements.min.js";
 import { callAPI, handleError } from "./deploy_callAPI.min.js";
 import { show_media } from  "./deploy_edit-content.min.js";
 
@@ -65,6 +65,8 @@ editor.addEventListener("input", (e) => {
                     target.style.textUnderlineOffset = e.target.value + "%";
                     target.style.textDecorationThickness = e.target.value + "%";
                 }
+            } else if (name.includes("margin")) {
+                target.style.marginBlock = e.target.value + "vh";
             } else if (name.includes("font_wght")) {
                 target.style.fontWeight = e.target.value;
             } else if (name.includes("font_wdth")) {
@@ -138,16 +140,6 @@ editor.addEventListener("change", (e) => {
 
 });
 
-const selectColorFromScreen = async (abortController) => {
-  const eyeDropper = new EyeDropper();
-  try {
-    const result = await eyeDropper.open({ signal: abortController.signal });
-    return result.sRGBHex;
-  } catch (e) {
-    return null;
-  }
-}
-
 editor.addEventListener("click", async (e) => {
     if (e.target.matches(".cancel-changes")) {
         window.location.reload();
@@ -220,7 +212,6 @@ editor.addEventListener("click", async (e) => {
 */
 const setBackgroundColor = (color) => {
     header.style.backgroundColor = color;
-    footer.style.backgroundColor = color;
     document.querySelectorAll(".curve").forEach ((curve) => {
         curve.style.fill = color;
     });
