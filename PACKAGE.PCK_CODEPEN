@@ -2,7 +2,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
     --
     PROCEDURE getCodepen(pArticleId IN article.id%type);
     --
-    FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pDeploy IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2;
+    FUNCTION buildCssRoot(pWebsiteId IN website.id%type) RETURN VARCHAR2;
     --
     PROCEDURE uploadCodepen(pId IN VARCHAR2, pZipFile IN BLOB);
     --
@@ -122,9 +122,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     END;
 
     /* 
-    ** Build page CSS
+    ** Build page CSS root
     */ 
-    FUNCTION buildCssRoot(pWebsiteId IN website.id%type, pApplicationId IN NUMBER, pDeploy IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2 IS
+    FUNCTION buildCssRoot(pWebsiteId IN website.id%type) RETURN VARCHAR2 IS
         l_fluid_types fluid_type_t;
 
         TYPE t_rgb_arr IS VARRAY(3) OF PLS_INTEGER;
@@ -139,7 +139,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_font_category google_font_variable.category%type;
         l_font_url VARCHAR2(200);
         l_root_css LONG;
-        l_deploy_css CLOB;
     BEGIN
         FOR C IN (
             SELECT w.max_width, w.color_text, w.color_background, w.color_primary, w.css,
@@ -152,18 +151,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
             l_fluid_types:=getFluidTypes(C.min_font_size, C.min_width_px, C.min_scale, C.max_font_size, C.max_width_px, C.max_scale);
 
-            IF (NOT pDeploy) THEN
-                FOR C IN (
-                    SELECT DISTINCT f.family
-                      FROM font f, website_font wf
-                     WHERE f.id=wf.font_id
-                       AND wf.website_id=pWebsiteId
-                       AND COALESCE(wf.chars_italic,wf.chars_normal) IS NOT NUll
-                ) LOOP
-                    l_root_css:=l_root_css ||
-                    '@import url("https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || '");' || chr(10);
-                END LOOP;
-            END IF;
+            
             l_root_css:=l_root_css ||
             ':root {' ||
                 '-webkit-text-size-adjust: none;' ||
@@ -209,25 +197,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             '--color-primary-light: #' || l_rgb_light || ';' ||
             '--color-primary-lighter: #' || l_rgb_lighter || ';' ||
             '--color-primary-lightest: #' || l_rgb_lightest || ';' || 
+            '--ck-image-style-spacing: 1.5em;' ||
+	        '--ck-inline-image-style-spacing: calc(var(--ck-image-style-spacing) / 2);' ||
             '}';
 
-            IF (C.css IS NULL) THEN
-                 IF (pDeploy) THEN
-                    l_css_file:='deploy.min.css'; -- deploy minimised css 
-                ELSE
-                    l_css_file:='deploy.css'; -- retain format and comments
-                END IF;
-                SELECT apex_util.blob_to_clob(file_content)
-                  INTO l_deploy_css
-                  FROM apex_application_static_files 
-                 WHERE application_id=pApplicationId
-                   AND file_name=l_css_file;
-            ELSE
-                l_deploy_css:=C.css;
-            END IF;
+            
         END LOOP;
 
-        RETURN (l_root_css || l_deploy_css);
+        RETURN (l_root_css);
     END;
 
     /*
@@ -505,10 +482,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         IF (pHtml IS NULL OR INSTR(pHtml,'<article')=0) THEN
             pHtml:='<article class="flow">' || pHtml || '</article>';
         END IF;
-
-        /* Remove empty elements */
-        pHtml:=REPLACE(pHtml,'<h1>&nbsp;</h1>',null);
-        pHtml:=REPLACE(pHtml,'<p>&nbsp;</p>',null);
     
         /* Build index if page is index of Blog / Media / Product */
         IF (pCollectionType='BLOG') THEN
@@ -678,7 +651,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_mobile_number website.mobile_number%type;
         l_linkedin_name website.linkedin_name%type;
         l_instagram_name website.instagram_name%type;
-        l_css CLOB;
+        l_css website.css%type;
+        l_css_null BOOLEAN;
         l_javascript CLOB;
         l_fluid_types pck_core.fluid_type_t;
         l_fluid_css LONG;
@@ -700,7 +674,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         /* Get id of website owning the article because we need to build navigation labels as would appear in the deployed site */
 
-        FOR C IN (SELECT website_id FROM website_article WHERE article_id=pArticleId AND user_id=l_session_data.user_id) LOOP
+        FOR C IN (SELECT website_id FROM website_article WHERE article_id=pArticleId) LOOP
             l_website_id:=C.website_id;
         END LOOP;
 
@@ -721,20 +695,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Get page content */
 
         IF (l_is_blog OR l_is_media) THEN
-            SELECT w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, null,null
-              INTO l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_contact_form, l_collection_type
+            SELECT w.css, w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, null,null
+              INTO l_css, l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_contact_form, l_collection_type
               FROM website w, article a
              WHERE w.id=l_website_id
                AND a.id=pArticleId;
         ELSE
-            SELECT w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, wa.contact_form, wa.collection_type
-              INTO l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_contact_form, l_collection_type
+            SELECT w.css, w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, wa.contact_form, wa.collection_type
+              INTO l_css, l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_contact_form, l_collection_type
               FROM website w, website_article wa, article a
              WHERE w.id=l_website_id
                AND wa.website_id=w.id
                AND wa.article_id=a.id
                AND a.id=pArticleId;
         END IF;
+
+        l_css_null:=l_css IS NULL;
 
         buildBodyHtml(
             l_session_data.user_id, 
@@ -762,11 +738,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             'document.querySelector(".login-email").showModal();' ||
         '})';
         
+        l_css:=buildCSSRoot(l_website_id) || l_css;
+
+        FOR C IN (
+            SELECT DISTINCT f.family
+              FROM font f, website_font wf
+             WHERE f.id=wf.font_id
+               AND wf.website_id=l_website_id
+               AND COALESCE(wf.chars_italic,wf.chars_normal) IS NOT NUll
+        ) LOOP
+            l_css:=l_css ||
+            '@import url("https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || '");' || chr(10);
+        END LOOP;
+
+        /* Include unminimized css if owner has not imported their own */
+        IF (l_css_null) THEN
+            FOR C IN (
+                SELECT apex_util.blob_to_clob(file_content) file_content
+                  FROM apex_application_static_files 
+                 WHERE application_id=101
+                   AND file_name='deploy.css'
+            ) LOOP
+                l_css:=l_css || C.file_content;
+            END LOOP;
+        END IF;
+
         apex_json.open_object;
         apex_json.write('success', TRUE); 
         apex_json.write('domain_name', l_domain_name);
         apex_json.write('html', l_html);
-        apex_json.write('css', buildCssRoot(l_website_id, l_session_data.app_id));
+        apex_json.write('css', l_css);
         apex_json.write('js', l_javascript);
         apex_json.close_object;
 
