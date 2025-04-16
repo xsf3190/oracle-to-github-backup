@@ -22,6 +22,16 @@ export const set_alert = (alert) => {
     }, 1500);
 }
 
+export const selectColorFromScreen = async (abortController) => {
+  const eyeDropper = new EyeDropper();
+  try {
+    const result = await eyeDropper.open({ signal: abortController.signal });
+    return result.sRGBHex;
+  } catch (e) {
+    return null;
+  }
+}
+
 login_dialog.querySelector("button.close").addEventListener("click", () => {
     login_dialog.close();
 })
