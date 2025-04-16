@@ -265,6 +265,9 @@ validate_passcode.addEventListener("click", (e) => {
     if (domain) {
         query+="&domain=" + form.querySelector("[name='email']").value;
         loader.classList.remove("visually-hidden");
+        const footer = form.querySelector("footer");
+        footer.replaceChildren();
+        footer.insertAdjacentHTML("beforeend","<span>Building website...</span>");
     } else {
         query+="&domain=NO";
     }
