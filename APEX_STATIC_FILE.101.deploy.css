@@ -233,8 +233,9 @@ body>header img {
 /* FOOTER STYLES */
 body>footer {
   font-family: var(--font-family-subtitle);
-  background-color: var(--color-primary);
-  color: var(--header-text-color);
+  font-size: var(--step--1);
+  background-color: var(--footer-background-color);
+  color: var(--footer-color);
   padding: 1em;
 }
 
@@ -968,6 +969,11 @@ pre:has(.language-sql)::after {
   transform: rotate(-45deg) translate(-16px, -6px);
 }
 
+.menulist {
+    max-height: 75vh;
+    overflow: auto;
+}
+
 .menulist li + li {
   border-block-start: solid 1px black;
 }
@@ -1149,7 +1155,7 @@ ol.deploy span + span {
 /* SPINNER ELEMENT WHILE WAITING FOR WEBSITE TO BE DEPLOYED */
 
 .loader {
-  width: 150px;
+  width: 10rem;
   aspect-ratio: 1;
   display: grid;
   -webkit-mask: conic-gradient(from 22deg, #0003,#000);
