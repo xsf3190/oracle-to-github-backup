@@ -163,6 +163,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_parm_names(1):='input';
             l_parm_values(1):=C.file_content;
             l_clob:=apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'POST', p_parm_name=>l_parm_names, p_parm_value=>l_parm_values);
+
+            logDeployment(pWebsiteId, pSiteId,'CSS file ' || pFilename || ' minimized from ' || 
+                apex_string_util.to_display_filesize(dbms_lob.getlength(C.file_content)) || ' to ' || 
+                apex_string_util.to_display_filesize(dbms_lob.getlength(l_clob)));
         END LOOP;
         IF (l_clob IS NULL) THEN
             logDeployment(pWebsiteId, pSiteId,'CSS file not found or empty:' || pFilename,'NOK');
@@ -686,33 +690,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             FROM data
         ) LOOP
             /* Seperate normal and italic according to actual usage */
-            
-                    
-        IF (pEnv='TEST') THEN
-            FOR C IN (
-                SELECT f.family,
-                    LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.opsz_start,',opsz',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
-                        NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
-                    LTRIM(NVL2(f.opsz_start,f.opsz_start||'..'||f.opsz_end,NULL) || NVL2(f.slnt_start,','||f.slnt_start||'..'||f.slnt_end,NULL) || 
-                        NVL2(f.wdth_start,','||f.wdth_start||'..'||f.wdth_end,NULL) || NVL2(f.wght_start,','||f.wght_start||'..'||f.wght_end,NULL),',') ranges
-                    FROM font f, website_font wf
-                    WHERE wf.website_id=pWebsiteId 
-                    AND wf.font_id=f.id
-            ) LOOP
-                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':' || C.axes || '@';
-                IF(INSTR(C.axes,'ital')>0) THEN 
-                    l_api_url:=l_api_url || '0,' || C.ranges || ';1,' || C.ranges;
-                ELSE
-                    l_api_url:=l_api_url || C.ranges;
-                END IF;
-                    
-                pck_api.callGoogleAPI(l_api_url,l_font_css);
-                
-                l_styles_edit:=l_styles_edit || l_font_css;
-            END LOOP;
-        END IF;
-        
 
+            IF (pEnv='TEST') THEN
+                FOR C IN (
+                    SELECT f.family,
+                        LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.opsz_start,',opsz',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
+                            NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
+                        LTRIM(NVL2(f.opsz_start,f.opsz_start||'..'||f.opsz_end,NULL) || NVL2(f.slnt_start,','||f.slnt_start||'..'||f.slnt_end,NULL) || 
+                            NVL2(f.wdth_start,','||f.wdth_start||'..'||f.wdth_end,NULL) || NVL2(f.wght_start,','||f.wght_start||'..'||f.wght_end,NULL),',') ranges
+                        FROM font f, website_font wf
+                        WHERE wf.website_id=pWebsiteId 
+                        AND wf.font_id=f.id
+                ) LOOP
+                    l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':' || C.axes || '@';
+                    IF(INSTR(C.axes,'ital')>0) THEN 
+                        l_api_url:=l_api_url || '0,' || C.ranges || ';1,' || C.ranges;
+                    ELSE
+                        l_api_url:=l_api_url || C.ranges;
+                    END IF;
+                        
+                    pck_api.callGoogleAPI(l_api_url,l_font_css);
+                    
+                    l_styles_edit:=l_styles_edit || l_font_css;
+                END LOOP;
+            END IF;
+        
             IF (INSTR(C.axes,'ital')>0 AND C.italic IS NOT NULL) THEN
                 l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':';
                 l_api_url:=l_api_url || C.axes || '@1,' || C.ranges || '&text=' || utl_url.escape(C.italic,TRUE,'UTF-8') || '&display=swap';
@@ -730,10 +732,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             logDeployment(pWebsiteId, pSiteId, ' - ' || C.family || ' (' || CASE WHEN C.italic IS NOT NULL THEN LENGTH(C.italic) || ' italic ' END || CASE WHEN C.normal IS NOT NULL THEN LENGTH(C.normal) || ' normal' END || ')');
         END LOOP;
 
-        /* Assemble the complete css file including font-face */
-        l_styles:=l_styles || pck_codepen.buildCssRoot(pWebsiteId, pApplicationId, pDeploy=>TRUE);
+        /* Append css root to font-face rules */
+        l_styles:=l_styles || pck_codepen.buildCssRoot(pWebsiteId);
 
         logDeployment(pWebsiteId, pSiteId, 'Building CSS');
+        l_styles:=l_styles || minifyCSS(pWebsiteId, pSiteId, 'deploy.css');
         l_sha1:=LOWER(dbms_crypto.hash(src => l_styles, typ => dbms_crypto.hash_sh1));
         l_deploy_files(l_sha1).file_name:='website.css';
         l_deploy_files(l_sha1).file_content:=l_styles;
@@ -747,7 +750,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_deploy_files(l_sha1).file_content:=l_styles_edit;
             l_files.put('website_edit.min.css', l_sha1);
         END IF;
-
 
         l_json.put('files',l_files);
 
