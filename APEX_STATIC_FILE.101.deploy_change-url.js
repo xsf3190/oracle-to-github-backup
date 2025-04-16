@@ -1,56 +1,66 @@
 /*
 **  CHANGE SUBDOMAIN OF EDiTOR SITE
 */
-import { callAPI } from "./deploy_callAPI.min.js";
+import { callAPI, handleError } from "./deploy_callAPI.min.js";
 
-const url_dialog = document.querySelector("dialog.url");
-const form = url_dialog.querySelector("form");
-const urlInput = form.querySelector("[name='subdomain']");
-const urlError = form.querySelector(".urlInput-result");
-const action = form.querySelector(".action");
-const actionresult = form.querySelector(".result");
-const charcounter = form.querySelector(".charcounter");
-const maxchars = urlInput.getAttribute("maxlength");
+const info_dialog = document.querySelector("dialog.info");
+const form = info_dialog.querySelector("form");
+const header = form.querySelector("h4");
+const article = form.querySelector("article");
+const footer = form.querySelector("footer");
 
-let endpoint, method;
+let endpoint;
 
 export const init = (element) => {
     endpoint = element.dataset.endpoint;
-    method = element.dataset.method;
     form.reset();
-    urlError.textContent = "";
-    actionresult.textContent = "";
-    url_dialog.showModal();
-}
 
-urlInput.addEventListener("input", () => {
-    let numOfEnteredChars = urlInput.value.length;
-    charcounter.textContent = numOfEnteredChars + "/" + maxchars;
-
-    if (numOfEnteredChars === Number(maxchars)) {
-        charcounter.style.color = "red";
-    } else {
-        charcounter.style.color = "initial";
-    }
-});
-
-action.addEventListener("click", () => {
-    if (urlInput.validity.valueMissing) {
-        urlError.textContent = "You need to enter a message.";
-        urlError.style.color = "red";
-        return;
-    }
-    const formData = new FormData(form);
-    const formObj = Object.fromEntries(formData);
-    callAPI(endpoint, method, formObj)
+    callAPI(endpoint, "GET")
         .then((data) => {
-            urlError.textContent = "";
-            actionresult.textContent = data.message;
-            actionresult.style.color = "green";
-            action.disabled = true;
+            
+            header.textContent = "Change URL";
+
+            article.replaceChildren();
+            article.insertAdjacentHTML("afterbegin", data.article);
+
+            const result = article.querySelector(".result");
+            article.querySelector("[name='subdomain']").addEventListener("input", (e) => {
+                result.textContent = e.target.value + ".netlify.app";
+            });
+
+            footer.replaceChildren();
+            footer.insertAdjacentHTML("afterbegin", data.footer);
+
+            footer.querySelector(".change-url")?.addEventListener("click", changeURL);
+
+            form.style.inlineSize="37ch";
+            
+            info_dialog.showModal();
         })
         .catch((error) => {
-            urlError.textContent = error;
-            urlError.style.color = "red";
+            handleError(error);
         });
-});
+}
+
+const changeURL = () => {
+    const formData = new FormData(form);
+    const formObj = Object.fromEntries(formData);
+    const loader = form.querySelector(".loader");
+    loader.classList.remove("visually-hidden");
+    const button = footer.querySelector(".change-url");
+    button.disabled = true;
+    callAPI(endpoint, "PUT", formObj)
+        .then((data) => {
+            const result = article.querySelector(".result");
+            result.textContent = data.message;
+            if (data.valid) {
+                window.location.replace(data.url);
+            }
+            result.style.color = "red";
+            loader.classList.add("visually-hidden");
+        })
+        .catch((error) => {
+            loader.classList.add("visually-hidden");
+            handleError(error);
+        });
+}
