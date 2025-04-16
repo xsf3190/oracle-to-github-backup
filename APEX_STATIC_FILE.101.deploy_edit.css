@@ -17,8 +17,25 @@ select,
 
 
 /* EDITOR STYLES */
-.edit-header:has(*) {
+
+/* COMMON EDITOR STYLES */
+.edit-header, .edit-footer {
     font-size: var(--step--2);
+}
+.edit-header legend, .edit-footer legend {
+    font-stretch: 125%;
+    font-weight: 600;
+}
+.edit-header label, .edit-footer label {
+    font-weight:500;
+}
+.edit-header label > *, .edit-footer label > * {
+    margin-inline-start: 0.5em;
+    font: inherit;
+}
+
+/* EDIT HEADER STYLES */
+.edit-header:has(*) {
     display: grid;
     grid-template-areas:
         "background title"
@@ -42,17 +59,6 @@ select,
 .edit-header > fieldset {
     inline-size: fit-content;
 }
-.edit-header legend {
-    font-stretch: 125%;
-    font-weight: 600;
-}
-.edit-header label {
-    font-weight:550;
-}
-.edit-header label > * {
-    margin-inline-start: 0.5em;
-    font: inherit;
-}
 .edit-header > fieldset.background-color {
     grid-area: background;
     align-self: start;
@@ -73,43 +79,12 @@ select,
 
 
 /* EDIT FOOTER STYLES */
-form.edit-footer, form.edit-footer>div {
+edit-footer, edit-footer>div {
     margin: 3vh;
 }
 
 .icon-with-text:has(span:empty) {
     display: none;
-}
-
-/* SPINNING LOADER STYLES */
-.loader {
-  position: fixed;
-  inset: 0;
-  display: none;
-  inline-size: 100%;
-  block-size: 100%;
-  z-index: 2;
-  -webkit-mask: conic-gradient(from 22deg, #0003,#000);
-          mask: conic-gradient(from 22deg, #0003,#000);
-  animation: load 1s steps(8) infinite;
-}
-
-.loader,
-.loader:before {
-  --_g: linear-gradient(#17177c 0 0) 50%;
-  background: 
-    var(--_g)/34% 8%  space no-repeat,
-    var(--_g)/8%  34% no-repeat space;
-}
-
-.loader:before {
-  content: "";
-  transform: rotate(45deg);
-}
-
-@keyframes load {
-  from {transform: rotate(0turn)}
-  to   {transform: rotate(1turn)}
 }
 
 
