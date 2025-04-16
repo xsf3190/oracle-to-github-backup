@@ -1,7 +1,7 @@
 /*
 **  EDIT WEBSITE FOOTER
 */
-import { footer, dropdown_details, set_alert } from "./deploy_elements.min.js";
+import { footer, dropdown_details, set_alert, selectColorFromScreen } from "./deploy_elements.min.js";
 import { callAPI, handleError } from "./deploy_callAPI.min.js";
 
 const editor = footer.previousElementSibling;
@@ -11,7 +11,10 @@ let endpoint;
 export const init = (element) => {
     endpoint = element.dataset.endpoint;
 
-    callAPI(endpoint,'GET')
+    const eyedropper = window.EyeDropper ? true : false;
+    const query = "?eyedropper="+eyedropper;
+
+    callAPI(endpoint,'GET',query)
         .then((data) => {
             editor.insertAdjacentHTML('afterbegin',data.html);
             dropdown_details.removeAttribute("open");
@@ -29,6 +32,17 @@ export const init = (element) => {
 */
 editor.addEventListener("input", (e) => {
     const name = e.target.getAttribute("name");
+
+    if (name==="footer_background_color") {
+        footer.style.backgroundColor = e.target.value;
+        return;
+    }
+
+    if (name==="footer_color") {
+        footer.style.color = e.target.value;
+        return;
+    }
+
     const target = footer.querySelector("[data-" + name + "]");
     /*
     ** target is <a href=""><svg></svg><span></span></a>
@@ -76,6 +90,15 @@ editor.addEventListener("change", (e) => {
 editor.addEventListener("click", async (e) => {
     if (e.target.matches(".cancel-changes")) {
         window.location.reload();
+        return;
+    }
+
+    if (e.target.matches(".eyedropper")) {
+        const abortController = new AbortController();
+        const newColor = await selectColorFromScreen(abortController);
+        const colorInput = editor.querySelector("[name='footer_background_color']");
+        colorInput.value = newColor;
+        footer.style.backgroundColor = newColor;
         return;
     }
 
