@@ -121,8 +121,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         
         SELECT site_id, ssl_url INTO l_netlify_site_id, l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id, ssl_url));
 
-        INSERT INTO website (id, domain_name, netlify_site_id, created_date, user_id, contact_email, title, subtitle, header_text_color, header_effect)
-        SELECT seq_website.nextval, l_domain, l_netlify_site_id, current_timestamp, pUserid, pEmail, l_domain, 'Editor website', header_text_color, header_effect
+        INSERT INTO website (id, domain_name, netlify_site_id, created_date, user_id, contact_email, title, subtitle, header_effect)
+        SELECT seq_website.nextval, l_domain, l_netlify_site_id, current_timestamp, pUserid, pEmail, l_domain, 'Editor website', header_effect
           FROM website WHERE id=pWebsiteId;
 
         INSERT INTO website_font (website_id, context, font_id, ital, wdth, wght, opsz, slnt, font_size, underline)
