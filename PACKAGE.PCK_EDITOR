@@ -12,7 +12,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
     --
     FUNCTION getFontURL(pFontid IN font.id%type) RETURN VARCHAR2;
     --
-    PROCEDURE getFooter(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
+    PROCEDURE getFooter(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER);
     --
     PROCEDURE getHeader(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER);
     --
@@ -417,7 +417,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     PROCEDURE initWebsiteFonts(pWebsiteId IN website.id%type, pTitleFont IN font.family%type, pSubTitleFont IN font.family%type DEFAULT NULL) IS
     BEGIN
         DELETE website_font WHERE website_id=pWebsiteId;
-        INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, font_size, underline)
+        INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, font_size, underline, margin)
         SELECT pWebsiteId, id, 'TITLE', 
                 NVL2(ital_start,0,NULL), 
                 CASE WHEN wght_start IS NOT NULL THEN 400 END, 
@@ -425,12 +425,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 CASE WHEN opsz_start IS NOT NULL THEN 14 END, 
                 CASE WHEN slnt_start IS NOT NULL THEN 0 END,
                 6,
+                0,
                 0
           FROM font
          WHERE family=pTitleFont;
         
         IF (pSubTitleFont IS NOT NULL) THEN
-            INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, font_size, underline)
+            INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, font_size, underline, margin)
             SELECT pWebsiteId, id, 'SUBTITLE', 
                     NVL2(ital_start,0,NULL), 
                     CASE WHEN wght_start IS NOT NULL THEN 400 END, 
@@ -438,6 +439,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     CASE WHEN opsz_start IS NOT NULL THEN 14 END, 
                     CASE WHEN slnt_start IS NOT NULL THEN 0 END,
                     6,
+                    0,
                     0
               FROM font
              WHERE family=pSubTitleFont;
@@ -604,7 +606,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_html LONG;
     BEGIN
         FOR C IN (
-            SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.color, wf.margin, wf.underline, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt, f.ital_start, f.ital_end, wf.ital
+            SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.color, wf.underline, wf.margin, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt, f.ital_start, f.ital_end, wf.ital
               FROM user_tab_columns c, user_col_comments i, website w, website_font wf, font f
              WHERE c.table_name=l_table_name
                AND c.column_name=UPPER(l_column_name)
@@ -638,6 +640,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     '</label>' ||
                     '<label for="' || l_column_name || '-underline">Underline' ||
                         '<input type="range" id="' || l_column_name || '-underline" name="' || l_column_name || '_underline" min="0" max="22" value="' || C.underline || '"/>' ||
+                    '</label>' ||
+                    '<label for="' || l_column_name || '-margin">Margin' ||
+                        '<input type="range" id="' || l_column_name || '-margin" name="' || l_column_name || '_margin" min="0" max="30" value="' || C.margin || '"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' class="visually-hidden"' END || '>Weight' ||
                         '<input type="range" id="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '"/>' ||
@@ -739,11 +744,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
         
         FOR C IN (
-            SELECT color_primary, title,title_font_family,title_font_size, title_color, title_underline, title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
-                subtitle,subtitle_font_family,subtitle_font_size, subtitle_color, subtitle_underline, subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
+            SELECT color_primary, title,title_font_family,title_font_size, title_color, title_underline, title_margin, title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
+                subtitle,subtitle_font_family,subtitle_font_size, subtitle_color, subtitle_underline, subtitle_margin, subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
               FROM JSON_TABLE(l_bodytext, '$' 
-              COLUMNS(color_primary,title,title_font_family,title_font_size,title_color,title_underline,title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
-                subtitle,subtitle_font_family,subtitle_font_size,subtitle_color,subtitle_underline,subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
+              COLUMNS(color_primary,title,title_font_family,title_font_size,title_color,title_underline,title_margin,title_font_wght,title_font_wdth,title_font_opsz,title_font_slnt,title_font_ital,
+                subtitle,subtitle_font_family,subtitle_font_size,subtitle_color,subtitle_underline,subtitle_margin,subtitle_font_wght,subtitle_font_wdth,subtitle_font_opsz,subtitle_font_slnt,subtitle_font_ital
               ))
         ) LOOP
             UPDATE website
@@ -755,6 +760,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                    font_size=C.title_font_size,
                    color=C.title_color,
                    underline=C.title_underline,
+                   margin=C.title_margin,
                    wght=C.title_font_wght,
                    wdth=C.title_font_wdth,
                    opsz=C.title_font_opsz,
@@ -769,6 +775,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                    font_size=C.subtitle_font_size,
                    color=C.subtitle_color,
                    underline=C.subtitle_underline,
+                   margin=C.subtitle_margin,
                    wght=C.subtitle_font_wght,
                    wdth=C.subtitle_font_wdth,
                    opsz=C.subtitle_font_opsz,
@@ -852,7 +859,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     /* 
     **  BUILD HTML INPUT ELEMENTS TO EDiT WEBSITE FOOTER
     */
-    PROCEDURE getFooter(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+    PROCEDURE getFooter(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
         l_html LONG;
         l_footer LONG;
@@ -860,7 +867,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
         FOR C IN (
-            SELECT w.color_primary, w.header_effect, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name
+            SELECT w.footer_background_color, w.footer_color, w.header_effect, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name
               FROM website w
              WHERE w.id=pWebsiteId
         ) 
@@ -869,32 +876,47 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             '<form>' ||
                 '<fieldset class="flex-items">' ||
                     '<legend><strong>Change Footer</strong></legend>' ||
-                    '<div>' ||
-                        '<label for="contact-email">Contact Email</label>' ||
-                        '<input type="email" id="contact-email" name="contact_email" maxlength="50" value="' || C.contact_email || '">' ||
+                    '<div class="flex-items" style="--flex-direction:row">' ||
+                        '<label for="footer-background-color-1">Pick Background Color' || 
+                            '<input type="color" id="footer-background-color-1" class="footer-background-color" name="footer_background_color" value="' || C.footer_background_color || '">' || 
+                        '</label>' ||
+                        CASE WHEN pEyeDropper='true' THEN
+                        '<label for="footer-background-color-2">Pick from Screen' ||
+                            '<button type="button" class="eyedropper"></button>' ||
+                        '</label>'
+                        END ||
+                        '<label for="footer-color">Text Color' || 
+                            '<input type="color" id="footer-color" class="footer-color" name="footer_color" value="' || C.footer_color || '">' || 
+                        '</label>' ||
                     '</div>' ||
-                    
-                    '<div>' ||
-                        '<label for="telephone-number">Telephone</label>' ||
-                        '<input type="tel" id="telephone-number" name="telephone_number" maxlength="20" value="' || C.telephone_number || '">' ||
-                    '</div>' ||
+                    '<div class="flex-items" style="--flex-direction:row">' ||
+                        '<div>' ||
+                            '<label for="contact-email">Contact Email</label>' ||
+                            '<input type="email" id="contact-email" name="contact_email" maxlength="50" value="' || C.contact_email || '">' ||
+                        '</div>' ||
+                        
+                        '<div>' ||
+                            '<label for="telephone-number">Telephone</label>' ||
+                            '<input type="tel" id="telephone-number" name="telephone_number" maxlength="20" value="' || C.telephone_number || '">' ||
+                        '</div>' ||
 
-                    '<div>' ||
-                        '<label for="mobile-number">Mobile</label>' ||
-                        '<input type="tel" id="mobile-number" name="mobile_number" maxlength="20" value="' || C.mobile_number || '">' ||
-                    '</div>' ||
+                        '<div>' ||
+                            '<label for="mobile-number">Mobile</label>' ||
+                            '<input type="tel" id="mobile-number" name="mobile_number" maxlength="20" value="' || C.mobile_number || '">' ||
+                        '</div>' ||
 
-                    '<div>' ||
-                        '<label for="linkedin-name">LinkedIn Name</label>' ||
-                        '<input type="text" id="linkedin-name" name="linkedin_name" maxlength="50" autocapitalize="none" value="' || C.linkedin_name || '">' ||
-                    '</div>' ||
+                        '<div>' ||
+                            '<label for="linkedin-name">LinkedIn Name</label>' ||
+                            '<input type="text" id="linkedin-name" name="linkedin_name" maxlength="50" autocapitalize="none" value="' || C.linkedin_name || '">' ||
+                        '</div>' ||
 
-                    '<div>' ||
-                        '<label for="instagram-name">Instagram Name</label>' ||
-                        '<input type="text" id="instagram-name" name="instagram_name" maxlength="50" autocapitalize="none" value="' || C.instagram_name || '">' ||
+                        '<div>' ||
+                            '<label for="instagram-name">Instagram Name</label>' ||
+                            '<input type="text" id="instagram-name" name="instagram_name" maxlength="50" autocapitalize="none" value="' || C.instagram_name || '">' ||
+                        '</div>' ||
                     '</div>' ||
-
                 '</fieldset>' ||
+
                 '<ul class="flex-items space-between buttons">' ||
                     '<li><button type="button" class="button publish-changes" data-endpoint="publish-website/" style="--button-bg:rebeccapurple">PUBLISH</button></li>' ||
                     '<li>' ||
@@ -951,12 +973,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
         
         FOR C IN (
-            SELECT contact_email, telephone_number, mobile_number, linkedin_name, instagram_name
+            SELECT footer_background_color, footer_color, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name
               FROM JSON_TABLE(l_bodytext, '$' 
-              COLUMNS(contact_email, telephone_number, mobile_number, linkedin_name, instagram_name))
+              COLUMNS(footer_background_color, footer_color, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name))
         ) LOOP
             UPDATE website
-               SET contact_email=C.contact_email, 
+               SET footer_background_color=C.footer_background_color, 
+                    footer_color=C.footer_color, 
+                    contact_email=C.contact_email, 
                     telephone_number=C.telephone_number,
                     mobile_number=C.mobile_number, 
                     linkedin_name=C.linkedin_name, 
