@@ -8,6 +8,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_HOSTING" is
     --
     PROCEDURE deleteWebsite(pWebsiteid IN website.id%type);
     --
+    PROCEDURE getChangeURL(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
+    --
     PROCEDURE getDNS(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
     --
     FUNCTION getEditorDomain(pEmail IN users.email%type) RETURN VARCHAR2;
@@ -121,14 +123,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         
         SELECT site_id, ssl_url INTO l_netlify_site_id, l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id, ssl_url));
 
-        INSERT INTO website (id, domain_name, netlify_site_id, created_date, user_id, contact_email, title, subtitle, header_effect)
-        SELECT seq_website.nextval, l_domain, l_netlify_site_id, current_timestamp, pUserid, pEmail, l_domain, 'Editor website', header_effect
-          FROM website WHERE id=pWebsiteId;
+        INSERT INTO website (id, domain_name, netlify_site_id, created_date, user_id, contact_email, title, subtitle, header_effect, color_primary)
+        VALUES (seq_website.nextval, l_domain, l_netlify_site_id, current_timestamp, pUserid, pEmail, l_domain, 'Editor website', 'curve', '#0F121A');
 
-        INSERT INTO website_font (website_id, context, font_id, ital, wdth, wght, opsz, slnt, font_size, underline)
-        SELECT seq_website.currval, context, font_id, ital, wdth, wght, opsz, slnt, font_size, underline
-          FROM website_font
-         WHERE website_id=pWebsiteId;
+        INSERT INTO website_font (website_id, context, font_id, wght, font_size, color, underline, margin)
+        VALUES (seq_website.currval, 'TITLE', 52, 550, 6, '#66FCF1', 0,0);
+
+        INSERT INTO website_font (website_id, context, font_id, ital, wdth, wght, font_size, color, underline, margin)
+        VALUES (seq_website.currval, 'SUBTITLE', 76, 1, 100, 430, 3, '#F7F3F3', 0, 0);
 
         SELECT article_id 
           INTO l_home_article_id 
@@ -203,35 +205,67 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
     END;
 
     /*
+    ** CREATE HTML FOR FORM TO CHANGE SUBDOMAIN OF TEST URL
+    */
+    PROCEDURE getChangeURL(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_subdomain website.domain_name%type;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        l_subdomain:=SUBSTR(l_session_data.url,1,INSTR(l_session_data.url,'.')-1);
+
+        apex_json.open_object;
+        apex_json.write('article', '<label for="subdomain">Enter New URL</label><input type="text" name="subdomain" required value="' || l_subdomain || '"><span class="result">' || l_session_data.url || '</span>');
+        apex_json.write('footer', '<button type="button" class="button change-url">CHANGE URL</button><div class="loader visually-hidden"></div>');
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
+    END;
+
+    /*
     ** CHANGE NETLIFY SUBDOMAIN NAME IF AVAILABLE
     */
     PROCEDURE changeURL(pWebsiteId IN website.id%type, pBodytext IN CLOB, pStatus OUT NUMBER) IS
-        l_subdomain website.domain_name%type;
         l_session_data pck_sec.t_session_data;
+        l_netlify_site_id website.netlify_site_id%type;
+        l_subdomain website.domain_name%type;
         l_json JSON_OBJECT_T;
         l_clob CLOB;
+        l_valid BOOLEAN:=TRUE;
         l_message VARCHAR2(50);
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
-        SELECT subdomain INTO l_subdomain FROM JSON_TABLE(pBodytext, '$' COLUMNS (subdomain));
+        SELECT j.subdomain, w.netlify_site_id INTO l_subdomain, l_netlify_site_id  FROM JSON_TABLE(pBodytext, '$' COLUMNS (subdomain)) j, website w WHERE w.id=pWebsiteId;
 
         IF (urlExists(l_subdomain || '.netlify.app')) THEN
             l_message:='URL already in use. Try again';
+            l_valid:=FALSE;
         ELSE
             l_json:=new JSON_OBJECT_T;
             l_json.put('name', l_subdomain);
-            apex_web_service.clear_request_headers;
-            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites', pMethod=>'POST', pBody=>l_json.stringify, pStatusAllowed=>422, pData=>l_clob);
+            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'PATCH', pBody=>l_json.stringify, pStatusAllowed=>422, pData=>l_clob);
             IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
                 l_message:='URL successfully changed';
+                UPDATE website SET domain_name=l_subdomain WHERE id=pWebsiteId;
+                pck_deploy.runDeployment(pWebsiteId, l_session_data.user_id, 'TEST', l_netlify_site_id, pck_core.getRestUrl(), 101);
             ELSIF (apex_web_service.g_status_code=422) THEN
                 l_message:='Name already taken. Try again';
+                l_valid:=FALSE;
             END IF;
         END IF;
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
+        apex_json.write('valid', l_valid);
+        IF (l_valid) THEN
+            apex_json.write('url', 'https://' || l_subdomain || '.netlify.app');
+        END IF;
         apex_json.write('message', l_message);
         apex_json.close_object;
 
