@@ -141,7 +141,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_root_css LONG;
     BEGIN
         FOR C IN (
-            SELECT w.max_width, w.color_text, w.color_background, w.color_primary, w.css,
+            SELECT w.max_width, w.color_text, w.color_background, w.color_primary, w.footer_background_color, w.footer_color, w.css,
                      w.min_font_size, w.min_width_px, w.min_scale, w.max_font_size, w.max_width_px, w.max_scale, w.img_border_radius
               FROM website w
              WHERE w.id=pWebsiteId
@@ -174,7 +174,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             '--img-border-radius: ' || C.img_border_radius || ';' ||
             '--color-text: ' || C.color_text || ';' || 
             '--color-background: ' || C.color_background || ';' || 
-            '--color-primary: ' || C.color_primary || ';';
+            '--color-primary: ' || C.color_primary || ';' ||
+            '--footer-background-color: ' || C.footer_background_color || ';' ||
+            '--footer-color: ' || C.footer_color || ';';
 
             FOR i IN 1..3 LOOP
                 l_rgb_arr.EXTEND;
@@ -344,11 +346,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                             '<span class="passcode-result"></span>' ||
                         '</div>' ||
                         '<div class="loader visually-hidden"></div>' ||
-                        --'<div class="visually-hidden">' ||
-                          --  '<label for="domainInput">Domain Name</label>' ||
-                            --'<input type="text" id="domainInput" name="domain" required pattern="[a-z0-9\-.]+" maxlength="37" spellcheck="false" autocapitalize="none" autocorrect="off">' ||
-                            --'<span class="domain-result"></span>' ||
-                        --'</div>' ||
                     '</article>' ||
                     '<footer class="flex-items space-apart">' ||
                         '<button class="button sendmail-magic" type="button">Send a Link</button>' ||
@@ -421,7 +418,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Build font syles collection once */
         IF (g_font_styles_title IS NULL) THEN
             FOR C IN (
-                SELECT context, font_size, color, underline, ital, opsz, slnt, wdth, wght
+                SELECT context, font_size, color, underline, margin, ital, opsz, slnt, wdth, wght
                   FROM website_font
                  WHERE website_id=pWebsiteId
             ) LOOP
@@ -432,7 +429,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 IF (C.underline>0) THEN
                     l_font_styles:=l_font_styles || ';text-decoration:underline;text-underline-offset:' || C.underline || '%;text-decoration-thickness:' || C.underline || '%' ;
                 END IF;
-
+                IF (C.margin>0) THEN
+                    l_font_styles:=l_font_styles || ';margin-block:' || C.margin || 'vh' ;
+                END IF;
                 IF (C.ital=1) THEN
                     l_font_styles:=l_font_styles || ';font-style:italic';
                 END IF;
