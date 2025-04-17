@@ -164,7 +164,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_parm_values(1):=C.file_content;
             l_clob:=apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'POST', p_parm_name=>l_parm_names, p_parm_value=>l_parm_values);
 
-            logDeployment(pWebsiteId, pSiteId,'CSS file ' || pFilename || ' minimized from ' || 
+            logDeployment(pWebsiteId, pSiteId,pFilename || ' minimized from ' || 
                 apex_string_util.to_display_filesize(dbms_lob.getlength(C.file_content)) || ' to ' || 
                 apex_string_util.to_display_filesize(dbms_lob.getlength(l_clob)));
         END LOOP;
