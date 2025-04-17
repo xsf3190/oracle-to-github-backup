@@ -34,6 +34,7 @@ form {
 
 main {
   font-family: var(--font-family-subtitle);
+  font-variation-settings: var(--font-variation-settings-subtitle);
   padding-inline: 1rem;
   container-type: inline-size;
 }
@@ -233,6 +234,7 @@ body>header img {
 /* FOOTER STYLES */
 body>footer {
   font-family: var(--font-family-subtitle);
+  font-variation-settings: var(--font-variation-settings-subtitle);
   font-size: var(--step--1);
   background-color: var(--footer-background-color);
   color: var(--footer-color);
@@ -330,8 +332,9 @@ small {
 main h2,
 main h3,
 main h4 {
-  text-wrap: balance;
+  text-wrap: pretty;
   font-family: var(--font-family-title);
+  font-variation-settings: var(--font-variation-settings-title);
 }
 
 
