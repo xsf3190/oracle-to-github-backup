@@ -318,10 +318,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         */
         l_test_site:=INSTR(pUrl,'netlify.app')>0;
 
-        --IF (INSTR(pUrl,'netlify.app')>0) THEN
-        --    l_test_site:=TRUE;
-        --END IF;
-
         SELECT netlify_site_id_custom, CASE WHEN netlify_site_id_custom IS NOT NULL AND NVL(netlify_last_published_custom,created_date) < netlify_last_published THEN 'OK'  ELSE 'NOK' END 
           INTO l_netlify_site_id_custom, l_can_publish
           FROM website
@@ -337,7 +333,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                AND r.name=pScope
                AND a.template_id=o.template_id
                AND INSTR(o.uri_template,'authenticate')=0
-             ORDER BY DECODE(o.label,'Publish Website',1,'Website Analytics',2,'Upload Media',3,'Edit Header',4,'Edit Content',5,'Edit Footer',6,7)
+             ORDER BY DECODE(o.label,'Publish Website',1,'Website Analytics',2,'Upload Media',3,'Edit Header',4,'Edit Content',5,'Edit Footer',6,'Edit Pages',7,8)
         )
         LOOP
             l_reports:=NULL;
@@ -460,40 +456,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     END;
 
     /*
-     **  Build Change URL Dialog
-     */
-    FUNCTION buildChangeURLDialog RETURN VARCHAR2 IS
-    BEGIN
-        RETURN(
-            '<dialog class="url">' ||
-                '<form>' ||
-                    '<header class="flex-items space-between">' ||
-                        '<h2>Change URL</h2>' ||
-                        '<button type="button" class="button close no-focus" data-button-variant="round-icon">' ||
-                            '<svg class="icon" aria-hidden="true" focusable="false">' ||
-                                '<use href="#cross"></use>' ||
-                            '</svg>' ||
-                        '</button>' ||
-                    '</header>' ||
-                    '<article class="flow">' ||
-                         '<div>' ||
-                            '<label for="urlInput">URL</label>' ||
-                            '<input type="text" id="urlInput" name="subdomain" required minlength="1" maxlength="39" pellcheck="false" autocapitalize="none" autocorrect="off">' ||
-                            '<div class="flex-items space-between">' ||
-                                '<span class="urlInput-result"></span>' ||
-                                '<span class="charcounter"></span>' ||
-                            '</div>' ||
-                        '</div>' ||
-                    '</article>' ||
-                    '<footer class="flex-items space-between">' ||
-                        '<button type="button" class="button action">APPLY CHANGE</button>' ||
-                        '<span class="result"></span>' ||
-                    '</footer>' ||
-                '</form>' ||
-             '</dialog>');
-    END;
-
-    /*
      **  Build General purpose ERROR dialog
      */
     FUNCTION buildErrorDialog RETURN VARCHAR2 IS
@@ -528,7 +490,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_session_data.scope, l_session_data.url));
-        APEX_JSON.write ('dialogs', buildContentDialog || buildInfoDialog || buildMessageDialog || buildChangeURLDialog || buildErrorDialog);
+        APEX_JSON.write ('dialogs', buildContentDialog || buildInfoDialog || buildMessageDialog  || buildErrorDialog);
         APEX_JSON.close_object;
 
         EXCEPTION WHEN OTHERS THEN
@@ -642,7 +604,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.write ('token', l_new_token);
         APEX_JSON.write ('refresh', l_new_refresh);
         APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_scope, OWA_UTIL.get_cgi_env('url')));
-        APEX_JSON.write ('dialogs',  buildContentDialog || buildInfoDialog || buildMessageDialog || buildChangeURLDialog || buildErrorDialog);
+        APEX_JSON.write ('dialogs',  buildContentDialog || buildInfoDialog || buildMessageDialog || buildErrorDialog);
         APEX_JSON.close_object;
             
     END;
