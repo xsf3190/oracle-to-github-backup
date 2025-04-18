@@ -211,8 +211,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_sha1 VARCHAR2(40);
 
         TYPE tt_fonts IS RECORD (
-            --id website_font.font_id%type,
             family font.family%type,
+            chars_bold_normal VARCHAR2(500),
+            chars_bold_italic VARCHAR2(500),
             chars_normal VARCHAR2(500),
             chars_italic VARCHAR2(500)
         );
@@ -303,10 +304,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
 
         /* Extract distinct set of italic and normal characters in the context */
-        PROCEDURE extract_styles(pText IN VARCHAR2, pItalic IN OUt VARCHAR2, pNormal IN OUT VARCHAR2) IS
+        PROCEDURE extract_styles(pText IN VARCHAR2, pBoldItalic IN OUT VARCHAR2, pBoldNormal IN OUT VARCHAR2, pItalic IN OUT VARCHAR2, pNormal IN OUT VARCHAR2) IS
             l_text LONG:=pText;
             l_italics_regex varchar2(12):='<i>(.+?)</i>';
             l_italics_substr LONG;
+            l_italics_bold_regex varchar2(30):='<i><strong>(.+?)</strong></i>';
+            l_italics_bold_substr LONG;
+            l_bold_regex varchar2(30):='<strong>(.+?)</strong>';
+            l_bold_substr LONG;
             l_char VARCHAR2(4);
             n PLS_INTEGER;
             len PLS_INTEGER;
@@ -314,6 +319,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             IF (pText IS NULL) THEN
                 RETURN;
             END IF;
+            n:=REGEXP_COUNT(l_text,l_italics_bold_regex);
+            FOR i IN 1..n LOOP
+                l_italics_bold_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_italics_bold_regex,1,i)));
+                len:=LENGTH(l_italics_bold_substr);
+                IF (len>0) THEN
+                    FOR k IN 1..len LOOP
+                        l_char:=SUBSTR(l_italics_bold_substr,k,1);
+                        IF (pBoldItalic IS NULL OR INSTR(pBoldItalic,l_char)=0) THEN
+                            pBoldItalic:=pBoldItalic || l_char;
+                        END IF;
+                    END LOOP;
+                END IF;
+            END LOOP;
+
+            l_text:=REGEXP_REPLACE(l_text,l_italics_bold_regex,null);
+
             n:=REGEXP_COUNT(l_text,l_italics_regex);
             FOR i IN 1..n LOOP
                 l_italics_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_italics_regex,1,i)));
@@ -329,6 +350,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END LOOP;
 
             l_text:=REGEXP_REPLACE(l_text,l_italics_regex,null);
+
+            n:=REGEXP_COUNT(l_text,l_bold_regex);
+            FOR i IN 1..n LOOP
+                l_bold_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_bold_regex,1,i)));
+                len:=LENGTH(l_bold_substr);
+                IF (len>0) THEN
+                    FOR k IN 1..len LOOP
+                        l_char:=SUBSTR(l_bold_substr,k,1);
+                        IF (pBoldNormal IS NULL OR INSTR(pBoldNormal,l_char)=0) THEN
+                            pBoldNormal:=pBoldNormal || l_char;
+                        END IF;
+                    END LOOP;
+                END IF;
+            END LOOP;
+
+            l_text:=REGEXP_REPLACE(l_text,l_bold_regex,null);
 
             l_text:=utl_i18n.unescape_reference(apex_escape.striphtml(l_text));
             len:=LENGTH(l_text);
@@ -444,11 +481,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             IF (n>0) THEN
                 FOR j IN 1..n 
                 LOOP
-                    extract_styles(REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j), l_fonts('TITLE').chars_italic, l_fonts('TITLE').chars_normal);
+                    extract_styles(REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j), l_fonts('TITLE').chars_bold_italic, l_fonts('TITLE').chars_bold_normal, l_fonts('TITLE').chars_italic, l_fonts('TITLE').chars_normal);
                 END LOOP;
                 l_body_html:=REGEXP_REPLACE(l_body_html,l_headings_regex,null);
             END IF;
-            extract_styles(l_body_html, l_fonts('SUBTITLE').chars_italic, l_fonts('SUBTITLE').chars_normal);
+            extract_styles(l_body_html, l_fonts('SUBTITLE').chars_bold_italic, l_fonts('SUBTITLE').chars_bold_normal, l_fonts('SUBTITLE').chars_italic, l_fonts('SUBTITLE').chars_normal);
 
             apex_string.push(l_labels(i).modules,'deploy_main.min.js');
 
@@ -654,11 +691,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_context:=l_fonts.FIRST;
         WHILE l_context IS NOT NULL LOOP
             /* Get unique set of characters used for each context */
+            l_fonts(l_context).chars_bold_italic:=chars_used(l_fonts(l_context).chars_bold_italic);
+            l_fonts(l_context).chars_bold_normal:=chars_used(l_fonts(l_context).chars_bold_normal);
             l_fonts(l_context).chars_italic:=chars_used(l_fonts(l_context).chars_italic);
             l_fonts(l_context).chars_normal:=chars_used(l_fonts(l_context).chars_normal);
 
             UPDATE website_font 
-               SET chars_italic=l_fonts(l_context).chars_italic, 
+               SET chars_bold_italic=l_fonts(l_context).chars_bold_italic, 
+                   chars_bold_normal=l_fonts(l_context).chars_bold_normal,
+                   chars_italic=l_fonts(l_context).chars_italic, 
                    chars_normal=l_fonts(l_context).chars_normal,
                    updated_date=current_timestamp
              WHERE website_id=pWebsiteId
@@ -669,7 +710,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /* Configure google fonts for the set of distinct characters */
         FOR C IN (
             WITH data AS 
-            (SELECT f.family, LISTAGG(wf.chars_italic) WITHIN GROUP (ORDER BY NULL) italic, LISTAGG(wf.chars_normal) WITHIN GROUP (ORDER BY NULL) normal,
+            (SELECT f.family, 
+                    LISTAGG(wf.chars_bold_italic) WITHIN GROUP (ORDER BY NULL) bold_italic, 
+                    LISTAGG(wf.chars_bold_normal) WITHIN GROUP (ORDER BY NULL) bold_normal,
+                    LISTAGG(wf.chars_italic) WITHIN GROUP (ORDER BY NULL) italic, 
+                    LISTAGG(wf.chars_normal) WITHIN GROUP (ORDER BY NULL) normal,
                     LTRIM(
                     MAX(NVL2(wf.ital,'ital',NULL)) ||
                     MAX(NVL2(wf.opsz,',opsz',NULL)) ||
@@ -686,13 +731,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                AND f.id=wf.font_id
              GROUP BY f.family
             )
-            SELECT family, italic, normal, axes, ranges
+            SELECT family, bold_italic, bold_normal, italic, normal, axes, ranges
             FROM data
         ) LOOP
             /* Seperate normal and italic according to actual usage */
 
             IF (pEnv='TEST') THEN
-                FOR C IN (
+                FOR C1 IN (
                     SELECT f.family,
                         LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.opsz_start,',opsz',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
                             NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
@@ -702,17 +747,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         WHERE wf.website_id=pWebsiteId 
                         AND wf.font_id=f.id
                 ) LOOP
-                    l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':' || C.axes || '@';
-                    IF(INSTR(C.axes,'ital')>0) THEN 
-                        l_api_url:=l_api_url || '0,' || C.ranges || ';1,' || C.ranges;
+                    l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C1.family,' ','+') || ':' || C1.axes || '@';
+                    IF(INSTR(C1.axes,'ital')>0) THEN 
+                        l_api_url:=l_api_url || '0,' || C1.ranges || ';1,' || C1.ranges;
                     ELSE
-                        l_api_url:=l_api_url || C.ranges;
+                        l_api_url:=l_api_url || C1.ranges;
                     END IF;
                         
                     pck_api.callGoogleAPI(l_api_url,l_font_css);
                     
                     l_styles_edit:=l_styles_edit || l_font_css;
                 END LOOP;
+            END IF;
+
+            IF (INSTR(C.axes,'ital')>0 AND C.bold_italic IS NOT NULL) THEN
+                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':';
+                l_api_url:=l_api_url || C.axes || '@1,' || C.ranges || '&text=' || utl_url.escape(C.bold_italic,TRUE,'UTF-8') || '&display=swap';
+                pck_api.callGoogleAPI(l_api_url,l_font_css);
+                l_styles:=l_styles || l_font_css;
+            END IF;
+
+            IF (C.bold_normal IS NOT NULL) THEN
+                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':';
+                l_api_url:=l_api_url || C.axes || '@0,' || C.ranges || '&text=' || utl_url.escape(C.bold_normal,TRUE,'UTF-8') || '&display=swap';
+                pck_api.callGoogleAPI(l_api_url,l_font_css);
+                l_styles:=l_styles || l_font_css;
             END IF;
         
             IF (INSTR(C.axes,'ital')>0 AND C.italic IS NOT NULL) THEN
@@ -729,6 +788,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_styles:=l_styles || l_font_css;
             END IF;
 
+            logDeployment(pWebsiteId, pSiteId, ' - ' || C.family || ' (' || CASE WHEN C.bold_italic IS NOT NULL THEN LENGTH(C.bold_italic) || ' bold italic ' END || CASE WHEN C.bold_normal IS NOT NULL THEN LENGTH(C.bold_normal) || ' bold normal' END || ')');
             logDeployment(pWebsiteId, pSiteId, ' - ' || C.family || ' (' || CASE WHEN C.italic IS NOT NULL THEN LENGTH(C.italic) || ' italic ' END || CASE WHEN C.normal IS NOT NULL THEN LENGTH(C.normal) || ' normal' END || ')');
         END LOOP;
 
