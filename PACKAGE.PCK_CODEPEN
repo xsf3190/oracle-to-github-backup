@@ -1,6 +1,6 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
     --
-    PROCEDURE getCodepen(pArticleId IN article.id%type);
+    PROCEDURE getCodepen(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pStatus OUT NUMBER);
     --
     FUNCTION buildCssRoot(pWebsiteId IN website.id%type) RETURN VARCHAR2;
     --
@@ -166,7 +166,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                  AND wf.website_id=pWebsiteId
             ) LOOP
                 l_root_css:=l_root_css || 
-                '--font-family-' || C1.context || ':"' || C1.family || '",' || CASE WHEN C1.category IN ('serif','sans-serif') THEN C1.category ELSE 'sans-serif' END || ';' ;
+                '--font-family-' || C1.context || ':"' || C1.family || '",' || CASE WHEN C1.category IN ('serif','sans-serif') THEN C1.category ELSE 'sans-serif' END || ';';
             END LOOP;
             l_root_css:=l_root_css || 
             '--font-family-ui: system-ui, sans-serif;' ||
@@ -387,7 +387,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         pLinkedinName website.linkedin_name%type,
         pInstagramName website.instagram_name%type,
         pPromotion website.promotion%type,
-        pHtml IN OUt NOCOPY CLOB) 
+        pHtml IN OUT NOCOPY CLOB) 
     IS
         l_font_styles VARCHAR2(500);
         l_header CLOB;
@@ -621,6 +621,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             pHtml:=pHtml || '</svg>';
         END IF;
 
+        /*  Include dummy form for CODEPEN if TEST env */
+        IF (pEnv='TEST') THEN
+            pHtml:=pHtml ||
+            '<form action="https://codepen.io/pen/define" method="POST" target="_blank"><input type="hidden" name="data" value=""></form>';
+        END IF;
+
         /*
         ** Return complete <body> element with data attributes identifying internal id of website and article
         */
@@ -631,136 +637,78 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     /*
     ** Build resources to open requested article in Codepen
     */
-    PROCEDURE getCodepen(pArticleId IN article.id%type) IS
-        l_website_id website.id%type;
-        
+    PROCEDURE getCodepen(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pStatus OUT NUMBER) IS
         l_domain_name website.domain_name%type;
-        l_contact_form website_article.contact_form%type;
-        l_collection_type website_article.collection_type%type;
-        l_is_blog BOOLEAN:=FALSE;
         l_is_media BOOLEAN:=FALSE;
         l_html CLOB;
-        l_title website.title%type;
-        l_subtitle website.subtitle%type;
-        l_header_effect website.header_effect%type;
-        l_hero_asset_id website.hero_asset_id%type;
-        l_promotion website.promotion%type;
-        l_contact_email website.contact_email%type;
-        l_telephone_number website.telephone_number%type;
-        l_mobile_number website.mobile_number%type;
-        l_linkedin_name website.linkedin_name%type;
-        l_instagram_name website.instagram_name%type;
         l_css website.css%type;
-        l_css_null BOOLEAN;
         l_javascript CLOB;
-        l_fluid_types pck_core.fluid_type_t;
-        l_fluid_css LONG;
         l_session_data pck_core.session_data_rt;
-
-        FUNCTION getJSCode(pFilename IN VARCHAR2) RETURN CLOB IS
-        BEGIN
-            FOR C IN (SELECT apex_util.blob_to_clob(file_content) file_content
-                        FROM apex_application_static_files 
-                       WHERE application_id=l_session_data.app_id
-                         AND file_name=pFilename) 
-            LOOP
-                RETURN (C.file_content);
-            END LOOP;
-        END;
-
     BEGIN
         l_session_data:=pck_core.getSessionData();
 
-        /* Get id of website owning the article because we need to build navigation labels as would appear in the deployed site */
-
-        FOR C IN (SELECT website_id FROM website_article WHERE article_id=pArticleId) LOOP
-            l_website_id:=C.website_id;
-        END LOOP;
-
-        IF (l_website_id IS NULL) THEN
-            /* Must be a sub-page article - so get website id from its parent article */
-            FOR C IN (SELECT wa.website_id, wa.collection_type
-                        FROM website_article wa, article a 
-                       WHERE a.id=pArticleId
-                         AND wa.article_id=a.parent_id
-                         AND author_user_id=l_session_data.user_id ) 
-            LOOP
-                l_website_id:=C.website_id;
-                l_is_blog:=C.collection_type='BLOG';
-                l_is_media:=C.collection_type='MEDIA';
-            END LOOP;
-        END IF;
-
         /* Get page content */
 
-        IF (l_is_blog OR l_is_media) THEN
-            SELECT w.css, w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, null,null
-              INTO l_css, l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_contact_form, l_collection_type
-              FROM website w, article a
-             WHERE w.id=l_website_id
-               AND a.id=pArticleId;
-        ELSE
+        FOR C IN (
             SELECT w.css, w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, wa.contact_form, wa.collection_type
-              INTO l_css, l_domain_name, l_title, l_subtitle, l_header_effect, l_hero_asset_id, l_promotion, l_html, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_contact_form, l_collection_type
               FROM website w, website_article wa, article a
-             WHERE w.id=l_website_id
+             WHERE w.id=pWebsiteId
                AND wa.website_id=w.id
                AND wa.article_id=a.id
-               AND a.id=pArticleId;
-        END IF;
-
-        l_css_null:=l_css IS NULL;
-
-        buildBodyHtml(
-            l_session_data.user_id, 
-            l_website_id,
-            'TEST', /* TEST environemt for Codepen */
-            pck_core.getresturl(),
-            pArticleId, 
-            l_collection_type, 
-            l_is_media, 
-            l_contact_form, 
-            l_title, 
-            l_subtitle, 
-            l_header_effect,
-            l_hero_asset_id,
-            l_contact_email,
-            l_telephone_number, 
-            l_mobile_number, 
-            l_linkedin_name,
-            l_instagram_name,
-            l_promotion,
-            l_html);
-
-        l_javascript:=
-        'document.querySelector(".login-btn").addEventListener("click", () => {' || 
-            'document.querySelector(".login-email").showModal();' ||
-        '})';
-        
-        l_css:=buildCSSRoot(l_website_id) || l_css;
-
-        FOR C IN (
-            SELECT DISTINCT f.family
-              FROM font f, website_font wf
-             WHERE f.id=wf.font_id
-               AND wf.website_id=l_website_id
-               AND COALESCE(wf.chars_italic,wf.chars_normal) IS NOT NUll
+               AND a.id=pArticleId
         ) LOOP
-            l_css:=l_css ||
-            '@import url("https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || '");' || chr(10);
-        END LOOP;
+            l_domain_name:=C.domain_name;
+            l_html:=C.body_html;
+            l_is_media:=C.collection_type='MEDIA';
+            buildBodyHtml(
+                l_session_data.user_id, 
+                pWebsiteId,
+                'TEST', /* TEST environemt for Codepen */
+                pck_core.getresturl(),
+                pArticleId, 
+                C.collection_type, 
+                l_is_media, 
+                C.contact_form, 
+                C.title, 
+                C.subtitle, 
+                C.header_effect,
+                C.hero_asset_id,
+                C.contact_email,
+                C.telephone_number, 
+                C.mobile_number, 
+                C.linkedin_name,
+                C.instagram_name,
+                C.promotion,
+                l_html);
 
-        /* Include unminimized css if owner has not imported their own */
-        IF (l_css_null) THEN
-            FOR C IN (
-                SELECT apex_util.blob_to_clob(file_content) file_content
-                  FROM apex_application_static_files 
-                 WHERE application_id=101
-                   AND file_name='deploy.css'
+            /* Import font-face first for codepen */
+            FOR C1 IN (
+                SELECT DISTINCT f.family
+                  FROM font f, website_font wf
+                 WHERE f.id=wf.font_id
+                   AND wf.website_id=pWebsiteId
+                   AND COALESCE(wf.chars_italic,wf.chars_normal) IS NOT NUll
             ) LOOP
-                l_css:=l_css || C.file_content;
+                l_css:=l_css ||
+                '@import url("https://fonts.googleapis.com/css2?family=' || REPLACE(C1.family,' ','+') || '");' || chr(10);
             END LOOP;
-        END IF;
+
+            l_css:=l_css || buildCSSRoot(pWebsiteId);
+
+            /* Append either author-uploaded CSS or mine  */
+            IF (C.css IS NOT NULL) THEN
+                l_css:=l_css || C.css;
+            ELSE
+                FOR C IN (
+                    SELECT apex_util.blob_to_clob(file_content) file_content
+                      FROM apex_application_static_files 
+                     WHERE application_id=101
+                       AND file_name='deploy.css'
+                ) LOOP
+                    l_css:=l_css || C.file_content;
+                END LOOP;
+            END IF;
+        END LOOP;
 
         apex_json.open_object;
         apex_json.write('success', TRUE); 
@@ -769,6 +717,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         apex_json.write('css', l_css);
         apex_json.write('js', l_javascript);
         apex_json.close_object;
+
+        pStatus:=200;
 
         EXCEPTION WHEN OTHERS THEN 
             pck_core.log_error;
