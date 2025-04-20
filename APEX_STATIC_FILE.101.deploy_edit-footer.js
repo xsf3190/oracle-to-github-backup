@@ -18,7 +18,7 @@ export const init = (element) => {
         .then((data) => {
             editor.insertAdjacentHTML('afterbegin',data.html);
             dropdown_details.removeAttribute("open");
-            editor.scrollIntoView();
+            editor.scrollIntoView({ behavior: 'smooth', block: 'end' });
             footer.replaceChildren();
             footer.insertAdjacentHTML('afterbegin',data.footer);
         })
