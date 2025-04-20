@@ -15,7 +15,7 @@ export const init = (element) => {
         .then((data) => {
             editor.insertAdjacentHTML('afterbegin',data.html);
             dropdown_details.removeAttribute("open");
-            editor.scrollIntoView();
+            editor.scrollIntoView({ behavior: 'smooth', block: 'end' });
             const edit = editor.querySelector("input[name='navigation_label']");
             const current = nav_items.querySelector("[aria-current='page']")
             edit.value = current.textContent;
@@ -94,8 +94,23 @@ editor.addEventListener("click", async (e) => {
         return;
     }
 
+    if (e.target.matches(".delete-site")) {
+        console.log("clicked delete-site");
+        callAPI(endpoint,'DELETE',{})
+            .then(() => {
+                window.location.reload();
+                return;
+            })
+            .catch((error) => {
+                handleError(error);
+            });
+    }
+
     if (e.target.matches(".delete-page")) {
         if (nav_items.childElementCount === 1) {
+            e.target.classList.add("delete-site");
+            e.target.style.backgroundColor = "red";
+            e.target.textContent = "Delete Site";
             return;
         }
         const target = nav.querySelector("[aria-current='page']");
