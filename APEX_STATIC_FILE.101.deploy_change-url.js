@@ -56,6 +56,7 @@ const changeURL = () => {
             if (data.valid) {
                 window.location.replace(data.url);
             }
+            button.disabled = false;
             result.style.color = "red";
             loader.classList.add("visually-hidden");
         })
