@@ -19,7 +19,7 @@ export const init = (element) => {
         .then((data) => {
             editor.insertAdjacentHTML('afterbegin',data.html);
             dropdown_details.removeAttribute("open");
-            editor.scrollIntoView();
+            editor.scrollIntoView({ behavior: 'smooth', block: 'end' });
         })
         .catch((error) => {
             handleError(error);
@@ -74,7 +74,7 @@ editor.addEventListener("input", (e) => {
             } else if (name.includes("font_opsz")) {
                 target.style.fontVariationSettings = '"opsz" ' + e.target.value;
             } else if (name.includes("font_slnt")) {
-                target.style.fontVariationSettings = '"slnt" ' + e.target.value;
+                target.style.fontStyle = "oblique " + e.target.value + "deg";
             } else if (name.includes("font_ital")) {
                 target.style.fontStyle = e.target.value==="0" ? "normal" : "italic";
             }
