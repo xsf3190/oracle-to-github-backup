@@ -286,6 +286,8 @@ export const init = async (element) => {
     })
     
     dropdown_details.removeAttribute("open");
+
+    document.querySelector("#editor").scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
 /*
