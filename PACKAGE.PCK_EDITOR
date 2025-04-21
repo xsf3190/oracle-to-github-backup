@@ -256,13 +256,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     '<label for="navigation-label">Navigation Label</label>' ||
                     '<input type="text" id="navigation-label" name="navigation_label" maxlength="30" value="">' ||
                 '</div>' ||
-
-                --'<div>' ||
-                --    '<label for="page-title">Page Title (SEO)</label>' ||
-                --    '<input type="text" id="page-title" name="page_title" maxlength="60" value="">' ||
-                --    '<span class=charcounter"></span>' ||
-                --'</div>' ||
-
                 '<fieldset class="flex-items">' ||
                     '<legend>Page Type</legend>' ||
                     '<label for="collection_type-normal">Normal' ||
@@ -606,7 +599,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_html LONG;
     BEGIN
         FOR C IN (
-            SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.color, wf.underline, wf.margin, f.wght_start, f.wght_end, wf.wght, f.wdth_start, f.wdth_end, wf.wdth, f.opsz_start, f.opsz_end, wf.opsz, f.slnt_start, f.slnt_end, wf.slnt, f.ital_start, f.ital_end, wf.ital
+            SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.color, wf.underline, wf.margin, 
+                f.wght_start, f.wght_end, NVL(wf.wght, f.wght_default) wght,
+                f.wdth_start, f.wdth_end, NVL(wf.wdth, f.wdth_default) wdth,
+                f.opsz_start, f.opsz_end, NVL(wf.opsz, f.opsz_default) opsz,
+                f.slnt_start, f.slnt_end, NVL(wf.slnt, f.slnt_default) slnt,
+                f.ital_start, f.ital_end, wf.ital
               FROM user_tab_columns c, user_col_comments i, website w, website_font wf, font f
              WHERE c.table_name=l_table_name
                AND c.column_name=UPPER(l_column_name)
@@ -670,7 +668,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     */
     PROCEDURE getHeader(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
-        l_html LONG;
+        l_html CLOB;
         l_title_font_url VARCHAR2(500);
         l_subtitle_font_url VARCHAR2(500);
         l_title_font_family font.family%type;
@@ -716,11 +714,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             '</form>';
         END LOOP;
         /* Include SVG symbols in hidden element */
+        /*
         l_html:=l_html || '<svg width="0" height="0">';
         FOR C IN (SELECT id, viewbox, svg FROM icon WHERE id IN ('eyedropper','image')) LOOP
             l_html:=l_html || '<symbol id="' || C.id || '" viewBox="' || C.viewbox || '" preserveAspectRatio="">' || C.svg || '</symbol>';
         END LOOP;
         l_html:=l_html || '</svg>';
+        */
 
         apex_json.open_object;
         apex_json.write('success', TRUE); 
