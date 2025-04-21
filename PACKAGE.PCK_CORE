@@ -913,7 +913,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 log_error;
                 RAISE;
     END;
-
+    
     /*
     **  load Google font definitions into google_font table. wolf3 format only. Websites deployed with optimized foont.r 
     */
@@ -922,26 +922,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_nb_fonts PLS_INTEGER;
         l_lastModified google_font_variable.lastModified%type;
     BEGIN
-        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts',l_clob);
+        execute immediate('truncate table google_font_metadata');
+        execute immediate('truncate table google_font_variable');
         
-        DELETE google_font_variable;
-
-        INSERT INTO google_font_variable(family,category,lastModified,regular,italic,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end)
+        pck_api.callGoogleAPI('https://fonts.google.com/metadata/fonts',l_clob);
+        INSERT INTO google_font_metadata(family, axis, min_value, max_value, default_value)
+        SELECT family, tag, min, max, defaultValue FROM JSON_TABLE(l_clob, '$.familyMetadataList[*]' COLUMNS (family, NESTED '$.axes[*]' COLUMNS(tag, min, max, defaultValue)))
+         WHERE tag IS NOT NULL;
+        
+        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts',l_clob);
+        INSERT INTO google_font_variable(family,category,lastModified,regular,italic,
+            wght_start,wght_end,
+            wdth_start,wdth_end,
+            opsz_start,opsz_end,
+            slnt_start,slnt_end)
         WITH data AS (
             SELECT family, category, lastModified, variant, tag,"start" as tag_start, "end" as tag_end
               FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, lastModified, NESTED '$.variants[*]' COLUMNS (variant PATH '$'), NESTED '$.axes[*]' COLUMNS(tag varchar2(4) PATH '$.tag', "start" number PATH '$.start', "end" number PATH '$.end'))) 
+             WHERE family IN (SELECT family FROM google_font_metadata)
         )
         SELECT family,category,TO_DATE(lastModified,'YYYY-MM-DD'),
-            max(decode(variant,'regular','YES')) as regular, max(decode(variant,'italic','YES')) as italic,
-            max(decode(tag,'wght',tag_start)) as wght_start, max(decode(tag,'wght',tag_end)) as wght_end,
-            max(decode(tag,'wdth',tag_start)) as wdth_start, max(decode(tag,'wdth',tag_end)) as wdth_end,
-            max(decode(tag,'opsz',tag_start)) as opsz_start, max(decode(tag,'opsz',tag_end)) as opsz_end,
+            max(decode(variant,'regular',1)) as regular, max(decode(variant,'italic',1)) as italic,
+            max(decode(tag,'wght',tag_start)) as wght_start, max(decode(tag,'wght',tag_end)) as wght_end, 
+            max(decode(tag,'wdth',tag_start)) as wdth_start, max(decode(tag,'wdth',tag_end)) as wdth_end, 
+            max(decode(tag,'opsz',tag_start)) as opsz_start, max(decode(tag,'opsz',tag_end)) as opsz_end, 
             max(decode(tag,'slnt',tag_start)) as slnt_start, max(decode(tag,'slnt',tag_end)) as slnt_end
         FROM data
         GROUP BY family,category,lastModified;
 
-        /* Variable fonts have at least one axis */
-        DELETE google_font_variable WHERE COALESCE(wght_start,wdth_start,opsz_start,slnt_start) IS NULL;
+        /* For this application, variable fonts must have at least wght and ital | slnt axes */
+        DELETE google_font_variable WHERE wght_start IS NULL OR COALESCE(italic,slnt_start) IS NULL;
 
         SELECT COUNT(*), MAX(lastModified) INTO l_nb_fonts, l_lastModified FROM google_font_variable;
         pck_core.log('Successfully loaded '|| l_nb_fonts || ' Google variable fonts  - last modified is ' || TO_CHAR(l_lastModified,'DD-MM-YYYY'));
@@ -950,23 +960,44 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         MERGE INTO font t
         USING
         (
-            SELECT family,category,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end,
-                CASE WHEN italic='YES' THEN 0 END ital_start,
-                CASE WHEN italic='YES' THEN 1 END ital_end
-            FROM google_font_variable
+            WITH defaults AS
+            (
+                SELECT family, MAX(DECODE(axis,'wght',default_value)) wght_default, MAX(DECODE(axis,'wdth',default_value)) wdth_default, 
+                    MAX(DECODE(axis,'opsz',default_value)) opsz_default, MAX(DECODE(axis,'slnt',default_value)) slnt_default
+                FROM google_font_metadata
+                GROUP BY family
+            )
+            SELECT v.family,v.category,v.wght_start,v.wght_end,d.wght_default,
+                v.wdth_start,v.wdth_end,d.wdth_default,
+                v.opsz_start,v.opsz_end,d.opsz_default,
+                v.slnt_start,v.slnt_end,d.slnt_default,
+                CASE WHEN italic=1 THEN 0 END ital_start,
+                CASE WHEN italic=1 THEN 1 END ital_end
+            FROM google_font_variable v, defaults d
+            WHERE v.family=d.family
         ) s
         ON (t.family=s.family)
         WHEN MATCHED THEN UPDATE SET
             t.category=s.category,
-            t.wght_start=s.wght_start,t.wght_end=s.wght_end,
-            t.wdth_start=s.wdth_start,t.wdth_end=s.wdth_end,
-            t.opsz_start=s.opsz_start,t.opsz_end=s.opsz_end,
-            t.slnt_start=s.slnt_start,t.slnt_end=s.slnt_end,
+            t.wght_start=s.wght_start,t.wght_end=s.wght_end,t.wght_default=s.wght_default,
+            t.wdth_start=s.wdth_start,t.wdth_end=s.wdth_end,t.wdth_default=s.wdth_default,
+            t.opsz_start=s.opsz_start,t.opsz_end=s.opsz_end,t.opsz_default=s.opsz_default,
+            t.slnt_start=s.slnt_start,t.slnt_end=s.slnt_end,t.slnt_default=s.slnt_default,
             t.ital_start=s.ital_start,t.ital_end=s.ital_end,
             t.updated_date=current_timestamp
-        WHEN NOT MATCHED THEN INSERT (id,family,category,wght_start,wght_end,wdth_start,wdth_end,opsz_start,opsz_end,slnt_start,slnt_end,ital_start,ital_end,created_date) 
-            VALUES (seq_font.nextval,s.family,s.category,s.wght_start,s.wght_end,s.wdth_start,s.wdth_end,s.opsz_start,s.opsz_end,s.slnt_start,s.slnt_end,s.ital_start,s.ital_end,current_timestamp);
-
+        WHEN NOT MATCHED THEN 
+            INSERT (id,family,category,
+                wght_start,wght_end,wght_default,
+                wdth_start,wdth_end,wdth_default,
+                opsz_start,opsz_end,opsz_default,
+                slnt_start,slnt_end,slnt_default,
+                ital_start,ital_end,created_date) 
+            VALUES (seq_font.nextval,s.family,s.category,
+                s.wght_start,s.wght_end,s.wght_default,
+                s.wdth_start,s.wdth_end,s.wdth_default,
+                s.opsz_start,s.opsz_end,s.opsz_default,
+                s.slnt_start,s.slnt_end,s.slnt_default,
+                s.ital_start,s.ital_end,current_timestamp);
     END;
 
     /*
