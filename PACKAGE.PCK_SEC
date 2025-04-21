@@ -123,6 +123,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_bearer_token := SUBSTR(OWA_UTIL.get_cgi_env('Authorization'), 8);
         l_JWT_data:=decodeJWT(l_bearer_token);
         
+        g_session_user_id:=l_JWT_data.jti;
+        g_website_id:=pWebsiteId;
 
         /* Check expiry and signature are ok */
         l_token:=apex_jwt.DECODE(p_value => l_bearer_token, p_signature_key => UTL_RAW.cast_to_raw (l_JWT_data.client_secret));
@@ -143,9 +145,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_session_data.scope:=l_JWT_data.aud;
         l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
         l_session_data.url:=OWA_UTIL.get_cgi_env('url');
-
-        g_session_user_id:=l_JWT_data.jti;
-        g_website_id:=pWebsiteId;
 
         RETURN l_session_data;
     END;
