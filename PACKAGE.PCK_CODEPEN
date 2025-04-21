@@ -432,21 +432,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 IF (C.margin>0) THEN
                     l_font_styles:=l_font_styles || ';margin-block:' || C.margin || 'vh' ;
                 END IF;
+                
                 IF (C.ital=1) THEN
                     l_font_styles:=l_font_styles || ';font-style:italic';
                 END IF;
-                IF (C.opsz IS NOT NULL) THEN
-                    l_font_styles:=l_font_styles || ';font-variation-settings:''opsz'''|| C.opsz;
-                END IF;
+                
                 IF (C.slnt IS NOT NULL) THEN
-                    l_font_styles:=l_font_styles || ';font-variation-settings:''slnt'''|| C.slnt;
+                    l_font_styles:=l_font_styles || ';font-style:oblique ' || C.slnt || 'deg';
                 END IF;
+                
                 IF (C.wdth IS NOT NULL) THEN
-                    l_font_styles:=l_font_styles || ';font-stretch:'|| C.wdth || '%';
+                    l_font_styles:=l_font_styles || ';font-stretch:' || C.wdth || '%';
                 END IF;
-                IF (C.wght IS NOT NULL) THEN
-                    l_font_styles:=l_font_styles || ';font-weight:'|| C.wght;
-                END IF;
+                
+                l_font_styles:=l_font_styles || ';font-weight:' || C.wght;
 
                 CASE C.context
                     WHEN 'TITLE' THEN
@@ -687,7 +686,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                   FROM font f, website_font wf
                  WHERE f.id=wf.font_id
                    AND wf.website_id=pWebsiteId
-                   AND COALESCE(wf.chars_italic,wf.chars_normal) IS NOT NUll
             ) LOOP
                 l_css:=l_css ||
                 '@import url("https://fonts.googleapis.com/css2?family=' || REPLACE(C1.family,' ','+') || '");' || chr(10);
