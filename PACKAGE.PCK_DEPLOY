@@ -185,11 +185,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_files JSON_OBJECT_T;
         l_head CLOB;
         l_page CLOB;
-
-        l_font_css CLOB;
-        l_font_download BLOB;
-        l_googleapis_query VARCHAR2(100);
-        l_googleapis_query_params VARCHAR2(500);
         
         l_title website.title%type;
         l_subtitle website.subtitle%type;
@@ -204,23 +199,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_favicon_url VARCHAR2(250);
         l_favicon_download BLOB;
         l_content CLOB;
+        l_text VARCHAR2(4000);
         
         l_char VARCHAR2(4);
         l_deploy_css CLOB;
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
 
-        TYPE tt_fonts IS RECORD (
-            family font.family%type,
-            chars_bold_normal VARCHAR2(500),
-            chars_bold_italic VARCHAR2(500),
-            chars_normal VARCHAR2(500),
-            chars_italic VARCHAR2(500)
-        );
-        TYPE t_font IS TABLE OF tt_fonts INDEX BY VARCHAR2(15);
-        l_fonts t_font;
-
-        l_context website_font.context%type;
+        l_axes VARCHAR2(30);
+        l_tuples VARCHAR2(100);
+        l_chars_normal VARCHAR2(500);
+        l_chars_italic VARCHAR2(500);
+        l_chars_normal_headings VARCHAR2(500);
+        l_chars_italic_headings VARCHAR2(500);
+        l_chars_bold_normal VARCHAR2(500);
+        l_chars_bold_italic VARCHAR2(500);
+        l_api_url VARCHAR2(50):='https://fonts.googleapis.com/css2?family=';
+        l_font_css LONG;
+        
+        l_dummy VARCHAR2(500);
         
         l_headings_regex varchar2(20):='<h.+?>(.+?)<\/h.+?>';
         
@@ -276,7 +273,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         TYPE t_jscode IS TABLE OF VARCHAR2(30);
         l_jscode t_jscode:=t_jscode();
 
-        l_api_url VARCHAR2(500);
         l_message VARCHAR2(100);
         l_styles CLOB;
         l_styles_edit CLOB;
@@ -380,27 +376,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END IF;
         END;
 
-        FUNCTION contactEmail RETURN VARCHAR2 IS
-            l_contact_email website.contact_email%type;
-        BEGIN
-            SELECT contact_email INTO l_contact_email FROM website WHERE id=pWebsiteId;
-            IF (l_contact_email IS NULL) THEN
-                SELECT email INTO l_contact_email FROM users WHERE id=pUserId;
-            END IF;
-            RETURN (l_contact_email);
-        END;
-
-        PROCEDURE logfont IS
-        BEGIN
-            l_context:=l_fonts.FIRST;
-            WHILE l_context IS NOT NULL LOOP
-                --pck_core.log(l_context||':'||l_fonts(l_context).chars_normal||':'||l_fonts(l_context).chars_italic||':');
-                l_fonts(l_context).chars_italic:=chars_used(l_fonts(l_context).chars_italic);
-                l_fonts(l_context).chars_normal:=chars_used(l_fonts(l_context).chars_normal);
-                l_context := l_fonts.NEXT(l_context);
-            END LOOP;
-        END;
-
     BEGIN
         /* For logging when running in scheduler */
         pck_sec.g_session_user_id:=pUserId;
@@ -411,35 +386,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
           FROM website
          WHERE id=pWebsiteId;
 
-        /* Build array of fonts for each context */
-        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM website_font WHERE website_id=pWebsiteId);
-        IF (n=0) THEN
-            pck_editor.initWebsiteFonts(pWebsiteId, 'Playpen Sans', 'Asap');  -- NEED TO CHANGE THIS TO BE RANDOM
-        END IF;
-        
-        FOR C IN (
-            SELECT f.id, f.family, wf.context, wf.ital, CASE WHEN wf.context='TITLE' THEN w.title ELSE w.subtitle END data
-              FROM website w, website_font wf, font f
-             WHERE w.id=pWebsiteId
-               AND wf.website_id=w.id
-               AND wf.font_id=f.id
-        )
-        LOOP
-            l_fonts(C.context).family:=C.family;
-
-            CASE C.ital
-                WHEN 0 THEN l_fonts(C.context).chars_normal:=C.data;
-                WHEN 1 THEN l_fonts(C.context).chars_italic:=C.data;
-                ELSE l_fonts(C.context).chars_normal:=C.data;
-            END CASE;
-
-            --logfont;
-
-        END LOOP;
-
-        /* All footer elements are normal style characters */
-        l_fonts('SUBTITLE').chars_normal:=l_fonts('SUBTITLE').chars_normal || l_contact_email || l_telephone_number || l_mobile_number || l_linkedin_name;
-        --logfont;
         /*
         ** Get all website content into collection
         */
@@ -475,17 +421,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         
         FOR i IN 1..l_labels.COUNT LOOP
 
-            /* For each context collect distinct set of italic and normal characters in order to later optimise font if custom deploy */
+            /* For each context collect distinct set of italic and normal characters in order to optimise font */
             l_body_html:=l_labels(i).body_html;           
             n:=REGEXP_COUNT(l_body_html,l_headings_regex);
             IF (n>0) THEN
                 FOR j IN 1..n 
                 LOOP
-                    extract_styles(REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j), l_fonts('TITLE').chars_bold_italic, l_fonts('TITLE').chars_bold_normal, l_fonts('TITLE').chars_italic, l_fonts('TITLE').chars_normal);
+                    extract_styles(REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j), l_dummy, l_dummy, l_chars_italic_headings, l_chars_normal_headings);
                 END LOOP;
                 l_body_html:=REGEXP_REPLACE(l_body_html,l_headings_regex,null);
             END IF;
-            extract_styles(l_body_html, l_fonts('SUBTITLE').chars_bold_italic, l_fonts('SUBTITLE').chars_bold_normal, l_fonts('SUBTITLE').chars_italic, l_fonts('SUBTITLE').chars_normal);
+            extract_styles(l_body_html, l_chars_bold_italic, l_chars_bold_normal, l_chars_italic, l_chars_normal);
 
             apex_string.push(l_labels(i).modules,'deploy_main.min.js');
 
@@ -605,6 +551,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     l_module_html ||
                     l_script_html ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
+                    '<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>' ||
                     '<link rel="stylesheet" href="/website.css">'  ||
                 '</head>' ||
                 
@@ -685,115 +632,140 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END LOOP;
         END LOOP;
         
-        logDeployment(pWebsiteId, pSiteId, 'Configuring FONTS for distinct characters');
+        logDeployment(pWebsiteId, pSiteId, 'Configuring FONTS for distinct characters used');
 
-        /* Google css API needs separate calls for distinct set of normal and italic characters used */
-        l_context:=l_fonts.FIRST;
-        WHILE l_context IS NOT NULL LOOP
-            /* Get unique set of characters used for each context */
-            l_fonts(l_context).chars_bold_italic:=chars_used(l_fonts(l_context).chars_bold_italic);
-            l_fonts(l_context).chars_bold_normal:=chars_used(l_fonts(l_context).chars_bold_normal);
-            l_fonts(l_context).chars_italic:=chars_used(l_fonts(l_context).chars_italic);
-            l_fonts(l_context).chars_normal:=chars_used(l_fonts(l_context).chars_normal);
-
-            UPDATE website_font 
-               SET chars_bold_italic=l_fonts(l_context).chars_bold_italic, 
-                   chars_bold_normal=l_fonts(l_context).chars_bold_normal,
-                   chars_italic=l_fonts(l_context).chars_italic, 
-                   chars_normal=l_fonts(l_context).chars_normal,
-                   updated_date=current_timestamp
-             WHERE website_id=pWebsiteId
-               AND context=l_context;   
-            l_context := l_fonts.NEXT(l_context);
-        END LOOP;
-
-        /* Configure google fonts for the set of distinct characters */
-        FOR C IN (
-            WITH data AS 
-            (SELECT f.family, 
-                    LISTAGG(wf.chars_bold_italic) WITHIN GROUP (ORDER BY NULL) bold_italic, 
-                    LISTAGG(wf.chars_bold_normal) WITHIN GROUP (ORDER BY NULL) bold_normal,
-                    LISTAGG(wf.chars_italic) WITHIN GROUP (ORDER BY NULL) italic, 
-                    LISTAGG(wf.chars_normal) WITHIN GROUP (ORDER BY NULL) normal,
-                    LTRIM(
-                    MAX(NVL2(wf.ital,'ital',NULL)) ||
-                    MAX(NVL2(wf.opsz,',opsz',NULL)) ||
-                    MAX(NVL2(wf.slnt,',slnt',NULL)) ||
-                    MAX(NVL2(wf.wdth,',wdth',NULL)) ||
-                    MAX(NVL2(wf.wght,',wght',NULL)),',') axes,
-                    LTRIM(
-                    MAX(NVL2(wf.opsz,','||wf.opsz,NULL)) ||
-                    MAX(NVL2(wf.slnt,','||wf.slnt,NULL)) ||
-                    MAX(NVL2(wf.wdth,','||wf.wdth,NULL)) ||
-                    MAX(NVL2(wf.wght,','||wf.wght,NULL)),',') ranges
-              FROM font f, website_font wf
-             WHERE wf.website_id=pWebsiteId
-               AND f.id=wf.font_id
-             GROUP BY f.family
-            )
-            SELECT family, bold_italic, bold_normal, italic, normal, axes, ranges
-            FROM data
-        ) LOOP
-            /* Seperate normal and italic according to actual usage */
-
-            IF (pEnv='TEST') THEN
-                FOR C1 IN (
-                    SELECT f.family,
-                        LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.opsz_start,',opsz',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
-                            NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
-                        LTRIM(NVL2(f.opsz_start,f.opsz_start||'..'||f.opsz_end,NULL) || NVL2(f.slnt_start,','||f.slnt_start||'..'||f.slnt_end,NULL) || 
-                            NVL2(f.wdth_start,','||f.wdth_start||'..'||f.wdth_end,NULL) || NVL2(f.wght_start,','||f.wght_start||'..'||f.wght_end,NULL),',') ranges
-                        FROM font f, website_font wf
-                        WHERE wf.website_id=pWebsiteId 
-                        AND wf.font_id=f.id
-                ) LOOP
-                    l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C1.family,' ','+') || ':' || C1.axes || '@';
-                    IF(INSTR(C1.axes,'ital')>0) THEN 
-                        l_api_url:=l_api_url || '0,' || C1.ranges || ';1,' || C1.ranges;
-                    ELSE
-                        l_api_url:=l_api_url || C1.ranges;
-                    END IF;
-                        
-                    pck_api.callGoogleAPI(l_api_url,l_font_css);
-                    
-                    l_styles_edit:=l_styles_edit || l_font_css;
-                END LOOP;
-            END IF;
-
-            IF (INSTR(C.axes,'ital')>0 AND C.bold_italic IS NOT NULL) THEN
-                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':';
-                l_api_url:=l_api_url || C.axes || '@1,' || C.ranges || '&text=' || utl_url.escape(C.bold_italic,TRUE,'UTF-8') || '&display=swap';
-                pck_api.callGoogleAPI(l_api_url,l_font_css);
-                l_styles:=l_styles || l_font_css;
-            END IF;
-
-            IF (C.bold_normal IS NOT NULL) THEN
-                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':';
-                l_api_url:=l_api_url || C.axes || '@0,' || C.ranges || '&text=' || utl_url.escape(C.bold_normal,TRUE,'UTF-8') || '&display=swap';
-                pck_api.callGoogleAPI(l_api_url,l_font_css);
-                l_styles:=l_styles || l_font_css;
-            END IF;
+        /* For now, set footer elements as normal style characters */
+        l_chars_normal:=l_chars_normal || l_contact_email || l_telephone_number || l_mobile_number || l_linkedin_name;
         
-            IF (INSTR(C.axes,'ital')>0 AND C.italic IS NOT NULL) THEN
-                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':';
-                l_api_url:=l_api_url || C.axes || '@1,' || C.ranges || '&text=' || utl_url.escape(C.italic,TRUE,'UTF-8') || '&display=swap';
-                pck_api.callGoogleAPI(l_api_url,l_font_css);
-                l_styles:=l_styles || l_font_css;
+        
+        /* Google css API needs separate calls for distinct set of normal and italic characters used */
+        /* All fonts have wght axis plus either ital or slnt */
+        
+        FOR C IN (
+            SELECT f.family, wf.context, wf.ital, wf.opsz, wf.slnt, wf.wdth, wf.wght, f.ital_start, f.opsz_default, f.slnt_end, f.slnt_default, f.wdth_default, f.wght_default, 
+                DECODE(wf.context,'TITLE',w.title,w.subtitle) text
+            FROM font f, website_font wf, website w
+            WHERE wf.website_id=w.id
+            AND f.id=wf.font_id
+            AND w.id=pWebsiteId
+            ORDER BY DECODE(wf.context,'TITLE',1,2) )
+        LOOP
+            /* Build fonts for header title and subtitle */
+            
+            l_axes:=null;
+            l_tuples:=null;
+            
+            IF (C.ital IS NOT NULL) THEN
+                l_axes:=l_axes || 'ital,';
+                l_tuples:=l_tuples || C.ital || ',';
             END IF;
-
-            IF (C.normal IS NOT NULL) THEN
-                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':';
-                l_api_url:=l_api_url || C.axes || '@' || CASE WHEN INSTR(C.axes,'ital')>0 THEN '0,' END || C.ranges || '&text=' || utl_url.escape(C.normal,TRUE,'UTF-8') || '&display=swap';
-                pck_api.callGoogleAPI(l_api_url,l_font_css);
-                l_styles:=l_styles || l_font_css;
+            IF (NVL(C.opsz,C.opsz_default)<>C.opsz_default) THEN
+                l_axes:=l_axes || 'opsz,';
+                l_tuples:=l_tuples || C.opsz || ',';
             END IF;
-
-            logDeployment(pWebsiteId, pSiteId, ' - ' || C.family || ' (' || CASE WHEN C.bold_italic IS NOT NULL THEN LENGTH(C.bold_italic) || ' bold italic ' END || CASE WHEN C.bold_normal IS NOT NULL THEN LENGTH(C.bold_normal) || ' bold normal' END || ')');
-            logDeployment(pWebsiteId, pSiteId, ' - ' || C.family || ' (' || CASE WHEN C.italic IS NOT NULL THEN LENGTH(C.italic) || ' italic ' END || CASE WHEN C.normal IS NOT NULL THEN LENGTH(C.normal) || ' normal' END || ')');
+            IF (C.slnt IS NOT NULL) THEN
+                l_axes:=l_axes || 'slnt,';
+                l_tuples:=l_tuples || C.slnt_end || ',';
+            END IF;
+            IF (NVL(C.wdth,C.wdth_default)<>C.wdth_default) THEN
+                l_axes:=l_axes || 'wdth,';
+                l_tuples:=l_tuples || C.wdth || ',';
+            END IF;
+            l_axes:=l_axes || 'wght';
+            l_tuples:=l_tuples || C.wght;
+            
+            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || l_tuples || '&text=' || chars_used(C.text) || '&display=swap',l_font_css);
+            l_styles:=l_styles || l_font_css;
+            
+            
+            /* Build fonts for main content */
+            
+            IF (C.ital IS NOT NULL) THEN
+                l_axes:='ital,wght';
+            ELSE
+                l_axes:='slnt,wght';
+            END IF;
+            
+            l_tuples:=null;
+            
+            l_text:=null;
+            
+            CASE C.context
+                WHEN 'TITLE' THEN
+                    IF (l_chars_normal_headings IS NOT NULL) THEN
+                        l_tuples:=l_tuples || '0,700;';
+                        l_text:=l_text || l_chars_normal_headings;
+                    END IF;
+                    IF (l_chars_italic_headings IS NOT NULL) THEN
+                        IF (C.ital IS NOT NULL) THEN
+                            l_tuples:=l_tuples || '1,700';
+                        ELSE
+                            l_tuples:=l_tuples || C.slnt_end || ',700';
+                        END IF;
+                        l_text:=l_text || l_chars_italic_headings;
+                    END IF;
+                    IF (l_text IS NOT NULL) THEN
+                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || RTRIM(l_tuples,';') || '&text=' || chars_used(l_text) || '&display=swap',l_font_css);
+                        l_styles:=l_styles || l_font_css;
+                    END IF;
+                WHEN 'SUBTITLE' THEN
+                    IF (l_chars_normal IS NOT NULL) THEN
+                        l_tuples:=l_tuples || '0,400;';
+                        l_text:=l_text || l_chars_normal;
+                    END IF;
+                    
+                    IF (l_chars_bold_normal IS NOT NULL) THEN
+                        l_tuples:=l_tuples || '0,700;';
+                        l_text:=l_text || l_chars_bold_normal;
+                    END IF;
+                    
+                    IF (l_chars_italic IS NOT NULL) THEN
+                        IF (C.ital IS NOT NULL) THEN
+                            l_tuples:=l_tuples || '1,400;';
+                        ELSE
+                            l_tuples:=l_tuples || C.slnt_end || ',400;';
+                        END IF;
+                        l_text:=l_text || l_chars_italic;
+                    END IF;
+                    
+                    IF (l_chars_bold_italic IS NOT NULL) THEN
+                        IF (C.ital IS NOT NULL) THEN
+                            l_tuples:=l_tuples || '1,700;';
+                        ELSE
+                            l_tuples:=l_tuples || C.slnt_end || ',700;';
+                        END IF;
+                        l_text:=l_text || l_chars_bold_italic;
+                    END IF;
+                    IF (l_text IS NOT NULL) THEN
+                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || RTRIM(l_tuples,';') || '&text=' || chars_used(l_text) || '&display=swap',l_font_css);
+                        l_styles:=l_styles || l_font_css;
+                    END IF;
+            END CASE;
         END LOOP;
 
         /* Append css root to font-face rules */
         l_styles:=l_styles || pck_codepen.buildCssRoot(pWebsiteId);
+
+        /* Build full featured variable fonts for TEST sites */
+        IF (pEnv='TEST') THEN
+            FOR C IN (
+                SELECT f.family,
+                    LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
+                        NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
+                    LTRIM(NVL2(f.slnt_start,','||f.slnt_start||'..'||f.slnt_end,NULL) || 
+                        NVL2(f.wdth_start,','||f.wdth_start||'..'||f.wdth_end,NULL) || NVL2(f.wght_start,','||f.wght_start||'..'||f.wght_end,NULL),',') tuples
+                    FROM font f, website_font wf
+                    WHERE wf.website_id=pWebsiteId 
+                    AND wf.font_id=f.id
+            ) LOOP
+                IF(INSTR(C.axes,'ital')>0) THEN 
+                    pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || C.axes || '@0,' || C.tuples || ';1,' || C.tuples || '&display=swap',l_font_css);
+                ELSE
+                    pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || C.axes || '@' || C.tuples || '&display=swap',l_font_css);
+                END IF;
+                l_styles_edit:=l_styles_edit || l_font_css;
+            END LOOP;
+        END IF;
 
         logDeployment(pWebsiteId, pSiteId, 'Building CSS');
         l_styles:=l_styles || minifyCSS(pWebsiteId, pSiteId, 'deploy.css');
