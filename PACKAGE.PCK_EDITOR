@@ -463,7 +463,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             END IF;
             
             pck_api.callGoogleAPI(l_api_url,l_font_css);
-            pck_core.log(l_font_css);
 
             /* Get url for Latin charcters ... but desperate but so far seems to be in last font-face */
             n:=regexp_count(l_font_css,l_url_regex);
