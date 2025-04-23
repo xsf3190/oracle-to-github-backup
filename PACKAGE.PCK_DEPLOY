@@ -710,7 +710,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     END IF;
                 WHEN 'SUBTITLE' THEN
                     IF (l_chars_normal IS NOT NULL) THEN
-                        l_tuples:=l_tuples || '0,400;';
+                        l_tuples:=l_tuples || '0,399;';
                         l_text:=l_text || l_chars_normal;
                     END IF;
                     
@@ -721,9 +721,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     
                     IF (l_chars_italic IS NOT NULL) THEN
                         IF (C.ital IS NOT NULL) THEN
-                            l_tuples:=l_tuples || '1,400;';
+                            l_tuples:=l_tuples || '1,399;';
                         ELSE
-                            l_tuples:=l_tuples || C.slnt_end || ',400;';
+                            l_tuples:=l_tuples || C.slnt_end || ',399;';
                         END IF;
                         l_text:=l_text || l_chars_italic;
                     END IF;
