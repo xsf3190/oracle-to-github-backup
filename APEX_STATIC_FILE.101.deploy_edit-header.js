@@ -117,7 +117,7 @@ editor.addEventListener("change", (e) => {
                         input.disabled = false;
                         input.setAttribute("min",axis.min);
                         input.setAttribute("max",axis.max);
-                        input.value = axis.name==="ital" ? 0 : Math.round(axis.min+((axis.max-axis.min)/2));
+                        // input.value = axis.name==="ital" ? 0 : Math.round(axis.min+((axis.max-axis.min)/2));
                     } else {
                         label.classList.add("visually-hidden");
                         input.disabled = true;
