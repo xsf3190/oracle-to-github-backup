@@ -920,10 +920,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
     PROCEDURE loadGoogleFonts IS 
         l_clob CLOB;
         l_nb_fonts PLS_INTEGER;
-        l_lastModified google_font_variable.lastModified%type;
+        l_lastModified google_font.lastModified%type;
     BEGIN
         execute immediate('truncate table google_font_metadata');
-        execute immediate('truncate table google_font_variable');
+        execute immediate('truncate table google_font');
         
         pck_api.callGoogleAPI('https://fonts.google.com/metadata/fonts',l_clob);
         INSERT INTO google_font_metadata(family, axis, min_value, max_value, default_value)
@@ -931,30 +931,39 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
          WHERE tag IS NOT NULL;
         
         pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts',l_clob);
-        INSERT INTO google_font_variable(family,category,lastModified,regular,italic,
+        INSERT INTO google_font(family, category, lastModified, 
+            weight_start, weight_end,
+            weight_start_italic, weight_end_italic,
             wght_start,wght_end,
             wdth_start,wdth_end,
             opsz_start,opsz_end,
             slnt_start,slnt_end)
-        WITH data AS (
-            SELECT family, category, lastModified, variant, tag,"start" as tag_start, "end" as tag_end
-              FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, lastModified, NESTED '$.variants[*]' COLUMNS (variant PATH '$'), NESTED '$.axes[*]' COLUMNS(tag varchar2(4) PATH '$.tag', "start" number PATH '$.start', "end" number PATH '$.end'))) 
-             WHERE family IN (SELECT family FROM google_font_metadata)
+        WITH 
+        data AS (
+            SELECT family, category, lastModified, DECODE(variant,'regular','400','italic','400italic',variant) variant, tag,"start" as tag_start, "end" as tag_end
+              FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, lastModified, NESTED '$.variants[*]' COLUMNS (variant PATH '$'), NESTED '$.axes[*]' COLUMNS(tag varchar2(4) PATH '$.tag', "start" number PATH '$.start', "end" number PATH '$.end')))
+        ),
+        data2 AS (
+            SELECT family, category, lastModified, tag, tag_start, tag_end, 
+                CASE WHEN INSTR(variant,'italic')>0 THEN SUBSTR(variant,1,INSTR(variant,'italic')-1) END italic,
+                CASE WHEN INSTR(variant,'italic')=0 THEN TO_NUMBER(variant) END regular
+            FROM data
         )
         SELECT family,category,TO_DATE(lastModified,'YYYY-MM-DD'),
-            max(decode(variant,'regular',1)) as regular, max(decode(variant,'italic',1)) as italic,
+            --listagg(regular,',') within group (order by regular) regular,
+            --listagg(italic,',') within group (order by italic) italic,
+            min(regular) weight_start,max(regular) weight_end,
+            min(italic) weight_start_italic, max(italic) weight_end_italic,
             max(decode(tag,'wght',tag_start)) as wght_start, max(decode(tag,'wght',tag_end)) as wght_end, 
             max(decode(tag,'wdth',tag_start)) as wdth_start, max(decode(tag,'wdth',tag_end)) as wdth_end, 
             max(decode(tag,'opsz',tag_start)) as opsz_start, max(decode(tag,'opsz',tag_end)) as opsz_end, 
             max(decode(tag,'slnt',tag_start)) as slnt_start, max(decode(tag,'slnt',tag_end)) as slnt_end
-        FROM data
-        GROUP BY family,category,lastModified;
+        FROM data2
+        GROUP BY family,category,lastModified
+        ORDER BY 1;
 
-        /* For this application, variable fonts must have at least wght and ital | slnt axes */
-        DELETE google_font_variable WHERE wght_start IS NULL OR COALESCE(italic,slnt_start) IS NULL;
-
-        SELECT COUNT(*), MAX(lastModified) INTO l_nb_fonts, l_lastModified FROM google_font_variable;
-        pck_core.log('Successfully loaded '|| l_nb_fonts || ' Google variable fonts  - last modified is ' || TO_CHAR(l_lastModified,'DD-MM-YYYY'));
+        SELECT COUNT(*), MAX(lastModified) INTO l_nb_fonts, l_lastModified FROM google_font;
+        pck_core.log('Successfully loaded '|| l_nb_fonts || ' Google fonts  - last modified is ' || TO_CHAR(l_lastModified,'DD-MM-YYYY'));
 
         /* Update font table from staging table */
         MERGE INTO font t
@@ -967,13 +976,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 FROM google_font_metadata
                 GROUP BY family
             )
-            SELECT v.family,v.category,v.wght_start,v.wght_end,d.wght_default,
+            SELECT v.family,v.category,
+                v.wght_start,v.wght_end,d.wght_default,
                 v.wdth_start,v.wdth_end,d.wdth_default,
                 v.opsz_start,v.opsz_end,d.opsz_default,
                 v.slnt_start,v.slnt_end,d.slnt_default,
-                CASE WHEN italic=1 THEN 0 END ital_start,
-                CASE WHEN italic=1 THEN 1 END ital_end
-            FROM google_font_variable v, defaults d
+                CASE WHEN v.weight_start_italic IS NOT NULL THEN 0 END ital_start,
+                CASE WHEN v.weight_start_italic IS NOT NULL THEN 1 END ital_end,
+                v.weight_start, v.weight_end, 
+                v.weight_start_italic, v.weight_end_italic 
+            FROM google_font v, defaults d
             WHERE v.family=d.family
         ) s
         ON (t.family=s.family)
@@ -984,6 +996,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             t.opsz_start=s.opsz_start,t.opsz_end=s.opsz_end,t.opsz_default=s.opsz_default,
             t.slnt_start=s.slnt_start,t.slnt_end=s.slnt_end,t.slnt_default=s.slnt_default,
             t.ital_start=s.ital_start,t.ital_end=s.ital_end,
+            t.weight_start=s.weight_start, t.weight_end=s.weight_end, 
+            t.weight_start_italic=s.weight_start_italic, t.weight_end_italic=s.weight_end_italic, 
             t.updated_date=current_timestamp
         WHEN NOT MATCHED THEN 
             INSERT (id,family,category,
@@ -991,13 +1005,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 wdth_start,wdth_end,wdth_default,
                 opsz_start,opsz_end,opsz_default,
                 slnt_start,slnt_end,slnt_default,
-                ital_start,ital_end,created_date) 
+                ital_start,ital_end,
+                weight_start, weight_end,
+                weight_start_italic, weight_end_italic,
+                created_date) 
             VALUES (seq_font.nextval,s.family,s.category,
                 s.wght_start,s.wght_end,s.wght_default,
                 s.wdth_start,s.wdth_end,s.wdth_default,
                 s.opsz_start,s.opsz_end,s.opsz_default,
                 s.slnt_start,s.slnt_end,s.slnt_default,
-                s.ital_start,s.ital_end,current_timestamp);
+                s.ital_start,s.ital_end,
+                s.weight_start, s.weight_end,
+                s.weight_start_italic, s.weight_end_italic,
+                current_timestamp);
     END;
 
     /*
