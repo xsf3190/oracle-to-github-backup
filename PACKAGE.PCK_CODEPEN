@@ -136,7 +136,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_rgb_lightest VARCHAR2(6);
         
         l_css_file apex_application_static_files.file_name%type;
-        l_font_category google_font_variable.category%type;
         l_font_url VARCHAR2(200);
         l_root_css LONG;
     BEGIN
@@ -169,8 +168,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 '--font-family-' || C1.context || ':"' || C1.family || '",' || CASE WHEN C1.category IN ('serif','sans-serif') THEN C1.category ELSE 'sans-serif' END || ';';
             END LOOP;
             l_root_css:=l_root_css || 
-            '--font-variation-settings-title: "opsz" 10;' ||
-            '--font-variation-settings-subtitle: "opsz" 10;' ||
             '--font-family-ui: system-ui, sans-serif;' ||
             '--max-width: ' || C.max_width || ';' || 
             '--img-border-radius: ' || C.img_border_radius || ';' ||
