@@ -950,8 +950,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             FROM data
         )
         SELECT family,category,TO_DATE(lastModified,'YYYY-MM-DD'),
-            --listagg(regular,',') within group (order by regular) regular,
-            --listagg(italic,',') within group (order by italic) italic,
             min(regular) weight_start,max(regular) weight_end,
             min(italic) weight_start_italic, max(italic) weight_end_italic,
             max(decode(tag,'wght',tag_start)) as wght_start, max(decode(tag,'wght',tag_end)) as wght_end, 
@@ -981,12 +979,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 v.wdth_start,v.wdth_end,d.wdth_default,
                 v.opsz_start,v.opsz_end,d.opsz_default,
                 v.slnt_start,v.slnt_end,d.slnt_default,
-                CASE WHEN v.weight_start_italic IS NOT NULL THEN 0 END ital_start,
-                CASE WHEN v.weight_start_italic IS NOT NULL THEN 1 END ital_end,
+                CASE WHEN COALESCE(v.wght_start,v.wdth_start,v.opsz_start,v.slnt_start) IS NOT NULL AND v.weight_start_italic IS NOT NULL THEN 0 END ital_start,
+                CASE WHEN COALESCE(v.wght_start,v.wdth_start,v.opsz_start,v.slnt_start) IS NOT NULL AND v.weight_start_italic IS NOT NULL THEN 1 END ital_end,
                 v.weight_start, v.weight_end, 
                 v.weight_start_italic, v.weight_end_italic 
             FROM google_font v, defaults d
-            WHERE v.family=d.family
+            WHERE v.family=d.family(+)
         ) s
         ON (t.family=s.family)
         WHEN MATCHED THEN UPDATE SET
