@@ -638,11 +638,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_chars_normal:=l_chars_normal || l_contact_email || l_telephone_number || l_mobile_number || l_linkedin_name;
         
         
-        /* Google css API needs separate calls for distinct set of normal and italic characters used */
-        /* All fonts have wght axis plus either ital or slnt */
+        /* Google Fonts API needs separate calls for distinct set of normal and italic characters used */
+        /* All variable fonts have wght axis plus either ital or slnt */
         
         FOR C IN (
-            SELECT f.family, wf.context, wf.ital, wf.opsz, wf.slnt, wf.wdth, wf.wght, f.ital_start, f.opsz_default, f.slnt_end, f.slnt_default, f.wdth_default, f.wght_default, 
+            SELECT f.family, wf.context, wf.ital, wf.opsz, wf.slnt, wf.wdth, wf.wght, f.opsz_default, f.slnt_default, f.wdth_default, f.wght_default, 
+                COALESCE(f.opsz_default, f.slnt_default, f.wdth_default, f.wght_default) variable,
                 DECODE(wf.context,'TITLE',w.title,w.subtitle) text
             FROM font f, website_font wf, website w
             WHERE wf.website_id=w.id
@@ -650,49 +651,64 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             AND w.id=pWebsiteId
             ORDER BY DECODE(wf.context,'TITLE',1,2) )
         LOOP
-            /* Build fonts for header title and subtitle */
+            /* FOR STATIC FONTS ONLY NEED DISTINCT CHARACTERS FOR TITLE AAND SUBTITLE */
             
+            IF (C.variable IS NULL OR C.variable IS NOT NULL) THEN
+                CASE C.context
+                    WHEN 'TITLE' THEN 
+                        l_text:=chars_used(C.text || l_chars_normal_headings || l_chars_italic_headings);
+                    WHEN 'SUBTITLE' THEN
+                        l_text:=chars_used(C.text || l_chars_normal || l_chars_bold_normal || l_chars_italic || l_chars_bold_italic);
+                END CASE;
+                pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || '&text=' || l_text || '&display=swap',l_font_css);
+                l_styles:=l_styles || l_font_css;
+                CONTINUE;
+            END IF;
+
             l_axes:=null;
             l_tuples:=null;
             
             IF (C.ital IS NOT NULL) THEN
                 l_axes:=l_axes || 'ital,';
                 l_tuples:=l_tuples || C.ital || ',';
+            ELSE 
+                IF (C.slnt IS NOT NULL) THEN
+                    l_axes:=l_axes || 'slnt,';
+                    l_tuples:=l_tuples || C.slnt || ',';
+                END IF;
             END IF;
             IF (NVL(C.opsz,C.opsz_default)<>C.opsz_default) THEN
                 l_axes:=l_axes || 'opsz,';
                 l_tuples:=l_tuples || C.opsz || ',';
             END IF;
-            IF (C.slnt IS NOT NULL) THEN
-                l_axes:=l_axes || 'slnt,';
-                l_tuples:=l_tuples || C.slnt_end || ',';
-            END IF;
             IF (NVL(C.wdth,C.wdth_default)<>C.wdth_default) THEN
                 l_axes:=l_axes || 'wdth,';
                 l_tuples:=l_tuples || C.wdth || ',';
             END IF;
-            l_axes:=l_axes || 'wght';
-            l_tuples:=l_tuples || C.wght;
-            
+            IF (NVL(C.wght,C.wght_default)<>C.wght_default) THEN
+                l_axes:=l_axes || 'wght,';
+                l_tuples:=l_tuples || C.wght || ',';
+            END IF;
+
+            l_axes:=RTRIM(l_axes,',');
+            l_tuples:=RTRIM(l_tuples,',');
+
             pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || l_tuples || '&text=' || chars_used(C.text) || '&display=swap',l_font_css);
+
             l_styles:=l_styles || l_font_css;
             
-            
-            /* Build fonts for main content */
-            
-            IF (C.ital IS NOT NULL) THEN
-                l_axes:='ital,wght';
-            ELSE
-                l_axes:='slnt,wght';
-            END IF;
-            
+            l_axes:=null;
             l_tuples:=null;
-            
             l_text:=null;
             
+            /*
+            ** AT THIS STAGE WE NEED VARIABLE FONTS FOR wght:400 (text) and wght:700 (headings)
+            ** IF FONT HAS NO ITAL AXIS, USE SLNT INSTEAD IF TEXT CONTAINS ANY ITALICS
+            */
             CASE C.context
                 WHEN 'TITLE' THEN
                     IF (l_chars_normal_headings IS NOT NULL) THEN
+                       -- l_axes:=l_axes || ''
                         l_tuples:=l_tuples || '0,700;';
                         l_text:=l_text || l_chars_normal_headings;
                     END IF;
@@ -700,7 +716,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         IF (C.ital IS NOT NULL) THEN
                             l_tuples:=l_tuples || '1,700';
                         ELSE
-                            l_tuples:=l_tuples || C.slnt_end || ',700';
+                            l_tuples:=l_tuples || C.slnt || ',700';
                         END IF;
                         l_text:=l_text || l_chars_italic_headings;
                     END IF;
@@ -710,7 +726,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     END IF;
                 WHEN 'SUBTITLE' THEN
                     IF (l_chars_normal IS NOT NULL) THEN
-                        l_tuples:=l_tuples || '0,399;';
+                        l_tuples:=l_tuples || '0,400;';
                         l_text:=l_text || l_chars_normal;
                     END IF;
                     
@@ -721,9 +737,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     
                     IF (l_chars_italic IS NOT NULL) THEN
                         IF (C.ital IS NOT NULL) THEN
-                            l_tuples:=l_tuples || '1,399;';
+                            l_tuples:=l_tuples || '1,400;';
                         ELSE
-                            l_tuples:=l_tuples || C.slnt_end || ',399;';
+                            l_tuples:=l_tuples || C.slnt || ',400;';
                         END IF;
                         l_text:=l_text || l_chars_italic;
                     END IF;
@@ -732,7 +748,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         IF (C.ital IS NOT NULL) THEN
                             l_tuples:=l_tuples || '1,700;';
                         ELSE
-                            l_tuples:=l_tuples || C.slnt_end || ',700;';
+                            l_tuples:=l_tuples || C.slnt || ',700;';
                         END IF;
                         l_text:=l_text || l_chars_bold_italic;
                     END IF;
@@ -746,10 +762,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /* Append css root to font-face rules */
         l_styles:=l_styles || pck_codepen.buildCssRoot(pWebsiteId);
 
-        /* Build full featured variable fonts for TEST sites */
-        IF (pEnv='TEST') THEN
+        /* Build full featured fonts for TEST sites */
+        IF (pEnv='TESTx') THEN
             FOR C IN (
                 SELECT f.family,
+                    COALESCE(f.opsz_default, f.slnt_default, f.wdth_default, f.wght_default) variable,
                     LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
                         NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
                     LTRIM(NVL2(f.slnt_start,','||f.slnt_start||'..'||f.slnt_end,NULL) || 
@@ -758,7 +775,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     WHERE wf.website_id=pWebsiteId 
                     AND wf.font_id=f.id
             ) LOOP
-                IF(INSTR(C.axes,'ital')>0) THEN 
+                IF (C.variable IS NULL) THEN
+                    pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || '&display=swap',l_font_css);
+                ELSIF (INSTR(C.axes,'ital')>0) THEN 
                     pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || C.axes || '@0,' || C.tuples || ';1,' || C.tuples || '&display=swap',l_font_css);
                 ELSE
                     pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || C.axes || '@' || C.tuples || '&display=swap',l_font_css);
