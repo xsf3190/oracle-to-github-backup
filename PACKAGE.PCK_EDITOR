@@ -439,6 +439,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         END IF;
     END;
 
+    /* 
+    **  RETURN GOOGLE FONTS URL FOR USER-SELECTED FONT
+    */
     FUNCTION getFontURL(pFontid IN font.id%type) RETURN VARCHAR2 IS
         l_api_url VARCHAR2(250);
         l_url VARCHAR2(500);
@@ -455,11 +458,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 FROM font f
                 WHERE f.id=pFontid) 
         LOOP
-            l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+') || ':' || C.axes || '@';
-            IF (INSTR(C.axes,'ital')>0) THEN
-                l_api_url:=l_api_url || '0,' || C.ranges || ';1,' || C.ranges;
-            ELSE
-                l_api_url:=l_api_url || C.ranges;
+            l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+');
+            IF (C.axes IS NOT NULL) THEN
+                l_api_url:=l_api_url || ':' || C.axes || '@';
+                IF (INSTR(C.axes,'ital')>0) THEN
+                    l_api_url:=l_api_url || '0,' || C.ranges || ';1,' || C.ranges;
+                ELSE
+                    l_api_url:=l_api_url || C.ranges;
+                END IF;
             END IF;
             
             pck_api.callGoogleAPI(l_api_url,l_font_css);
@@ -473,7 +479,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     END;
 
     /* 
-    **  GET VARIABLE FONT LISTS AND PROPERTIES (font_id=0) ELSE GET SETTING FOR SPECIFIC FONT
+    **  BUILD SELECT LIST OF FONT FAMILIES FOR GIVEN CATEGORY (if font_id=0) ELSE GET FONT SETTINGS FOR A SPECIFIC FONT
     */
     PROCEDURE getFonts(pWebsiteId IN website.id%type, pCategory IN font.category%type, pFontId IN font.id%type, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
@@ -496,7 +502,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             APEX_JSON.write('content', l_html);
         ELSE
             FOR C IN (
-                SELECT f.family, f.ital_start, f.ital_end, f.wght_start, f.wght_end, f.wdth_start, f.wdth_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end
+                SELECT f.family, f.ital_start, f.ital_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end, f.wdth_start, f.wdth_end, f.wght_start, f.wght_end,
+                    COALESCE(f.ital_start, f.opsz_start, f.slnt_start, f.wdth_start, f.wght_start) variable,
+                    f.weight_start, f.weight_end, f.weight_start_italic, f.weight_end_italic
                  FROM font f
                 WHERE f.id=pFontid
             ) 
@@ -504,11 +512,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 apex_json.write('url',getFontUrl(pFontid));
 
                 apex_json.open_array('axes');
+
+                apex_json.open_object;
+                apex_json.write('name','ital');
+                IF (C.variable IS NOT NULL) THEN
+                    apex_json.write('min', C.ital_start);
+                    apex_json.write('max', C.ital_end);
+                ELSE
+                    apex_json.write('min', CASE WHEN C.weight_start_italic IS NOT NULL THEN 0 END);
+                    apex_json.write('max', CASE WHEN C.weight_start_italic IS NOT NULL THEN 1 END);
+                END IF;
+                apex_json.close_object;
+
                 apex_json.open_object;
                 apex_json.write('name','wght');
-                apex_json.write('min', C.wght_start);
-                apex_json.write('max', C.wght_end);
+                IF (C.variable IS NOT NULL) THEN
+                    apex_json.write('min', C.wght_start);
+                    apex_json.write('max', C.wght_end);
+                ELSE
+                    apex_json.write('min', C.weight_start);
+                    apex_json.write('max', C.weight_end);
+                END IF;
                 apex_json.close_object;
+
                 apex_json.open_object;
                 apex_json.write('name','wdth');
                 apex_json.write('min', C.wdth_start);
@@ -524,11 +550,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 apex_json.write('min', C.slnt_start);
                 apex_json.write('max', C.slnt_end);
                 apex_json.close_object;
-                apex_json.open_object;
-                apex_json.write('name','ital');
-                apex_json.write('min', C.ital_start);
-                apex_json.write('max', C.ital_end);
-                apex_json.close_object;
+                
                 apex_json.close_array;
             END LOOP;
         END IF;
