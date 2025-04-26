@@ -107,7 +107,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         l_clob CLOB;
         l_netlify_site_id website.netlify_site_id%type;
         l_ssl_url VARCHAR2(100);
-        l_home_article_id article.id%type;
+        l_body_html article.body_html%type:=
+        '<article class="flow">' ||
+        '<h2>This is a heading</h2>' ||
+        '<p>Choose the "Edit Content" option to change using a WYSIWYG editor.</p>' ||
+        '<h3>This is what a sub-heading looks like</h3>' ||
+        '</article>';
     BEGIN
         l_domain:=getEditorDomain(pEmail);
         IF (urlExists(l_domain || '.netlify.app')) THEN
@@ -124,24 +129,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         SELECT site_id, ssl_url INTO l_netlify_site_id, l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS (site_id, ssl_url));
 
         INSERT INTO website (id, domain_name, netlify_site_id, created_date, user_id, contact_email, title, subtitle, header_effect, color_primary)
-        VALUES (seq_website.nextval, l_domain, l_netlify_site_id, current_timestamp, pUserid, pEmail, l_domain, 'Editor website', 'curve', '#0F121A');
+        VALUES (seq_website.nextval, l_domain, l_netlify_site_id, current_timestamp, pUserid, pEmail, l_domain, 'Welcome to your website', 'curve', '#0F121A');
 
-        INSERT INTO website_font (website_id, context, font_id, wght, font_size, color, underline, margin)
-        VALUES (seq_website.currval, 'TITLE', 52, 550, 6, '#66FCF1', 0,0);
-
-        INSERT INTO website_font (website_id, context, font_id, ital, wdth, wght, font_size, color, underline, margin)
-        VALUES (seq_website.currval, 'SUBTITLE', 76, 1, 100, 430, 3, '#F7F3F3', 0, 0);
-
-        SELECT article_id 
-          INTO l_home_article_id 
-          FROM website_article 
-         WHERE website_id=pWebsiteId 
-           AND UPPER(navigation_label)='EDITOR';
+        INSERT INTO website_font (website_id, context, font_id, ital, opsz, slnt, wdth, wght, font_size, color, underline, margin)
+        SELECT seq_website.currval, context, font_id, ital, opsz, slnt, wdth, wght, font_size, color, 0, 0
+          FROM website_font
+         WHERE website_id=pWebsiteId;
 
         INSERT INTO article (id, body_html, author_user_id)
-        SELECT seq_article.nextval, body_html, pUserid
-          FROM article
-         WHERE id=l_home_article_id;
+        VALUES (seq_article.nextval, l_body_html, pUserid);
 
         INSERT INTO website_article (website_id, article_id, display_order, navigation_label)
         VALUES (seq_website.currval, seq_article.currval, 1, 'Home');
