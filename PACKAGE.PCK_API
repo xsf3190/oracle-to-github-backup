@@ -549,7 +549,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         l_google_api_key users.google_api_key%type;
         l_error_message LONG;
     BEGIN
-        /* Get user's developer Google api key */
+        /* Get user's Google api key if requesting webfonts list - e.g. in daily backup job */
         IF (INSTR(pUrl,'webfonts')>0) THEN
             SELECT u.google_api_key 
               INTO l_google_api_key
