@@ -214,7 +214,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_chars_italic_headings VARCHAR2(500);
         l_chars_bold_normal VARCHAR2(500);
         l_chars_bold_italic VARCHAR2(500);
-        l_api_url VARCHAR2(50):='https://fonts.googleapis.com/css2?family=';
+        l_api_url VARCHAR2(50);
         l_font_css LONG;
         
         l_dummy VARCHAR2(500);
@@ -498,7 +498,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[ img-src 'self' res.cloudinary.com;]' ||
             q'[ font-src 'self' fonts.gstatic.com;]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com;]' ||
-            q'[ script-src 'self' cdn.ckeditor.com upload-widget.cloudinary.com;]' ||
+            q'[ script-src 'self' cdn.ckeditor.com upload-widget.cloudinary.com restartnet.com;]' ||
             q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
             q'[ frame-ancestors 'none';]' ||
             q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
@@ -638,12 +638,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_chars_normal:=l_chars_normal || l_contact_email || l_telephone_number || l_mobile_number || l_linkedin_name;
         
         
-        /* Google Fonts API needs separate calls for distinct set of normal and italic characters used */
-        /* All variable fonts have wght axis plus either ital or slnt */
+        /* 
+        **  STATIC FONT REQUEST USES SYNTAX LIKE THIS IN THE GOOGLE API CALL -  E.G. FOR ALL FLAVOURS OF ROBOTO:
+        **  css/Roboto:400normal,400italic,700normal,700italic
+        **
+        **  VARIABLE FONT REQUESTS USE DIFFERENT SYNTAX
+        **  css2/Roboto:ital,wght@0,400;0,700;1,400;1,700
+         */
         
         FOR C IN (
-            SELECT f.family, wf.context, wf.ital, wf.opsz, wf.slnt, wf.wdth, wf.wght, f.opsz_default, f.slnt_default, f.wdth_default, f.wght_default, 
-                COALESCE(f.opsz_default, f.slnt_default, f.wdth_default, f.wght_default) variable,
+            SELECT f.family, f.variable, wf.context, wf.ital, wf.opsz, wf.slnt, wf.wdth, wf.wght, f.opsz_default, f.slnt_default, f.wdth_default, f.wght_default,
                 DECODE(wf.context,'TITLE',w.title,w.subtitle) text
             FROM font f, website_font wf, website w
             WHERE wf.website_id=w.id
@@ -653,17 +657,50 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         LOOP
             /* FOR STATIC FONTS ONLY NEED DISTINCT CHARACTERS FOR TITLE AAND SUBTITLE */
             
-            IF (C.variable IS NULL OR C.variable IS NOT NULL) THEN
+            IF (C.variable=0) THEN
+                l_api_url:='https://fonts.googleapis.com/css?family=';
                 CASE C.context
-                    WHEN 'TITLE' THEN 
-                        l_text:=chars_used(C.text || l_chars_normal_headings || l_chars_italic_headings);
+                    WHEN 'TITLE' THEN /* Includes elements h1,h2,h3,h4 weight:700 */
+                        IF (l_chars_normal_headings IS NOT NULL) THEN
+                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':700' || '&text=' || l_chars_normal_headings || '&display=swap',l_font_css);
+                            l_styles:=l_styles || l_font_css;
+                        END IF;
+                        IF (l_chars_italic_headings IS NOT NULL) THEN
+                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':700italic' || '&text=' || l_chars_italic_headings || '&display=swap',l_font_css);
+                            l_styles:=l_styles || l_font_css;
+                        END IF;
+                        IF (C.text IS NOT NULL) THEN
+                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || C.wght || CASE WHEN C.ital=1 THEN 'italic' END || '&text=' || C.text || '&display=swap',l_font_css);
+                            l_styles:=l_styles || l_font_css;
+                        END IF;
+
                     WHEN 'SUBTITLE' THEN
-                        l_text:=chars_used(C.text || l_chars_normal || l_chars_bold_normal || l_chars_italic || l_chars_bold_italic);
+                        IF (l_chars_normal IS NOT NULL) THEN
+                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':400' || '&text=' || l_chars_normal || '&display=swap',l_font_css);
+                            l_styles:=l_styles || l_font_css;
+                        END IF;
+                        IF (l_chars_bold_normal IS NOT NULL) THEN
+                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':700' || '&text=' || l_chars_bold_normal || '&display=swap',l_font_css);
+                            l_styles:=l_styles || l_font_css;
+                        END IF;
+                        IF (l_chars_italic IS NOT NULL) THEN
+                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':400italic' || '&text=' || l_chars_italic || '&display=swap',l_font_css);
+                            l_styles:=l_styles || l_font_css;
+                        END IF;
+                        IF (l_chars_bold_italic IS NOT NULL) THEN
+                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':700italic' || '&text=' || l_chars_bold_italic || '&display=swap',l_font_css);
+                            l_styles:=l_styles || l_font_css;
+                        END IF;
                 END CASE;
-                pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || '&text=' || l_text || '&display=swap',l_font_css);
-                l_styles:=l_styles || l_font_css;
                 CONTINUE;
             END IF;
+
+
+            /* *************************** */
+            /* VARIABLE FONTS USE CSS2 API */
+            /* *************************** */
+
+            l_api_url:='https://fonts.googleapis.com/css2?family=';
 
             l_axes:=null;
             l_tuples:=null;
@@ -697,10 +734,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             l_styles:=l_styles || l_font_css;
             
-            l_axes:=null;
-            l_tuples:=null;
-            l_text:=null;
-            
             /*
             ** AT THIS STAGE WE NEED VARIABLE FONTS FOR wght:400 (text) and wght:700 (headings)
             ** IF FONT HAS NO ITAL AXIS, USE SLNT INSTEAD IF TEXT CONTAINS ANY ITALICS
@@ -708,52 +741,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             CASE C.context
                 WHEN 'TITLE' THEN
                     IF (l_chars_normal_headings IS NOT NULL) THEN
-                       -- l_axes:=l_axes || ''
-                        l_tuples:=l_tuples || '0,700;';
-                        l_text:=l_text || l_chars_normal_headings;
-                    END IF;
-                    IF (l_chars_italic_headings IS NOT NULL) THEN
-                        IF (C.ital IS NOT NULL) THEN
-                            l_tuples:=l_tuples || '1,700';
-                        ELSE
-                            l_tuples:=l_tuples || C.slnt || ',700';
-                        END IF;
-                        l_text:=l_text || l_chars_italic_headings;
-                    END IF;
-                    IF (l_text IS NOT NULL) THEN
-                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || RTRIM(l_tuples,';') || '&text=' || chars_used(l_text) || '&display=swap',l_font_css);
+                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':ital,wght@0,700&text=' || chars_used(l_chars_normal_headings) || '&display=swap',l_font_css);
                         l_styles:=l_styles || l_font_css;
                     END IF;
+                    IF (l_chars_italic_headings IS NOT NULL) THEN
+                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':ital,wght@1,700&text=' || chars_used(l_chars_italic_headings) || '&display=swap',l_font_css);
+                        l_styles:=l_styles || l_font_css;
+                    END IF;
+
                 WHEN 'SUBTITLE' THEN
                     IF (l_chars_normal IS NOT NULL) THEN
-                        l_tuples:=l_tuples || '0,400;';
-                        l_text:=l_text || l_chars_normal;
+                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':ital,wght@0,400&text=' || chars_used(l_chars_normal) || '&display=swap',l_font_css);
+                        l_styles:=l_styles || l_font_css;
                     END IF;
                     
                     IF (l_chars_bold_normal IS NOT NULL) THEN
-                        l_tuples:=l_tuples || '0,700;';
-                        l_text:=l_text || l_chars_bold_normal;
+                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':ital,wght@0,700&text=' || chars_used(l_chars_bold_normal) || '&display=swap',l_font_css);
+                        l_styles:=l_styles || l_font_css;
                     END IF;
                     
                     IF (l_chars_italic IS NOT NULL) THEN
-                        IF (C.ital IS NOT NULL) THEN
-                            l_tuples:=l_tuples || '1,400;';
-                        ELSE
-                            l_tuples:=l_tuples || C.slnt || ',400;';
-                        END IF;
-                        l_text:=l_text || l_chars_italic;
+                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':ital,wght@1,400&text=' || chars_used(l_chars_italic) || '&display=swap',l_font_css);
+                        l_styles:=l_styles || l_font_css;
                     END IF;
                     
                     IF (l_chars_bold_italic IS NOT NULL) THEN
-                        IF (C.ital IS NOT NULL) THEN
-                            l_tuples:=l_tuples || '1,700;';
-                        ELSE
-                            l_tuples:=l_tuples || C.slnt || ',700;';
-                        END IF;
-                        l_text:=l_text || l_chars_bold_italic;
-                    END IF;
-                    IF (l_text IS NOT NULL) THEN
-                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || RTRIM(l_tuples,';') || '&text=' || chars_used(l_text) || '&display=swap',l_font_css);
+                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':ital,wght@1,700&text=' || chars_used(l_chars_bold_italic) || '&display=swap',l_font_css);
                         l_styles:=l_styles || l_font_css;
                     END IF;
             END CASE;
@@ -763,10 +776,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_styles:=l_styles || pck_codepen.buildCssRoot(pWebsiteId);
 
         /* Build full featured fonts for TEST sites */
-        IF (pEnv='TESTx') THEN
+        IF (pEnv='TEST') THEN
             FOR C IN (
-                SELECT f.family,
-                    COALESCE(f.opsz_default, f.slnt_default, f.wdth_default, f.wght_default) variable,
+                SELECT f.family, f.variable,
                     LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
                         NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
                     LTRIM(NVL2(f.slnt_start,','||f.slnt_start||'..'||f.slnt_end,NULL) || 
@@ -775,13 +787,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     WHERE wf.website_id=pWebsiteId 
                     AND wf.font_id=f.id
             ) LOOP
-                IF (C.variable IS NULL) THEN
-                    pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || '&display=swap',l_font_css);
-                ELSIF (INSTR(C.axes,'ital')>0) THEN 
-                    pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || C.axes || '@0,' || C.tuples || ';1,' || C.tuples || '&display=swap',l_font_css);
+                IF (C.variable=0) THEN
+                    l_api_url:='https://fonts.googleapis.com/css?family=';
                 ELSE
-                    pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || C.axes || '@' || C.tuples || '&display=swap',l_font_css);
+                    l_api_url:='https://fonts.googleapis.com/css2?family=';
                 END IF;
+                pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || '&display=swap',l_font_css);
                 l_styles_edit:=l_styles_edit || l_font_css;
             END LOOP;
         END IF;
