@@ -1,6 +1,6 @@
-import "https://restartnet.com/deploy_metric.min.js";
+import "./deploy_metric.min.js";
 
-import { dropdown, login_btn } from "https://restartnet.com/deploy_elements.min.js";
+import { dropdown, login_btn } from "./deploy_elements.min.js";
 
 /*
 ** NEW WEBSITE URL INCLUDES OWNER'S JWT TOKENS - SAVE THESE IN STORAGE AND REMOVE FROM URL
@@ -19,7 +19,7 @@ if (url.searchParams.has("refresh")) {
 ** SET DROPDOWN ELEMENTS IF REFRESH TOKEN EXISTS
 */
 if (localStorage.getItem("refresh")) {
-    import("https://restartnet.com/deploy_menulist.min.js")
+    import("./deploy_menulist.min.js")
         .then((module) => {
             module.init("menulist/:ID");
         })
@@ -35,7 +35,7 @@ if (localStorage.getItem("refresh")) {
 dropdown.addEventListener("click", async (e) => {
     let module_name = e.target.dataset.endpoint;
     if (!module_name) return;
-    module_name = "https://restartnet.com/deploy_" + module_name.substring(0,module_name.indexOf("/")) + ".min.js";
+    module_name = "/deploy_" + module_name.substring(0,module_name.indexOf("/")) + ".min.js";
     import(module_name)
         .then((module) => {
             module.init(e.target);
