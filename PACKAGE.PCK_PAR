@@ -95,5 +95,16 @@ EXCEPTION WHEN OTHERS THEN
 
 END generate_pre_auth_request;
 
+/*
+select blob_content, filename into l_request_object, l_request_filename from apex_application_temp_files where name = :FILE_NAME;
+l_request_url := 'https://objectstorage.eu-frankfurt-1.oraclecloud.com/n/namespace/b/bucket_name/o/' || apex_util.url_encode(l_request_filename);        
+l_response := apex_web_service.make_rest_request(
+            p_url => l_request_url,
+            p_http_method => 'PUT',
+            p_body_blob => l_request_object,
+            p_credential_static_id => 'Your_Static_Credential_ID'
+        );
+*/
+
 END PCK_PAR;
 /
