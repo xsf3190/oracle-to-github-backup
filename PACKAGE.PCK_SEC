@@ -1,5 +1,9 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS 
     --
+    REFRESH_TOKEN_EXP CONSTANT PLS_INTEGER:=(24*60*60)*90; --90 DAYS
+    --
+    ACCESS_TOKEN_EXP CONSTANT PLS_INTEGER:=60*5; -- 5 MINUTES
+    --
     TYPE t_JWT_data IS RECORD (
         iss VARCHAR2(10),
         sub VARCHAR2(100),
@@ -16,6 +20,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
         canuse_eyedropper BOOLEAN,
         user_id NUMBER,
         scope VARCHAR2(7),
+        iss VARCHAR2(10),
+        sub VARCHAR2(100),
+        client_secret user_ords_clients.client_secret%type,
         valid BOOLEAN
     );
 
@@ -43,9 +50,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
 END PCK_SEC;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
-
-    REFRESH_TOKEN_EXP CONSTANT PLS_INTEGER:=(24*60*60)*90; --90 DAYS
-    ACCESS_TOKEN_EXP CONSTANT PLS_INTEGER:=60*5; -- 5 MINUTES
 
     /* 
     ** TEMPORARY SOLUTION TO POPULATE ENDPOINT TABLES
@@ -143,6 +147,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
 
         l_session_data.user_id:=l_JWT_data.jti;
         l_session_data.scope:=l_JWT_data.aud;
+        l_session_data.iss:=l_JWT_data.iss;
+        l_session_data.sub:=l_JWT_data.sub;
+        l_session_data.client_secret:=l_JWT_data.client_secret;
         l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
         l_session_data.url:=OWA_UTIL.get_cgi_env('url');
 
