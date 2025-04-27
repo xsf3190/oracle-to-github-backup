@@ -246,6 +246,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         l_clob CLOB;
         l_valid BOOLEAN:=TRUE;
         l_message VARCHAR2(50);
+        l_new_token_domain VARCHAR2 (4000);
+        l_new_refresh_domain VARCHAR2 (4000);
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
@@ -272,7 +274,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         apex_json.write('success', TRUE);
         apex_json.write('valid', l_valid);
         IF (l_valid) THEN
-            apex_json.write('url', 'https://' || l_subdomain || '.netlify.app');
+            l_new_token_domain:=apex_jwt.ENCODE (
+                p_iss       => l_session_data.iss,
+                p_sub       => l_session_data.sub,
+                p_aud       => l_session_data.scope,
+                p_jti       => l_session_data.user_id,
+                p_iat_ts    => current_timestamp,
+                p_exp_sec   => pck_sec.ACCESS_TOKEN_EXP,
+                p_signature_key => UTL_RAW.cast_to_raw (l_session_data.client_secret)
+            ); 
+            l_new_refresh_domain:=apex_jwt.ENCODE (
+                p_iss       => l_session_data.iss,
+                p_sub       => l_session_data.sub,
+                p_aud       => l_session_data.scope,
+                p_jti       => l_session_data.user_id,
+                p_iat_ts    => current_timestamp,
+                p_exp_sec   => pck_sec.REFRESH_TOKEN_EXP,
+                p_signature_key => UTL_RAW.cast_to_raw (l_session_data.client_secret)
+            );
+            apex_json.write('url', 'https://' || l_subdomain || '.netlify.app' || '?refresh=' || l_new_refresh_domain || '&token=' || l_new_token_domain);
         END IF;
         apex_json.write('message', l_message);
         apex_json.close_object;
