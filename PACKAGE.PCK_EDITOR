@@ -450,7 +450,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         n PLS_INTEGER;
     BEGIN
         FOR C IN (
-                SELECT f.family, 
+                SELECT f.family, f.variable,
                     LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.opsz_start,',opsz',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
                         NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
                     LTRIM(NVL2(f.opsz_start,f.opsz_start||'..'||f.opsz_end,NULL) || NVL2(f.slnt_start,','||f.slnt_start||'..'||f.slnt_end,NULL) || 
@@ -458,16 +458,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 FROM font f
                 WHERE f.id=pFontid) 
         LOOP
-            l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+');
-            IF (C.axes IS NOT NULL) THEN
-                l_api_url:=l_api_url || ':' || C.axes || '@';
-                IF (INSTR(C.axes,'ital')>0) THEN
-                    l_api_url:=l_api_url || '0,' || C.ranges || ';1,' || C.ranges;
-                ELSE
-                    l_api_url:=l_api_url || C.ranges;
+            IF (C.variable=1) THEN
+                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+');
+                IF (C.axes IS NOT NULL) THEN
+                    l_api_url:=l_api_url || ':' || C.axes || '@';
+                    IF (INSTR(C.axes,'ital')>0) THEN
+                        l_api_url:=l_api_url || '0,' || C.ranges || ';1,' || C.ranges;
+                    ELSE
+                        l_api_url:=l_api_url || C.ranges;
+                    END IF;
                 END IF;
+            ELSE
+                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+');
             END IF;
-            
             pck_api.callGoogleAPI(l_api_url,l_font_css);
 
             /* Get url for Latin charcters ... but desperate but so far seems to be in last font-face */
@@ -502,8 +505,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             APEX_JSON.write('content', l_html);
         ELSE
             FOR C IN (
-                SELECT f.family, f.ital_start, f.ital_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end, f.wdth_start, f.wdth_end, f.wght_start, f.wght_end,
-                    COALESCE(f.ital_start, f.opsz_start, f.slnt_start, f.wdth_start, f.wght_start) variable,
+                SELECT f.family, f.variable, f.ital_start, f.ital_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end, f.wdth_start, f.wdth_end, f.wght_start, f.wght_end,
                     f.weight_start, f.weight_end, f.weight_start_italic, f.weight_end_italic
                  FROM font f
                 WHERE f.id=pFontid
@@ -515,7 +517,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
 
                 apex_json.open_object;
                 apex_json.write('name','ital');
-                IF (C.variable IS NOT NULL) THEN
+                IF (C.variable=1) THEN
                     apex_json.write('min', C.ital_start);
                     apex_json.write('max', C.ital_end);
                 ELSE
