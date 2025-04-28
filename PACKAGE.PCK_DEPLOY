@@ -182,7 +182,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     **  VARIABLE FONT REQUESTS USE DIFFERENT SYNTAX
     **  css2/Roboto:ital,wght@0,400;0,700;1,400;1,700
      */
-    PROCEDURE getFontfaces(pWebsiteid IN website.id%type, pSiteId IN website.netlify_site_id%type, pCharsNormalHeadings IN VARCHAR2, pCharsItalicHeadings IN VARCHAR2, pCharsNormal IN VARCHAR2, pCharsItalic IN VARCHAR2, pCharsBoldNormal IN VARCHAR2, pCharsBoldItalic IN VARCHAR2, pFontface IN OUT NOCOPY VARCHAR2) IS
+    PROCEDURE getFontfaces(pWebsiteid IN website.id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pCharsNormalHeadings IN VARCHAR2, pCharsItalicHeadings IN VARCHAR2, pCharsNormal IN VARCHAR2, pCharsItalic IN VARCHAR2, pCharsBoldNormal IN VARCHAR2, pCharsBoldItalic IN VARCHAR2, pFontface IN OUT NOCOPY VARCHAR2) IS
         l_api_url VARCHAR2(50);
         l_font_css LONG;
         l_axes VARCHAR2(30);
@@ -222,6 +222,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         FOR C IN (
             SELECT f.family, f.variable, wf.context, wf.ital, wf.opsz, wf.slnt, wf.wdth, wf.wght, f.opsz_default, f.slnt_default, f.wdth_default, f.wght_default,
+                f.ital_start, f.ital_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end, f.wdth_start, f.wdth_end, f.wght_start, f.wght_end,
                 DECODE(wf.context,'TITLE',w.title,w.subtitle) text
             FROM font f, website_font wf, website w
             WHERE wf.website_id=w.id
@@ -278,32 +279,48 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_axes:=null;
             l_tuples:=null;
             
-            IF (C.ital IS NOT NULL) THEN
+            IF (C.ital_start IS NOT NULL) THEN
                 l_axes:=l_axes || 'ital,';
-                l_tuples:=l_tuples || C.ital || ',';
             ELSE 
-                IF (C.slnt IS NOT NULL) THEN
+                IF (C.slnt_start IS NOT NULL) THEN
                     l_axes:=l_axes || 'slnt,';
-                    l_tuples:=l_tuples || C.slnt || ',';
+                    CASE pEnv
+                        WHEN 'TEST' THEN l_tuples:=l_tuples || C.slnt_start || '..' || C.slnt_end || ',';
+                        WHEN 'LIVE' THEN l_tuples:=l_tuples || C.slnt || ',';
+                    END CASE;
                 END IF;
             END IF;
-            IF (NVL(C.opsz,C.opsz_default)<>C.opsz_default) THEN
+            IF (C.opsz_start IS NOT NULL) THEN
                 l_axes:=l_axes || 'opsz,';
-                l_tuples:=l_tuples || C.opsz || ',';
+                CASE pEnv
+                    WHEN 'TEST' THEN l_tuples:=l_tuples || C.opsz_start || '..' || C.opsz_end || ',';
+                    WHEN 'LIVE' THEN l_tuples:=l_tuples || C.opsz || ',';
+                END CASE;
             END IF;
-            IF (NVL(C.wdth,C.wdth_default)<>C.wdth_default) THEN
+            IF (C.wdth_start IS NOT NULL) THEN
                 l_axes:=l_axes || 'wdth,';
-                l_tuples:=l_tuples || C.wdth || ',';
+                CASE pEnv
+                    WHEN 'TEST' THEN l_tuples:=l_tuples || C.wdth_start || '..' || C.wdth_end || ',';
+                    WHEN 'LIVE' THEN l_tuples:=l_tuples || C.wdth || ',';
+                END CASE;
             END IF;
-            IF (NVL(C.wght,C.wght_default)<>C.wght_default) THEN
+            IF (C.wght_start IS NOT NULL) THEN
                 l_axes:=l_axes || 'wght,';
-                l_tuples:=l_tuples || C.wght || ',';
+                CASE pEnv
+                    WHEN 'TEST' THEN l_tuples:=l_tuples || C.wght_start || '..' || C.wght_end || ',';
+                    WHEN 'LIVE' THEN l_tuples:=l_tuples || C.wght || ',';
+                END CASE;
             END IF;
 
             l_axes:=RTRIM(l_axes,',');
             l_tuples:=RTRIM(l_tuples,',');
 
-            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || l_tuples || '&text=' || chars_used(C.text) || '&display=swap',l_font_css);
+            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || 
+                CASE 
+                    WHEN INSTR(l_axes,'ital')>0 THEN C.ital_start || ',' || l_tuples || ';' || C.ital_end || ',' || l_tuples 
+                    ELSE l_tuples 
+                END || 
+                '&text=' || chars_used(C.text) || '&display=swap',l_font_css);
 
             pFontface:=pFontface || l_font_css;
             
@@ -344,30 +361,85 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     END IF;
             END CASE;
         END LOOP;
+    END;
 
-        /* Build full featured fonts for TEST sites */
-        /*
-        IF (pEnv='TEST') THEN
-            FOR C IN (
-                SELECT f.family, f.variable,
-                    LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
-                        NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
-                    LTRIM(NVL2(f.slnt_start,','||f.slnt_start||'..'||f.slnt_end,NULL) || 
-                        NVL2(f.wdth_start,','||f.wdth_start||'..'||f.wdth_end,NULL) || NVL2(f.wght_start,','||f.wght_start||'..'||f.wght_end,NULL),',') tuples
-                    FROM font f, website_font wf
-                    WHERE wf.website_id=pWebsiteId 
-                    AND wf.font_id=f.id
-            ) LOOP
-                IF (C.variable=0) THEN
-                    l_api_url:='https://fonts.googleapis.com/css?family=';
-                ELSE
-                    l_api_url:='https://fonts.googleapis.com/css2?family=';
+    /* 
+    ** EXTRACT DISTINCT ITALIC / NORMAL / BOLD CHARACTERS IN TEXT
+    */
+    PROCEDURE extract_styles(pText IN VARCHAR2, pBoldItalic IN OUT VARCHAR2, pBoldNormal IN OUT VARCHAR2, pItalic IN OUT VARCHAR2, pNormal IN OUT VARCHAR2) IS
+        l_text LONG:=pText;
+        l_italics_regex varchar2(12):='<i>(.+?)</i>';
+        l_italics_substr LONG;
+        l_italics_bold_regex varchar2(30):='<i><strong>(.+?)</strong></i>';
+        l_italics_bold_substr LONG;
+        l_bold_regex varchar2(30):='<strong>(.+?)</strong>';
+        l_bold_substr LONG;
+        l_char VARCHAR2(4);
+        n PLS_INTEGER;
+        len PLS_INTEGER;
+    BEGIN
+        IF (pText IS NULL) THEN
+            RETURN;
+        END IF;
+        n:=REGEXP_COUNT(l_text,l_italics_bold_regex);
+        FOR i IN 1..n LOOP
+            l_italics_bold_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_italics_bold_regex,1,i)));
+            len:=LENGTH(l_italics_bold_substr);
+            IF (len>0) THEN
+                FOR k IN 1..len LOOP
+                    l_char:=SUBSTR(l_italics_bold_substr,k,1);
+                    IF (pBoldItalic IS NULL OR INSTR(pBoldItalic,l_char)=0) THEN
+                        pBoldItalic:=pBoldItalic || l_char;
+                    END IF;
+                END LOOP;
+            END IF;
+        END LOOP;
+
+        l_text:=REGEXP_REPLACE(l_text,l_italics_bold_regex,null);
+
+        n:=REGEXP_COUNT(l_text,l_italics_regex);
+        FOR i IN 1..n LOOP
+            l_italics_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_italics_regex,1,i)));
+            len:=LENGTH(l_italics_substr);
+            IF (len>0) THEN
+                FOR k IN 1..len LOOP
+                    l_char:=SUBSTR(l_italics_substr,k,1);
+                    IF (pItalic IS NULL OR INSTR(pItalic,l_char)=0) THEN
+                        pItalic:=pItalic || l_char;
+                    END IF;
+                END LOOP;
+            END IF;
+        END LOOP;
+
+        l_text:=REGEXP_REPLACE(l_text,l_italics_regex,null);
+
+        n:=REGEXP_COUNT(l_text,l_bold_regex);
+        FOR i IN 1..n LOOP
+            l_bold_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_bold_regex,1,i)));
+            len:=LENGTH(l_bold_substr);
+            IF (len>0) THEN
+                FOR k IN 1..len LOOP
+                    l_char:=SUBSTR(l_bold_substr,k,1);
+                    IF (pBoldNormal IS NULL OR INSTR(pBoldNormal,l_char)=0) THEN
+                        pBoldNormal:=pBoldNormal || l_char;
+                    END IF;
+                END LOOP;
+            END IF;
+        END LOOP;
+
+        l_text:=REGEXP_REPLACE(l_text,l_bold_regex,null);
+
+        l_text:=utl_i18n.unescape_reference(apex_escape.striphtml(l_text));
+        len:=LENGTH(l_text);
+        
+        IF (len>0) THEN
+            FOR i IN 1..len LOOP
+                l_char:=SUBSTR(l_text,i,1);
+                IF (pNormal IS NULL OR INSTR(pNormal,l_char)=0) THEN
+                    pNormal:=pNormal || l_char;
                 END IF;
-                pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || '&display=swap',l_font_css);
-                l_styles_edit:=l_styles_edit || l_font_css;
             END LOOP;
         END IF;
-        */
     END;
 
 
@@ -460,7 +532,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_modules apex_t_varchar2;
         l_module_html LONG;
         l_script_html LONG;
-        l_module_domain VARCHAR2(50);
 
         l_thumbnails CLOB;
 
@@ -479,83 +550,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_total_pages PLS_INTEGER;
         n PLS_INTEGER;
         n2 PLS_INTEGER;
-
-        /* Extract distinct set of italic and normal characters in the context */
-        PROCEDURE extract_styles(pText IN VARCHAR2, pBoldItalic IN OUT VARCHAR2, pBoldNormal IN OUT VARCHAR2, pItalic IN OUT VARCHAR2, pNormal IN OUT VARCHAR2) IS
-            l_text LONG:=pText;
-            l_italics_regex varchar2(12):='<i>(.+?)</i>';
-            l_italics_substr LONG;
-            l_italics_bold_regex varchar2(30):='<i><strong>(.+?)</strong></i>';
-            l_italics_bold_substr LONG;
-            l_bold_regex varchar2(30):='<strong>(.+?)</strong>';
-            l_bold_substr LONG;
-            l_char VARCHAR2(4);
-            n PLS_INTEGER;
-            len PLS_INTEGER;
-        BEGIN
-            IF (pText IS NULL) THEN
-                RETURN;
-            END IF;
-            n:=REGEXP_COUNT(l_text,l_italics_bold_regex);
-            FOR i IN 1..n LOOP
-                l_italics_bold_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_italics_bold_regex,1,i)));
-                len:=LENGTH(l_italics_bold_substr);
-                IF (len>0) THEN
-                    FOR k IN 1..len LOOP
-                        l_char:=SUBSTR(l_italics_bold_substr,k,1);
-                        IF (pBoldItalic IS NULL OR INSTR(pBoldItalic,l_char)=0) THEN
-                            pBoldItalic:=pBoldItalic || l_char;
-                        END IF;
-                    END LOOP;
-                END IF;
-            END LOOP;
-
-            l_text:=REGEXP_REPLACE(l_text,l_italics_bold_regex,null);
-
-            n:=REGEXP_COUNT(l_text,l_italics_regex);
-            FOR i IN 1..n LOOP
-                l_italics_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_italics_regex,1,i)));
-                len:=LENGTH(l_italics_substr);
-                IF (len>0) THEN
-                    FOR k IN 1..len LOOP
-                        l_char:=SUBSTR(l_italics_substr,k,1);
-                        IF (pItalic IS NULL OR INSTR(pItalic,l_char)=0) THEN
-                            pItalic:=pItalic || l_char;
-                        END IF;
-                    END LOOP;
-                END IF;
-            END LOOP;
-
-            l_text:=REGEXP_REPLACE(l_text,l_italics_regex,null);
-
-            n:=REGEXP_COUNT(l_text,l_bold_regex);
-            FOR i IN 1..n LOOP
-                l_bold_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_bold_regex,1,i)));
-                len:=LENGTH(l_bold_substr);
-                IF (len>0) THEN
-                    FOR k IN 1..len LOOP
-                        l_char:=SUBSTR(l_bold_substr,k,1);
-                        IF (pBoldNormal IS NULL OR INSTR(pBoldNormal,l_char)=0) THEN
-                            pBoldNormal:=pBoldNormal || l_char;
-                        END IF;
-                    END LOOP;
-                END IF;
-            END LOOP;
-
-            l_text:=REGEXP_REPLACE(l_text,l_bold_regex,null);
-
-            l_text:=utl_i18n.unescape_reference(apex_escape.striphtml(l_text));
-            len:=LENGTH(l_text);
-            
-            IF (len>0) THEN
-                FOR i IN 1..len LOOP
-                    l_char:=SUBSTR(l_text,i,1);
-                    IF (pNormal IS NULL OR INSTR(pNormal,l_char)=0) THEN
-                        pNormal:=pNormal || l_char;
-                    END IF;
-                END LOOP;
-            END IF;
-        END;
 
     BEGIN
         /* For logging when running in scheduler */
@@ -679,7 +673,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[ img-src 'self' res.cloudinary.com;]' ||
             q'[ font-src 'self' fonts.gstatic.com;]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com;]' ||
-            q'[ script-src 'self' cdn.ckeditor.com upload-widget.cloudinary.com restartnet-com.netlify.app restartnet.com;]' ||
+            q'[ script-src 'self' cdn.ckeditor.com upload-widget.cloudinary.com;]' ||
             q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
             q'[ frame-ancestors 'none';]' ||
             q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
@@ -710,17 +704,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_module_html:=NULL;
             l_script_html:=NULL;
 
-            /* Load modues from master site if deploying non-master site !*/
-
-            IF (INSTR(l_ssl_url,'restartnet.com')>0 OR INSTR(l_ssl_url,'restartnet-com')>0) THEN
-                l_module_domain:=NULL;
-            ELSE
-                l_module_domain:='https://restartnet.com';
-            END IF;
-
             FOR C IN (SELECT column_value FROM TABLE(l_labels(i).modules)) LOOP
-                l_module_html:=l_module_html || '<link rel="modulepreload" href="' || l_module_domain || '/' || C.column_value || '">' || chr(10);
-                l_script_html:=l_script_html || '<script src="' || l_module_domain || '/' || C.column_value || '" type="module"></script>' || chr(10);
+                l_module_html:=l_module_html || '<link rel="modulepreload" href="/' || C.column_value || '">' || chr(10);
+                l_script_html:=l_script_html || '<script src="/' || C.column_value || '" type="module"></script>' || chr(10);
                 IF (C.column_value NOT MEMBER OF l_jscode) THEN
                     l_jscode.EXTEND();
                     l_jscode(l_jscode.LAST):=C.column_value;
@@ -826,7 +812,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /* For now, set footer elements as normal style characters */
         l_chars_normal:=l_chars_normal || l_contact_email || l_telephone_number || l_mobile_number || l_linkedin_name;
         
-        getFontfaces(pWebsiteid, pSiteId, l_chars_normal_headings, l_chars_italic_headings, l_chars_normal, l_chars_italic, l_chars_bold_normal, l_chars_bold_italic, l_styles);
+        getFontfaces(pWebsiteid, pEnv, pSiteId, l_chars_normal_headings, l_chars_italic_headings, l_chars_normal, l_chars_italic, l_chars_bold_normal, l_chars_bold_italic, l_styles);
         
         l_styles:=l_styles || pck_codepen.buildCssRoot(pWebsiteId);
 
