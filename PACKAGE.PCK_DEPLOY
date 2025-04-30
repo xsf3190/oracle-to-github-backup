@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as 
     --
+    PROCEDURE buildESModules(pEnv IN VARCHAR2);
+    --
     PROCEDURE deleteDirectory(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
     PROCEDURE deployInfrastructure(pSenderEmail IN VARCHAR2 DEFAULT 'contact.form');
@@ -20,6 +22,53 @@ end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as 
     
+    PROCEDURE buildESModules(pEnv IN VARCHAR2) IS 
+        TYPE tt_files IS RECORD (
+            file_name apex_application_static_files.file_name%type,
+            file_content CLOB
+        );
+        TYPE t_files IS TABLE OF tt_files INDEX BY VARCHAR2(40);
+        l_deploy_files t_files;
+
+        l_files JSON_OBJECT_T;
+        l_json JSON_OBJECT_T;
+        l_sha1 VARCHAR2(40);
+        l_clob CLOB;
+        l_netlify_site_id website.netlify_site_id%type;
+        ES_MODULES_DOMAIN CONSTANT VARCHAR2(20):='es-modules';
+    BEGIN
+        SELECT netlify_site_id INTO l_netlify_site_id FROM website WHERE domain_name=ES_MODULES_DOMAIN;
+
+        l_json:= new JSON_OBJECT_T;
+        l_files:= new JSON_OBJECT_T;
+
+        FOR C IN (
+            SELECT file_name, apex_util.blob_to_clob(file_content) file_content
+              FROM apex_application_static_files 
+             WHERE application_id=101
+               AND file_name LIKE 'deploy_%min.js%'
+             )
+        LOOP
+            l_sha1:=LOWER(dbms_crypto.hash(src=>C.file_content, typ=>dbms_crypto.hash_sh1));
+            l_deploy_files(l_sha1).file_name:=pEnv || '/' || C.file_name;
+            l_deploy_files(l_sha1).file_content:=C.file_content;
+            l_files.put(pEnv || '/' || C.file_name, l_sha1);
+        END LOOP;
+        l_json.put('files',l_files);
+
+        pck_core.log('Sending digest of ' || l_deploy_files.COUNT || ' files to Netlify for '|| ES_MODULES_DOMAIN);
+        pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'sites/' || l_netlify_site_id || '/deploys', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
+
+        /* upload to Netlify if required - i.e. file content has changed since last deployment  */
+        FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
+            pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', 
+                pBody=>l_deploy_files(C.sha1).file_content,
+                pData=>l_clob
+            );
+            pck_core.log('Successfully uploaded ' || l_deploy_files(C.sha1).file_name);
+        END LOOP;
+    END;
+
     /*
     **  Insert row in website_deploy logging table
     */      
@@ -673,7 +722,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[ img-src 'self' res.cloudinary.com;]' ||
             q'[ font-src 'self' fonts.gstatic.com;]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com;]' ||
-            q'[ script-src 'self' cdn.ckeditor.com upload-widget.cloudinary.com;]' ||
+            q'[ script-src 'self' 'unsafe-inline' cdn.ckeditor.com upload-widget.cloudinary.com es-modules.netlify.app;]' ||
             q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
             q'[ frame-ancestors 'none';]' ||
             q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
@@ -723,6 +772,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<meta name="description" content="' || l_labels(i).page_description || '">' ||
                     '<meta name="author" content="mark.russellbrown@gmail.com">' ||
                     --'<link rel="preload" as="font" href="/' || l_font_filename || '" crossorigin>' ||
+                    '<script type="importmap">' ||
+                        '{' ||
+                            '"imports": {' ||
+                                '"./": "https://es-modules.netlify.app/test"' ||
+                            '}' || 
+                        '}' ||
+                    '</script>' ||
                     l_module_html ||
                     l_script_html ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
