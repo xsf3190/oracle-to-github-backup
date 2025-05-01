@@ -2,8 +2,8 @@
 ** RETRIEVE CURRENT MENULIST FOR USER
 */
 
-import { login_btn, email, expires, menulist } from "./deploy_elements.min.js";
-import { callAPI, handleError } from "./deploy_callAPI.min.js";
+import { login_btn, email, expires, menulist } from "deploy_elements";
+import { callAPI, handleError } from "deploy_callAPI";
 
 export const init = (endpoint) => {
     const arrayToken = localStorage.getItem("refresh").split(".");
