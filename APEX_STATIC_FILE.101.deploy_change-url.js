@@ -1,7 +1,7 @@
 /*
 **  CHANGE SUBDOMAIN OF EDiTOR SITE
 */
-import { callAPI, handleError } from "./deploy_callAPI.min.js";
+import { callAPI, handleError } from "deploy_callAPI";
 
 const info_dialog = document.querySelector("dialog.info");
 const form = info_dialog.querySelector("form");
