@@ -3,7 +3,7 @@
 /* ALSO USED TO CREATE A NEW WEBSITE                              */
 /* ************************************************************** */
 
-import { login_dialog, login_btn, email, expires, menulist, bodydata } from "./deploy_elements.min.js";
+import { login_dialog, login_btn, email, expires, menulist, bodydata } from "deploy_elements";
 
 const form = login_dialog.querySelector("form");
 const emailInput = form.querySelector("[name='email']");
