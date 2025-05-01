@@ -2,8 +2,8 @@
  ** INITIALIZE CLOUDINARY UPLOAD WIDGET
  */
 
-import { bodydata } from "./deploy_elements.min.js";
-import { callAPI, handleError } from "./deploy_callAPI.min.js";
+import { bodydata } from "deploy_elements";
+import { callAPI, handleError } from "deploy_callAPI";
 
 const info_dialog = document.querySelector("dialog.info");
 let endpoint, widget;
