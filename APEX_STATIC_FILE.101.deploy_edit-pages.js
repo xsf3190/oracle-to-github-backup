@@ -1,8 +1,8 @@
 /*
 **  ADD / CHANGE / DELETE PAGES
 */
-import { nav, dropdown_details } from "./deploy_elements.min.js";
-import { callAPI, handleError } from "./deploy_callAPI.min.js";
+import { nav, dropdown_details } from "deploy_elements";
+import { callAPI, handleError } from "deploy_callAPI";
 
 const nav_items = nav.querySelector("div");
 const editor = nav.nextElementSibling;
