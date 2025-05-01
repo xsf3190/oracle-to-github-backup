@@ -3,8 +3,8 @@
 ** INCLUDE DEPLOY BUTTON IN CKEDITOR TOOLBAR
 */
 
-import { dropdown_details, header } from "./deploy_elements.min.js";
-import { callAPI, handleError } from "./deploy_callAPI.min.js";
+import { dropdown_details, header } from "deploy_elements";
+import { callAPI, handleError } from "deploy_callAPI";
 
 const CK_CSS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css";
 const CK_JS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js";
