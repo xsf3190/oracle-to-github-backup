@@ -1,4 +1,4 @@
-import { bodydata, menulist, login_btn } from "./deploy_elements.min.js";
+import { bodydata, menulist, login_btn } from "deploy_elements";
 
 let access_token = sessionStorage.getItem("token");
 let refresh_token = localStorage.getItem("refresh");
