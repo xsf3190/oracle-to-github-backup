@@ -1,9 +1,9 @@
 /*
 ** IMPORT SELF-HOSTED CWV MODULE FUNCTIONS
 */
-import {onLCP, onINP, onCLS} from './deploy_web_vitals.min.js';
+import {onLCP, onINP, onCLS} from 'deploy_web_vitals';
 
-import { bodydata } from "./deploy_elements.min.js";
+import { bodydata } from "deploy_elements";
 
 /*
 ** SETUP COLLECTION OF METRICS. 
