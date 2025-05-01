@@ -1,7 +1,7 @@
 /*
 **  LEAVE A MESSAGE
 */
-import { callAPI } from "./deploy_callAPI.min.js";
+import { callAPI } from "deploy_callAPI";
 
 const message_dialog = document.querySelector("dialog.message");
 const form = message_dialog.querySelector("form");
