@@ -2,7 +2,7 @@
 ** CREATE NETLIFY DNS ZONE FOR WEBSITE OR GET DNS SERVER NAMES TO BE CHANGED IN WEBSITE'S DOMAIN REGISTRAR
 */
 
-import { callAPI, handleError } from "./deploy_callAPI.min.js";
+import { callAPI, handleError } from "deploy_callAPI";
 
 let endpoint;
 
