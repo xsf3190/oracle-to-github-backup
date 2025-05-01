@@ -2,7 +2,7 @@
 ** VISIT REPORTS
 */
 
-import { callAPI } from "./deploy_callAPI.min.js";
+import { callAPI } from "deploy_callAPI";
 
 //const content = output_dialog.querySelector("article");
 const output_dialog = document.querySelector("dialog.output");
