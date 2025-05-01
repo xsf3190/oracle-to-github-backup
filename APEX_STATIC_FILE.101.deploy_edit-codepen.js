@@ -1,7 +1,7 @@
 /*
 **  OPEN CURRENT PAGE IN CODEPEN EDITOR
 */
-import { callAPI, handleError } from "./deploy_callAPI.min.js";
+import { callAPI, handleError } from "deploy_callAPI";
 
 let endpoint;
 
