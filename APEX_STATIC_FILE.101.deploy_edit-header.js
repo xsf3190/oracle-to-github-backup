@@ -1,9 +1,9 @@
 /*
 **  EDIT WEBSITE HEADER
 */
-import { header, dropdown_details, set_alert, selectColorFromScreen } from "./deploy_elements.min.js";
-import { callAPI, handleError } from "./deploy_callAPI.min.js";
-import { show_media } from  "./deploy_edit-content.min.js";
+import { header, dropdown_details, set_alert, selectColorFromScreen } from "deploy_elements";
+import { callAPI, handleError } from "deploy_callAPI";
+import { show_media } from  "deploy_edit-content";
 
 const editor = header.previousElementSibling;
 
