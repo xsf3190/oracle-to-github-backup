@@ -1,8 +1,8 @@
 /*
 **  EDIT WEBSITE FOOTER
 */
-import { footer, dropdown_details, set_alert, selectColorFromScreen } from "./deploy_elements.min.js";
-import { callAPI, handleError } from "./deploy_callAPI.min.js";
+import { footer, dropdown_details, set_alert, selectColorFromScreen } from "deploy_elements";
+import { callAPI, handleError } from "deploy_callAPI";
 
 const editor = footer.previousElementSibling;
 
