@@ -25,7 +25,7 @@ if (localStorage.getItem("refresh")) {
         })
         .catch((error) => {
             console.error(error);
-            console.error("Failed to load deploy_menulist.min.js");
+            console.error("Failed to load deploy_menulist");
         });
 }
 
@@ -35,7 +35,7 @@ if (localStorage.getItem("refresh")) {
 dropdown.addEventListener("click", async (e) => {
     let module_name = e.target.dataset.endpoint;
     if (!module_name) return;
-    module_name = "deploy_" + module_name.substring(0,module_name.indexOf("/")) + ".min.js";
+    module_name = "deploy_" + module_name.substring(0,module_name.indexOf("/"));
     import(module_name)
         .then((module) => {
             module.init(e.target);
