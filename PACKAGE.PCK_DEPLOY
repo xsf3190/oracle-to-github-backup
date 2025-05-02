@@ -21,6 +21,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
 end;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as 
+
+    FUNCTION getSha256(pContent IN CLOB) RETURN VARCHAR2 IS
+        l_sha256 RAW(92);
+    BEGIN
+        l_sha256:=dbms_crypto.hash(src=>pContent, typ=>dbms_crypto.hash_sh256);
+        RETURN ('sha256-' || utl_raw.cast_to_varchar2(utl_encode.base64_encode(l_sha256)));
+    END;
     
     PROCEDURE buildESModules(pEnv IN VARCHAR2) IS 
         TYPE tt_files IS RECORD (
@@ -30,9 +37,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         TYPE t_files IS TABLE OF tt_files INDEX BY VARCHAR2(40);
         l_deploy_files t_files;
 
+        l_headers CLOB;
         l_files JSON_OBJECT_T;
         l_json JSON_OBJECT_T;
         l_sha1 VARCHAR2(40);
+        
+        l_file_name apex_application_static_files.file_name%type;
+        l_integrity_value LONG;
+        l_page CLOB;
+        
         l_clob CLOB;
         l_netlify_site_id website.netlify_site_id%type;
         ES_MODULES_DOMAIN CONSTANT VARCHAR2(20):='es-modules';
@@ -42,18 +55,46 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
 
+        DELETE es_module;
+
         FOR C IN (
             SELECT file_name, apex_util.blob_to_clob(file_content) file_content
               FROM apex_application_static_files 
              WHERE application_id=101
                AND file_name LIKE 'deploy_%min.js%'
-             )
+               AND file_name<>'deploy_main.min.js'
+            )
         LOOP
             l_sha1:=LOWER(dbms_crypto.hash(src=>C.file_content, typ=>dbms_crypto.hash_sh1));
             l_deploy_files(l_sha1).file_name:=pEnv || '/' || C.file_name;
             l_deploy_files(l_sha1).file_content:=C.file_content;
             l_files.put(pEnv || '/' || C.file_name, l_sha1);
+            l_integrity_value:=getSha256(C.file_content);
+            INSERT INTO es_module (module_name,hash_value) VALUES (C.file_name, l_integrity_value);
         END LOOP;
+
+        l_page:=
+        '<!DOCTYPE HTML>' ||
+        '<html lang="en">' ||
+        '<head>' ||
+            '<meta charset="UTF-8">' ||
+            '<meta name="viewport" content="width=device-width, initial-scale=1.0">' ||
+        '</head>' ||
+        '<body>' ||
+        '<h1>ES Modules for RESTARTNET.COM editor websites</h1>' ||
+        '</body>' ||
+        '</html>';
+        l_sha1:=LOWER(dbms_crypto.hash(src=>l_page, typ=>dbms_crypto.hash_sh1));
+        l_deploy_files(l_sha1).file_name:='index.html';
+        l_deploy_files(l_sha1).file_content:=l_page;
+        l_files.put('index.html', l_sha1);
+
+        l_headers:='/*' || chr(10) || 'Access-Control-Allow-Origin: *';
+        l_sha1:=LOWER(dbms_crypto.hash(src=>l_headers, typ=>dbms_crypto.hash_sh1));
+        l_deploy_files(l_sha1).file_name:='_headers';
+        l_deploy_files(l_sha1).file_content:=l_headers;
+        l_files.put('_headers', l_sha1);
+
         l_json.put('files',l_files);
 
         pck_core.log('Sending digest of ' || l_deploy_files.COUNT || ' files to Netlify for '|| ES_MODULES_DOMAIN);
@@ -67,6 +108,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             );
             pck_core.log('Successfully uploaded ' || l_deploy_files(C.sha1).file_name);
         END LOOP;
+
     END;
 
     /*
@@ -578,7 +620,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_is_blog BOOLEAN:=FALSE;
         l_is_product BOOLEAN:=FALSE;
 
-        l_importmap  VARCHAR2(200);
+        l_importmap  CLOB;
+        l_importmap_integrity  CLOB;
+        l_importmap_sha256 VARCHAR2(200);
         l_modules apex_t_varchar2;
         l_module_html LONG;
         l_script_html LONG;
@@ -717,19 +761,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END IF;
 
         l_robots:='User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: ' || l_ssl_url || '/sitemap.xml';
+
+        l_importmap:='"imports":{';
+        l_importmap_integrity:='"integrity":{';
+
+        FOR C IN (
+            SELECT module_name, hash_value FROM es_module ORDER BY 1
+        ) LOOP
+            l_importmap:=l_importmap || '"' || SUBSTR(C.module_name,1,INSTR(C.module_name,'.min.js')-1) || '":"' || 'https://es-modules.netlify.app/test/' || C.module_name || '",';
+            l_importmap_integrity:=l_importmap_integrity || '"' || 'https://es-modules.netlify.app/test/' || C.module_name || '":"' || C.hash_value || '",';
+        END LOOP;
+        l_importmap:=RTRIM(l_importmap,',') || '}';
+        l_importmap_integrity:=RTRIM(l_importmap_integrity,',') || '}';
+
+        --l_importmap_sha256:=getSha256('{' || l_importmap || '}');
+        l_importmap_sha256:='sha256-TdDhz/93bz6a1+gw6k+w/o7sAxgpdjpmVhXZaLx7i/A=';
+
         l_headers:=
         '/*' || chr(10) || 
             q'[Content-Security-Policy: default-src 'none';]' ||
             q'[ img-src 'self' res.cloudinary.com;]' ||
             q'[ font-src 'self' fonts.gstatic.com;]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com;]' ||
-            q'[ script-src 'self' cdn.ckeditor.com upload-widget.cloudinary.com es-modules.netlify.app;]' ||
+            q'[ script-src 'self' cdn.ckeditor.com upload-widget.cloudinary.com es-modules.netlify.app ']' || l_importmap_sha256 || q'[';]' ||
             q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
             q'[ frame-ancestors 'none';]' ||
             q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
             q'[X-Content-Type-Options: nosniff]' || chr(10) ||
             q'[X-Frame-Options: SAMEORIGIN]' || chr(10) ||
             q'[Referrer-Policy: no-referrer-when-downgrade]' || chr(10) ||
+            q'[Access-Control-Allow-Origin: *]' || chr(10) ||
             q'[Permissions-Policy: microphone=(), geolocation=()]';
 
         /* 
@@ -763,10 +824,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END IF;
             END LOOP;
 
-            l_importmap:=
-            '"imports": {' ||
-                    '"editor/": "https://es-modules.netlify.app/test/"' ||
-                '}';
+            
             
             l_page:=
                 '<!DOCTYPE HTML>' ||
@@ -778,7 +836,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<meta name="description" content="' || l_labels(i).page_description || '">' ||
                     '<meta name="author" content="mark.russellbrown@gmail.com">' ||
                     --'<link rel="preload" as="font" href="/' || l_font_filename || '" crossorigin>' ||
-                    '<script type="importmap">{' || l_importmap || '}' || '</script>' ||
+                    '<script type="importmap" integrity="' || l_importmap_sha256 || '">{' || l_importmap || ',' || l_importmap_integrity || '}' || '</script>' ||
                     l_module_html ||
                     l_script_html ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
@@ -824,6 +882,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_content:=l_headers;
         l_files.put('_headers', l_sha1);
 
+        /*
         FOR C IN (
             SELECT o.uri_template
               FROM api_endpoint a, role r, ords_endpoints o
@@ -836,7 +895,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_jscode(l_jscode.LAST):='deploy_' || SUBSTR(C.uri_template,1,INSTR(C.uri_template,'/')-1) || '.min.js';
         END LOOP;
 
-        /* Utility javascript modules */
         l_jscode.EXTEND();
         l_jscode(l_jscode.LAST):='deploy_web_vitals.min.js';
         l_jscode.EXTEND();
@@ -848,7 +906,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_jscode.EXTEND();
         l_jscode(l_jscode.LAST):='deploy_menulist.min.js';
 
-
+    */
         logDeployment(pWebsiteId, pSiteId, 'Building JS modules');
         FOR i IN 1..l_jscode.COUNT LOOP
             FOR C IN (SELECT apex_util.blob_to_clob(file_content) file_content
@@ -862,6 +920,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_files.put(l_jscode(i), l_sha1);
             END LOOP;
         END LOOP;
+        
         
         logDeployment(pWebsiteId, pSiteId, 'Configuring FONTS for distinct characters used');
 
