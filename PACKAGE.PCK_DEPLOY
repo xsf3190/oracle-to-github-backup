@@ -538,6 +538,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     **  DEPLOY BY UPLOADING HTML FILE CONTENT DIRECTLY TO NETLIFY
     */
     PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pRestUrl IN VARCHAR2, pApplicationId IN VARCHAR2) IS
+        MAIN_MODULE_NAME CONSTANT VARCHAR2(30):='deploy_main.min.js';
+        
         l_clob CLOB;
         l_json JSON_OBJECT_T;
         l_files JSON_OBJECT_T;
@@ -597,7 +599,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             collection_type website_article.collection_type%type,
             page_title website_article.page_title%type,
             page_description website_article.page_description%type,
-            contact_form website_article.contact_form%type,
             lastmod article.updated_date%type,
             word_count article.word_count%type, 
             title website.title%type,
@@ -610,8 +611,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             linkedin_name website.linkedin_name%type,
             instagram_name website.instagram_name%type,
             promotion website.promotion%type,
-            body_html article.body_html%type,
-            modules apex_t_varchar2
+            body_html article.body_html%type
         );
         TYPE t_labels IS TABLE OF tt_labels INDEX BY PLS_INTEGER;
         l_labels t_labels;
@@ -623,14 +623,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_importmap  CLOB;
         l_importmap_integrity  CLOB;
         l_importmap_sha256 VARCHAR2(200);
-        l_modules apex_t_varchar2;
-        l_module_html LONG;
-        l_script_html LONG;
-
-        l_thumbnails CLOB;
-
-        TYPE t_jscode IS TABLE OF VARCHAR2(30);
-        l_jscode t_jscode:=t_jscode();
 
         l_message VARCHAR2(100);
         l_styles CLOB;
@@ -658,18 +650,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /*
         ** Get all website content into collection
         */
-        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, contact_form, lastmod, word_count, title, subtitle, header_effect, hero_asset_id, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, promotion, body_html, apex_t_varchar2()
+        SELECT parent_article_id, article_id, navigation_label, path_name, collection_type, page_title, page_description, lastmod, word_count, title, subtitle, header_effect, hero_asset_id, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, promotion, body_html
           BULK COLLECT INTO l_labels
           FROM
           (
-        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, wa.contact_form, 
+        SELECT wa.article_id parent_article_id, wa.article_id, wa.navigation_label, apex_string_util.get_slug(wa.navigation_label) path_name, wa.collection_type, wa.page_title, wa.page_description, 
             wa.display_order, NVL(a.updated_date,a.created_date) lastmod, a.word_count, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, w.promotion, a.body_html body_html
           FROM website w, website_article wa, article a
          WHERE w.id=pWebsiteId
            AND wa.website_id=w.id 
            AND wa.article_id=a.id
          UNION ALL
-        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, NULL, 
+        SELECT wa.article_id, a.id, a.title, apex_string_util.get_slug(wa.navigation_label) || '/' || apex_string_util.get_slug(a.title),  NULL, NULL, NULL, 
             wa.display_order+NVL(a.display_order/100,0.001),  NVL(a.updated_date,a.created_date) lastmod, a.word_count, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, w.promotion, a.body_html
           FROM website w, website_article wa, article a 
          WHERE w.id=pWebsiteId
@@ -681,8 +673,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
-
-        pck_sec.refreshOrdsEndpoints(pWebsiteId);
 
         /* Get URL of site to be deployed */
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId, pMethod=>'GET', pData=>l_clob);
@@ -702,23 +692,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END IF;
             extract_styles(l_body_html, l_chars_bold_italic, l_chars_bold_normal, l_chars_italic, l_chars_normal);
 
-            apex_string.push(l_labels(i).modules,'deploy_main.min.js');
-
             IF (l_labels(i).collection_type='BLOG') THEN
                 l_is_blog:=TRUE;
                 l_is_media:=FALSE;
-                apex_string.push(l_labels(i).modules,'deploy_blog.min.js');
             ELSIF (l_labels(i).collection_type='MEDIA') THEN
                 l_is_media:=TRUE;
                 l_is_blog:=FALSE;
-            ELSIF (l_labels(i).collection_type='PRODUCT') THEN
-                apex_string.push(l_labels(i).modules,'deploy_cart.js');
-            ELSIF (l_labels(i).collection_type IS NULL AND l_is_media) THEN
-                apex_string.push(l_labels(i).modules,'deploy_gallery.min.js');
-            END IF;
-
-            IF (l_labels(i).contact_form='YES') THEN
-                apex_string.push(l_labels(i).modules,'deploy_contact.min.js');
             END IF;
 
             pck_codepen.buildBodyHtml(
@@ -729,7 +708,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_labels(i).article_id, 
                 l_labels(i).collection_type, 
                 l_is_media, 
-                l_labels(i).contact_form, 
                 l_title,
                 l_subtitle,
                 l_labels(i).header_effect,
@@ -742,10 +720,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_labels(i).promotion,
                 l_labels(i).body_html
             );
-
-            IF (INSTR(l_labels(i).body_html,'class="featured')>0) THEN
-                apex_string.push(l_labels(i).modules,'deploy_blog.min.js');
-            END IF;
 
         END LOOP;
 
@@ -774,16 +748,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_importmap:=RTRIM(l_importmap,',') || '}';
         l_importmap_integrity:=RTRIM(l_importmap_integrity,',') || '}';
 
-        --l_importmap_sha256:=getSha256('{' || l_importmap || '}');
-        l_importmap_sha256:='sha256-TdDhz/93bz6a1+gw6k+w/o7sAxgpdjpmVhXZaLx7i/A=';
+        /* Assemble complete inline importmap JSON script */
+        l_importmap:='{' || l_importmap || ',' || l_importmap_integrity || '}';
+
+        l_importmap_sha256:=getSha256(l_importmap);
 
         l_headers:=
         '/*' || chr(10) || 
             q'[Content-Security-Policy: default-src 'none';]' ||
+            q'[ base-uri 'self';]' ||
             q'[ img-src 'self' res.cloudinary.com;]' ||
             q'[ font-src 'self' fonts.gstatic.com;]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com;]' ||
-            q'[ script-src 'self' cdn.ckeditor.com upload-widget.cloudinary.com es-modules.netlify.app ']' || l_importmap_sha256 || q'[';]' ||
+            q'[ script-src 'self' 'strict-dynamic' cdn.ckeditor.com upload-widget.cloudinary.com es-modules.netlify.app ']' || l_importmap_sha256 || q'[';]' ||
             q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
             q'[ frame-ancestors 'none';]' ||
             q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
@@ -812,20 +789,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 '</urlset>';
             END IF;
 
-            l_module_html:=NULL;
-            l_script_html:=NULL;
-
-            FOR C IN (SELECT column_value FROM TABLE(l_labels(i).modules)) LOOP
-                l_module_html:=l_module_html || '<link rel="modulepreload" href="/' || C.column_value || '">' || chr(10);
-                l_script_html:=l_script_html || '<script src="/' || C.column_value || '" type="module"></script>' || chr(10);
-                IF (C.column_value NOT MEMBER OF l_jscode) THEN
-                    l_jscode.EXTEND();
-                    l_jscode(l_jscode.LAST):=C.column_value;
-                END IF;
-            END LOOP;
-
-            
-            
             l_page:=
                 '<!DOCTYPE HTML>' ||
                 '<html lang="en">' ||
@@ -835,10 +798,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<title>' || l_labels(i).page_title || '</title>' ||
                     '<meta name="description" content="' || l_labels(i).page_description || '">' ||
                     '<meta name="author" content="mark.russellbrown@gmail.com">' ||
-                    --'<link rel="preload" as="font" href="/' || l_font_filename || '" crossorigin>' ||
-                    '<script type="importmap" integrity="' || l_importmap_sha256 || '">{' || l_importmap || ',' || l_importmap_integrity || '}' || '</script>' ||
-                    l_module_html ||
-                    l_script_html ||
+                    '<script type="importmap" integrity="' || l_importmap_sha256 || '">' || l_importmap || '</script>' ||
+                    '<link rel="modulepreload" href="/' || MAIN_MODULE_NAME || '">' ||
+                    '<script src="/' || MAIN_MODULE_NAME || '" type="module"></script>' ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
                     '<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>' ||
                     '<link rel="stylesheet" href="/website.css">'  ||
@@ -882,43 +844,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_content:=l_headers;
         l_files.put('_headers', l_sha1);
 
-        /*
+        logDeployment(pWebsiteId, pSiteId, 'Building JS main module');
         FOR C IN (
-            SELECT o.uri_template
-              FROM api_endpoint a, role r, ords_endpoints o
-             WHERE a.website_id=pWebsiteId 
-               AND a.role_id=r.id 
-               AND r.name='admin'
-               AND a.template_id=o.template_id
-        ) LOOP
-            l_jscode.EXTEND();
-            l_jscode(l_jscode.LAST):='deploy_' || SUBSTR(C.uri_template,1,INSTR(C.uri_template,'/')-1) || '.min.js';
-        END LOOP;
-
-        l_jscode.EXTEND();
-        l_jscode(l_jscode.LAST):='deploy_web_vitals.min.js';
-        l_jscode.EXTEND();
-        l_jscode(l_jscode.LAST):='deploy_metric.min.js';
-        l_jscode.EXTEND();
-        l_jscode(l_jscode.LAST):='deploy_elements.min.js';
-        l_jscode.EXTEND();
-        l_jscode(l_jscode.LAST):='deploy_callAPI.min.js';
-        l_jscode.EXTEND();
-        l_jscode(l_jscode.LAST):='deploy_menulist.min.js';
-
-    */
-        logDeployment(pWebsiteId, pSiteId, 'Building JS modules');
-        FOR i IN 1..l_jscode.COUNT LOOP
-            FOR C IN (SELECT apex_util.blob_to_clob(file_content) file_content
-                        FROM apex_application_static_files 
-                       WHERE application_id=pApplicationId
-                         AND file_name=l_jscode(i)) 
-            LOOP
-                l_sha1:=LOWER(dbms_crypto.hash(src=>C.file_content, typ=>dbms_crypto.hash_sh1));
-                l_deploy_files(l_sha1).file_name:=l_jscode(i);
-                l_deploy_files(l_sha1).file_content:=C.file_content;
-                l_files.put(l_jscode(i), l_sha1);
-            END LOOP;
+            SELECT apex_util.blob_to_clob(file_content) file_content
+              FROM apex_application_static_files 
+             WHERE application_id=pApplicationId
+               AND file_name=MAIN_MODULE_NAME)
+        LOOP
+            l_sha1:=LOWER(dbms_crypto.hash(src=>C.file_content, typ=>dbms_crypto.hash_sh1));
+            l_deploy_files(l_sha1).file_name:=MAIN_MODULE_NAME;
+            l_deploy_files(l_sha1).file_content:=C.file_content;
+            l_files.put(MAIN_MODULE_NAME, l_sha1);
         END LOOP;
         
         
