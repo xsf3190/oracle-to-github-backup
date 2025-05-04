@@ -26,14 +26,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildProductList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type) RETURN CLOB;
     --
-    FUNCTION buildNavLabel(pId IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pAttrName IN VARCHAR2 DEFAULT NULL, pAttrValue IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
-    --
-    FUNCTION buildPageNav(pWebsiteId IN website.id%type) RETURN CLOB;
-    --
-    FUNCTION buildPushableButton(pClassName IN VARCHAR2, pHTMLSymbol IN VARCHAR2 DEFAULT NULL, pButtonText IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
-    --
-    FUNCTION getPageContent RETURN CLOB;
-    --
     FUNCTION getRestUrl RETURN VARCHAR2;
     --
     FUNCTION getSessionData(pWebsiteId IN website.id%type DEFAULT NULL) RETURN session_data_rt;
@@ -47,10 +39,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     PROCEDURE log_error;
     --
     PROCEDURE log_error(pStatus OUT NUMBER);
-    --
-    FUNCTION makeWebsiteListItem(pId IN website.id%type, pDomainName IN website.domain_name%type, pEnv IN VARCHAR2) RETURN VARCHAR2;
-    --
-    PROCEDURE transferWebsite(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
     FUNCTION password RETURN VARCHAR2;
     --
@@ -226,16 +214,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         RETURN (l_rest_url);
     END;
 
-    /* 
-    ** Copy "adfreesites.edu" for new users
-    */ 
-    PROCEDURE createStarterWebsite(pUserId IN users.id%type) IS
-    BEGIN
-        null;
-    END;
-
-    
-
     /*
     ** Construct index of Blog entries
     */
@@ -408,511 +386,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_html:=l_html || '<!--CMS END-->';
         RETURN (l_html);
     END;
-
-    /*
-    ** the miserable privacy policy - Faceook insists that it can be accessed by an application url
-    */
-    FUNCTION buildPrivacyPage RETURN CLOB IS
-    BEGIN
-        FOR C IN (SELECT body_html FROM article WHERE id=19124)   
-        LOOP
-            RETURN C.body_html;
-        END LOOP;
-    END;
-
-    /*
-     **  Login page
-     */
-    FUNCTION buildLoginPage RETURN CLOB IS
-    BEGIN
-        FOR C IN (SELECT id FROM article WHERE id=19124)  -- the miserable privacy policy
-        LOOP
-            RETURN TO_CLOB('
-                <ul class="container">
-                    <li class="red">' || pck_icons.g_oracle_svg || '</li>
-                    <li class="grey login">
-                        <a class="button" href="' || apex_util.host_url('SCRIPT') || 'f?p=101:2:' || APEX_CUSTOM_AUTH.GET_SESSION_ID || ':APEX_AUTHENTICATION=Google">' || pck_icons.g_google_svg ||'Login w/ Google</a>
-                        <!--<button data-id="' || C.id || '">Priv</button>-->
-                    </li>
-                    <li class="grey">' || pck_icons.g_netlify_svg || '</li>
-                    <li class="grey">' || pck_icons.g_cloudinary_svg || '</li>
-                    <li class="yellow">ALWAYS FREE</li>
-                    <li class="grey"></li>
-                    <li class="blue"></li>
-                    <li class="grey"></li>
-                    <li class="grey"></li>
-                </ul>
-                <dialog>
-                    <div>
-                        <div></div> <!-- empty div to make grid -->
-                        <div class="content"></div>
-                        <button type="button" class="close">&times;</button>
-                    </div>
-                </dialog>');
-        END LOOP;
-    END;
-
-    FUNCTION buildTopNav(pIsAdmin IN INTEGER) RETURN VARCHAR2 IS
-    BEGIN
-        RETURN (
-        '<nav class="top-nav">
-            <div class="dropdown">
-                <span>' || apex_application.g_user || '</span>
-                <button type="button" class="show-dropdown" aria-haspopup="true" aria-expanded="false" aria-controls="topnav-menu">&blacktriangledown;</button>
-                <ul class="dropdown-items" id="topnav-menu" role="menu" aria-hidden="true">                    
-                    <li class="api-keys" role="menuitem">
-                        <button type="button" class="with-icon api-keys">
-                            &#128273;
-                            API Keys
-                        </button>
-                    </li>
-                    <li class="account-usage" role="menuitem">
-                        <button type="button" class="with-icon account-usage">
-                           %
-                            Account Usage
-                        </button>
-                    </li>
-                    <li class="session-log" role="menuitem">
-                        <button type="button" class="with-icon session-log">
-                            &#9776;
-                            Technical Log
-                        </button>
-                    </li>
-                    <li class="github-repo" role="menuitem">
-                        <a class="with-icon github-repo" href="https://github.com/xsf3190/oracle-to-github-backup" target="a_blank">
-                           &#9733; Github Backup
-                        </a>
-                    </li>' || 
-                    CASE WHEN pIsAdmin<>1 THEN
-                    '<li class="delete-user" role="menuitem">
-                        <button type="button" class="with-icon delete-user">
-                            &#128686;
-                            Delete My Data
-                        </button>
-                    </li>'
-                    END ||
-                    '<li class="signout" role="menuitem">
-                        <button type="button" class="with-icon">
-                            &#8676;
-                            Log Out
-                        </button>
-                    </li>  
-                </ul>
-            </div>
-        </nav>');
-    END;
-
-    /*
-    **  Vuild Website Page navigation label with supporting elements
-    */
-    FUNCTION buildNavLabel(pId IN INTEGER, pLabel IN VARCHAR2, pClassName IN VARCHAR2, pAttrName IN VARCHAR2 DEFAULT NULL, pAttrValue IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
-        l_html LONG;
-    BEGIN
-        l_html:=
-        '<div data-id="' || pId || '">
-            <button type="button" class="' || pClassName || '" title="Page options">
-                &#128397;
-            </button>
-            <a href="" class="nav-label">' || pLabel || '</a>
-            <div class="dropdown">' || CASE WHEN pAttrName IS NOT NULL THEN '<button type="button" class="show-dropdown show-subpages" data-'|| pAttrName || '="' || pAttrValue || '">&blacktriangledown;</button>' END ||
-                '<ol class="dropdown-items"></li></ol>
-            </div>
-        </div>';
-
-        RETURN(l_html);
-    END;
-
-    FUNCTION makeWebsiteListItem(pId IN website.id%type, pDomainName IN website.domain_name%type, pEnv IN VARCHAR2) RETURN VARCHAR2 IS
-    BEGIN
-        RETURN(
-        '<li role="menuitem">
-            <button type="button" class="edit-website with-icon" data-id="' || pId || '" data-env="' || pEnv || '" data-domain="' || pDomainName || '">' || pDomainName || '<span class="env">' || pEnv || '</span></button>
-        </li>');
-    END;
-
-    FUNCTION buildWebsiteNav(pUserId IN users.id%type, pSelectedWebsiteId IN OUT website.id%type) RETURN VARCHAR2 IS
-        TYPE tt_websites IS RECORD(
-            id website.id%type,
-            domain_name website.domain_name%type,
-            netlify_site_id website.netlify_site_id%type,
-            netlify_site_id_custom website.netlify_site_id_custom%type,
-            url VARCHAR2(60),
-            url_custom VARCHAR2(45));
-        TYPE t_websites IS TABLE OF tt_websites INDEX BY pls_integer;
-        l_websites t_websites;
-        l_website_list LONG;
-        l_html LONG;
-    BEGIN
-        SELECT id, domain_name, netlify_site_id, netlify_site_id_custom, 
-                CASE WHEN netlify_last_published IS NOT NULL THEN 'href="https://' || REPLACE(domain_name,'.','-') || '.netlify.app"' END,
-                CASE WHEN netlify_last_published_custom IS NOT NULL THEN 'href="https://' || domain_name || '"' END
-          BULK COLLECT INTO l_websites
-          FROM website
-         WHERE user_id=pUserId
-         ORDER BY COALESCE(updated_date,created_date) DESC;
-
-        pSelectedWebsiteId:=l_websites(1).id;
-
-        FOR i IN 1..l_websites.COUNT
-        LOOP
-            l_website_list:=l_website_list || makeWebsiteListItem(l_websites(i).id, l_websites(i).domain_name, 'TEST');
-            IF (l_websites(i).netlify_site_id_custom IS NOT NULL) THEN
-                l_website_list:=l_website_list || makeWebsiteListItem(l_websites(i).id, l_websites(i).domain_name, 'LIVE');
-            END IF;
-            IF (i<l_websites.COUNT) THEN
-                l_website_list:=l_website_list || '<hr>';
-            END IF;
-        END LOOP;
-
-        l_html:=
-        '<div class="website-nav" data-id="' || l_websites(1).id || '" data-env="TEST">
-            <div>
-                <button type="button" class="website-options" title="Website options">&#128397;</button>
-                <a ' || l_websites(1).url || '" target="a_blank" class="selected">' || l_websites(1).domain_name || '</a>
-                <section class="dropdown">
-                    <button type="button" class="show-dropdown" aria-haspopup="true" aria-expanded="false" aria-controls="website-dropdown"' || CASE WHEN l_websites.COUNT<2 THEN ' style="display:none"' END || '>&blacktriangledown;</button>
-                    <ul id="website-dropdown" class="dropdown-items" role="menu" aria-hidden="true">' || l_website_list || '</ul>
-                </section>
-            </div>
-            <button type="button" class="action deploy-website">DEPLOY<span class="env">TEST</span></button>
-            <div>
-                <button type="button" class="action visits">VISITS<span class="env">TEST</span></button>
-                <button type="button" class="action performance">METRICS<span class="env">TEST</span></button>
-            </div>';
-
-        RETURN (l_html);
-    END;
-
-    FUNCTION buildPageNav(pWebsiteId IN website.id%type) RETURN CLOB IS
-        l_html CLOB;
-        n PLS_INTEGER;
-    BEGIN
-        FOR C IN (SELECT navigation_label, article_id, collection_type
-                    FROM website_article
-                   WHERE website_id=pWebsiteId
-                   ORDER BY display_order) 
-        LOOP
-            IF (C.collection_type='N/A') THEN
-                l_html:=l_html || TO_CLOB(buildNavLabel(C.article_id, C.navigation_label, 'page-options'));
-            ELSE
-                l_html:=l_html || TO_CLOB(buildNavLabel(C.article_id, C.navigation_label, 'page-options','collection',C.collection_type));
-            END IF;
-        END LOOP;
-        RETURN(l_html);
-    END;
-
-    FUNCTION buildPushableButton(pClassName IN VARCHAR2, pHTMLSymbol IN VARCHAR2 DEFAULT NULL, pButtonText IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS 
-        l_html VARCHAR2(200);
-    BEGIN
-        RETURN(
-        '<button type="button" class="' || pClassName || ' pushable">
-            <span class="shadow"></span>
-            <span class="edge"></span>
-            <span class="front">' || 
-                CASE WHEN pHTMLSymbol IS NOT NULL THEN pHTMLSymbol || '&nbsp;' END || 
-                CASE WHEN pButtonText IS NOT NULL THEN pButtonText ELSE UPPER(REPLACE(pClassName,'-',' ')) END || 
-            '</span>
-        </button>');
-    END;
-
-    FUNCTION buildMediaCard RETURN CLOB IS
-    BEGIN
-        RETURN(
-        buildPushableButton('upload-media') ||
-        '<ul class="gallery-list"></ul>
-        <div class="gallery-overlay">
-            <img src="">
-            <span class="counter"></span>
-            <button type="button" class="close-fullscreen">&times;</button>
-            <button type="button" class="prev">&lt;</button>
-            <button type="button" class="next">&gt;</button>
-        </div>');
-    END;
-
-    FUNCTION buildDialogs RETURN VARCHAR2 IS
-    BEGIN
-        RETURN(
-        '<dialog class="popup">
-            <div>
-                <button type="button" class="close">&times;</button>
-                <h2></h2>
-                <p></p>
-            </div>
-        </dialog>
-        <dialog class="log">
-            <div>
-                <div class="content"></div>
-                <button type="button" class="close">&times;</button>
-            </div>
-        </dialog>');
-    END;
-
-    /*
-     **  Build authenticated page
-     */
-    FUNCTION buildAuthPage RETURN CLOB IS
-        l_session_data session_data_rt;
-        l_nb_websites PLS_INTEGER;
-        l_is_admin PLS_INTEGER;
-        l_clob CLOB;
-        l_selected_website_id website.id%type;
-    BEGIN
-        l_session_data:=getSessionData();
-
-        SELECT COUNT(*)
-          INTO l_nb_websites
-          FROM website
-         WHERE user_id=l_session_data.user_id;
-
-        IF (l_nb_websites=0) THEN
-            createStarterWebsite(l_session_data.user_id);
-        END IF;
-
-        SELECT COUNT(*)
-          INTO l_is_admin
-          FROM apex_workspace_apex_users w, users u 
-         WHERE u.id=l_session_data.user_id
-           AND w.email=u.email
-           AND w.is_admin='Yes'
-         FETCH FIRST ROW ONLY;
-
-        l_clob:= 
-        '<div class="wrapper">' ||
-            buildTopNav(l_is_admin) ||
-            '<div>
-                <div>' ||
-                    buildPushableButton('new-website', '&plus;') ||
-                '</div>' ||
-                buildWebsiteNav(l_session_data.user_id, l_selected_website_id) ||
-            '</div>
-            <div class="page-content">
-                <div>' ||
-                    buildMediaCard() ||
-                '</div>
-                <div>
-                    <div class="button-container">' ||
-                    buildPushableButton('new-page','&plus;') ||
-                    '</div>
-                    <nav class="page-nav">' ||
-                    buildPageNav(l_selected_website_id) ||
-                    '</nav>
-                    <div id="editor"></div>
-                </div>
-            </div><!-- END page-content-->
-            <form action="https://codepen.io/pen/define" method="POST" target="_blank">
-                <input type="hidden" name="data" value="">
-            </form>' ||
-            buildDialogs() ||
-        '</div><!-- END wrapper-->
-         <input type="hidden" name="nb_websites" value="' || l_nb_websites ||'" id="nb-websites">' || 
-         '<script type="importmap">
-            {
-                "imports": {
-                    "ckeditor5": "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js",
-                    "ckeditor5/": "https://cdn.ckeditor.com/ckeditor5/43.2.0/"
-                }
-            }
-        </script>' ||
-        q'@<script type="module">
-            import {
-                ClassicEditor,
-                Essentials,
-                Alignment,
-                Autosave,
-                BlockQuote,
-                Bold,
-                Clipboard,
-                Code,
-                CodeBlock,
-                GeneralHtmlSupport,
-                Heading,
-                HorizontalLine,
-                Image,
-                ImageCaption,
-                ImageResize,
-                ImageStyle,
-                ImageToolbar,
-                ImageInsert,
-                ImageInsertViaUrl,
-                Italic,
-                Link,
-                List,
-                Paragraph,
-                SelectAll,
-                SourceEditing,
-                Underline,
-                WordCount
-            } from 'ckeditor5';
-
-            ClassicEditor
-                .create( document.querySelector( '#editor' ), {
-                    plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock, GeneralHtmlSupport, Heading, HorizontalLine, Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, Italic, Link, List, Paragraph, SelectAll, SourceEditing, Underline, WordCount ],
-                    toolbar: ['heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'underline', 'code', 'alignment', 'link', 'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing'],
-                    alignment: {
-                        options: [
-                            {name:'left', className: 'align-left'},
-                            {name:'right', className: 'align-right'},
-                            {name:'center', className: 'align-center'},
-                            {name:'justify', className: 'align-justify'}
-                        ]
-                    },
-                    autosave: {
-                        waitingTime: 2000,
-                        save( editor ) {
-                            return saveData( editor.getData() );
-                        }
-                    },
-                    codeBlock: {
-                        languages: [
-                            { language: 'css', label: 'CSS' },
-                            { language: 'html', label: 'HTML' },
-                            { language: 'javascript', label: 'Javascript' },
-                            { language: 'sql', label: 'SQL' },
-                            { language: 'plsql', label: 'PL/SQL' },
-                            { language: 'shell', label: 'shell' }
-                        ]
-                    },
-                    htmlSupport: {
-                        allow: [
-                            {
-                                name: /.*/,
-                                attributes: true,
-                                classes: true,
-                                styles: false
-                            }
-                        ]
-                    },
-                    image: {
-                        insert: {
-                            type: 'auto',
-                            integrations: ['url']
-                        },
-                        toolbar: [
-                            'imageStyle:inline',
-                            'imageStyle:block',
-                            '|',
-                            'imageStyle:wrapText',
-                            '|',
-                            'toggleImageCaption',
-                            'imageTextAlternative',
-                        ]
-                    },
-                    list: {
-                        properties: {
-                            styles: true,
-                            startIndex: true,
-                            reversed: true
-                        }
-                    },
-                    placeholder: 'Enter content',
-                    title: {
-                        placeholder: 'New title'
-                    },
-                    ui: {
-                        viewportOffset: {
-                            top: 0
-                        }
-                    },
-                    wordCount: {
-                            displayCharacters: true
-                    },
-                } )
-                .then( newEditor => {
-                    editor = newEditor;
-                    const wordCountPlugin = editor.plugins.get( 'WordCount' );
-                    const wordCountWrapper = wrapper.querySelector( '.ck-editor__main' );
-                    wordCountWrapper.appendChild(wordCountPlugin.wordCountContainer );
-                    /*
-                    editor.editing.view.document.on( 'drop', ( evt, data ) => {
-            			// Stop execute next callbacks.
-            			evt.stop();
-            	
-            			// Stop the default event action.
-            			data.preventDefault();
-            		}, { priority: 'high' } );
-            	
-            		editor.editing.view.document.on( 'dragover', ( evt, data ) => {
-            			evt.stop();
-            			data.preventDefault();
-            		}, { priority: 'high' } );
-                    */
-                    const toolbar = wrapper.querySelector(".ck-toolbar__items");
-                    toolbar.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
-                    editor_status = "init";
-                    editor_status_text = wrapper.querySelector("#editor-status");
-                    editor.enableReadOnlyMode( 'lock-id' );
-                })
-                .catch( error => {
-                    console.error(error);
-                });
-        </script>@';
-
-        RETURN l_clob;
-    END;
-
-    /*
-     **  All pages initiated by APEX "Dynamic Content" component.
-     **  After that it's Javascript fetch and ORDS all the way
-     */
-    FUNCTION getPageContent RETURN CLOB IS
-        l_clob CLOB;
-        l_css_file_urls APEX_APPLICATION_PAGES.css_file_urls%type;
-        l_javascript_file_urls APEX_APPLICATION_PAGES.javascript_file_urls%type;
-        l_page_css APEX_APPLICATION_STATIC_FILES.file_name%type;
-        l_page_js APEX_APPLICATION_STATIC_FILES.file_name%type;
-        l_metric_js APEX_APPLICATION_STATIC_FILES.file_name%type;
-    BEGIN
-        SELECT NVL(css_file_urls,' '), NVL(javascript_file_urls,' ')
-          INTO l_css_file_urls, l_javascript_file_urls
-          FROM APEX_APPLICATION_PAGES 
-         WHERE application_id=apex_application.g_flow_id
-           AND page_id=apex_application.g_flow_step_id;
-
-        l_page_css:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.css';
-
-        IF (INSTR(l_css_file_urls,l_page_css)=0) THEN
-            FOR C IN (SELECT file_content FROM APEX_APPLICATION_STATIC_FILES WHERE application_id=apex_application.g_flow_id AND file_name=REPLACE(l_page_css,'.min')) LOOP
-                l_clob:=l_clob || chr(10) || '<style>' || apex_util.blob_to_clob(C.file_content) || '</style>';
-            END LOOP;
-        END IF;
-
-        CASE apex_application.g_flow_step_id
-            WHEN 1 THEN l_clob:=l_clob || buildLoginPage;
-            WHEN 2 THEN l_clob:=l_clob || buildAuthPage;
-            WHEN 3 THEN l_clob:=l_clob || buildPrivacyPage;
-        END CASE;
-
-        l_clob:=l_clob || TO_CLOB('
-            <input type="hidden" name="p_flow_id" value="' || apex_application.g_flow_id ||'" id="pFlowId">
-            <input type="hidden" name="p_flow_step_id" value="' || apex_application.g_flow_step_id ||'" id="pFlowStepId">
-            <input type="hidden" name="p_instance" value="' || APEX_CUSTOM_AUTH.GET_SESSION_ID ||'" id="pInstance">');            
-
-        l_clob:=l_clob || chr(10) || TO_CLOB('
-        <script>
-            const gRestUrl = "' || getRestUrl() || '";' || 
-            CASE WHEN apex_application.g_flow_step_id=2 THEN '
-            const gHomeUrl = "' || apex_util.host_url('SCRIPT') || 'f?p=101:1:0";' END || 
-        '</script>');
-
-        l_page_js:='app' || apex_application.g_flow_id || '_' || apex_application.g_flow_step_id || '.min.js';
-
-        IF (INSTR(l_javascript_file_urls,l_page_js)=0) THEN
-            FOR C IN (SELECT file_content 
-                        FROM APEX_APPLICATION_STATIC_FILES 
-                       WHERE application_id=apex_application.g_flow_id 
-                         AND file_name=REPLACE(l_page_js,'.min') )
-            LOOP
-                l_clob:=l_clob || chr(10) || '<script>' || apex_util.blob_to_clob(C.file_content) || '</script>';
-            END LOOP;
-        END IF;
-
-        RETURN (l_clob);
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                log_error;
-                RAISE;
-    END;
     
     /*
     **  load Google font definitions into google_font table. wolf3 format only. Websites deployed with optimized foont.r 
@@ -922,18 +395,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_nb_fonts PLS_INTEGER;
         l_lastModified google_font.lastModified%type;
     BEGIN
-        execute immediate('truncate table google_font_metadata');
-        execute immediate('truncate table google_font');
+        --execute immediate('truncate table google_font_metadata');
+        execute immediate('truncate table google_font_static');
+        execute immediate('truncate table google_font_variable');
         
-        pck_api.callGoogleAPI('https://fonts.google.com/metadata/fonts',l_clob);
-        INSERT INTO google_font_metadata(family, axis, min_value, max_value, default_value)
-        SELECT family, tag, min, max, defaultValue FROM JSON_TABLE(l_clob, '$.familyMetadataList[*]' COLUMNS (family, NESTED '$.axes[*]' COLUMNS(tag, min, max, defaultValue)))
-         WHERE tag IS NOT NULL;
+        --pck_api.callGoogleAPI('https://fonts.google.com/metadata/fonts',l_clob);
+        --INSERT INTO google_font_metadata(family, axis, min_value, max_value, default_value)
+        --SELECT family, tag, min, max, defaultValue FROM JSON_TABLE(l_clob, '$.familyMetadataList[*]' COLUMNS (family, NESTED '$.axes[*]' COLUMNS(tag, min, max, defaultValue)))
+        -- WHERE tag IS NOT NULL;
         
-        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts',l_clob);
-        INSERT INTO google_font(family, category, lastModified, 
-            weight_start, weight_end,
-            weight_start_italic, weight_end_italic,
+        /* STATIC FONTS */
+        DELETE google_font_static;
+        
+        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts',pCapability=>'WOFF2',pData=>l_clob);
+        
+        INSERT INTO google_font_static(family, category, wght_start, wght_end, wght_start_italic, wght_end_italic) 
+        WITH data AS
+        (       
+        SELECT family, category, 
+            TO_NUMBER(
+            CASE 
+                WHEN variant='regular' THEN '400'
+                WHEN variant='italic' THEN '-400'
+                WHEN INSTR(variant,'italic')>0 THEN '-' || SUBSTR(variant,1,INSTR(variant,'italic')-1)
+                ELSE variant
+            END
+            ) variant
+          FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, NESTED PATH '$.variants[*]' COLUMNS (variant VARCHAR2(50) PATH '$')))
+        )
+        SELECT family, category, MIN(DECODE(SIGN(variant),1,variant)), MAX(DECODE(SIGN(variant),1,variant)),MIN(DECODE(SIGN(variant),-1,variant*-1)), MAX(DECODE(SIGN(variant),-1,variant*-1))
+        FROM data
+        GROUP BY family, category;
+
+        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts',pCapability=>'VF',pData=>l_clob);
+        INSERT INTO google_font_variable(family, category, lastModified, 
+            ital_start,ital_end,
             wght_start,wght_end,
             wdth_start,wdth_end,
             opsz_start,opsz_end,
@@ -945,13 +441,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         ),
         data2 AS (
             SELECT family, category, lastModified, tag, tag_start, tag_end, 
-                CASE WHEN INSTR(variant,'italic')>0 THEN SUBSTR(variant,1,INSTR(variant,'italic')-1) END italic,
-                CASE WHEN INSTR(variant,'italic')=0 THEN TO_NUMBER(variant) END regular
+                CASE WHEN INSTR(variant,'italic')>0 THEN 0 END ital_start,
+                CASE WHEN INSTR(variant,'italic')>0 THEN 1 END ital_end
             FROM data
         )
         SELECT family,category,TO_DATE(lastModified,'YYYY-MM-DD'),
-            min(regular) weight_start,max(regular) weight_end,
-            min(italic) weight_start_italic, max(italic) weight_end_italic,
+            max(ital_start), max(ital_end),
             max(decode(tag,'wght',tag_start)) as wght_start, max(decode(tag,'wght',tag_end)) as wght_end, 
             max(decode(tag,'wdth',tag_start)) as wdth_start, max(decode(tag,'wdth',tag_end)) as wdth_end, 
             max(decode(tag,'opsz',tag_start)) as opsz_start, max(decode(tag,'opsz',tag_end)) as opsz_end, 
