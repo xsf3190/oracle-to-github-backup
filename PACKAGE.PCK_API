@@ -24,7 +24,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
     --
     PROCEDURE callGodaddyAPI(pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB);
     --
-    PROCEDURE callGoogleAPI(pUrl IN VARCHAR2, pData IN OUT NOCOPY CLOB);
+    PROCEDURE callGoogleAPI(pUrl IN VARCHAR2, pCapability IN VARCHAR2 DEFAULT 'WOFF2', pData IN OUT NOCOPY CLOB);
     --
     PROCEDURE callIpdataAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB);
     --
@@ -543,6 +543,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
     */
     PROCEDURE callGoogleAPI(
         pUrl IN VARCHAR2,
+        pCapability IN VARCHAR2 DEFAULT 'WOFF2',
         pData IN OUT NOCOPY CLOB)
     IS
         l_google_url VARCHAR2(1000):='https://www.googleapis.com/webfonts/v1/webfonts';
@@ -564,7 +565,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         apex_web_service.g_request_headers(1).value := 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
 
         IF (l_google_api_key IS NOT NULL) THEN
-            l_google_url:=pUrl || '?key=' || l_google_api_key || '&capability=VF';
+            l_google_url:=pUrl || '?key=' || l_google_api_key || '&capability=WOFF2';
         ELSE
             l_google_url:=pUrl;
         END IF;
