@@ -1,18 +1,5 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
-    TYPE session_data_rt IS RECORD (
-        app_id NUMBER, 
-        session_id NUMBER,
-        page_id NUMBER,
-        maxtouchpoints NUMBER,
-        url VARCHAR2(100),
-        timezone VARCHAR2(30),
-        canuse_popover BOOLEAN,
-        canuse_eyedropper BOOLEAN,
-        user_id NUMBER,
-        valid BOOLEAN
-    );
-    --
     TYPE fluid_type_rt IS RECORD(
         property VARCHAR2(30),
         value VARCHAR2(200)
@@ -21,14 +8,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
     --
     FUNCTION buildBlogList( pEnv IN VARCHAR2, pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pClasses IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
     --
-    
     FUNCTION buildMediaList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type, pIncludeLinks  IN BOOLEAN DEFAULT TRUE) RETURN CLOB;
     --
     FUNCTION buildProductList(pWebsiteId IN website_article.website_id%type, pArticleId IN website_article.article_id%type) RETURN CLOB;
     --
     FUNCTION getRestUrl RETURN VARCHAR2;
-    --
-    FUNCTION getSessionData(pWebsiteId IN website.id%type DEFAULT NULL) RETURN session_data_rt;
     --
     PROCEDURE loadGoogleFonts;
     --
@@ -45,57 +29,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CORE" AS
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
-
-    
-
-    /*
-    ** MIGRATING API FROM APEX SESSION TO CONVENTIONAL OAUTH2 USING JWT
-    */
-    FUNCTION getSessionData(pWebsiteId IN website.id%type) RETURN session_data_rt IS
-        l_apex_session VARCHAR2(50);
-        l_parts apex_t_varchar2;
-        l_session_data session_data_rt;
-        l_token APEX_JWT.T_TOKEN;
-        l_token_object APEX_JSON.T_VALUES;
-        l_email users.email%type;
-        l_jwt_enc_key user_ords_clients.client_secret%type;
-        n PLS_INTEGER;
-    BEGIN
-        l_apex_session:=OWA_UTIL.get_cgi_env('Apex-Session');
-        IF (l_apex_session IS NULL) THEN
-            l_session_data.app_id:=apex_application.g_flow_id;
-            l_session_data.session_id:=APEX_CUSTOM_AUTH.GET_SESSION_ID;
-            l_session_data.page_id:=apex_application.g_flow_step_id;
-        ELSE        
-            l_parts:=apex_string.split(l_apex_session,',');
-            l_session_data.app_id:=l_parts(1);
-            l_session_data.session_id:=l_parts(2);
-            l_session_data.page_id:=l_parts(3);
-        END IF;
-
-        FOR C IN (SELECT timezone, supports_popover, supports_eyedropper FROM session_data WHERE session_id=l_session_data.session_id) LOOP
-            l_session_data.timezone:=C.timezone;
-            l_session_data.canuse_popover:=CASE WHEN C.supports_popover='true' THEN TRUE ELSE FALSE END;
-            l_session_data.canuse_eyedropper:=CASE WHEN C.supports_eyedropper='true' THEN TRUE ELSE FALSE END;
-        END LOOP;
-
-        FOR C IN (
-            SELECT u.id
-              FROM apex_workspace_sessions s, users u
-             WHERE s.apex_session_id=l_session_data.session_id
-               AND s.user_name=u.email )
-        LOOP
-            l_session_data.user_id:=C.id;
-        END LOOP;
-
-        IF (l_session_data.user_id IS NULL AND l_session_data.page_id=2) THEN
-            RAISE_APPLICATION_ERROR(-20000,'YOUR SESSION HAS EXPIRED');
-        END IF;
-
-        RETURN l_session_data;
-
-        EXCEPTION WHEN VALUE_ERROR THEN RETURN l_session_data;
-    END;
 
     PROCEDURE log(pMsg IN OUT NOCOPY CLOB) IS PRAGMA AUTONOMOUS_TRANSACTION;
         l_calling_subprogram1 varchar2(128); -- package name, standalone function name, standalone procedure name or "__anonymous_block".
@@ -395,9 +328,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         l_nb_fonts PLS_INTEGER;
         l_lastModified google_font.lastModified%type;
     BEGIN
-        --execute immediate('truncate table google_font_metadata');
-        execute immediate('truncate table google_font_static');
-        execute immediate('truncate table google_font_variable');
         
         --pck_api.callGoogleAPI('https://fonts.google.com/metadata/fonts',l_clob);
         --INSERT INTO google_font_metadata(family, axis, min_value, max_value, default_value)
@@ -405,9 +335,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         -- WHERE tag IS NOT NULL;
         
         /* STATIC FONTS */
-        DELETE google_font_static;
-        
-        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts',pCapability=>'WOFF2',pData=>l_clob);
+        execute immediate('truncate table google_font_static');
+
+        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts?capability=WOFF2',pData=>l_clob);
         
         INSERT INTO google_font_static(family, category, wght_start, wght_end, wght_start_italic, wght_end_italic) 
         WITH data AS
@@ -427,7 +357,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         FROM data
         GROUP BY family, category;
 
-        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts',pCapability=>'VF',pData=>l_clob);
+        
+        execute immediate('truncate table google_font_variable');
+
+        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts?capability=VF',pData=>l_clob);
         INSERT INTO google_font_variable(family, category, lastModified, 
             ital_start,ital_end,
             wght_start,wght_end,
@@ -436,13 +369,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             slnt_start,slnt_end)
         WITH 
         data AS (
-            SELECT family, category, lastModified, DECODE(variant,'regular','400','italic','400italic',variant) variant, tag,"start" as tag_start, "end" as tag_end
+            SELECT family, category, lastModified, CASE WHEN tag='italic' THEN 0 END ital_start, CASE WHEN tag='italic' THEN 1 END ital_end, tag,"start" as tag_start, "end" as tag_end
               FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, lastModified, NESTED '$.variants[*]' COLUMNS (variant PATH '$'), NESTED '$.axes[*]' COLUMNS(tag varchar2(4) PATH '$.tag', "start" number PATH '$.start', "end" number PATH '$.end')))
         ),
         data2 AS (
             SELECT family, category, lastModified, tag, tag_start, tag_end, 
-                CASE WHEN INSTR(variant,'italic')>0 THEN 0 END ital_start,
-                CASE WHEN INSTR(variant,'italic')>0 THEN 1 END ital_end
+                NVL2(ital_start,0,NULL) ital_start, NVL2(ital_end,1,NULL) ital_end
             FROM data
         )
         SELECT family,category,TO_DATE(lastModified,'YYYY-MM-DD'),
@@ -452,8 +384,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
             max(decode(tag,'opsz',tag_start)) as opsz_start, max(decode(tag,'opsz',tag_end)) as opsz_end, 
             max(decode(tag,'slnt',tag_start)) as slnt_start, max(decode(tag,'slnt',tag_end)) as slnt_end
         FROM data2
-        GROUP BY family,category,lastModified
-        ORDER BY 1;
+        WHERE tag IS NOT NULL
+        GROUP BY family,category,lastModified;
+        
 
         SELECT COUNT(*), MAX(lastModified) INTO l_nb_fonts, l_lastModified FROM google_font;
         pck_core.log('Successfully loaded '|| l_nb_fonts || ' Google fonts  - last modified is ' || TO_CHAR(l_lastModified,'DD-MM-YYYY'));
@@ -462,55 +395,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
         MERGE INTO font t
         USING
         (
-            WITH defaults AS
-            (
-                SELECT family, MAX(DECODE(axis,'wght',default_value)) wght_default, MAX(DECODE(axis,'wdth',default_value)) wdth_default, 
-                    MAX(DECODE(axis,'opsz',default_value)) opsz_default, MAX(DECODE(axis,'slnt',default_value)) slnt_default
-                FROM google_font_metadata
-                GROUP BY family
-            )
-            SELECT v.family,v.category,
-                v.wght_start,v.wght_end,d.wght_default,
-                v.wdth_start,v.wdth_end,d.wdth_default,
-                v.opsz_start,v.opsz_end,d.opsz_default,
-                v.slnt_start,v.slnt_end,d.slnt_default,
-                CASE WHEN COALESCE(v.wght_start,v.wdth_start,v.opsz_start,v.slnt_start) IS NOT NULL AND v.weight_start_italic IS NOT NULL THEN 0 END ital_start,
-                CASE WHEN COALESCE(v.wght_start,v.wdth_start,v.opsz_start,v.slnt_start) IS NOT NULL AND v.weight_start_italic IS NOT NULL THEN 1 END ital_end,
-                v.weight_start, v.weight_end, 
-                v.weight_start_italic, v.weight_end_italic 
-            FROM google_font v, defaults d
-            WHERE v.family=d.family(+)
+            SELECT family, category, wght_start, wght_end, NVL2(wght_start_italic,0,NULL) ital_start, NVL2(wght_end_italic,1,NULL) ital_end
+            FROM google_font_static
         ) s
         ON (t.family=s.family)
         WHEN MATCHED THEN UPDATE SET
             t.category=s.category,
-            t.wght_start=s.wght_start,t.wght_end=s.wght_end,t.wght_default=s.wght_default,
-            t.wdth_start=s.wdth_start,t.wdth_end=s.wdth_end,t.wdth_default=s.wdth_default,
-            t.opsz_start=s.opsz_start,t.opsz_end=s.opsz_end,t.opsz_default=s.opsz_default,
-            t.slnt_start=s.slnt_start,t.slnt_end=s.slnt_end,t.slnt_default=s.slnt_default,
-            t.ital_start=s.ital_start,t.ital_end=s.ital_end,
-            t.weight_start=s.weight_start, t.weight_end=s.weight_end, 
-            t.weight_start_italic=s.weight_start_italic, t.weight_end_italic=s.weight_end_italic, 
+            t.wght_start=s.wght_start,
+            t.wght_end=s.wght_end,
+            t.ital_start=s.ital_start,
+            t.ital_end=s.ital_end,
+            t.variable=0,
             t.updated_date=current_timestamp
         WHEN NOT MATCHED THEN 
-            INSERT (id,family,category,
-                wght_start,wght_end,wght_default,
-                wdth_start,wdth_end,wdth_default,
-                opsz_start,opsz_end,opsz_default,
-                slnt_start,slnt_end,slnt_default,
-                ital_start,ital_end,
-                weight_start, weight_end,
-                weight_start_italic, weight_end_italic,
-                created_date) 
-            VALUES (seq_font.nextval,s.family,s.category,
-                s.wght_start,s.wght_end,s.wght_default,
-                s.wdth_start,s.wdth_end,s.wdth_default,
-                s.opsz_start,s.opsz_end,s.opsz_default,
-                s.slnt_start,s.slnt_end,s.slnt_default,
-                s.ital_start,s.ital_end,
-                s.weight_start, s.weight_end,
-                s.weight_start_italic, s.weight_end_italic,
-                current_timestamp);
+            INSERT (id, family, category, wght_start, wght_end, ital_start, ital_end, variable, created_date) 
+            VALUES (seq_font.nextval, s.family, s.category, s.wght_start, s.wght_end, s.ital_start, s.ital_end, 0, current_timestamp);
     END;
 
     /*
