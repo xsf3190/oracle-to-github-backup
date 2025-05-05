@@ -469,9 +469,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     END IF;
                 END IF;
             ELSE
-                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+');
+                l_api_url:='https://fonts.googleapis.com/css?family=' || REPLACE(C.family,' ','+');
             END IF;
-            pck_api.callGoogleAPI(l_api_url,l_font_css);
+            pck_api.callGoogleAPI(l_api_url,pData=>l_font_css);
 
             /* Get url for Latin charcters ... but desperate but so far seems to be in last font-face */
             n:=regexp_count(l_font_css,l_url_regex);
@@ -505,8 +505,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             APEX_JSON.write('content', l_html);
         ELSE
             FOR C IN (
-                SELECT f.family, f.variable, f.ital_start, f.ital_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end, f.wdth_start, f.wdth_end, f.wght_start, f.wght_end,
-                    f.weight_start, f.weight_end, f.weight_start_italic, f.weight_end_italic
+                SELECT f.family, f.variable, f.ital_start, f.ital_end, f.wght_start, f.wght_end
                  FROM font f
                 WHERE f.id=pFontid
             ) 
@@ -517,26 +516,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
 
                 apex_json.open_object;
                 apex_json.write('name','ital');
-                IF (C.variable=1) THEN
-                    apex_json.write('min', C.ital_start);
-                    apex_json.write('max', C.ital_end);
-                ELSE
-                    apex_json.write('min', CASE WHEN C.weight_start_italic IS NOT NULL THEN 0 END);
-                    apex_json.write('max', CASE WHEN C.weight_start_italic IS NOT NULL THEN 1 END);
-                END IF;
+                apex_json.write('min', C.ital_start);
+                apex_json.write('max', C.ital_end);
                 apex_json.close_object;
 
                 apex_json.open_object;
                 apex_json.write('name','wght');
-                IF (C.variable IS NOT NULL) THEN
-                    apex_json.write('min', C.wght_start);
-                    apex_json.write('max', C.wght_end);
-                ELSE
-                    apex_json.write('min', C.weight_start);
-                    apex_json.write('max', C.weight_end);
-                END IF;
+                apex_json.write('min', C.wght_start);
+                apex_json.write('max', C.wght_end);
                 apex_json.close_object;
 
+                /*
                 apex_json.open_object;
                 apex_json.write('name','wdth');
                 apex_json.write('min', C.wdth_start);
@@ -552,6 +542,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 apex_json.write('min', C.slnt_start);
                 apex_json.write('max', C.slnt_end);
                 apex_json.close_object;
+                */
                 
                 apex_json.close_array;
             END LOOP;
@@ -623,10 +614,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     BEGIN
         FOR C IN (
             SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.color, wf.underline, wf.margin, 
-                f.wght_start, f.wght_end, NVL(wf.wght, f.wght_default) wght,
-                f.wdth_start, f.wdth_end, NVL(wf.wdth, f.wdth_default) wdth,
-                f.opsz_start, f.opsz_end, NVL(wf.opsz, f.opsz_default) opsz,
-                f.slnt_start, f.slnt_end, NVL(wf.slnt, f.slnt_default) slnt,
+                f.wght_start, f.wght_end, wf.wght,
                 f.ital_start, f.ital_end, wf.ital
               FROM user_tab_columns c, user_col_comments i, website w, website_font wf, font f
              WHERE c.table_name=l_table_name
@@ -668,17 +656,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     '<label for="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' class="visually-hidden"' END || '>Weight' ||
                         '<input type="range" id="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '"/>' ||
                     '</label>' ||
-                    '<label for="' || l_column_name || '-font-wdth"' || CASE WHEN C.wdth_start IS NULL THEN ' class="visually-hidden"' END || '>Width' ||
-                        '<input type="range" id="' || l_column_name || '-font-wdth"' || CASE WHEN C.wdth_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_wdth" min="' || C.wdth_start || '" max="' || C.wdth_end || '" value="' || C.wdth || '"/>' ||
-                    '</label>' ||
                     '<label for="' || l_column_name || '-font-ital"' || CASE WHEN C.ital_start IS NULL THEN ' class="visually-hidden"' END || '>Italics' ||
                         '<input type="range" id="' || l_column_name || '-font-ital"' || CASE WHEN C.ital_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_ital" min="' || C.ital_start || '" max="' || C.ital_end || '" value="' || C.ital || '"/>' ||
-                    '</label>' ||
-                    '<label for="' || l_column_name || '-font-slnt"' || CASE WHEN C.slnt_start IS NULL THEN ' class="visually-hidden"' END || '>Slant' ||
-                        '<input type="range" id="' || l_column_name || '-font-slnt"' || CASE WHEN C.slnt_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_slnt" min="' || C.slnt_start || '" max="' || C.slnt_end || '" value="' || C.slnt || '"/>' ||
-                    '</label>' ||
-                    '<label for="' || l_column_name || '-font-opsz"' || CASE WHEN C.opsz_start IS NULL THEN ' class="visually-hidden"' END || '>Optical Size' ||
-                        '<input type="range" id="' || l_column_name || '-font-opsz"' || CASE WHEN C.opsz_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_opsz" min="' || C.opsz_start || '" max="' || C.opsz_end || '" value="' || C.opsz || '"/>' ||
                     '</label>' ||
                 '</div>' ||
             '</fieldset>';
