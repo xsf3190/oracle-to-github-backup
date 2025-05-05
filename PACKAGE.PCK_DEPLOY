@@ -6,10 +6,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE deployInfrastructure(pSenderEmail IN VARCHAR2 DEFAULT 'contact.form');
     --
-    PROCEDURE deployWebsite(pBodyText IN CLOB);
-    --
-    PROCEDURE getDeploymentStatus(pId IN VARCHAR2);
-    --
     PROCEDURE logDeployment(pWebsiteId IN website.id%type, pSiteId IN website_deploy.site_id%type, pMessage IN VARCHAR2, pStatus IN VARCHAR2 DEFAULT 'OK', pLogTime IN TIMESTAMP DEFAULT current_timestamp);
     --
     PROCEDURE runDelete(pUserId IN users.id%type, pWebsiteId IN website.id%type, pSiteId IN website.netlify_site_id%type);
@@ -121,118 +117,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     END; 
 
     /*
-    ** Build and deploy website to Netlify by submitting Github action
-    */    
-    PROCEDURE deployWebsite(pBodyText IN CLOB) IS
-        TYPE t_table_id IS RECORD(
-            id NUMBER,
-            display_order NUMBER);
-        TYPE tt_table_id IS TABLE OF t_table_id;
-        l_table_ids tt_table_id; 
-
-        l_clob CLOB;
-        l_job_name VARCHAR2(30);
-        n PLS_INTEGER;
-        l_body_text CLOB:=pBodyText;
-        l_website_id website.id%type;
-        l_env VARCHAR2(4);
-        l_site_id website.netlify_site_id%type;
-        l_list LONG;
-        l_url VARCHAR2(100);
-        l_session_data pck_core.session_data_rt;
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-
-        WITH payload AS (SELECT websiteid, env, list FROM JSON_TABLE(l_body_text, '$' COLUMNS (websiteid, env, list)))
-        SELECT p.websiteid, p.env, CASE WHEN p.env='TEST' THEN w.netlify_site_id ELSE w.netlify_site_id_custom END, p.list 
-          INTO l_website_id, l_env, l_site_id, l_list
-          FROM website w, payload p
-         WHERE w.user_id=l_session_data.user_id
-           AND w.id=p.websiteid;
-
-        /* Reorder pages */
-        SELECT column_value, rownum 
-          BULK COLLECT INTO l_table_ids
-          FROM TABLE(apex_string.split(l_list,':'));
-
-        FORALL i IN l_table_ids.first .. l_table_ids.last
-            UPDATE website_article 
-               SET display_order=l_table_ids(i).display_order 
-             WHERE website_id = l_website_id
-               AND article_id=l_table_ids(i).id;
-
-        /* Check no other session currently deploying - simultaneous deployments not allowed on Netlify free plan */
-        FOR C IN (SELECT job_name FROM user_scheduler_running_jobs WHERE job_name LIKE 'DEPLOY_%') LOOP
-            apex_json.open_object;
-            apex_json.write('content', '<h2>Someone else is deploying ... try again later</h2>');
-            apex_json.write('stop', TRUE);
-            apex_json.write('success', TRUE);
-            apex_json.close_object;
-            RETURN;
-        END LOOP;
-
-        DELETE website_deploy WHERE website_id=l_website_id;
-        UPDATE website SET netlify_deploy_id=NULL WHERE id=l_website_id;
-
-        l_job_name:=dbms_scheduler.generate_job_name('DEPLOY_');
-        dbms_scheduler.create_job(
-            job_name   => l_job_name,
-            job_type   =>'STORED_PROCEDURE',
-            job_action =>'pck_deploy.runDeployment',
-            number_of_arguments=>6,
-            start_date=>systimestamp
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 1,
-            argument_value => l_website_id
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 2,
-            argument_value => l_session_data.user_id
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 3,
-            argument_value => l_env
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 4,
-            argument_value => l_site_id
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 5,
-            argument_value => pck_core.getRestUrl()
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 6,
-            argument_value => l_session_data.app_id
-        );
-        dbms_scheduler.enable(l_job_name);
-
-        SELECT CASE 
-                WHEN netlify_site_id=l_site_id THEN REPLACE(domain_name,'.','-') || '.netlify.app'  
-                WHEN netlify_site_id_custom=l_site_id THEN domain_name
-               END
-        INTO l_url 
-        FROM website 
-        WHERE id=l_website_id;
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('content', '<ol class="deploy"><li><span>' || TO_CHAR(current_timestamp,'hh24:mi:ss') || '</span><span>Starting deployment of ' || l_url || '</span></li></ol>');
-        apex_json.close_object;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-    END;
-
-    /*
     ** MINIFY CSS FILE USING TOPTAL UTILITY API
     */
 
@@ -276,8 +160,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     PROCEDURE getFontfaces(pWebsiteid IN website.id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pCharsNormalHeadings IN VARCHAR2, pCharsItalicHeadings IN VARCHAR2, pCharsNormal IN VARCHAR2, pCharsItalic IN VARCHAR2, pCharsBoldNormal IN VARCHAR2, pCharsBoldItalic IN VARCHAR2, pFontface IN OUT NOCOPY VARCHAR2) IS
         l_api_url VARCHAR2(50);
         l_font_css LONG;
-        l_axes VARCHAR2(30);
-        l_tuples VARCHAR2(100);
 
         /* Return distict characters sorted */
         FUNCTION chars_used (pCharacters IN VARCHAR2) RETURN VARCHAR2 IS
@@ -291,29 +173,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             RETURN(l_chars);
         END;
 
-    BEGIN
-        IF (pCharsNormalHeadings IS NOT NULL) THEN
-            logDeployment(pWebsiteid, pSiteId, ' - Headings normal characters: '||LENGTH(pCharsNormalHeadings));
-        END IF;
-        IF (pCharsItalicHeadings IS NOT NULL) THEN
-            logDeployment(pWebsiteid, pSiteId, ' - Headings italic characters: '||LENGTH(pCharsItalicHeadings));
-        END IF;
-        IF (pCharsNormal IS NOT NULL) THEN
-            logDeployment(pWebsiteid, pSiteId, ' - Text normal characters: '||LENGTH(pCharsNormal));
-        END IF;
-        IF (pCharsItalic IS NOT NULL) THEN
-            logDeployment(pWebsiteid, pSiteId, ' - Text italic characters: '||LENGTH(pCharsItalic));
-        END IF;
-        IF (pCharsBoldNormal IS NOT NULL) THEN
-            logDeployment(pWebsiteid, pSiteId, ' - Text bold characters: '||LENGTH(pCharsBoldNormal));
-        END IF;
-        IF (pCharsBoldItalic IS NOT NULL) THEN
-            logDeployment(pWebsiteid, pSiteId, ' - Text bold italic characters: '||LENGTH(pCharsBoldItalic));
-        END IF;
+        FUNCTION addFontface(pFamily IN font.family%type, pWeight IN VARCHAR2, pChars IN VARCHAR2) RETURN VARCHAR2 IS
+            l_font_face LONG;
+            l_api_url VARCHAR2(500);
+            l_chars VARCHAR2(500);
+        BEGIN
+            l_chars:=chars_used(pChars);
+            logDeployment(pWebsiteid, pSiteId, ' - ' || pWeight || ' characters: '||LENGTH(l_chars));
+            l_api_url:='https://fonts.googleapis.com/css?family=' || REPLACE(pFamily,' ','+') || ':' || pWeight 
+                || '&display=swap'
+                || '&capability=WOFF2' 
+                || '&text=' || chars_used(pChars);
+            pck_api.callGoogleAPI(l_api_url,l_font_face);
+            RETURN (l_font_face);
+        END;
 
+    BEGIN
         FOR C IN (
-            SELECT f.family, f.variable, wf.context, wf.ital, wf.opsz, wf.slnt, wf.wdth, wf.wght, f.opsz_default, f.slnt_default, f.wdth_default, f.wght_default,
-                f.ital_start, f.ital_end, f.opsz_start, f.opsz_end, f.slnt_start, f.slnt_end, f.wdth_start, f.wdth_end, f.wght_start, f.wght_end,
+            SELECT f.family, f.variable, wf.context, wf.ital, wf.wght, f.ital_start, f.ital_end, f.wght_start, f.wght_end,
                 DECODE(wf.context,'TITLE',w.title,w.subtitle) text
             FROM font f, website_font wf, website w
             WHERE wf.website_id=w.id
@@ -322,133 +199,30 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             ORDER BY DECODE(wf.context,'TITLE',1,2) )
         LOOP
             /* FOR STATIC FONTS ONLY NEED DISTINCT CHARACTERS FOR TITLE AND SUBTITLE */
-            IF (C.variable=0) THEN
-                l_api_url:='https://fonts.googleapis.com/css?family=';
-                CASE C.context
-                    WHEN 'TITLE' THEN /* Heading elements h1,h2,h3,h4 */
-                        IF (pCharsNormalHeadings IS NOT NULL) THEN
-                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':700' || '&text=' || chars_used(pCharsNormalHeadings) || '&display=swap',l_font_css);
-                            pFontface:=pFontface || l_font_css;
-                        END IF;
-                        IF (pCharsItalicHeadings IS NOT NULL) THEN
-                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':700italic' || '&text=' || chars_used(pCharsItalicHeadings) || '&display=swap',l_font_css);
-                            pFontface:=pFontface || l_font_css;
-                        END IF;
-                        IF (C.text IS NOT NULL) THEN
-                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || C.wght || CASE WHEN C.ital=1 THEN 'italic' END || '&text=' || chars_used(C.text) || '&display=swap',l_font_css);
-                            pFontface:=pFontface || l_font_css;
-                        END IF;
-
-                    WHEN 'SUBTITLE' THEN /* Non-heading elements */
-                        IF (pCharsNormal IS NOT NULL) THEN
-                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':400' || '&text=' || chars_used(pCharsNormal) || '&display=swap',l_font_css);
-                            pFontface:=pFontface || l_font_css;
-                        END IF;
-                        IF (pCharsBoldNormal IS NOT NULL) THEN
-                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':700' || '&text=' || chars_used(pCharsBoldNormal) || '&display=swap',l_font_css);
-                            pFontface:=pFontface || l_font_css;
-                        END IF;
-                        IF (pCharsItalic IS NOT NULL) THEN
-                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':400italic' || '&text=' || chars_used(pCharsItalic) || '&display=swap',l_font_css);
-                            pFontface:=pFontface || l_font_css;
-                        END IF;
-                        IF (pCharsBoldItalic IS NOT NULL) THEN
-                            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':700italic' || '&text=' || chars_used(pCharsBoldItalic) || '&display=swap',l_font_css);
-                            pFontface:=pFontface || l_font_css;
-                        END IF;
-                END CASE;
-                CONTINUE;
-            END IF;
-
-
-            /* *************************** */
-            /* VARIABLE FONTS USE CSS2 API */
-            /* *************************** */
-
-            l_api_url:='https://fonts.googleapis.com/css2?family=';
-
-            l_axes:=null;
-            l_tuples:=null;
-            
-            IF (C.ital_start IS NOT NULL) THEN
-                l_axes:=l_axes || 'ital,';
-            ELSE 
-                IF (C.slnt_start IS NOT NULL) THEN
-                    l_axes:=l_axes || 'slnt,';
-                    CASE pEnv
-                        WHEN 'TEST' THEN l_tuples:=l_tuples || C.slnt_start || '..' || C.slnt_end || ',';
-                        WHEN 'LIVE' THEN l_tuples:=l_tuples || C.slnt || ',';
-                    END CASE;
-                END IF;
-            END IF;
-            IF (C.opsz_start IS NOT NULL) THEN
-                l_axes:=l_axes || 'opsz,';
-                CASE pEnv
-                    WHEN 'TEST' THEN l_tuples:=l_tuples || C.opsz_start || '..' || C.opsz_end || ',';
-                    WHEN 'LIVE' THEN l_tuples:=l_tuples || C.opsz || ',';
-                END CASE;
-            END IF;
-            IF (C.wdth_start IS NOT NULL) THEN
-                l_axes:=l_axes || 'wdth,';
-                CASE pEnv
-                    WHEN 'TEST' THEN l_tuples:=l_tuples || C.wdth_start || '..' || C.wdth_end || ',';
-                    WHEN 'LIVE' THEN l_tuples:=l_tuples || C.wdth || ',';
-                END CASE;
-            END IF;
-            IF (C.wght_start IS NOT NULL) THEN
-                l_axes:=l_axes || 'wght,';
-                CASE pEnv
-                    WHEN 'TEST' THEN l_tuples:=l_tuples || C.wght_start || '..' || C.wght_end || ',';
-                    WHEN 'LIVE' THEN l_tuples:=l_tuples || C.wght || ',';
-                END CASE;
-            END IF;
-
-            l_axes:=RTRIM(l_axes,',');
-            l_tuples:=RTRIM(l_tuples,',');
-
-            pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':' || l_axes || '@' || 
-                CASE 
-                    WHEN INSTR(l_axes,'ital')>0 THEN C.ital_start || ',' || l_tuples || ';' || C.ital_end || ',' || l_tuples 
-                    ELSE l_tuples 
-                END || 
-                '&text=' || chars_used(C.text) || '&display=swap',l_font_css);
-
-            pFontface:=pFontface || l_font_css;
-            
-            /*
-            ** AT THIS STAGE WE NEED VARIABLE FONTS FOR wght:400 (text) and wght:700 (headings)
-            ** IF FONT HAS NO ITAL AXIS, USE SLNT INSTEAD IF TEXT CONTAINS ANY ITALICS
-            */
             CASE C.context
-                WHEN 'TITLE' THEN
+                WHEN 'TITLE' THEN /* Heading elements h1,h2,h3,h4 */
                     IF (pCharsNormalHeadings IS NOT NULL) THEN
-                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':ital,wght@0,700&text=' || chars_used(pCharsNormalHeadings) || '&display=swap',l_font_css);
-                        pFontface:=pFontface || l_font_css;
+                        pFontface:=pFontface || addFontface(C.family, '700', pCharsNormalHeadings);
                     END IF;
                     IF (pCharsItalicHeadings IS NOT NULL) THEN
-                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':ital,wght@1,700&text=' || chars_used(pCharsItalicHeadings) || '&display=swap',l_font_css);
-                        pFontface:=pFontface || l_font_css;
+                        pFontface:=pFontface || addFontface(C.family, '700italic', pCharsItalicHeadings);
+                    END IF;
+                    IF (C.text IS NOT NULL) THEN
+                        pFontface:=pFontface || addFontface(C.family, C.wght || CASE WHEN C.ital=1 THEN 'italic' END, C.text);
                     END IF;
 
-                WHEN 'SUBTITLE' THEN
+                WHEN 'SUBTITLE' THEN /* Non-heading elements */
                     IF (pCharsNormal IS NOT NULL) THEN
-                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':ital,wght@0,400&text=' || chars_used(pCharsNormal) || '&display=swap',l_font_css);
-                        pFontface:=pFontface || l_font_css;
+                        pFontface:=pFontface || addFontface(C.family, '400', pCharsNormal);
                     END IF;
-                    
                     IF (pCharsBoldNormal IS NOT NULL) THEN
-                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':ital,wght@0,700&text=' || chars_used(pCharsBoldNormal) || '&display=swap',l_font_css);
-                        pFontface:=pFontface || l_font_css;
+                        pFontface:=pFontface || addFontface(C.family, '700', pCharsBoldNormal);
                     END IF;
-                    
                     IF (pCharsItalic IS NOT NULL) THEN
-                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':ital,wght@1,400&text=' || chars_used(pCharsItalic) || '&display=swap',l_font_css);
-                        pFontface:=pFontface || l_font_css;
+                        pFontface:=pFontface || addFontface(C.family, '400italic', pCharsItalic);
                     END IF;
-                    
                     IF (pCharsBoldItalic IS NOT NULL) THEN
-                        pck_api.callGoogleAPI(l_api_url || REPLACE(C.family,' ','+') || ':ital,wght@1,700&text=' || chars_used(pCharsBoldItalic) || '&display=swap',l_font_css);
-                        pFontface:=pFontface || l_font_css;
+                        pFontface:=pFontface || addFontface(C.family, '400italic', pCharsBoldItalic);
                     END IF;
             END CASE;
         END LOOP;
@@ -923,141 +697,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     END;
 
     /*
-     **  Get deployment status from website_deploy logging table - called from Javascript every 3 seconds
-     */
-    PROCEDURE getDeploymentStatus(pId IN VARCHAR2) IS 
-        l_website_id website_deploy.website_id%type;
-        l_site_id website_deploy.site_id%type;
-        l_content CLOB;
-        l_clob CLOB;
-        l_ssl_url VARCHAR2(100);
-        l_deployment_complete BOOLEAN:=FALSE;
-        l_netlify_status website_deploy.status%type;
-        l_netlify_deploy_id website.netlify_deploy_id%type;
-        l_state VARCHAR2(200);
-        l_updated_at website.netlify_last_published%type;
-        l_job_name VARCHAR2(30);
-        l_session_data pck_core.session_data_rt;
-        TYPE t_deploy_log IS RECORD(
-            id website_deploy.id%type,
-            log_time VARCHAR2(8),
-            message website_deploy.message%type,
-            status website_deploy.status%type);
-        TYPE tt_deploy_log IS TABLE OF t_deploy_log;
-        l_deploy_log tt_deploy_log;          
-        l_env VARCHAR2(4);
-        l_is_live BOOLEAN;
-        cert_not_ready exception;
-        pragma exception_init( cert_not_ready, -29273 );
-    BEGIN
-        l_session_data:=pck_core.getSessionData();
-
-        l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
-        l_env:=SUBSTR(pId,INSTR(pId,',')+1);
-
-        SELECT netlify_deploy_id, CASE WHEN l_env='TEST' THEN netlify_site_id ELSE netlify_site_id_custom END
-          INTO l_netlify_deploy_id, l_site_id
-          FROM website
-         WHERE id=l_website_id;
-
-        l_is_live:=l_env='LIVE';
-
-        /* Get latest deployment status if started */
-        IF (l_netlify_deploy_id IS NOT NULL) THEN
-            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/'|| l_site_id || '/deploys/' || l_netlify_deploy_id, pMethod=>'GET', pData=>l_clob);
-            FOR C IN (SELECT state, ssl_url, TO_TIMESTAMP_TZ(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FXFF3TZR') updated_at
-                        FROM JSON_TABLE(l_clob, '$' COLUMNS (state, ssl_url, updated_at)) 
-                       WHERE state='ready') 
-            LOOP
-                logDeployment(l_website_id, l_site_id, C.state, pLogTime=>C.updated_at);
-                l_ssl_url:=C.ssl_url;
-            END LOOP;
-        END IF;
-
-        SELECT id, TO_CHAR(log_time,'hh24:mi:ss') log_time, message, status
-          BULK COLLECT INTO l_deploy_log
-          FROM website_deploy 
-         WHERE website_id=l_website_id
-           AND site_id=l_site_id
-           AND sent_ind='N'
-         ORDER BY id;
-
-        /* Now return list of all deployment status messages to client */
-        FOR i IN 1..l_deploy_log.COUNT
-        LOOP
-            IF (l_deploy_log(i).message='ready') THEN 
-                l_content:=l_content ||'<li><span>' || l_deploy_log(i).log_time || '</span><span>Successful deployment</span></li>'; 
-                l_content:=l_content ||'<li class="ready"><span></span><span><a target="_blank" href="' || l_ssl_url || '">' || l_ssl_url || '</a></span></li>';
-                IF (l_is_live) THEN
-                    BEGIN
-                        l_clob:=apex_web_service.make_rest_request(p_url=>l_ssl_url, p_http_method=>'GET');
-                        EXCEPTION WHEN cert_not_ready THEN
-                            l_content:=l_content ||'<li><span></span><span style="color:red">Certificate in process of being issued</span></li>'; 
-                    END;
-                END If;
-                l_deployment_complete:=TRUE;
-                EXIT;
-            END IF;
-
-            IF (l_deploy_log(i).status='OK') THEN 
-                l_content:=l_content ||'<li><span>' || l_deploy_log(i).log_time || '</span><span>' || l_deploy_log(i).message || '</span></li>'; 
-            ELSE
-                l_content:=l_content ||'<li style="color:red"><span>' || l_deploy_log(i).log_time || '</span><span>' || l_deploy_log(i).message || '</span></li>'; 
-                l_deployment_complete:=TRUE;
-            END IF;
-        END LOOP;
-
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.write('completed', l_deployment_complete);
-        apex_json.write('content', l_content);
-        apex_json.close_object;
-
-        FORALL i IN 1..l_deploy_log.COUNT
-            UPDATE website_deploy SET sent_ind='Y' WHERE id=l_deploy_log(i).id;
-
-        IF (l_deployment_complete) THEN
-            IF (l_is_live) THEN
-                UPDATE website 
-                   SET netlify_last_published_custom = current_timestamp
-                 WHERE id=l_website_id;
-            ELSE
-                UPDATE website 
-                   SET netlify_last_published = current_timestamp
-                 WHERE id=l_website_id;
-            END IF;
-
-            l_job_name:=dbms_scheduler.generate_job_name('DELETE_');
-            dbms_scheduler.create_job(
-                job_name   => l_job_name,
-                job_type   =>'STORED_PROCEDURE',
-                job_action =>'pck_deploy.runDelete',
-                number_of_arguments=>3,
-                start_date=>systimestamp
-            );
-            dbms_scheduler.set_job_argument_value(
-                job_name => l_job_name,
-                argument_position => 1,
-                argument_value => l_session_data.user_id
-            );
-            dbms_scheduler.set_job_argument_value(
-                job_name => l_job_name,
-                argument_position => 2,
-                argument_value => l_website_id
-            );
-            dbms_scheduler.set_job_argument_value(
-                job_name => l_job_name,
-                argument_position => 3,
-                argument_value => l_site_id
-            );
-            dbms_scheduler.enable(l_job_name);    
-        END IF;
-
-        EXCEPTION
-            WHEN OTHERS THEN
-                pck_core.log_error;
-    END;   
-
+    **  DELETE OLD DEPLOYMENTS FROM NETLIFY SYSTEM
+    */
     PROCEDURE runDelete(pUserId IN users.id%type, pWebsiteId IN website.id%type, pSiteId IN website.netlify_site_id%type) IS
         l_clob CLOB;
     BEGIN
