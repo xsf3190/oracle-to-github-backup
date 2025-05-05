@@ -602,9 +602,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_html CLOB;
         l_css website.css%type;
         l_javascript CLOB;
-        l_session_data pck_core.session_data_rt;
+        l_session_data pck_sec.t_session_data;
     BEGIN
-        l_session_data:=pck_core.getSessionData();
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
 
         /* Get page content */
 
@@ -694,7 +695,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_body_html CLOB;
         l_zip BLOB:=pZipFile;
         l_files apex_zip.t_files;
-        l_session_data pck_core.session_data_rt;
+        l_session_data pck_sec.t_session_data;
         l_nb_files PLS_INTEGER:=0;
         l_ddl VARCHAR2(500);
         l_deploy_css CLOB;
@@ -714,11 +715,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         END;
 
     BEGIN
-        l_session_data:=pck_core.getSessionData();
+        
 
         /* pId contains website_id,article_id */
         l_website_id:=SUBSTR(pId,1,INSTR(pId,',')-1);
         l_article_id:=SUBSTR(pId,INSTR(pId,',')+1);
+
+        l_session_data:=pck_sec.getSessionData(l_website_id);
 
         l_files:=apex_zip.get_files(p_zipped_blob => l_zip);
 
@@ -745,7 +748,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             SELECT apex_util.blob_to_clob(file_content)
               INTO l_deploy_css
               FROM apex_application_static_files 
-             WHERE application_id=l_session_data.app_id
+             WHERE application_id=101
                AND file_name='deploy.css';
 
             /* 
