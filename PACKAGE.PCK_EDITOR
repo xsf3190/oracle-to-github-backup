@@ -525,24 +525,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 apex_json.write('min', C.wght_start);
                 apex_json.write('max', C.wght_end);
                 apex_json.close_object;
-
-                /*
-                apex_json.open_object;
-                apex_json.write('name','wdth');
-                apex_json.write('min', C.wdth_start);
-                apex_json.write('max', C.wdth_end);
-                apex_json.close_object;
-                apex_json.open_object;
-                apex_json.write('name','opsz');
-                apex_json.write('min', C.opsz_start);
-                apex_json.write('max', C.opsz_end);
-                apex_json.close_object;
-                apex_json.open_object;
-                apex_json.write('name','slnt');
-                apex_json.write('min', C.slnt_start);
-                apex_json.write('max', C.slnt_end);
-                apex_json.close_object;
-                */
                 
                 apex_json.close_array;
             END LOOP;
@@ -614,7 +596,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     BEGIN
         FOR C IN (
             SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.color, wf.underline, wf.margin, 
-                f.wght_start, f.wght_end, wf.wght,
+                f.wght_start, f.wght_end, wf.wght, CASE WHEN NVL(f.wght_start,0)< NVL(f.wght_end,0) THEN 1 END show_wght,
                 f.ital_start, f.ital_end, wf.ital
               FROM user_tab_columns c, user_col_comments i, website w, website_font wf, font f
              WHERE c.table_name=l_table_name
@@ -650,11 +632,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     '<label for="' || l_column_name || '-underline">Underline' ||
                         '<input type="range" id="' || l_column_name || '-underline" name="' || l_column_name || '_underline" min="0" max="22" value="' || C.underline || '"/>' ||
                     '</label>' ||
-                    '<label for="' || l_column_name || '-margin">Margin' ||
+                    '<label for="' || l_column_name || '-margin">Move' ||
                         '<input type="range" id="' || l_column_name || '-margin" name="' || l_column_name || '_margin" min="0" max="30" value="' || C.margin || '"/>' ||
                     '</label>' ||
-                    '<label for="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' class="visually-hidden"' END || '>Weight' ||
-                        '<input type="range" id="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" value="' || C.wght || '"/>' ||
+                    '<label for="' || l_column_name || '-font-wght"' || CASE WHEN C.show_wght<>1 THEN ' class="visually-hidden"' END || '>Weight' ||
+                        '<input type="range" id="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" step="100" value="' || NVL(C.wght,400) || '"/>' ||
                     '</label>' ||
                     '<label for="' || l_column_name || '-font-ital"' || CASE WHEN C.ital_start IS NULL THEN ' class="visually-hidden"' END || '>Italics' ||
                         '<input type="range" id="' || l_column_name || '-font-ital"' || CASE WHEN C.ital_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_ital" min="' || C.ital_start || '" max="' || C.ital_end || '" value="' || C.ital || '"/>' ||
