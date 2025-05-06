@@ -85,10 +85,11 @@ editor.addEventListener("input", (e) => {
 editor.addEventListener("change", (e) => {
     
     const name = e.target.getAttribute("name");
-    const target = header.querySelector("." + name.split("_")[0]);
+    const context = name.split("_")[0];
+    const target = header.querySelector("." + context);
     
     if (name.includes("font_category")) {
-        const query = "?category=" + e.target.value + "&font=0";
+        const query = "?category=" + e.target.value + "&font=0&context=" + context;
         callAPI('fonts/:ID','GET', query)
             .then((data) => {
                 const family = e.target.parentElement.nextSibling.querySelector("select");
