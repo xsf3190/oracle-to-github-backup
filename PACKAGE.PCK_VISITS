@@ -866,7 +866,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_env VARCHAR2(4);
         l_url page_hit.url%type;
         l_content CLOB;
-        l_session_data pck_core.session_data_rt;
         n PLS_INTEGER;
 
         FUNCTION cwv(pGood IN NUMBER, pPoor IN NUMBER, pUnits IN VARCHAR2, pScore IN NUMBER) RETURN VARCHAR2 IS
