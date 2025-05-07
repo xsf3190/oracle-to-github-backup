@@ -385,7 +385,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Build font syles collection once */
         IF (g_font_styles_title IS NULL) THEN
             FOR C IN (
-                SELECT context, font_size, color, underline, margin, ital, opsz, slnt, wdth, wght
+                SELECT context, font_size, color, underline, margin, ital
                   FROM website_font
                  WHERE website_id=pWebsiteId
             ) LOOP
@@ -396,6 +396,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 IF (C.underline>0) THEN
                     l_font_styles:=l_font_styles || ';text-decoration:underline;text-underline-offset:' || C.underline || '%;text-decoration-thickness:' || C.underline || '%' ;
                 END IF;
+                
                 IF (C.margin>0) THEN
                     l_font_styles:=l_font_styles || ';margin-block:' || C.margin || 'vh' ;
                 END IF;
@@ -403,16 +404,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 IF (C.ital=1) THEN
                     l_font_styles:=l_font_styles || ';font-style:italic';
                 END IF;
-                
-                IF (C.slnt IS NOT NULL) THEN
-                    l_font_styles:=l_font_styles || ';font-style:oblique ' || C.slnt || 'deg';
-                END IF;
-                
-                IF (C.wdth IS NOT NULL) THEN
-                    l_font_styles:=l_font_styles || ';font-stretch:' || C.wdth || '%';
-                END IF;
-                
-                l_font_styles:=l_font_styles || ';font-weight:' || C.wght;
 
                 CASE C.context
                     WHEN 'TITLE' THEN
