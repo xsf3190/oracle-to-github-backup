@@ -339,7 +339,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
 
         pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts?capability=WOFF2',pData=>l_clob);
         
-        INSERT INTO google_font_static(family, category, wght_start, wght_end, wght_start_italic, wght_end_italic) 
+        INSERT INTO google_font_static(family, category, wght_start, wght_end, wght_start_italic, wght_end_italic, subsets) 
         WITH data AS
         (       
         SELECT family, category, 
@@ -350,10 +350,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CORE" AS
                 WHEN INSTR(variant,'italic')>0 THEN '-' || SUBSTR(variant,1,INSTR(variant,'italic')-1)
                 ELSE variant
             END
-            ) variant
-          FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, NESTED PATH '$.variants[*]' COLUMNS (variant VARCHAR2(50) PATH '$')))
+            ) variant,
+            subset
+          FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, NESTED PATH '$.variants[*]' COLUMNS (variant VARCHAR2(50) PATH '$'),  NESTED PATH '$.subsets[*]' COLUMNS (subset VARCHAR2(50) PATH '$')))
         )
-        SELECT family, category, MIN(DECODE(SIGN(variant),1,variant)), MAX(DECODE(SIGN(variant),1,variant)),MIN(DECODE(SIGN(variant),-1,variant*-1)), MAX(DECODE(SIGN(variant),-1,variant*-1))
+        SELECT family, category, MIN(DECODE(SIGN(variant),1,variant)), MAX(DECODE(SIGN(variant),1,variant)),MIN(DECODE(SIGN(variant),-1,variant*-1)), MAX(DECODE(SIGN(variant),-1,variant*-1)),
+            LISTAGG(subset,'|') WITHIN GROUP (ORDER BY subset)
         FROM data
         GROUP BY family, category;
 
