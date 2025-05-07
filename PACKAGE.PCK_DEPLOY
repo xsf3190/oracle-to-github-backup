@@ -173,14 +173,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             RETURN(l_chars);
         END;
 
-        FUNCTION addFontface(pFamily IN font.family%type, pWeight IN VARCHAR2, pChars IN VARCHAR2) RETURN VARCHAR2 IS
+        FUNCTION addFontface(pFamily IN font.family%type, pChars IN VARCHAR2, pWeight IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
             l_font_face LONG;
             l_api_url VARCHAR2(500);
             l_chars VARCHAR2(500);
         BEGIN
             l_chars:=chars_used(pChars);
             logDeployment(pWebsiteid, pSiteId, ' - ' || pWeight || ' characters: '||LENGTH(l_chars));
-            l_api_url:='https://fonts.googleapis.com/css?family=' || REPLACE(pFamily,' ','+') || ':' || pWeight 
+            l_api_url:='https://fonts.googleapis.com/css?family=' || REPLACE(pFamily,' ','+') || CASE WHEN pWeight IS NOT NULL THEN ':' || pWeight END 
                 || '&display=swap'
                 || '&capability=WOFF2' 
                 || '&text=' || chars_used(pChars);
@@ -190,39 +190,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
     BEGIN
         FOR C IN (
-            SELECT f.family, f.variable, wf.context, wf.ital, wf.wght, f.ital_start, f.ital_end, f.wght_start, f.wght_end,
-                DECODE(wf.context,'TITLE',w.title,w.subtitle) text
+            SELECT f.family, f.variable, wf.context, wf.ital, f.wght_start, f.wght_end
             FROM font f, website_font wf, website w
             WHERE wf.website_id=w.id
             AND f.id=wf.font_id
             AND w.id=pWebsiteId
             ORDER BY DECODE(wf.context,'TITLE',1,2) )
         LOOP
-            /* FOR STATIC FONTS ONLY NEED DISTINCT CHARACTERS FOR TITLE AND SUBTITLE */
             CASE C.context
                 WHEN 'TITLE' THEN /* Heading elements h1,h2,h3,h4 */
                     IF (pCharsNormalHeadings IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, '700', pCharsNormalHeadings);
+                        pFontface:=pFontface || addFontface(C.family, pCharsNormalHeadings, CASE WHEN 700 BETWEEN C.wght_start AND C.wght_end THEN '700' END);
                     END IF;
                     IF (pCharsItalicHeadings IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, '700italic', pCharsItalicHeadings);
-                    END IF;
-                    IF (C.text IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, C.wght || CASE WHEN C.ital=1 THEN 'italic' END, C.text);
+                        pFontface:=pFontface || addFontface(C.family, pCharsItalicHeadings, CASE WHEN 700 BETWEEN C.wght_start AND C.wght_end THEN '700italic' END);
                     END IF;
 
                 WHEN 'SUBTITLE' THEN /* Non-heading elements */
                     IF (pCharsNormal IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, '400', pCharsNormal);
+                        pFontface:=pFontface || addFontface(C.family, pCharsNormal, '400');
                     END IF;
                     IF (pCharsBoldNormal IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, '700', pCharsBoldNormal);
+                        pFontface:=pFontface || addFontface(C.family, pCharsBoldNormal, '700');
                     END IF;
                     IF (pCharsItalic IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, '400italic', pCharsItalic);
+                        pFontface:=pFontface || addFontface(C.family, pCharsItalic, '400italic');
                     END IF;
                     IF (pCharsBoldItalic IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, '400italic', pCharsBoldItalic);
+                        pFontface:=pFontface || addFontface(C.family, pCharsBoldItalic, '700italic');
                     END IF;
             END CASE;
         END LOOP;
@@ -416,10 +411,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         pck_sec.g_session_user_id:=pUserId;
         pck_sec.g_website_id:=pWebsiteId;
 
-        SELECT title, subtitle, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, SUBSTR(color_primary,2), favicon_asset_id
-          INTO l_title, l_subtitle, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_color_primary, l_favicon_asset_id
+        SELECT contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, SUBSTR(color_primary,2), favicon_asset_id
+          INTO l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_color_primary, l_favicon_asset_id
           FROM website
          WHERE id=pWebsiteId;
+
+        FOR C IN (
+            SELECT w.title, w.subtitle, wf.context, wf.ital
+              FROM website w, website_font wf
+             WHERE w.id=pWebsiteId
+               AND wf.website_id=w.id
+        ) 
+        LOOP
+            CASE C.context
+                WHEN 'TITLE' THEN
+                    l_title:=C.title;
+                    IF (C.ital=1) THEN
+                        l_chars_italic_headings:=C.title;
+                    ELSE
+                        l_chars_normal_headings:=C.title;
+                    END IF;
+                WHEN 'SUBTITLE' THEN
+                    l_subtitle:=C.subtitle;
+                    IF (C.ital=1) THEN
+                        l_chars_italic:=C.subtitle;
+                    ELSE
+                        l_chars_normal:= C.subtitle;
+                    END IF;
+            END CASE;
+        END LOOP;
+
 
         /*
         ** Get all website content into collection
