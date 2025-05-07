@@ -8,7 +8,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
     --
     PROCEDURE getEditorContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pStatus OUT NUMBER);
     --
-    PROCEDURE getFonts(pWebsiteId IN website.id%type, pCategory IN font.category%type, pFontId IN font.id%type, pStatus OUT NUMBER);
+    PROCEDURE getFonts(pWebsiteId IN website.id%type, pCategory IN font.category%type, pFontId IN font.id%type, pContext IN website_font.context%type, pStatus OUT NUMBER);
     --
     FUNCTION getFontURL(pFontid IN font.id%type) RETURN VARCHAR2;
     --
@@ -458,7 +458,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 FROM font f
                 WHERE f.id=pFontid) 
         LOOP
-            IF (C.variable=1) THEN
+            IF (C.variable=0) THEN
+                l_api_url:='https://fonts.googleapis.com/css?family=' || REPLACE(C.family,' ','+');
+            ELSE
                 l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+');
                 IF (C.axes IS NOT NULL) THEN
                     l_api_url:=l_api_url || ':' || C.axes || '@';
@@ -468,8 +470,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                         l_api_url:=l_api_url || C.ranges;
                     END IF;
                 END IF;
-            ELSE
-                l_api_url:='https://fonts.googleapis.com/css?family=' || REPLACE(C.family,' ','+');
             END IF;
             pck_api.callGoogleAPI(l_api_url,pData=>l_font_css);
 
@@ -484,7 +484,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     /* 
     **  BUILD SELECT LIST OF FONT FAMILIES FOR GIVEN CATEGORY (if font_id=0) ELSE GET FONT SETTINGS FOR A SPECIFIC FONT
     */
-    PROCEDURE getFonts(pWebsiteId IN website.id%type, pCategory IN font.category%type, pFontId IN font.id%type, pStatus OUT NUMBER) IS
+    PROCEDURE getFonts(pWebsiteId IN website.id%type, pCategory IN font.category%type, pFontId IN font.id%type, pContext IN website_font.context%type, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
         l_html CLOB;
     BEGIN
@@ -494,18 +494,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
 
         IF (pFontId=0) THEN /* Get all fonts for category*/
             l_html:='<option value="">--Choose a Font--</option>';
-            FOR C IN (
-                SELECT id, family 
-                FROM font 
-                WHERE category=pCategory ORDER BY 2
-            )
-            LOOP
-                l_html:=l_html || '<option value="' || C.id || '">' || C.family || '</option>';
-            END LOOP;
+            CASE pContext
+                WHEN 'title' THEN
+                    FOR C IN (
+                        SELECT id, family 
+                        FROM font 
+                        WHERE category=pCategory ORDER BY 2
+                    )
+                    LOOP
+                        l_html:=l_html || '<option value="' || C.id || '">' || C.family || '</option>';
+                    END LOOP;
+                WHEN 'subtitle' THEN
+                    FOR C IN (
+                        SELECT id, family 
+                        FROM font 
+                        WHERE category=pCategory
+                          AND ital_start IS NOT NULL 
+                          AND 400 BETWEEN wght_start AND wght_end
+                          AND 700 BETWEEN wght_start AND wght_end
+                        ORDER BY 2
+                    )
+                    LOOP
+                        l_html:=l_html || '<option value="' || C.id || '">' || C.family || '</option>';
+                    END LOOP;
+            END CASE;
             APEX_JSON.write('content', l_html);
         ELSE
             FOR C IN (
-                SELECT f.family, f.variable, f.ital_start, f.ital_end, f.wght_start, f.wght_end
+                SELECT f.family, f.variable, f.ital_start, f.ital_end
                  FROM font f
                 WHERE f.id=pFontid
             ) 
@@ -519,12 +535,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 apex_json.write('min', C.ital_start);
                 apex_json.write('max', C.ital_end);
                 apex_json.close_object;
-
+                /*
                 apex_json.open_object;
                 apex_json.write('name','wght');
-                apex_json.write('min', C.wght_start);
-                apex_json.write('max', C.wght_end);
+                apex_json.write('min', CASE WHEN C.wght_start=C.wght_end THEN NULL ELSE C.wght_start END);
+                apex_json.write('max', CASE WHEN C.wght_start=C.wght_end THEN NULL ELSE C.wght_end END);
                 apex_json.close_object;
+                */
                 
                 apex_json.close_array;
             END LOOP;
@@ -572,13 +589,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
               '<selectedcontent></selectedcontent>' ||
               '<span class="arrow"></span>' ||
             '</button>';
-        FOR C IN (SELECT id, family FROM font WHERE category=l_selected_category ORDER BY 2)
-        LOOP
-            l_html:=l_html || 
-            '<option value="' || C.id || '"'|| CASE WHEN C.id=pFontId THEN ' selected' END || '>' ||
-                C.family ||
-            '</option>';
-        END LOOP;
+        CASE pColumnName
+            WHEN 'title' THEN
+                FOR C IN (SELECT id, family FROM font WHERE category=l_selected_category ORDER BY 2)
+                LOOP
+                    l_html:=l_html || 
+                    '<option value="' || C.id || '"'|| CASE WHEN C.id=pFontId THEN ' selected' END || '>' ||
+                        C.family ||
+                    '</option>';
+                END LOOP;
+            WHEN 'subtitle' THEN
+                FOR C IN (SELECT id, family FROM font WHERE category=l_selected_category AND ital_start IS NOT NULL AND wght_end>wght_start ORDER BY 2)
+                LOOP
+                    l_html:=l_html || 
+                    '<option value="' || C.id || '"'|| CASE WHEN C.id=pFontId THEN ' selected' END || '>' ||
+                        C.family ||
+                    '</option>';
+                END LOOP;
+        END CASE;
         l_html:=l_html || 
             '</select>' ||
         '</label>';
@@ -596,7 +624,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     BEGIN
         FOR C IN (
             SELECT c.data_length, i.comments, wf.font_id, wf.font_size, wf.color, wf.underline, wf.margin, 
-                f.wght_start, f.wght_end, wf.wght, CASE WHEN NVL(f.wght_start,0)< NVL(f.wght_end,0) THEN 1 END show_wght,
+                --f.wght_start, f.wght_end, wf.wght, CASE WHEN NVL(f.wght_start,0)< NVL(f.wght_end,0) THEN 1 END show_wght,
                 f.ital_start, f.ital_end, wf.ital
               FROM user_tab_columns c, user_col_comments i, website w, website_font wf, font f
              WHERE c.table_name=l_table_name
@@ -635,11 +663,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     '<label for="' || l_column_name || '-margin">Move' ||
                         '<input type="range" id="' || l_column_name || '-margin" name="' || l_column_name || '_margin" min="0" max="30" value="' || C.margin || '"/>' ||
                     '</label>' ||
-                    '<label for="' || l_column_name || '-font-wght"' || CASE WHEN C.show_wght<>1 THEN ' class="visually-hidden"' END || '>Weight' ||
-                        '<input type="range" id="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" step="100" value="' || NVL(C.wght,400) || '"/>' ||
-                    '</label>' ||
+                    --'<label for="' || l_column_name || '-font-wght"' || CASE WHEN C.show_wght<>1 THEN ' class="visually-hidden"' END || '>Weight' ||
+                    --    '<input type="range" id="' || l_column_name || '-font-wght"' || CASE WHEN C.wght_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_wght" min="' || C.wght_start || '" max="' || C.wght_end || '" step="100" value="' || NVL(C.wght,400) || '"/>' ||
+                    --'</label>' ||
                     '<label for="' || l_column_name || '-font-ital"' || CASE WHEN C.ital_start IS NULL THEN ' class="visually-hidden"' END || '>Italics' ||
-                        '<input type="range" id="' || l_column_name || '-font-ital"' || CASE WHEN C.ital_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_ital" min="' || C.ital_start || '" max="' || C.ital_end || '" value="' || C.ital || '"/>' ||
+                        '<input type="range" id="' || l_column_name || '-font-ital"' || CASE WHEN C.ital_start IS NULL THEN ' disabled' END || ' name="' || l_column_name || '_font_ital" min="' || C.ital_start || '" max="' || C.ital_end || '" value="' || NVL(C.ital,0) || '"/>' ||
                     '</label>' ||
                 '</div>' ||
             '</fieldset>';
@@ -648,7 +676,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     END;
 
     /* 
-    **  BUILD HTML INPUT ELEMENTS TO EDiT WEBSITE HEADER
+    **  BUILD HTML INPUT ELEMENTS TO EDIT WEBSITE HEADER
     */
     PROCEDURE getHeader(pWebsiteId IN website.id%type, pEyeDropper IN VARCHAR2, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
