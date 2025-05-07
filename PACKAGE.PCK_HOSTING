@@ -153,12 +153,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
      * DELETE WEBSITE INCLUDING HOSTING AND ANY ASSETS OWNED BY US
     */
     PROCEDURE deleteWebsite(pWebsiteid IN website.id%type, pStatus OUT NUMBER) IS
-        l_session_data pck_core.session_data_rt;
+        l_session_data pck_sec.t_session_data;
         TYPE t_website_article IS TABLE OF article.id%type INDEX BY PLS_INTEGER;
         l_website_articles t_website_article;
         l_clob CLOB;
     BEGIN
-        l_session_data:=pck_core.getSessionData(pWebsiteId);
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
         FOR C IN (
             SELECT w.user_id, w.netlify_site_id, w.netlify_site_id_custom, w.netlify_dns_zone_id, u.cld_api_key 
