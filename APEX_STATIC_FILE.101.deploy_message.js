@@ -33,7 +33,7 @@ messageInput.addEventListener("input", (e) => {
 
 sendmessage.addEventListener("click", (event) => {
     if (messageInput.validity.valueMissing) {
-        messageError.textContent = "You need to enter a message.";
+        messageError.textContent = "Enter a message";
         messageError.style.color = "red";
         return;
     }
