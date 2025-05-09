@@ -49,6 +49,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         RETURN ('sha256-' || utl_raw.cast_to_varchar2(utl_encode.base64_encode(l_sha256)));
     END;
     
+    /*
+    ** SERVE JS AND CSS MODULES FROM NETLIFY SITE
+    ** "TEST" - FOR TESTING BY ADMIN USERS OF ADMIN-oWNED WEBSITES
+    ** "LIVE" - ALL DEPLOYED WEBSITES LINK TO THESE
+    */
     PROCEDURE buildESModules(pEnv IN VARCHAR2) IS 
         TYPE tt_files IS RECORD (
             file_name apex_application_static_files.file_name%type,
@@ -64,7 +69,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         
         l_file_name apex_application_static_files.file_name%type;
         l_file_content CLOB;
-        l_integrity_value LONG;
+        
         l_page CLOB;
         l_table CLOB;
         
@@ -72,37 +77,52 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_website_id website.id%type;
         l_netlify_site_id website.netlify_site_id%type;
         ES_MODULES_DOMAIN CONSTANT VARCHAR2(20):='es-modules';
+
+        PROCEDURE addEntry(pEnv IN VARCHAR2, pFilename IN es_module.module_name%type, pMimetype IN es_module.mime_type%type, pLastUpdated es_module.last_updated%type, pSha1 IN es_module.sha1%type, pFilecontent IN OUt NOCOPY CLOB) IS
+            l_hash_value es_module.hash_value%type;
+        BEGIN
+            l_sha1:=LOWER(dbms_crypto.hash(src=>pFilecontent, typ=>dbms_crypto.hash_sh1));
+            l_deploy_files(l_sha1).file_name:=pEnv || '/' || pFilename;
+            l_deploy_files(l_sha1).file_content:=pFilecontent;
+            l_files.put(pEnv || '/' || pFilename, l_sha1);
+            l_hash_value:=getSha256(pFilecontent);
+            INSERT INTO es_module (env, host_name, module_name, mime_type, last_updated, hash_value, sha1) 
+                VALUES (pEnv, 'https://' || ES_MODULES_DOMAIN || '.netlify.app', pFilename, pMimetype, pLastUpdated, l_hash_value, l_sha1);
+        END;
+
     BEGIN
         SELECT id, netlify_site_id INTO l_website_id, l_netlify_site_id FROM website WHERE domain_name=ES_MODULES_DOMAIN;
 
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
 
-        /* ALWAYS REBUILD MODULES FOR THE ENVIRONMENT */
-        DELETE es_module WHERE env=pEnv;
+        /* ALWAYS REBUILD TEST MODULES */
 
         FOR C IN (
-            SELECT file_name, last_updated_on, mime_type, apex_util.blob_to_clob(file_content) file_content
-              FROM apex_application_static_files 
-             WHERE application_id=101
-               AND (
-                    (file_name LIKE 'deploy%' AND mime_type='text/javascript' AND INSTR(file_name,'.min.')>0) 
-                    OR 
-                    (file_name LIKE 'deploy%' AND mime_type='text/css' AND INSTR(file_name,'.min.')=0)
-                   )
-               AND file_name<>'deploy_main.min.js'
+            WITH source AS (
+                SELECT CASE WHEN mime_type='text/css' THEN SUBSTR(file_name,1,INSTR(file_name,'.')) || 'min.css' ELSE file_name END file_name, 
+                        last_updated_on, 
+                        mime_type, 
+                        apex_util.blob_to_clob(file_content) file_content
+                  FROM apex_application_static_files 
+                 WHERE application_id=101
+                   AND (
+                        (file_name LIKE 'deploy%' AND mime_type='text/javascript' AND INSTR(file_name,'.min.')>0) 
+                        OR 
+                        (file_name LIKE 'deploy%' AND mime_type='text/css' AND INSTR(file_name,'.min.')=0)
+                       )
+                   AND file_name<>'deploy_main.min.js'
+            )
+            SELECT s.file_name, s.mime_type, s.last_updated_on, s.file_content, e.env, e.sha1, e.last_uploaded
+              FROM source s, es_module e
+             WHERE s.file_name=e.module_name(+)
             )
         LOOP
-            l_file_name:=CASE WHEN C.mime_type='text/css' THEN SUBSTR(C.file_name,1,INSTR(C.file_name,'.')) || 'min.css' ELSE C.file_name END;
             l_file_content:=CASE WHEN C.mime_type='text/css' THEN minifyCss(C.file_content) ELSE C.file_content END;
 
-            l_sha1:=LOWER(dbms_crypto.hash(src=>l_file_content, typ=>dbms_crypto.hash_sh1));
-            l_deploy_files(l_sha1).file_name:=pEnv || '/' || l_file_name;
-            l_deploy_files(l_sha1).file_content:=l_file_content;
-            l_files.put(pEnv || '/' || l_file_name, l_sha1);
-            l_integrity_value:=getSha256(l_file_content);
-            INSERT INTO es_module (env, host_name, module_name, mime_type, last_updated_on, hash_value) 
-                VALUES (pEnv, ES_MODULES_DOMAIN || '.netlify.app', l_file_name, C.mime_type, C.last_updated_on, l_integrity_value);
+            addEntry(pEnv=>NVL(C.env,'test'), pFilename=>C.file_name, pMimetype=>C.mime_type, pLastUpdated=>C.last_updated_on, pSha1=>C.sha1, pFilecontent=>l_file_content);
+            addEntry(pEnv=>NVL(C.env,'live'), pFilename=>C.file_name, pMimetype=>C.mime_type, pLastUpdated=>C.last_updated_on, pSha1=>C.sha1, pFilecontent=>l_file_content);
+
         END LOOP;
 
         l_table:=
@@ -112,11 +132,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             '<thead>' ||
             '<tbody>';
         FOR C IN (
-            SELECT env, host_name, module_name, mime_type, TO_CHAR(last_updated_on,'dd.mm.yyyy hh24:mi') last_updated_on,  TO_CHAR(uploaded_date,'dd.mm.yyyy hh24:mi') uploaded_date 
+            SELECT env, host_name, module_name, mime_type, TO_CHAR(last_updated,'dd.mm.yyyy hh24:mi') last_updated,  TO_CHAR(last_uploaded,'dd.mm.yyyy hh24:mi') last_uploaded 
               FROM es_module 
              ORDER BY env, mime_type, module_name
         ) LOOP
-            l_table:=l_table || '<tr><td>' || C.env || '</td><td>' || C.host_name || '</td><td>' || C.module_name || '</td><td>' || C.last_updated_on || '</td><td>' || C.uploaded_date || '</td><tr>';
+            l_table:=l_table || '<tr><td>' || C.env || '</td><td>' || C.host_name || '</td><td>' || C.module_name || '</td><td>' || C.last_updated || '</td><td>' || C.last_uploaded|| '</td><tr>';
         END LOOP;
         l_table:=l_table || 
         '</tbody>' ||
@@ -130,7 +150,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             '<meta name="viewport" content="width=device-width, initial-scale=1.0">' ||
         '</head>' ||
         '<body>' ||
-        '<h1>ES Modules for RESTARTNET.COM editor websites</h1>' || l_table ||
+        '<h1>ES Modules for RESTARTNET.COM websites</h1>' || l_table ||
         '</body>' ||
         '</html>';
         l_sha1:=LOWER(dbms_crypto.hash(src=>l_page, typ=>dbms_crypto.hash_sh1));
@@ -146,7 +166,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_json.put('files',l_files);
 
-        pck_core.log('Sending digest of ' || l_deploy_files.COUNT || ' files to Netlify for '|| ES_MODULES_DOMAIN);
+        dbms_output.put_line('Sending digest of ' || l_deploy_files.COUNT || ' files to Netlify for '|| ES_MODULES_DOMAIN);
         pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'sites/' || l_netlify_site_id || '/deploys', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
 
         UPDATE website SET netlify_deploy_id=(SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) WHERE id=l_website_id;
@@ -158,7 +178,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 pBody=>l_deploy_files(C.sha1).file_content,
                 pData=>l_clob
             );
-            pck_core.log('Successfully uploaded ' || l_deploy_files(C.sha1).file_name);
+            dbms_output.put_line('Successfully uploaded ' || l_deploy_files(C.sha1).file_name);
         END LOOP;
 
         pck_hosting.waitDeployment(l_website_id,pUserid=>null);
