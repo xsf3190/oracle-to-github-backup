@@ -1,6 +1,6 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as 
     --
-    PROCEDURE buildESModules(pEnv IN VARCHAR2);
+    PROCEDURE buildESModules;
     --
     PROCEDURE deleteDirectory(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
@@ -54,7 +54,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     ** "TEST" - FOR TESTING BY ADMIN USERS OF ADMIN-oWNED WEBSITES
     ** "LIVE" - ALL DEPLOYED WEBSITES LINK TO THESE
     */
-    PROCEDURE buildESModules(pEnv IN VARCHAR2) IS 
+    PROCEDURE buildESModules IS 
         TYPE tt_files IS RECORD (
             file_name apex_application_static_files.file_name%type,
             file_content CLOB
@@ -65,8 +65,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_headers CLOB;
         l_files JSON_OBJECT_T;
         l_json JSON_OBJECT_T;
-        l_sha1 VARCHAR2(40);
-        
+        l_sha1 es_module.sha1%type;
+         l_hash_value es_module.hash_value%type;
+
         l_file_name apex_application_static_files.file_name%type;
         l_file_content CLOB;
         
@@ -76,27 +77,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_clob CLOB;
         l_website_id website.id%type;
         l_netlify_site_id website.netlify_site_id%type;
+        l_ssl_url VARCHAR2(50);
         ES_MODULES_DOMAIN CONSTANT VARCHAR2(20):='es-modules';
-
-        PROCEDURE addEntry(pEnv IN VARCHAR2, pFilename IN es_module.module_name%type, pMimetype IN es_module.mime_type%type, pLastUpdated es_module.last_updated%type, pSha1 IN es_module.sha1%type, pFilecontent IN OUt NOCOPY CLOB) IS
-            l_hash_value es_module.hash_value%type;
-        BEGIN
-            l_sha1:=LOWER(dbms_crypto.hash(src=>pFilecontent, typ=>dbms_crypto.hash_sh1));
-            l_deploy_files(l_sha1).file_name:=pEnv || '/' || pFilename;
-            l_deploy_files(l_sha1).file_content:=pFilecontent;
-            l_files.put(pEnv || '/' || pFilename, l_sha1);
-            l_hash_value:=getSha256(pFilecontent);
-            INSERT INTO es_module (env, host_name, module_name, mime_type, last_updated, hash_value, sha1) 
-                VALUES (pEnv, 'https://' || ES_MODULES_DOMAIN || '.netlify.app', pFilename, pMimetype, pLastUpdated, l_hash_value, l_sha1);
-        END;
 
     BEGIN
         SELECT id, netlify_site_id INTO l_website_id, l_netlify_site_id FROM website WHERE domain_name=ES_MODULES_DOMAIN;
 
+        pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'GET', pData=>l_clob);
+        SELECT ssl_url INTO l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS(ssl_url));
+
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
-
-        /* ALWAYS REBUILD TEST MODULES */
 
         FOR C IN (
             WITH source AS (
@@ -113,30 +104,46 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                        )
                    AND file_name<>'deploy_main.min.js'
             )
-            SELECT s.file_name, s.mime_type, s.last_updated_on, s.file_content, e.env, e.sha1, e.last_uploaded
+            SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, s.last_updated_on, s.file_content, e.sha1, e.last_uploaded
               FROM source s, es_module e
              WHERE s.file_name=e.module_name(+)
             )
         LOOP
-            l_file_content:=CASE WHEN C.mime_type='text/css' THEN minifyCss(C.file_content) ELSE C.file_content END;
 
-            addEntry(pEnv=>NVL(C.env,'test'), pFilename=>C.file_name, pMimetype=>C.mime_type, pLastUpdated=>C.last_updated_on, pSha1=>C.sha1, pFilecontent=>l_file_content);
-            addEntry(pEnv=>NVL(C.env,'live'), pFilename=>C.file_name, pMimetype=>C.mime_type, pLastUpdated=>C.last_updated_on, pSha1=>C.sha1, pFilecontent=>l_file_content);
+            IF (C.sha1 IS NULL OR C.last_updated_on>C.last_uploaded) THEN
+                l_file_content:=CASE WHEN C.file_path='css/' THEN minifyCss(C.file_content) ELSE C.file_content END;
+
+                l_sha1:=LOWER(dbms_crypto.hash(src=>l_file_content, typ=>dbms_crypto.hash_sh1));
+                l_hash_value:=getSha256(l_file_content);
+                l_deploy_files(l_sha1).file_name:=C.file_path || C.file_name;
+                l_deploy_files(l_sha1).file_content:=l_file_content;
+
+                IF (C.sha1 IS NULL) THEN
+                    INSERT INTO es_module (host_name, module_name, last_updated, hash_value, sha1) 
+                    VALUES (l_ssl_url || '/' || C.file_path || C.file_name, C.file_name, C.last_updated_on, l_hash_value, l_sha1);
+                ELSE
+                    UPDATE es_module SET sha1=l_sha1, hash_value=l_hash_value, last_updated=C.last_updated_on WHERE module_name=C.file_name;
+                END IF;
+            ELSE
+                l_sha1:=C.sha1;
+            END IF;
+
+            l_files.put(C.file_path || C.file_name, l_sha1);
 
         END LOOP;
 
         l_table:=
         '<table>' ||
             '<thead>' ||
-                '<tr><th>Env</th><th>Host</th><th>module name</th><th>last updated</th><th>Deployed date</th><tr>' ||
+                '<tr><th>Host</th><th>module name</th><th>last updated</th><tr>' ||
             '<thead>' ||
             '<tbody>';
         FOR C IN (
-            SELECT env, host_name, module_name, mime_type, TO_CHAR(last_updated,'dd.mm.yyyy hh24:mi') last_updated,  TO_CHAR(last_uploaded,'dd.mm.yyyy hh24:mi') last_uploaded 
+            SELECT host_name, module_name, TO_CHAR(last_updated,'dd.mm.yyyy hh24:mi') last_updated
               FROM es_module 
-             ORDER BY env, mime_type, module_name
+             ORDER BY host_name
         ) LOOP
-            l_table:=l_table || '<tr><td>' || C.env || '</td><td>' || C.host_name || '</td><td>' || C.module_name || '</td><td>' || C.last_updated || '</td><td>' || C.last_uploaded|| '</td><tr>';
+            l_table:=l_table || '<tr><td>' || C.host_name || '</td><td>' || C.module_name || '</td><td>' || C.last_updated || '</td><tr>';
         END LOOP;
         l_table:=l_table || 
         '</tbody>' ||
@@ -179,6 +186,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 pData=>l_clob
             );
             dbms_output.put_line('Successfully uploaded ' || l_deploy_files(C.sha1).file_name);
+            UPDATE es_module SET last_uploaded=current_date WHERE module_name=SUBSTR(l_deploy_files(C.sha1).file_name,INSTR(l_deploy_files(C.sha1).file_name,'/')+1);
         END LOOP;
 
         pck_hosting.waitDeployment(l_website_id,pUserid=>null);
@@ -440,6 +448,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_importmap_sha256 VARCHAR2(200);
 
         l_message VARCHAR2(100);
+        l_css VARCHAR2(1000);
         l_fontfaces CLOB;
         l_styles_edit CLOB;
         
@@ -565,10 +574,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         END LOOP;
 
-        /* 
-        ** ASSEMBLE DISCRETE SET OF FONT-FACES FOR THE SITE 
+        /*
+        ** Get all font-faces into variable "l_fontfaces"
         */
-        getFontfaces(pWebsiteid, pEnv, pSiteId, l_chars_normal_headings, l_chars_italic_headings, l_chars_normal, l_chars_italic, l_chars_bold_normal, l_chars_bold_italic, l_fontfaces);
+        getFontfaces(pWebsiteid=>pWebsiteid, pEnv=>pEnv, pSiteId=>pSiteId, 
+            pCharsNormalHeadings=>l_chars_normal_headings, pCharsItalicHeadings=>l_chars_italic_headings, 
+            pCharsNormal=>l_chars_normal, pCharsItalic=>l_chars_italic, pCharsBoldNormal=>l_chars_bold_normal, pCharsBoldItalic=>l_chars_bold_italic, 
+            pFontface=>l_fontfaces);
+
+        /*
+        ** Append website-specific design tokens defined in a :root element and minify
+        */
+        l_fontfaces:=minifyCss(l_fontfaces || pck_codepen.buildCssRoot(pWebsiteid));
+
+        l_sha1:=LOWER(dbms_crypto.hash(src => l_fontfaces, typ => dbms_crypto.hash_sh1));
+        l_deploy_files(l_sha1).file_name:='site.min.css';
+        l_deploy_files(l_sha1).file_content:=l_fontfaces;
+        l_files.put('site.min.css', l_sha1);
+
+        /* Create <link> element for site-specific css */
+        l_css:='<link rel="stylesheet" href="/site.min.css">';
 
         /* 
         ** The site favicon is an SVG format image file uploaded through the CMS to the Asset table.
@@ -584,17 +609,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_robots:='User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: ' || l_ssl_url || '/sitemap.xml';
 
         /* 
-        ** BUILD IMPORT MAP OF JAVASCRIPT MODULES
+        ** BUILD IMPORT MAP OF JAVASCRIPT MODULES (BARE MODULE NAMES ONLY)
+        ** CREATE LiNK ELEMENTS FOR GENERAL AND SITE-SOECIFIC STYLESHEETS
         */
         l_importmap:='"imports":{';
         l_importmap_integrity:='"integrity":{';
 
         FOR C IN (
-            SELECT module_name, hash_value FROM es_module ORDER BY 1
+            SELECT module_name, host_name, hash_value 
+              FROM es_module 
+             ORDER BY 1
         ) LOOP
-            l_importmap:=l_importmap || '"' || SUBSTR(C.module_name,1,INSTR(C.module_name,'.min.js')-1) || '":"' || 'https://es-modules.netlify.app/test/' || C.module_name || '",';
-            l_importmap_integrity:=l_importmap_integrity || '"' || 'https://es-modules.netlify.app/test/' || C.module_name || '":"' || C.hash_value || '",';
+            IF (INSTR(C.host_name,'javascript')>0) THEN 
+                l_importmap:=l_importmap || '"' || SUBSTR(C.module_name,1,INSTR(C.module_name,'.')-1) || '":"' || C.host_name || '",';
+                l_importmap_integrity:=l_importmap_integrity || '"' || C.host_name || '":"' || C.hash_value || '",';
+            ELSIF (INSTR(C.host_name,'css')>0) THEN
+                l_css:=l_css || '<link rel="stylesheet" href="' || C.host_name || '" integrity="' || C.hash_value || '" crossorigin>';
+            END IF;
         END LOOP;
+        
         l_importmap:=RTRIM(l_importmap,',') || '}';
         l_importmap_integrity:=RTRIM(l_importmap_integrity,',') || '}';
 
@@ -648,12 +681,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<title>' || l_labels(i).page_title || '</title>' ||
                     '<meta name="description" content="' || l_labels(i).page_description || '">' ||
                     '<meta name="author" content="mark.russellbrown@gmail.com">' ||
+                    '<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>' ||
+                    l_css ||
                     '<script type="importmap" integrity="' || l_importmap_sha256 || '">' || l_importmap || '</script>' ||
                     '<link rel="modulepreload" href="/' || MAIN_MODULE_NAME || '">' ||
                     '<script src="/' || MAIN_MODULE_NAME || '" type="module"></script>' ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
-                    '<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>' ||
-                    '<link rel="stylesheet" href="/website.css">'  ||
+                    
                 '</head>' ||
                 
                 l_labels(i).body_html ||
