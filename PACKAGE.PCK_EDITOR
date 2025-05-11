@@ -40,6 +40,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             display_order website_article.display_order%type
         );
     TYPE t_labels IS TABLE OF tt_labels;
+
     /* 
     **  DEPLOY WEBSITE
     */
@@ -78,7 +79,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             job_name   => l_job_name,
             job_type   =>'STORED_PROCEDURE',
             job_action =>'pck_deploy.runDeployment',
-            number_of_arguments=>6,
+            number_of_arguments=>5,
             start_date=>systimestamp
         );
         dbms_scheduler.set_job_argument_value(
@@ -105,12 +106,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             job_name => l_job_name,
             argument_position => 5,
             argument_value => pck_core.getRestUrl()
-        );
-        
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 6,
-            argument_value => 101
         );
         dbms_scheduler.enable(l_job_name);
 
