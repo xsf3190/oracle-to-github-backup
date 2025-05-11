@@ -10,7 +10,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE runDelete(pUserId IN users.id%type, pWebsiteId IN website.id%type, pSiteId IN website.netlify_site_id%type);
     --
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pResturl IN VARCHAR2, pApplicationId IN VARCHAR2) ;
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pResturl IN VARCHAR2) ;
     --
     PROCEDURE setTerraformApikey;
     --
@@ -66,7 +66,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_files JSON_OBJECT_T;
         l_json JSON_OBJECT_T;
         l_sha1 es_module.sha1%type;
-         l_hash_value es_module.hash_value%type;
+        l_hash_value es_module.hash_value%type;
 
         l_file_name apex_application_static_files.file_name%type;
         l_file_content CLOB;
@@ -79,6 +79,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_netlify_site_id website.netlify_site_id%type;
         l_ssl_url VARCHAR2(50);
         ES_MODULES_DOMAIN CONSTANT VARCHAR2(20):='es-modules';
+
+        PROCEDURE addDeploy(pFilename IN VARCHAR2, pFileContent IN OUT NOCOPY CLOB) IS
+        BEGIN
+            l_sha1:=LOWER(dbms_crypto.hash(src => pFileContent, typ => dbms_crypto.hash_sh1));
+            l_deploy_files(l_sha1).file_name:=pFilename;
+            l_deploy_files(l_sha1).file_content:=pFileContent;
+            l_files.put(pFilename, l_sha1);
+        END;
 
     BEGIN
         SELECT id, netlify_site_id INTO l_website_id, l_netlify_site_id FROM website WHERE domain_name=ES_MODULES_DOMAIN;
@@ -102,7 +110,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         OR 
                         (file_name LIKE 'deploy%' AND mime_type='text/css' AND INSTR(file_name,'.min.')=0)
                        )
-                   AND file_name<>'deploy_main.min.js'
+                   --AND file_name<>'deploy_main.min.js'
             )
             SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, s.last_updated_on, s.file_content, e.sha1, e.last_uploaded
               FROM source s, es_module e
@@ -211,7 +219,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     **  VARIABLE FONT REQUESTS USE DIFFERENT SYNTAX
     **  css2/Roboto:ital,wght@0,400;0,700;1,400;1,700
      */
-    PROCEDURE getFontfaces(pWebsiteid IN website.id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pCharsNormalHeadings IN VARCHAR2, pCharsItalicHeadings IN VARCHAR2, pCharsNormal IN VARCHAR2, pCharsItalic IN VARCHAR2, pCharsBoldNormal IN VARCHAR2, pCharsBoldItalic IN VARCHAR2, pFontface IN OUT NOCOPY VARCHAR2) IS
+    PROCEDURE getFontfaces(pWebsiteid IN website.id%type, pCharsNormalHeadings IN VARCHAR2, pCharsItalicHeadings IN VARCHAR2, pCharsNormal IN VARCHAR2, pCharsItalic IN VARCHAR2, pCharsBoldNormal IN VARCHAR2, pCharsBoldItalic IN VARCHAR2, pFontface IN OUT NOCOPY VARCHAR2) IS
         l_api_url VARCHAR2(50);
         l_font_css LONG;
 
@@ -233,7 +241,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_chars VARCHAR2(500);
         BEGIN
             l_chars:=chars_used(pChars);
-            logDeployment(pWebsiteid, pSiteId, ' - ' || pWeight || ' characters: '||LENGTH(l_chars));
             l_api_url:='https://fonts.googleapis.com/css?family=' || REPLACE(pFamily,' ','+') || CASE WHEN pWeight IS NOT NULL THEN ':' || pWeight END 
                 || '&display=swap'
                 || '&capability=WOFF2' 
@@ -244,7 +251,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
     BEGIN
         FOR C IN (
-            SELECT f.family, f.variable, wf.context, wf.ital, f.wght_start, f.wght_end
+            SELECT f.family, wf.context, wf.ital, f.wght_start, f.wght_end
             FROM font f, website_font wf, website w
             WHERE wf.website_id=w.id
             AND f.id=wf.font_id
@@ -360,7 +367,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     /*
     **  DEPLOY BY UPLOADING HTML FILE CONTENT DIRECTLY TO NETLIFY
     */
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pRestUrl IN VARCHAR2, pApplicationId IN VARCHAR2) IS
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pRestUrl IN VARCHAR2) IS
         MAIN_MODULE_NAME CONSTANT VARCHAR2(30):='deploy_main.min.js';
         
         l_clob CLOB;
@@ -405,11 +412,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_heading LONG;
 
         TYPE tt_files IS RECORD (
-            lastmod article.updated_date%type,
-            url VARCHAR2(200),
             file_name VARCHAR2(200),
-            file_content CLOB,
-            file_content_b BLOB
+            file_content CLOB
         );
         TYPE t_files IS TABLE OF tt_files INDEX BY VARCHAR2(40);
         l_deploy_files t_files;
@@ -448,6 +452,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_importmap_sha256 VARCHAR2(200);
 
         l_message VARCHAR2(100);
+        l_main_module  VARCHAR2(1000);
         l_css VARCHAR2(1000);
         l_fontfaces CLOB;
         l_styles_edit CLOB;
@@ -460,6 +465,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_total_pages PLS_INTEGER;
         n PLS_INTEGER;
         n2 PLS_INTEGER;
+
+        PROCEDURE addDeploy(pFilename IN VARCHAR2, pFileContent IN OUT NOCOPY CLOB) IS
+        BEGIN
+            l_sha1:=LOWER(dbms_crypto.hash(src => pFileContent, typ => dbms_crypto.hash_sh1));
+            l_deploy_files(l_sha1).file_name:=pFilename;
+            l_deploy_files(l_sha1).file_content:=pFileContent;
+            l_files.put(pFilename, l_sha1);
+        END;
 
     BEGIN
         /* For logging when running in scheduler */
@@ -571,13 +584,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_labels(i).promotion,
                 l_labels(i).body_html
             );
-
         END LOOP;
 
         /*
         ** Get all font-faces into variable "l_fontfaces"
         */
-        getFontfaces(pWebsiteid=>pWebsiteid, pEnv=>pEnv, pSiteId=>pSiteId, 
+        logDeployment(pWebsiteId, pSiteId, 'Configuring FONTS for distinct characters used');
+        getFontfaces(pWebsiteid=>pWebsiteid, 
             pCharsNormalHeadings=>l_chars_normal_headings, pCharsItalicHeadings=>l_chars_italic_headings, 
             pCharsNormal=>l_chars_normal, pCharsItalic=>l_chars_italic, pCharsBoldNormal=>l_chars_bold_normal, pCharsBoldItalic=>l_chars_bold_italic, 
             pFontface=>l_fontfaces);
@@ -586,11 +599,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         ** Append website-specific design tokens defined in a :root element and minify
         */
         l_fontfaces:=minifyCss(l_fontfaces || pck_codepen.buildCssRoot(pWebsiteid));
-
-        l_sha1:=LOWER(dbms_crypto.hash(src => l_fontfaces, typ => dbms_crypto.hash_sh1));
-        l_deploy_files(l_sha1).file_name:='site.min.css';
-        l_deploy_files(l_sha1).file_content:=l_fontfaces;
-        l_files.put('site.min.css', l_sha1);
+        addDeploy('site.min.css', l_fontfaces);
 
         /* Create <link> element for site-specific css */
         l_css:='<link rel="stylesheet" href="/site.min.css">';
@@ -620,11 +629,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
               FROM es_module 
              ORDER BY 1
         ) LOOP
-            IF (INSTR(C.host_name,'javascript')>0) THEN 
+            IF (C.module_name=MAIN_MODULE_NAME) THEN
+                l_main_module:=
+                    '<link rel="modulepreload" href="' || C.host_name || '">' ||
+                    '<script src="' || C.host_name || '" type="module" integrity="' ||  C.hash_value || '" crossorigin></script>';
+            ELSIF (INSTR(C.host_name,'javascript')>0) THEN 
                 l_importmap:=l_importmap || '"' || SUBSTR(C.module_name,1,INSTR(C.module_name,'.')-1) || '":"' || C.host_name || '",';
                 l_importmap_integrity:=l_importmap_integrity || '"' || C.host_name || '":"' || C.hash_value || '",';
             ELSIF (INSTR(C.host_name,'css')>0) THEN
-                l_css:=l_css || '<link rel="stylesheet" href="' || C.host_name || '" integrity="' || C.hash_value || '" crossorigin>';
+                l_css:=l_css || 
+                    '<link rel="stylesheet" href="' || C.host_name || '" integrity="' || C.hash_value || '" crossorigin>';
             END IF;
         END LOOP;
         
@@ -681,11 +695,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<title>' || l_labels(i).page_title || '</title>' ||
                     '<meta name="description" content="' || l_labels(i).page_description || '">' ||
                     '<meta name="author" content="mark.russellbrown@gmail.com">' ||
+                    '<meta name="mobile-web-app-capable" content="yes">' ||
                     '<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>' ||
                     l_css ||
                     '<script type="importmap" integrity="' || l_importmap_sha256 || '">' || l_importmap || '</script>' ||
-                    '<link rel="modulepreload" href="/' || MAIN_MODULE_NAME || '">' ||
-                    '<script src="/' || MAIN_MODULE_NAME || '" type="module"></script>' ||
+                    l_main_module ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
                     
                 '</head>' ||
@@ -693,75 +707,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_labels(i).body_html ||
             '</html>';
 
-            l_sha1:=LOWER(dbms_crypto.hash(src=>l_page, typ=>dbms_crypto.hash_sh1));
+            addDeploy(CASE WHEN i=1 THEN 'index.html' ELSE l_labels(i).path_name || '.html' END, l_page);
 
-            IF (i=1) THEN
-                l_file_name:='index.html';
-            ELSE
-                l_file_name:=l_labels(i).path_name || '.html';
-            END IF;
-
-            l_deploy_files(l_sha1).url:=l_ssl_url || CASE WHEN i>1 THEN '/' || l_labels(i).path_name END;
-            l_deploy_files(l_sha1).lastmod:=l_labels(i).lastmod;
-            l_deploy_files(l_sha1).file_name:=l_file_name;
-            l_deploy_files(l_sha1).file_content:=l_page;
-            l_files.put(l_file_name, l_sha1);
         END LOOP;
 
         /* Build website assets */
 
         logDeployment(pWebsiteId, pSiteId, 'Building sitemap.xml for SEO');
-        l_sha1:=LOWER(dbms_crypto.hash(src => l_sitemap, typ => dbms_crypto.hash_sh1));
-        l_deploy_files(l_sha1).file_name:='sitemap.xml';
-        l_deploy_files(l_sha1).file_content:=l_sitemap;
-        l_files.put('sitemap.xml', l_sha1);
+        addDeploy('sitemap.xml', l_sitemap);
 
         logDeployment(pWebsiteId, pSiteId, 'Building robots.txt for SEO');
-        l_sha1:=LOWER(dbms_crypto.hash(src => l_robots, typ => dbms_crypto.hash_sh1));
-        l_deploy_files(l_sha1).file_name:='robots.txt';
-        l_deploy_files(l_sha1).file_content:=l_robots;
-        l_files.put('robots.txt', l_sha1);
+        addDeploy('robots.txt', l_robots);
 
         logDeployment(pWebsiteId, pSiteId, 'Building Content Security Policy');
-        l_sha1:=LOWER(dbms_crypto.hash(src => l_headers, typ => dbms_crypto.hash_sh1));
-        l_deploy_files(l_sha1).file_name:='_headers';
-        l_deploy_files(l_sha1).file_content:=l_headers;
-        l_files.put('_headers', l_sha1);
-
-        logDeployment(pWebsiteId, pSiteId, 'Building JS main module');
-        FOR C IN (
-            SELECT apex_util.blob_to_clob(file_content) file_content
-              FROM apex_application_static_files 
-             WHERE application_id=pApplicationId
-               AND file_name=MAIN_MODULE_NAME)
-        LOOP
-            l_sha1:=LOWER(dbms_crypto.hash(src=>C.file_content, typ=>dbms_crypto.hash_sh1));
-            l_deploy_files(l_sha1).file_name:=MAIN_MODULE_NAME;
-            l_deploy_files(l_sha1).file_content:=C.file_content;
-            l_files.put(MAIN_MODULE_NAME, l_sha1);
-        END LOOP;
-        
-        
-        logDeployment(pWebsiteId, pSiteId, 'Configuring FONTS for distinct characters used');
+        addDeploy('_headers', l_headers);
 
         /*
-        logDeployment(pWebsiteId, pSiteId, 'Building CSS');
-        l_sha1:=LOWER(dbms_crypto.hash(src => l_styles, typ => dbms_crypto.hash_sh1));
-        l_deploy_files(l_sha1).file_name:='website.css';
-        l_deploy_files(l_sha1).file_content:=l_styles;
-        l_files.put('website.css', l_sha1);
-
-
-        IF (pEnv='TEST') THEN
-            l_styles_edit:=l_styles_edit || minifyCSS(pWebsiteId, pSiteId, 'deploy_edit.css');
-            logDeployment(pWebsiteId, pSiteId, 'Building CSS edit styles');
-            l_sha1:=LOWER(dbms_crypto.hash(src => l_styles_edit, typ => dbms_crypto.hash_sh1));
-            l_deploy_files(l_sha1).file_name:='website_edit.min.css';
-            l_deploy_files(l_sha1).file_content:=l_styles_edit;
-            l_files.put('website_edit.min.css', l_sha1);
-        END IF;
+        ** DEPLOYMENT TO NETLIFY - SEND ALL SHA1 AND UPLOAD THOSE IDENTIFIED AS REQUIRED BY NETLIFY
         */
-
         l_json.put('files',l_files);
 
         logDeployment(pWebsiteId, pSiteId, 'Sending digest of ' || l_deploy_files.COUNT || ' files to Netlify');
@@ -773,8 +736,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         n:=0;
         FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
             pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', 
-                pBody=>l_deploy_files(C.sha1).file_content, 
-                pBodyBlob=>l_deploy_files(C.sha1).file_content_b, 
+                pBody=>l_deploy_files(C.sha1).file_content,
                 pData=>l_clob
             );
             logDeployment(pWebsiteId, pSiteId, 'Successfully uploaded ' || l_deploy_files(C.sha1).file_name);
