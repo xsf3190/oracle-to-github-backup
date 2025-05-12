@@ -248,36 +248,44 @@ body>footer>a {
 
 
 /* NAVIGATION STYLES */
-nav {
-  font-family: var(--font-family-ui);
-  --flex-wrap: no-wrap;
-  padding: var(--space-3xs);
-  font-size: var(--step--1);
-  font-variant: all-small-caps;
+.topnav {
   position: sticky;
   top: 0;
-  background-color: var(--color-background);
   color: var(--color-text);
+  --flex-wrap: no-wrap;
+}
+
+.topnav :last-child {
+  align-self: flex-start;
+}
+
+nav {
+  font-family: var(--font-family-ui);
+  font-size: var(--step--1);
+  font-variant: all-small-caps;
   line-height: 2;
+}
+
+nav li {
+  display:inline-block;
 }
 
 nav a {
   padding: max(var(--space-3xs),48px) var(--space-2xs);
   text-decoration: none;
   color: var(--color-text);
-  transition: 1s ease-in-out;
+  transition: .5s ease-in-out;
   font-variation-settings: "GRAD" 400;
 }
 
 nav a:not([aria-current="page"]):hover {
-  font-variation-settings: "GRAD"800;
+  font-variation-settings: "GRAD" 800;
 }
 
 [aria-current="page"] {
   text-decoration: underline;
-  text-decoration-thickness: 0.5ex;
-  text-decoration-skip-ink: none;
-  text-underline-offset: 0.8ex;
+  text-decoration-thickness: 20%;
+  text-underline-offset: 20%;
 }
 
 .curve {
