@@ -265,20 +265,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         END IF;
 
         l_nav_labels:=
-        '<nav class="flex-items space-between" aria-label="Main Navigation">' ||
+        '<div class="topnav flex-items space-between">' ||
             '<span class="logo"></span>' ||
-            '<div>';
+            '<nav aria-label="Main Navigation">' ||
+                '<ul role="list">';
         FOR i IN 1..g_nav_labels.COUNT LOOP
             l_nav_labels:=l_nav_labels || 
-                '<a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '"' ||
+                '<li><a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '"' ||
                     CASE WHEN g_nav_labels(i).article_id=l_article_id THEN ' aria-current="page"' END  || 
                     CASE WHEN g_nav_labels.COUNT=1 THEN ' class="visually-hidden"' END ||
-                    ' data-id="' || g_nav_labels(i).article_id || '" data-collection="' || g_nav_labels(i).collection_type || '">' || g_nav_labels(i).navigation_label || '</a>';
+                    ' data-id="' || g_nav_labels(i).article_id || '" data-collection="' || g_nav_labels(i).collection_type || '">' || g_nav_labels(i).navigation_label || 
+                '</a></li>';
         END LOOP;
         l_nav_labels:=l_nav_labels || 
-            '</div>';
+                '</ul>' ||
+            '</nav>';
         l_nav_labels:=l_nav_labels || buildLoginAside(pWebsiteId) ||
-        '</nav>';
+        '</div>';
 
         RETURN (l_nav_labels);
     END;
