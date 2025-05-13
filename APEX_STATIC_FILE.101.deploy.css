@@ -34,7 +34,6 @@ form {
 
 main {
   font-family: var(--font-family-subtitle);
-  font-variation-settings: var(--font-variation-settings-subtitle);
   padding-inline: 1rem;
   container-type: inline-size;
 }
@@ -234,7 +233,6 @@ body>header img {
 /* FOOTER STYLES */
 body>footer {
   font-family: var(--font-family-subtitle);
-  font-variation-settings: var(--font-variation-settings-subtitle);
   font-size: var(--step--1);
   background-color: var(--footer-background-color);
   color: var(--footer-color);
@@ -252,7 +250,10 @@ body>footer>a {
   position: sticky;
   top: 0;
   color: var(--color-text);
+  background-color: var(--color-background);
   --flex-wrap: no-wrap;
+  --flex-gap: 0;
+  line-height: 2;
 }
 
 .topnav :last-child {
@@ -263,7 +264,6 @@ nav {
   font-family: var(--font-family-ui);
   font-size: var(--step--1);
   font-variant: all-small-caps;
-  line-height: 2;
 }
 
 nav li {
@@ -271,9 +271,9 @@ nav li {
 }
 
 nav a {
-  padding: max(var(--space-3xs),48px) var(--space-2xs);
+   padding: max(1em,48px) 0.6em;
   text-decoration: none;
-  color: var(--color-text);
+  color: inherit;
   transition: .5s ease-in-out;
   font-variation-settings: "GRAD" 400;
 }
@@ -342,7 +342,6 @@ main h3,
 main h4 {
   text-wrap: pretty;
   font-family: var(--font-family-title);
-  font-variation-settings: var(--font-variation-settings-title);
 }
 
 
