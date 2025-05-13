@@ -378,7 +378,6 @@ export const deploy_website = async () => {
             content.insertAdjacentHTML('afterbegin',data.content);
             info_dialog.querySelector("h4").textContent = "";
             info_dialog.querySelector("footer").replaceChildren();
-            info_dialog.querySelector("form").style.inlineSize="70ch";
             info_dialog.showModal();
             if (data.stop) return;
             if (intervalId) {
