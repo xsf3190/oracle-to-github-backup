@@ -251,36 +251,30 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
     BEGIN
         FOR C IN (
-            SELECT f.family, wf.context, wf.ital, f.wght_start, f.wght_end
-            FROM font f, website_font wf, website w
-            WHERE wf.website_id=w.id
-            AND f.id=wf.font_id
-            AND w.id=pWebsiteId
-            ORDER BY DECODE(wf.context,'TITLE',1,2) )
+            SELECT f.family, wf.ital, f.wght_start, f.wght_end
+              FROM font f, website_font wf
+             WHERE wf.website_id=pWebsiteId
+               AND f.id=wf.font_id
+             GROUP BY f.family, wf.ital, f.wght_start, f.wght_end)
         LOOP
-            CASE C.context
-                WHEN 'TITLE' THEN /* Heading elements h1,h2,h3,h4 */
-                    IF (pCharsNormalHeadings IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, pCharsNormalHeadings, CASE WHEN 700 BETWEEN C.wght_start AND C.wght_end THEN '700' END);
-                    END IF;
-                    IF (pCharsItalicHeadings IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, pCharsItalicHeadings, CASE WHEN 700 BETWEEN C.wght_start AND C.wght_end THEN '700italic' END);
-                    END IF;
-
-                WHEN 'SUBTITLE' THEN /* Non-heading elements */
-                    IF (pCharsNormal IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, pCharsNormal, '400');
-                    END IF;
-                    IF (pCharsBoldNormal IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, pCharsBoldNormal, '700');
-                    END IF;
-                    IF (pCharsItalic IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, pCharsItalic, '400italic');
-                    END IF;
-                    IF (pCharsBoldItalic IS NOT NULL) THEN
-                        pFontface:=pFontface || addFontface(C.family, pCharsBoldItalic, '700italic');
-                    END IF;
-            END CASE;
+            IF (pCharsNormalHeadings IS NOT NULL) THEN
+                pFontface:=pFontface || addFontface(C.family, pCharsNormalHeadings, CASE WHEN 700 BETWEEN C.wght_start AND C.wght_end THEN '700' END);
+            END IF;
+            IF (pCharsItalicHeadings IS NOT NULL) THEN
+                pFontface:=pFontface || addFontface(C.family, pCharsItalicHeadings, CASE WHEN 700 BETWEEN C.wght_start AND C.wght_end THEN '700italic' END);
+            END IF;
+            IF (pCharsNormal IS NOT NULL) THEN
+                pFontface:=pFontface || addFontface(C.family, pCharsNormal, '400');
+            END IF;
+            IF (pCharsBoldNormal IS NOT NULL) THEN
+                pFontface:=pFontface || addFontface(C.family, pCharsBoldNormal, '700');
+            END IF;
+            IF (pCharsItalic IS NOT NULL) THEN
+                pFontface:=pFontface || addFontface(C.family, pCharsItalic, '400italic');
+            END IF;
+            IF (pCharsBoldItalic IS NOT NULL) THEN
+                pFontface:=pFontface || addFontface(C.family, pCharsBoldItalic, '700italic');
+            END IF;
         END LOOP;
     END;
 
@@ -396,7 +390,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
 
-        
+        l_nb_fonts PLS_INTEGER;
+
         l_chars_normal VARCHAR2(500);
         l_chars_italic VARCHAR2(500);
         l_chars_normal_headings VARCHAR2(500);
@@ -408,8 +403,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_dummy VARCHAR2(500);
         
         l_headings_regex varchar2(20):='<h.+?>(.+?)<\/h.+?>';
-        
-        l_heading LONG;
 
         TYPE tt_files IS RECORD (
             file_name VARCHAR2(200),
@@ -479,37 +472,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         pck_sec.g_session_user_id:=pUserId;
         pck_sec.g_website_id:=pWebsiteId;
 
-        SELECT contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, SUBSTR(color_primary,2), favicon_asset_id
-          INTO l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_color_primary, l_favicon_asset_id
+        SELECT title, subtitle, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, SUBSTR(color_primary,2), favicon_asset_id
+          INTO l_title, l_subtitle, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_color_primary, l_favicon_asset_id
           FROM website
          WHERE id=pWebsiteId;
-
-        FOR C IN (
-            SELECT w.title, w.subtitle, wf.context, wf.ital
-              FROM website w, website_font wf
-             WHERE w.id=pWebsiteId
-               AND wf.website_id=w.id
-        ) 
-        LOOP
-            CASE C.context
-                WHEN 'TITLE' THEN
-                    l_title:=C.title;
-                    IF (C.ital=1) THEN
-                        l_chars_italic_headings:=C.title;
-                    ELSE
-                        l_chars_normal_headings:=C.title;
-                    END IF;
-                WHEN 'SUBTITLE' THEN
-                    l_subtitle:=C.subtitle;
-                    IF (C.ital=1) THEN
-                        l_chars_italic:=C.subtitle;
-                    ELSE
-                        l_chars_normal:= C.subtitle;
-                    END IF;
-            END CASE;
-        END LOOP;
-
-        l_chars_normal:=l_chars_normal || l_contact_email || l_telephone_number || l_mobile_number || l_linkedin_name;
 
         /*
         ** Get all website content into collection
@@ -545,7 +511,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         FOR i IN 1..l_labels.COUNT LOOP
 
             /* For each context collect distinct set of italic and normal characters in order to optimise font */
-            l_body_html:=l_labels(i).body_html;           
+            l_body_html:=l_labels(i).body_html;
+            IF (i=1) THEN
+                FOR C IN (
+                    SELECT 
+                        CASE 
+                            WHEN context='TITLE' THEN 
+                                '<h1>' || DECODE(ital,1,'<i>') || l_title || DECODE(ital,1,'</i>') || '</h1>'
+                            WHEN context='SUBTITLE' THEN 
+                                '<p>' || DECODE(ital,1,'<i>') || l_subtitle || l_contact_email || l_telephone_number || l_mobile_number || l_linkedin_name || l_instagram_name || DECODE(ital,1,'</i>') || '</p>'
+                        END html
+                      FROM website_font
+                     WHERE website_id=pWebsiteId
+                ) 
+                LOOP
+                    l_body_html:=l_body_html || C.html;
+                END LOOP;
+            END iF;
+
             n:=REGEXP_COUNT(l_body_html,l_headings_regex);
             IF (n>0) THEN
                 FOR j IN 1..n 
@@ -589,11 +572,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /*
         ** Get all font-faces into variable "l_fontfaces"
         */
-        logDeployment(pWebsiteId, pSiteId, 'Configuring FONTS for distinct characters used');
+        logDeployment(pWebsiteId, pSiteId, 'Optimizing FONTS');
         getFontfaces(pWebsiteid=>pWebsiteid, 
-            pCharsNormalHeadings=>l_chars_normal_headings, pCharsItalicHeadings=>l_chars_italic_headings, 
-            pCharsNormal=>l_chars_normal, pCharsItalic=>l_chars_italic, pCharsBoldNormal=>l_chars_bold_normal, pCharsBoldItalic=>l_chars_bold_italic, 
-            pFontface=>l_fontfaces);
+                pCharsNormalHeadings=>l_chars_normal_headings, 
+                pCharsItalicHeadings=>l_chars_italic_headings, 
+                pCharsNormal=>l_chars_normal, 
+                pCharsItalic=>l_chars_italic, 
+                pCharsBoldNormal=>l_chars_bold_normal, 
+                pCharsBoldItalic=>l_chars_bold_italic, 
+                pFontface=>l_fontfaces);
 
         /*
         ** Append website-specific design tokens defined in a :root element and minify
@@ -638,7 +625,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_importmap_integrity:=l_importmap_integrity || '"' || C.host_name || '":"' || C.hash_value || '",';
             ELSIF (INSTR(C.host_name,'css')>0) THEN
                 l_css:=l_css || 
-                    '<link rel="stylesheet" href="' || C.host_name || '" integrity="' || C.hash_value || '" crossorigin>';
+                    --'<link rel="stylesheet" href="' || C.host_name || '" integrity="' || C.hash_value || '" crossorigin>';
+                    '<link rel="stylesheet" href="' || C.host_name || '" crossorigin>';
             END IF;
         END LOOP;
         
@@ -713,10 +701,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         /* Build website assets */
 
-        logDeployment(pWebsiteId, pSiteId, 'Building sitemap.xml for SEO');
+        logDeployment(pWebsiteId, pSiteId, 'Building sitemap.xml');
         addDeploy('sitemap.xml', l_sitemap);
-
-        logDeployment(pWebsiteId, pSiteId, 'Building robots.txt for SEO');
         addDeploy('robots.txt', l_robots);
 
         logDeployment(pWebsiteId, pSiteId, 'Building Content Security Policy');
@@ -727,7 +713,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         */
         l_json.put('files',l_files);
 
-        logDeployment(pWebsiteId, pSiteId, 'Sending digest of ' || l_deploy_files.COUNT || ' files to Netlify');
+        logDeployment(pWebsiteId, pSiteId, 'Uploading ' || l_deploy_files.COUNT || ' files');
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId || '/deploys', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
         UPDATE website SET netlify_deploy_id=(SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) WHERE id=pWebsiteId;
         COMMIT;
@@ -739,7 +725,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 pBody=>l_deploy_files(C.sha1).file_content,
                 pData=>l_clob
             );
-            logDeployment(pWebsiteId, pSiteId, 'Successfully uploaded ' || l_deploy_files(C.sha1).file_name);
+            logDeployment(pWebsiteId, pSiteId, '.. ' || l_deploy_files(C.sha1).file_name);
             n:=n+1;
         END LOOP;
 
