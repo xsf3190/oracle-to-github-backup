@@ -212,70 +212,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         COMMIT;
     END; 
 
-    /* 
-    **  STATIC FONT REQUEST USES SYNTAX LIKE THIS IN THE GOOGLE API CALL -  E.G. FOR ALL FLAVOURS OF ROBOTO:
-    **  css/Roboto:400normal,400italic,700normal,700italic
-    **
-    **  VARIABLE FONT REQUESTS USE DIFFERENT SYNTAX
-    **  css2/Roboto:ital,wght@0,400;0,700;1,400;1,700
-     */
-    PROCEDURE getFontfaces(pWebsiteid IN website.id%type, pCharsNormalHeadings IN VARCHAR2, pCharsItalicHeadings IN VARCHAR2, pCharsNormal IN VARCHAR2, pCharsItalic IN VARCHAR2, pCharsBoldNormal IN VARCHAR2, pCharsBoldItalic IN VARCHAR2, pFontface IN OUT NOCOPY VARCHAR2) IS
-        l_api_url VARCHAR2(50);
-        l_font_css LONG;
+    /* Return distict characters sorted */
+    FUNCTION chars_used (pCharacters IN VARCHAR2) RETURN VARCHAR2 IS
+        l_chars VARCHAR2(500);
+    BEGIN
+        SELECT LISTAGG(DISTINCT SUBSTR(pCharacters, LEVEL, 1), NULL) WITHIN GROUP (
+                  ORDER BY SUBSTR(pCharacters, LEVEL, 1))
+        INTO l_chars
+        FROM dual
+        CONNECT BY LEVEL <= LENGTH(pCharacters);
+        RETURN(l_chars);
+    END;
 
-        /* Return distict characters sorted */
-        FUNCTION chars_used (pCharacters IN VARCHAR2) RETURN VARCHAR2 IS
-            l_chars VARCHAR2(500);
-        BEGIN
-            SELECT LISTAGG(DISTINCT SUBSTR(pCharacters, LEVEL, 1), NULL) WITHIN GROUP (
-                      ORDER BY SUBSTR(pCharacters, LEVEL, 1))
-            INTO l_chars
-            FROM dual
-            CONNECT BY LEVEL <= LENGTH(pCharacters);
-            RETURN(l_chars);
-        END;
 
-        FUNCTION addFontface(pFamily IN font.family%type, pChars IN VARCHAR2, pWeight IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2 IS
-            l_font_face LONG;
-            l_api_url VARCHAR2(500);
-            l_chars VARCHAR2(500);
-        BEGIN
-            l_chars:=chars_used(pChars);
-            l_api_url:='https://fonts.googleapis.com/css?family=' || REPLACE(pFamily,' ','+') || CASE WHEN pWeight IS NOT NULL THEN ':' || pWeight END 
+    FUNCTION getFontface(pFamily IN VARCHAR2, pFont IN VARCHAR2, pChars IN VARCHAR2) RETURN VARCHAR2 IS
+        l_api_url VARCHAR2(600);
+        l_font_face LONG;
+    BEGIN
+        IF (pChars IS NULL) THEN 
+            RETURN (NULL);
+        END IF;
+
+        l_api_url:='https://fonts.googleapis.com/css?family=' || REPLACE(pFamily,' ','+') || ':' || pFont
                 || '&display=swap'
                 || '&capability=WOFF2' 
                 || '&text=' || chars_used(pChars);
-            pck_api.callGoogleAPI(l_api_url,l_font_face);
-            RETURN (l_font_face);
-        END;
-
-    BEGIN
-        FOR C IN (
-            SELECT f.family, wf.ital, f.wght_start, f.wght_end
-              FROM font f, website_font wf
-             WHERE wf.website_id=pWebsiteId
-               AND f.id=wf.font_id
-             GROUP BY f.family, wf.ital, f.wght_start, f.wght_end)
-        LOOP
-            IF (pCharsNormalHeadings IS NOT NULL) THEN
-                pFontface:=pFontface || addFontface(C.family, pCharsNormalHeadings, CASE WHEN 700 BETWEEN C.wght_start AND C.wght_end THEN '700' END);
-            END IF;
-            IF (pCharsItalicHeadings IS NOT NULL) THEN
-                pFontface:=pFontface || addFontface(C.family, pCharsItalicHeadings, CASE WHEN 700 BETWEEN C.wght_start AND C.wght_end THEN '700italic' END);
-            END IF;
-            IF (pCharsNormal IS NOT NULL) THEN
-                pFontface:=pFontface || addFontface(C.family, pCharsNormal, '400');
-            END IF;
-            IF (pCharsBoldNormal IS NOT NULL) THEN
-                pFontface:=pFontface || addFontface(C.family, pCharsBoldNormal, '700');
-            END IF;
-            IF (pCharsItalic IS NOT NULL) THEN
-                pFontface:=pFontface || addFontface(C.family, pCharsItalic, '400italic');
-            END IF;
-            IF (pCharsBoldItalic IS NOT NULL) THEN
-                pFontface:=pFontface || addFontface(C.family, pCharsBoldItalic, '700italic');
-            END IF;
-        END LOOP;
+        pck_api.callGoogleAPI(l_api_url,l_font_face);
+        RETURN (l_font_face);
     END;
 
     /* 
@@ -389,20 +352,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_css CLOB;
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
-
-        l_nb_fonts PLS_INTEGER;
-
-        l_chars_normal VARCHAR2(500);
-        l_chars_italic VARCHAR2(500);
-        l_chars_normal_headings VARCHAR2(500);
-        l_chars_italic_headings VARCHAR2(500);
-        l_chars_bold_normal VARCHAR2(500);
-        l_chars_bold_italic VARCHAR2(500);
-        
-        
-        l_dummy VARCHAR2(500);
         
         l_headings_regex varchar2(20):='<h.+?>(.+?)<\/h.+?>';
+
+         TYPE tt_fonts IS RECORD (
+            family font.family%type,
+            wght_bold font.wght_end%type,
+            wght_normal font.wght_end%type,
+            chars_normal VARCHAR2(500),
+            chars_italic VARCHAR2(500),
+            chars_bold_normal VARCHAR2(500),
+            chars_bold_italic VARCHAR2(500)
+        );
+        TYPE t_fonts IS TABLE OF tt_fonts INDEX BY VARCHAR2(40);
+        l_fonts t_fonts;
+
+        l_context VARCHAR2(8);
+        l_nb_fonts PLS_INTEGER;
 
         TYPE tt_files IS RECORD (
             file_name VARCHAR2(200),
@@ -515,17 +481,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             IF (i=1) THEN
                 FOR C IN (
                     SELECT 
+                        f.family,
+                        CASE WHEN f.wght_end<700 THEN f.wght_end ELSE 700 END wght_bold,
+                        CASE WHEN f.wght_start>400 THEN f.wght_start ELSE 400 END wght_normal,
+                        DECODE(wf.context,'TITLE','headings','text') context,
+                        COuNT(DISTINCT wf.font_id) OVER () nb_fonts,
                         CASE 
-                            WHEN context='TITLE' THEN 
-                                '<h1>' || DECODE(ital,1,'<i>') || l_title || DECODE(ital,1,'</i>') || '</h1>'
-                            WHEN context='SUBTITLE' THEN 
-                                '<p>' || DECODE(ital,1,'<i>') || l_subtitle || l_contact_email || l_telephone_number || l_mobile_number || l_linkedin_name || l_instagram_name || DECODE(ital,1,'</i>') || '</p>'
+                            WHEN wf.context='TITLE' THEN 
+                                '<h1>' || DECODE(wf.ital,1,'<i>') || l_title || DECODE(wf.ital,1,'</i>') || '</h1>'
+                            WHEN wf.context='SUBTITLE' THEN 
+                                '<p>' || DECODE(wf.ital,1,'<i>') || l_subtitle || DECODE(wf.ital,1,'</i>') || '</p>' ||
+                                '<p>' || l_contact_email || l_telephone_number || l_mobile_number || l_linkedin_name || l_instagram_name || '</p>'
                         END html
-                      FROM website_font
-                     WHERE website_id=pWebsiteId
+                      FROM website_font wf, font f
+                     WHERE wf.website_id=pWebsiteId
+                       AND wf.font_id=f.id
                 ) 
                 LOOP
+                    l_fonts(C.context).family:=C.family;
+                    l_fonts(C.context).wght_bold:=C.wght_bold;
+                    l_fonts(C.context).wght_normal:=C.wght_normal;
                     l_body_html:=l_body_html || C.html;
+                    l_nb_fonts:=C.nb_fonts;
                 END LOOP;
             END iF;
 
@@ -533,11 +510,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             IF (n>0) THEN
                 FOR j IN 1..n 
                 LOOP
-                    extract_styles(REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j), l_dummy, l_dummy, l_chars_italic_headings, l_chars_normal_headings);
+                    extract_styles(REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j), l_fonts('headings').chars_bold_italic, l_fonts('headings').chars_bold_normal, l_fonts('headings').chars_italic, l_fonts('headings').chars_normal);
                 END LOOP;
                 l_body_html:=REGEXP_REPLACE(l_body_html,l_headings_regex,null);
             END IF;
-            extract_styles(l_body_html, l_chars_bold_italic, l_chars_bold_normal, l_chars_italic, l_chars_normal);
+            extract_styles(l_body_html, l_fonts('text').chars_bold_italic, l_fonts('text').chars_bold_normal, l_fonts('text').chars_italic, l_fonts('text').chars_normal);                    
 
             IF (l_labels(i).collection_type='BLOG') THEN
                 l_is_blog:=TRUE;
@@ -571,24 +548,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         /*
         ** Get all font-faces into variable "l_fontfaces"
+        ** MERGE headings and text if only one font selected
         */
         logDeployment(pWebsiteId, pSiteId, 'Optimizing FONTS');
-        getFontfaces(pWebsiteid=>pWebsiteid, 
-                pCharsNormalHeadings=>l_chars_normal_headings, 
-                pCharsItalicHeadings=>l_chars_italic_headings, 
-                pCharsNormal=>l_chars_normal, 
-                pCharsItalic=>l_chars_italic, 
-                pCharsBoldNormal=>l_chars_bold_normal, 
-                pCharsBoldItalic=>l_chars_bold_italic, 
-                pFontface=>l_fontfaces);
+        IF (l_nb_fonts=1) THEN
+            l_fonts('text').chars_bold_italic:=l_fonts('text').chars_bold_italic || l_fonts('headings').chars_italic;
+            l_fonts('text').chars_bold_normal:=l_fonts('text').chars_bold_normal || l_fonts('headings').chars_normal;
+            l_fonts.DELETE('headings');
+        END IF;
+
+        l_context:=l_fonts.FIRST;
+        WHILE l_context IS NOT NULL LOOP
+            l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_bold || 'italic', l_fonts(l_context).chars_bold_italic);
+            l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_bold, l_fonts(l_context).chars_bold_normal);
+            l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_normal || 'italic', l_fonts(l_context).chars_italic);
+            l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_normal, l_fonts(l_context).chars_normal);
+            l_context:=l_fonts.NEXT(l_context);
+        END LOOP;
 
         /*
         ** Append website-specific design tokens defined in a :root element and minify
         */
         l_fontfaces:=minifyCss(l_fontfaces || pck_codepen.buildCssRoot(pWebsiteid));
         addDeploy('site.min.css', l_fontfaces);
-
-        /* Create <link> element for site-specific css */
         l_css:='<link rel="stylesheet" href="/site.min.css">';
 
         /* 
