@@ -492,7 +492,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 '<div>' ||
                     CASE WHEN pHeroAssetId IS NOT NULL THEN pck_media.getImageSrcset(pHeroAssetId) END ||
                     '<h1 class="title" style="' || g_font_styles_title ||'">' || pTitle || '</h1>' ||
-                    '<h2 class="subtitle" style="' || g_font_styles_subtitle   ||'">' || pSubtitle || '</h2>' ||
+                    '<p class="subtitle" style="' || g_font_styles_subtitle   ||'">' || pSubtitle || '</p>' ||
                 '</div>' ||
             '</header>' || 
             CASE WHEN pHeroAssetId IS NULL THEN g_curve END;
