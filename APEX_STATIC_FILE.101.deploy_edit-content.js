@@ -20,11 +20,6 @@ export const init = async (element) => {
     
     endpoint = element.dataset.endpoint;
     
-    /* Get user role (owner or admin) */
-    const arrayToken = localStorage.getItem("refresh").split(".");
-    const parsedToken = JSON.parse(atob(arrayToken[1]));
-    const aud = parsedToken.aud;
-    
     /* Add CKEDITOR CSS to document <head> */
     const link = document.createElement('link');
     link.setAttribute('rel', 'stylesheet');
@@ -93,169 +88,89 @@ export const init = async (element) => {
     
     /* Configure CKEDITOR */
     let editor;
-    switch (aud) {
-        case 'admin':
-            editor = await ClassicEditor.create( document.querySelector( '#editor' ), {
-                plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock,  
-                           Deploy, FontColor, GeneralHtmlSupport, Heading, HorizontalLine, 
-                           Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, 
-                           Italic, Link, List, Media, Paragraph, 
-                           SelectAll, SourceEditing, Underline, WordCount ],
-                toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'fontColor',
-                           'underline', 'code', 'alignment', 'link', 
-                            'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing', '|', 'media'],
-                initialData: initialdata,
-                alignment: {
-                  options: [
-                    {name:'left', className: 'align-left'},
-                    {name:'right', className: 'align-right'},
-                    {name:'center', className: 'align-center'},
-                    {name:'justify', className: 'align-justify'}
-                  ]
-                },
-                autosave: {
-                  waitingTime: 2000,
-                  save( editor ) {
-                    return saveData( editor.getData(), endpoint );
-                  }
-                },
-                codeBlock: {
-                  languages: [
-                    { language: 'css', label: 'CSS' },
-                    { language: 'html', label: 'HTML' },
-                    { language: 'javascript', label: 'Javascript' },
-                    { language: 'sql', label: 'SQL' },
-                    { language: 'plsql', label: 'PL/SQL' },
-                    { language: 'shell', label: 'shell' }
-                  ]
-                },
-                htmlSupport: {
-                  allow: [
-                    {
-                      name: /.*/,
-                      attributes: true,
-                      classes: true,
-                      styles: false
-                    }
-                  ]
-                },
-                image: {
-                  insert: {
-                    type: 'auto',
-                    integrations: ['url']
-                  },
-                  toolbar: [
-                    'imageStyle:inline',
-                    'imageStyle:block',
-                    '|',
-                    'imageStyle:wrapText',
-                    '|',
-                    'toggleImageCaption',
-                    'imageTextAlternative',
-                  ]
-                },
-                list: {
-                  properties: {
-                    styles: true,
-                    startIndex: true,
-                    reversed: true
-                  }
-                },
-                placeholder: 'Enter content',
-                title: {
-                  placeholder: 'New title'
-                },
-                ui: {
-                  viewportOffset: {
-                    top: 0
-                  }
-                },
-                wordCount: {
-                  displayCharacters: true
-                },
-            })
-            .catch( error => {
-                handleError(error);
-            });
-            
-            break;
-            
-        case 'owner':
-            editor = await ClassicEditor.create( document.querySelector( '#editor' ), {
-                plugins: [ Essentials, Alignment, Autosave, BlockQuote, Bold, Clipboard,
-                           Deploy, FontColor, GeneralHtmlSupport, Heading, HorizontalLine,
-                           Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl,  
-                           Italic, Link, List, Media, Paragraph, 
-                           SelectAll, Underline, WordCount ],
-                toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'fontColor',
-                           'underline', 'alignment', 'link', 
-                           'bulletedList', 'numberedList', 'blockQuote', 'insertImage', '|', 'media'],
-                initialData: initialdata,
-                alignment: {
-                  options: [
-                    {name:'left', className: 'align-left'},
-                    {name:'right', className: 'align-right'},
-                    {name:'center', className: 'align-center'},
-                    {name:'justify', className: 'align-justify'}
-                  ]
-                },
-                autosave: {
-                  waitingTime: 2000,
-                  save( editor ) {
-                    return saveData( editor.getData(), endpoint );
-                  }
-                },
-                htmlSupport: {
-                  allow: [
-                    {
-                      name: /.*/,
-                      attributes: true,
-                      classes: true,
-                      styles: false
-                    }
-                  ]
-                },
-                list: {
-                  properties: {
-                    styles: true,
-                    startIndex: true,
-                    reversed: true
-                  }
-                },
-                image: {
-                  insert: {
-                    type: 'auto',
-                    integrations: ['url']
-                  },
-                  toolbar: [
-                    'imageStyle:inline',
-                    'imageStyle:block',
-                    '|',
-                    'imageStyle:wrapText',
-                    '|',
-                    'toggleImageCaption',
-                    'imageTextAlternative',
-                  ]
-                },
-                placeholder: 'Enter content',
-                title: {
-                  placeholder: 'New title'
-                },
-                ui: {
-                  viewportOffset: {
-                    top: 0
-                  }
-                },
-                wordCount: {
-                  displayCharacters: true
-                },
-            })
-            .catch( error => {
-                handleError(error);
-            });
-            
-            break;
-    }
+
+    editor = await ClassicEditor.create( document.querySelector( '#editor' ), {
+        plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock,  
+                    Deploy, FontColor, GeneralHtmlSupport, Heading, HorizontalLine, 
+                    Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, 
+                    Italic, Link, List, Media, Paragraph, 
+                    SelectAll, SourceEditing, Underline, WordCount ],
+        toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'fontColor',
+                    'underline', 'code', 'alignment', 'link', 
+                    'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing', '|', 'media'],
+        initialData: initialdata,
+        alignment: {
+            options: [
+            {name:'left', className: 'align-left'},
+            {name:'right', className: 'align-right'},
+            {name:'center', className: 'align-center'},
+            {name:'justify', className: 'align-justify'}
+            ]
+        },
+        autosave: {
+            waitingTime: 2000,
+            save( editor ) {
+            return saveData( editor.getData(), endpoint );
+            }
+        },
+        codeBlock: {
+            languages: [
+            { language: 'css', label: 'CSS' },
+            { language: 'html', label: 'HTML' },
+            { language: 'javascript', label: 'Javascript' },
+            { language: 'sql', label: 'SQL' },
+            { language: 'plsql', label: 'PL/SQL' },
+            { language: 'shell', label: 'shell' }
+            ]
+        },
+        htmlSupport: {
+            allow: [
+            {
+                name: /.*/,
+                attributes: true,
+                classes: true,
+                styles: false
+            }
+            ]
+        },
+        image: {
+            insert: {
+            type: 'auto',
+            integrations: ['url']
+            },
+            toolbar: [
+            'imageStyle:inline',
+            'imageStyle:block',
+            '|',
+            'imageStyle:wrapText',
+            '|',
+            'toggleImageCaption',
+            'imageTextAlternative',
+            ]
+        },
+        list: {
+            properties: {
+            styles: true,
+            startIndex: true,
+            reversed: true
+            }
+        },
+        placeholder: 'Enter content',
+        title: {
+            placeholder: 'New title'
+        },
+        ui: {
+            viewportOffset: {
+            top: 0
+            }
+        },
+        wordCount: {
+            displayCharacters: true
+        },
+    })
+    .catch( error => {
+        handleError(error);
+    });
 
     /* Configure word count plugin and position at bottom of ediitor */
     const wordCountPlugin = editor.plugins.get( 'WordCount' );
