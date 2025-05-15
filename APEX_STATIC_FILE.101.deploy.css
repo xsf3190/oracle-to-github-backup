@@ -308,10 +308,6 @@ aside.login {
   text-align: end;
 }
 
-article {
-  padding-block: 1em;
-}
-
 .flow > * + * {
   margin-block-start: var(--flow-space, 1em);
 }
@@ -756,6 +752,7 @@ dialog > form {
     display: grid;
     grid-template-rows: auto 1fr auto;
     align-items: start;
+    max-inline-size: min(95vw, var(--max-width));
     max-block-size: 80vh;
     max-block-size: 80dvb;
 }
@@ -772,9 +769,11 @@ dialog header ul.underline {
 }
 
 dialog button.close {
-    align-self: start;
-    margin-inline-end: -.8em;
     border: none;
+}
+
+dialog > form > header {
+    padding: 1rem;
 }
 
 dialog > form > article {
