@@ -1,6 +1,6 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as 
     --
-    PROCEDURE buildESModules;
+    PROCEDURE buildESModules(pEnv IN VARCHAR2 DEFAULT NULL);
     --
     PROCEDURE deleteDirectory(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
@@ -54,7 +54,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     ** "TEST" - FOR TESTING BY ADMIN USERS OF ADMIN-oWNED WEBSITES
     ** "LIVE" - ALL DEPLOYED WEBSITES LINK TO THESE
     */
-    PROCEDURE buildESModules IS 
+    PROCEDURE buildESModules(pEnv IN VARCHAR2) IS 
         TYPE tt_files IS RECORD (
             file_name apex_application_static_files.file_name%type,
             file_content CLOB
@@ -89,6 +89,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
+        if (pEnv IS NOT NULL AND pEnv NOT IN ('test','live')) THEN
+            RAISE_APPLICATION_ERROR(-21000,'Environment must be "live" or "test"');
+            RETuRN;
+        END IF;
+
         SELECT id, netlify_site_id INTO l_website_id, l_netlify_site_id FROM website WHERE domain_name=ES_MODULES_DOMAIN;
 
         pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'GET', pData=>l_clob);
@@ -137,6 +142,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END IF;
 
             l_files.put(C.file_path || C.file_name, l_sha1);
+            
+            -- NEW
+
+
 
         END LOOP;
 
@@ -232,11 +241,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         IF (pChars IS NULL) THEN 
             RETURN (NULL);
         END IF;
+        pck_core.log(pFamily||'-'||pFont||'-'||pChars);
 
         l_api_url:='https://fonts.googleapis.com/css?family=' || REPLACE(pFamily,' ','+') || ':' || pFont
                 || '&display=swap'
                 || '&capability=WOFF2' 
-                || '&text=' || chars_used(pChars);
+                || '&text=' || utl_url.escape(chars_used(pChars),TRUE,'UTF-8');
         pck_api.callGoogleAPI(l_api_url,l_font_face);
         RETURN (l_font_face);
     END;
@@ -272,6 +282,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END LOOP;
             END IF;
         END LOOP;
+        pck_core.log('pBoldItalic:'||pBoldItalic);
 
         l_text:=REGEXP_REPLACE(l_text,l_italics_bold_regex,null);
 
@@ -288,6 +299,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END LOOP;
             END IF;
         END LOOP;
+        pck_core.log('pItalic:'||pItalic);
 
         l_text:=REGEXP_REPLACE(l_text,l_italics_regex,null);
 
@@ -304,6 +316,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END LOOP;
             END IF;
         END LOOP;
+        pck_core.log('pBoldNormal:'||pBoldNormal);
+
 
         l_text:=REGEXP_REPLACE(l_text,l_bold_regex,null);
 
@@ -318,6 +332,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END IF;
             END LOOP;
         END IF;
+        pck_core.log('pNormal:'||pNormal);
     END;
 
 
@@ -353,7 +368,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
         
-        l_headings_regex varchar2(20):='<h.+?>(.+?)<\/h.+?>';
+        --l_headings_regex varchar2(20):='<h.+?>(.+?)<\/h.+?>';
+        l_headings_regex varchar2(30):='<h[1-4]>(.+?)<\/h[1-4]>';
 
          TYPE tt_fonts IS RECORD (
             family font.family%type,
@@ -485,19 +501,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         CASE WHEN f.wght_end<700 THEN f.wght_end ELSE 700 END wght_bold,
                         CASE WHEN f.wght_start>400 THEN f.wght_start ELSE 400 END wght_normal,
                         DECODE(wf.context,'TITLE','headings','text') context,
-                        COuNT(DISTINCT wf.font_id) OVER () nb_fonts,
+                        COUNT(DISTINCT wf.font_id) OVER () nb_fonts,
                         CASE 
                             WHEN wf.context='TITLE' THEN 
                                 '<h1>' || DECODE(wf.ital,1,'<i>') || l_title || DECODE(wf.ital,1,'</i>') || '</h1>'
                             WHEN wf.context='SUBTITLE' THEN 
                                 '<p>' || DECODE(wf.ital,1,'<i>') || l_subtitle || DECODE(wf.ital,1,'</i>') || '</p>' ||
-                                '<p>' || l_contact_email || l_telephone_number || l_mobile_number || l_linkedin_name || l_instagram_name || '</p>'
+                                '<span>' || l_contact_email || '</span>' || 
+                                '<span>' || l_telephone_number || '</span>' || 
+                                '<span>' || l_mobile_number || '</span>' || 
+                                '<span>' || CASE WHEN l_linkedin_name IS NOT NULL THEN 'Let''s Connect' END || '</span>' || 
+                                '<span>' || l_instagram_name || '</span>'
                         END html
                       FROM website_font wf, font f
                      WHERE wf.website_id=pWebsiteId
                        AND wf.font_id=f.id
                 ) 
                 LOOP
+                --pck_core.log(C.context || '-' || C.family|| '-' ||C.wght_bold|| '-' ||C.wght_normal);
                     l_fonts(C.context).family:=C.family;
                     l_fonts(C.context).wght_bold:=C.wght_bold;
                     l_fonts(C.context).wght_normal:=C.wght_normal;
@@ -507,6 +528,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END iF;
 
             n:=REGEXP_COUNT(l_body_html,l_headings_regex);
+            pck_core.log('extract_styles headings:'||n);
             IF (n>0) THEN
                 FOR j IN 1..n 
                 LOOP
@@ -514,6 +536,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END LOOP;
                 l_body_html:=REGEXP_REPLACE(l_body_html,l_headings_regex,null);
             END IF;
+            pck_core.log('extract_styles text');
             extract_styles(l_body_html, l_fonts('text').chars_bold_italic, l_fonts('text').chars_bold_normal, l_fonts('text').chars_italic, l_fonts('text').chars_normal);                    
 
             IF (l_labels(i).collection_type='BLOG') THEN
@@ -559,10 +582,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_context:=l_fonts.FIRST;
         WHILE l_context IS NOT NULL LOOP
-            l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_bold || 'italic', l_fonts(l_context).chars_bold_italic);
-            l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_bold, l_fonts(l_context).chars_bold_normal);
-            l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_normal || 'italic', l_fonts(l_context).chars_italic);
-            l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_normal, l_fonts(l_context).chars_normal);
+            CASE l_context
+                WHEN 'headings' THEN
+                    l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_bold || 'italic', l_fonts(l_context).chars_italic);
+                    l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_bold, l_fonts(l_context).chars_normal);
+                WHEN 'text' THEN
+                    l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_bold || 'italic', l_fonts(l_context).chars_bold_italic);
+                    l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_bold, l_fonts(l_context).chars_bold_normal);
+                    l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_normal || 'italic', l_fonts(l_context).chars_italic);
+                    l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_normal, l_fonts(l_context).chars_normal);
+            END CASE;
             l_context:=l_fonts.NEXT(l_context);
         END LOOP;
 
@@ -695,7 +724,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         */
         l_json.put('files',l_files);
 
-        logDeployment(pWebsiteId, pSiteId, 'Uploading ' || l_deploy_files.COUNT || ' files');
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId || '/deploys', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
         UPDATE website SET netlify_deploy_id=(SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) WHERE id=pWebsiteId;
         COMMIT;
@@ -707,15 +735,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 pBody=>l_deploy_files(C.sha1).file_content,
                 pData=>l_clob
             );
-            logDeployment(pWebsiteId, pSiteId, '.. ' || l_deploy_files(C.sha1).file_name);
+            logDeployment(pWebsiteId, pSiteId, 'Uploading ' || l_deploy_files(C.sha1).file_name);
             n:=n+1;
         END LOOP;
 
+        /*
         IF (n>0) THEN
             logDeployment(pWebsiteId, pSiteId, 'Uploaded files: ' || n || ' Unchanged files: ' || TO_CHAR(l_deploy_files.COUNT-n));
         ELSE
             logDeployment(pWebsiteId, pSiteId, 'All files unchanged since last deployment');
         END IF;
+        */
 
         /* Update deployed_date if null */
         CASE pEnv
