@@ -68,6 +68,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_sha1 es_module.sha1%type;
         l_hash_value es_module.hash_value%type;
 
+        l_sha1_test es_module.sha1_test%type;
+        l_sha256_test es_module.sha256_test%type;
+        
+        l_sha1_live es_module.sha1_live%type;
+        l_sha256_live es_module.sha256_live%type;
+
         l_file_name apex_application_static_files.file_name%type;
         l_file_content CLOB;
         
@@ -89,9 +95,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
-        if (pEnv IS NOT NULL AND pEnv NOT IN ('test','live')) THEN
+        IF (NVL(pEnv,'x') NOT IN ('test','live')) THEN
             RAISE_APPLICATION_ERROR(-21000,'Environment must be "live" or "test"');
-            RETuRN;
+            RETURN;
         END IF;
 
         SELECT id, netlify_site_id INTO l_website_id, l_netlify_site_id FROM website WHERE domain_name=ES_MODULES_DOMAIN;
@@ -117,7 +123,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                        )
                    --AND file_name<>'deploy_main.min.js'
             )
-            SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, s.last_updated_on, s.file_content, e.sha1, e.last_uploaded
+            SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, s.last_updated_on, s.file_content, e.sha1, e.last_uploaded,
+                    e.sha1_test, e.last_uploaded_test, e.sha1_live, e.last_uploaded_live
               FROM source s, es_module e
              WHERE s.file_name=e.module_name(+)
             )
@@ -143,9 +150,44 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             l_files.put(C.file_path || C.file_name, l_sha1);
             
-            -- NEW
+            --
+            -- NEW APPROACH
+            --
 
+            IF (C.sha1_test IS NULL OR C.last_updated_on>C.last_uploaded_test) THEN         
+                l_file_content:=CASE WHEN C.file_path='css/' THEN minifyCss(C.file_content) ELSE C.file_content END;
+                l_sha1_test:=LOWER(dbms_crypto.hash(src=>l_file_content, typ=>dbms_crypto.hash_sh1));
+                l_sha256_test:=getSha256(l_file_content);
+                l_deploy_files(l_sha1_test).file_name:='test/' || C.file_path || C.file_name;
+                l_deploy_files(l_sha1_test).file_content:=l_file_content;
 
+                IF (C.sha1_test IS NULL) THEN
+                    INSERT INTO es_module (host_name, module_name, last_updated, sha1_test, sha256_test) 
+                    VALUES (l_ssl_url || '/' || C.file_path || C.file_name, C.file_name, C.last_updated_on, l_sha1_test, l_sha256_test);
+                ELSE
+                    UPDATE es_module
+                       SET sha1_test=l_sha1_test, 
+                           sha256_test=l_sha256_test, 
+                           last_updated_test=C.last_updated_on
+                     WHERE module_name=C.file_name;
+                END IF;
+            ELSE
+                l_sha1_test:=C.sha1_test;
+            END IF;
+            
+            l_files.put('test/' || C.file_path || C.file_name, l_sha1_test);
+
+            --
+            --  IF pEnv="live" UPLOAD TO "live" FOLDER, ELSE UPLOAD EXISTING SHA1_LIVE (NETLIFY REBUILDS COMPLETE WEBSITE!)
+            --
+
+            IF (pEnv='live') THEN
+                l_files.put('live/' || C.file_path || C.file_name, l_sha1_test);
+                UPDATE es_module SET sha1_live=l_sha1_test, sha256_live=l_sha256_test, last_updated_live=C.last_updated_on
+                    WHERE module_name=C.file_name;
+            ELSE
+                l_files.put('live/' || C.file_path || C.file_name, NVL(C.sha1_live,l_sha1_test));
+            END IF;
 
         END LOOP;
 
