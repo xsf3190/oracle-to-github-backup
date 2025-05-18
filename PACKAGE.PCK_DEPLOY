@@ -1,6 +1,6 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as 
     --
-    PROCEDURE buildESModules(pEnv IN VARCHAR2 DEFAULT NULL);
+    PROCEDURE buildESModules(pEnv IN VARCHAR2 DEFAULT 'test');
     --
     PROCEDURE deleteDirectory(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
@@ -70,9 +70,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_sha1_test es_module.sha1_test%type;
         l_sha256_test es_module.sha256_test%type;
-        
-        l_sha1_live es_module.sha1_live%type;
-        l_sha256_live es_module.sha256_live%type;
 
         l_file_name apex_application_static_files.file_name%type;
         l_file_content CLOB;
@@ -84,7 +81,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_website_id website.id%type;
         l_netlify_site_id website.netlify_site_id%type;
         l_ssl_url VARCHAR2(50);
-        ES_MODULES_DOMAIN CONSTANT VARCHAR2(20):='es-modules';
+        ES_MODULES_DOMAIN CONSTANT VARCHAR2(20):='mark-russellbrown';--'es-modules';
 
         PROCEDURE addDeploy(pFilename IN VARCHAR2, pFileContent IN OUT NOCOPY CLOB) IS
         BEGIN
@@ -95,8 +92,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
     BEGIN
-        IF (NVL(pEnv,'x') NOT IN ('test','live')) THEN
-            RAISE_APPLICATION_ERROR(-21000,'Environment must be "live" or "test"');
+        IF (pEnv NOT IN ('test','live')) THEN
+            RAISE_APPLICATION_ERROR(-20100,'Environment must be "live" or "test"');
             RETURN;
         END IF;
 
@@ -123,91 +120,48 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                        )
                    --AND file_name<>'deploy_main.min.js'
             )
-            SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, s.last_updated_on, s.file_content, e.sha1, e.last_uploaded,
-                    e.sha1_test, e.last_uploaded_test, e.sha1_live, e.last_uploaded_live
-              FROM source s, es_module e
+            SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, s.file_content, e.sha1_test, e.sha1_live
+              FROM source s, es_module2 e
              WHERE s.file_name=e.module_name(+)
             )
         LOOP
+            l_file_content:=CASE WHEN C.file_path='css/' THEN minifyCss(C.file_content) ELSE C.file_content END;
 
-            IF (C.sha1 IS NULL OR C.last_updated_on>C.last_uploaded) THEN
-                l_file_content:=CASE WHEN C.file_path='css/' THEN minifyCss(C.file_content) ELSE C.file_content END;
+            l_sha1_test:=LOWER(dbms_crypto.hash(src=>l_file_content, typ=>dbms_crypto.hash_sh1));
+            l_sha256_test:=getSha256(l_file_content);
 
-                l_sha1:=LOWER(dbms_crypto.hash(src=>l_file_content, typ=>dbms_crypto.hash_sh1));
-                l_hash_value:=getSha256(l_file_content);
-                l_deploy_files(l_sha1).file_name:=C.file_path || C.file_name;
-                l_deploy_files(l_sha1).file_content:=l_file_content;
-
-                IF (C.sha1 IS NULL) THEN
-                    INSERT INTO es_module (host_name, module_name, last_updated, hash_value, sha1) 
-                    VALUES (l_ssl_url || '/' || C.file_path || C.file_name, C.file_name, C.last_updated_on, l_hash_value, l_sha1);
-                ELSE
-                    UPDATE es_module SET sha1=l_sha1, hash_value=l_hash_value, last_updated=C.last_updated_on WHERE module_name=C.file_name;
-                END IF;
-            ELSE
-                l_sha1:=C.sha1;
-            END IF;
-
-            l_files.put(C.file_path || C.file_name, l_sha1);
-            
-            --
-            -- NEW APPROACH
-            --
-
-            IF (C.sha1_test IS NULL OR C.last_updated_on>C.last_uploaded_test) THEN         
-                l_file_content:=CASE WHEN C.file_path='css/' THEN minifyCss(C.file_content) ELSE C.file_content END;
-                l_sha1_test:=LOWER(dbms_crypto.hash(src=>l_file_content, typ=>dbms_crypto.hash_sh1));
-                l_sha256_test:=getSha256(l_file_content);
-                l_deploy_files(l_sha1_test).file_name:='test/' || C.file_path || C.file_name;
-                l_deploy_files(l_sha1_test).file_content:=l_file_content;
-
-                IF (C.sha1_test IS NULL) THEN
-                    INSERT INTO es_module (host_name, module_name, last_updated, sha1_test, sha256_test) 
-                    VALUES (l_ssl_url || '/' || C.file_path || C.file_name, C.file_name, C.last_updated_on, l_sha1_test, l_sha256_test);
-                ELSE
-                    UPDATE es_module
-                       SET sha1_test=l_sha1_test, 
-                           sha256_test=l_sha256_test, 
-                           last_updated_test=C.last_updated_on
-                     WHERE module_name=C.file_name;
-                END IF;
-            ELSE
-                l_sha1_test:=C.sha1_test;
+            IF (C.sha1_test IS NULL) THEN -- NEW MODULE
+                INSERT INTO es_module2 (host_name, module_name, sha1_test, sha256_test) 
+                VALUES (l_ssl_url || '/' || C.file_path || C.file_name, C.file_name, l_sha1_test, l_sha256_test);
+            ELSIF(l_sha1_test<>C.sha1_test) THEN -- EXISTING MODULE WITH CHANGED CONTENT
+                UPDATE es_module2
+                   SET sha1_test=l_sha1_test, 
+                       sha256_test=l_sha256_test
+                 WHERE module_name=C.file_name;
             END IF;
             
+            l_deploy_files(l_sha1_test).file_name:=C.file_path || C.file_name;
+            l_deploy_files(l_sha1_test).file_content:=l_file_content;
             l_files.put('test/' || C.file_path || C.file_name, l_sha1_test);
 
-            --
-            --  IF pEnv="live" UPLOAD TO "live" FOLDER, ELSE UPLOAD EXISTING SHA1_LIVE (NETLIFY REBUILDS COMPLETE WEBSITE!)
-            --
-
             IF (pEnv='live') THEN
+                UPDATE es_module
+                   SET sha1_live=l_sha1_test,
+                       sha256_live=l_sha256_test
+                 WHERE module_name=C.file_name;
                 l_files.put('live/' || C.file_path || C.file_name, l_sha1_test);
-                UPDATE es_module SET sha1_live=l_sha1_test, sha256_live=l_sha256_test, last_updated_live=C.last_updated_on
-                    WHERE module_name=C.file_name;
             ELSE
-                l_files.put('live/' || C.file_path || C.file_name, NVL(C.sha1_live,l_sha1_test));
+                l_files.put('live/' || C.file_path || C.file_name, NVL(C.sha1_live, l_sha1_test));
             END IF;
-
+            
         END LOOP;
 
-        l_table:=
-        '<table>' ||
-            '<thead>' ||
-                '<tr><th>Host</th><th>module name</th><th>last updated</th><tr>' ||
-            '<thead>' ||
-            '<tbody>';
-        FOR C IN (
-            SELECT host_name, module_name, TO_CHAR(last_updated,'dd.mm.yyyy hh24:mi') last_updated
-              FROM es_module 
-             ORDER BY host_name
-        ) LOOP
-            l_table:=l_table || '<tr><td>' || C.host_name || '</td><td>' || C.module_name || '</td><td>' || C.last_updated || '</td><tr>';
-        END LOOP;
-        l_table:=l_table || 
-        '</tbody>' ||
-        '</table>';
-        
+        l_headers:='/*' || chr(10) || 'Access-Control-Allow-Origin: *';
+        l_sha1:=LOWER(dbms_crypto.hash(src=>l_headers, typ=>dbms_crypto.hash_sh1));
+        l_deploy_files(l_sha1).file_name:='_headers';
+        l_deploy_files(l_sha1).file_content:=l_headers;
+        l_files.put('_headers', l_sha1);
+
         l_page:=
         '<!DOCTYPE HTML>' ||
         '<html lang="en">' ||
@@ -216,7 +170,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             '<meta name="viewport" content="width=device-width, initial-scale=1.0">' ||
         '</head>' ||
         '<body>' ||
-        '<h1>ES Modules for RESTARTNET.COM websites</h1>' || l_table ||
+        '<h1>ES Modules deployed at' || to_char(sysdate,'dd.mm.yyyy hh24:mi') || '</h1>' || 
         '</body>' ||
         '</html>';
         l_sha1:=LOWER(dbms_crypto.hash(src=>l_page, typ=>dbms_crypto.hash_sh1));
@@ -224,33 +178,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1).file_content:=l_page;
         l_files.put('index.html', l_sha1);
 
-        l_headers:='/*' || chr(10) || 'Access-Control-Allow-Origin: *';
-        l_sha1:=LOWER(dbms_crypto.hash(src=>l_headers, typ=>dbms_crypto.hash_sh1));
-        l_deploy_files(l_sha1).file_name:='_headers';
-        l_deploy_files(l_sha1).file_content:=l_headers;
-        l_files.put('_headers', l_sha1);
 
         l_json.put('files',l_files);
 
-        dbms_output.put_line('Sending digest of ' || l_deploy_files.COUNT || ' files to Netlify for '|| ES_MODULES_DOMAIN);
+        /*
+        ** POST ALL FILE NAMES AND THEIR SHA1 VALUES TO THE NETLIFY DEPLOYS ENDPOINT
+        ** - RETURNS ARRAY OF SHA1 TO BE UPLOADED 
+        */
+
         pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'sites/' || l_netlify_site_id || '/deploys', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
-
-        UPDATE website SET netlify_deploy_id=(SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) WHERE id=l_website_id;
-        COMMIT;
-
-        /* upload to Netlify if required - i.e. file content has changed since last deployment  */
+        
+        /*
+        ** UPLOAD TO NETLIFY ONLY THE FILES IT REQUIRES
+        */
         FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
+            pck_core.log('... uploading ' || l_deploy_files(C.sha1).file_name);
             pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', 
                 pBody=>l_deploy_files(C.sha1).file_content,
                 pData=>l_clob
             );
-            dbms_output.put_line('Successfully uploaded ' || l_deploy_files(C.sha1).file_name);
-            UPDATE es_module SET last_uploaded=current_date WHERE module_name=SUBSTR(l_deploy_files(C.sha1).file_name,INSTR(l_deploy_files(C.sha1).file_name,'/')+1);
+            
         END LOOP;
 
-        pck_hosting.waitDeployment(l_website_id,pUserid=>null);
+        /*
+        ** WAIT FOR DEPLOYMENT TO COMPLETE
+        */
+        --pck_hosting.waitDeployment(pWebsiteId=>l_website_id ,pUserid=>null, pWaitSeconds=>60);
 
-        runDelete(pUserId=>null, pWebsiteId=>l_website_id, pSiteId=>l_netlify_site_id);
+        /*
+        ** DELETE ANY OLD DEPLOYMENTS
+        */
+        --runDelete(pUserId=>null, pWebsiteId=>l_website_id, pSiteId=>l_netlify_site_id);
 
     END;
 
