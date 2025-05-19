@@ -65,11 +65,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_headers CLOB;
         l_files JSON_OBJECT_T;
         l_json JSON_OBJECT_T;
-        l_sha1 es_module.sha1%type;
-        l_hash_value es_module.hash_value%type;
 
-        l_sha1_test es_module.sha1_test%type;
-        l_sha256_test es_module.sha256_test%type;
+        l_sha1_test es_modules.sha1_test%type;
+        l_sha256_test es_modules.sha256_test%type;
 
         l_file_name apex_application_static_files.file_name%type;
         l_file_content CLOB;
@@ -83,14 +81,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_ssl_url VARCHAR2(50);
         ES_MODULES_DOMAIN CONSTANT VARCHAR2(20):='mark-russellbrown';--'es-modules';
 
-        PROCEDURE addDeploy(pFilename IN VARCHAR2, pFileContent IN OUT NOCOPY CLOB) IS
-        BEGIN
-            l_sha1:=LOWER(dbms_crypto.hash(src => pFileContent, typ => dbms_crypto.hash_sh1));
-            l_deploy_files(l_sha1).file_name:=pFilename;
-            l_deploy_files(l_sha1).file_content:=pFileContent;
-            l_files.put(pFilename, l_sha1);
-        END;
-
     BEGIN
         IF (pEnv NOT IN ('test','live')) THEN
             RAISE_APPLICATION_ERROR(-20100,'Environment must be "live" or "test"');
@@ -98,6 +88,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END IF;
 
         SELECT id, netlify_site_id INTO l_website_id, l_netlify_site_id FROM website WHERE domain_name=ES_MODULES_DOMAIN;
+
+        /*
+        ** DELETE ANY OLD DEPLOYMENTS
+        */
+        runDelete(pUserId=>null, pWebsiteId=>l_website_id, pSiteId=>l_netlify_site_id);
 
         pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'GET', pData=>l_clob);
         SELECT ssl_url INTO l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS(ssl_url));
@@ -120,8 +115,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                        )
                    --AND file_name<>'deploy_main.min.js'
             )
-            SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, s.file_content, e.sha1_test, e.sha1_live
-              FROM source s, es_module2 e
+            SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, CAST(s.last_updated_on AS TIMESTAMP WITH TIME ZONE) updated_source, s.file_content, e.sha1_test, e.sha1_live
+              FROM source s, es_modules e
              WHERE s.file_name=e.module_name(+)
             )
         LOOP
@@ -130,13 +125,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_sha1_test:=LOWER(dbms_crypto.hash(src=>l_file_content, typ=>dbms_crypto.hash_sh1));
             l_sha256_test:=getSha256(l_file_content);
 
-            IF (C.sha1_test IS NULL) THEN -- NEW MODULE
-                INSERT INTO es_module2 (host_name, module_name, sha1_test, sha256_test) 
-                VALUES (l_ssl_url || '/' || C.file_path || C.file_name, C.file_name, l_sha1_test, l_sha256_test);
-            ELSIF(l_sha1_test<>C.sha1_test) THEN -- EXISTING MODULE WITH CHANGED CONTENT
-                UPDATE es_module2
-                   SET sha1_test=l_sha1_test, 
-                       sha256_test=l_sha256_test
+            IF (C.sha1_test IS NULL) THEN 
+                INSERT INTO es_modules (host_name, module_name, updated_source, sha1_test, sha256_test, updated_test, sha1_live, sha256_live, updated_live) 
+                VALUES (l_ssl_url || '/' || C.file_path || C.file_name, C.file_name, C.updated_source, l_sha1_test, l_sha256_test, current_timestamp, l_sha1_test, l_sha256_test, current_timestamp);
+            ELSIF(l_sha1_test<>C.sha1_test) THEN 
+                UPDATE es_modules
+                   SET updated_source=C.updated_source,
+                       sha1_test=l_sha1_test, 
+                       sha256_test=l_sha256_test,
+                       updated_test=current_timestamp
                  WHERE module_name=C.file_name;
             END IF;
             
@@ -144,23 +141,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_deploy_files(l_sha1_test).file_content:=l_file_content;
             l_files.put('test/' || C.file_path || C.file_name, l_sha1_test);
 
+            /*
+            ** UPDATE "live" ON REQUEST ONLY 
+            */
             IF (pEnv='live') THEN
-                UPDATE es_module
+                UPDATE es_modules
                    SET sha1_live=l_sha1_test,
-                       sha256_live=l_sha256_test
+                       sha256_live=l_sha256_test,
+                       updated_live=current_timestamp
                  WHERE module_name=C.file_name;
                 l_files.put('live/' || C.file_path || C.file_name, l_sha1_test);
             ELSE
-                l_files.put('live/' || C.file_path || C.file_name, NVL(C.sha1_live, l_sha1_test));
+                l_files.put('live/' || C.file_path || C.file_name, NVL(C.sha1_live,l_sha1_test) );
             END IF;
             
         END LOOP;
 
         l_headers:='/*' || chr(10) || 'Access-Control-Allow-Origin: *';
-        l_sha1:=LOWER(dbms_crypto.hash(src=>l_headers, typ=>dbms_crypto.hash_sh1));
-        l_deploy_files(l_sha1).file_name:='_headers';
-        l_deploy_files(l_sha1).file_content:=l_headers;
-        l_files.put('_headers', l_sha1);
+        l_sha1_test:=LOWER(dbms_crypto.hash(src=>l_headers, typ=>dbms_crypto.hash_sh1));
+        l_deploy_files(l_sha1_test).file_name:='_headers';
+        l_deploy_files(l_sha1_test).file_content:=l_headers;
+        l_files.put('_headers', l_sha1_test);
 
         l_page:=
         '<!DOCTYPE HTML>' ||
@@ -173,10 +174,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         '<h1>ES Modules deployed at' || to_char(sysdate,'dd.mm.yyyy hh24:mi') || '</h1>' || 
         '</body>' ||
         '</html>';
-        l_sha1:=LOWER(dbms_crypto.hash(src=>l_page, typ=>dbms_crypto.hash_sh1));
-        l_deploy_files(l_sha1).file_name:='index.html';
-        l_deploy_files(l_sha1).file_content:=l_page;
-        l_files.put('index.html', l_sha1);
+        l_sha1_test:=LOWER(dbms_crypto.hash(src=>l_page, typ=>dbms_crypto.hash_sh1));
+        l_deploy_files(l_sha1_test).file_name:='index.html';
+        l_deploy_files(l_sha1_test).file_content:=l_page;
+        l_files.put('index.html', l_sha1_test);
 
 
         l_json.put('files',l_files);
@@ -204,11 +205,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         ** WAIT FOR DEPLOYMENT TO COMPLETE
         */
         --pck_hosting.waitDeployment(pWebsiteId=>l_website_id ,pUserid=>null, pWaitSeconds=>60);
-
-        /*
-        ** DELETE ANY OLD DEPLOYMENTS
-        */
-        --runDelete(pUserId=>null, pWebsiteId=>l_website_id, pSiteId=>l_netlify_site_id);
 
     END;
 
