@@ -542,7 +542,6 @@ main a:hover {
   white-space: nowrap;
 }
 
-form,
 pre {
   padding: 1em;
 }
@@ -759,33 +758,24 @@ dialog > form {
     max-block-size: 80dvb;
 }
 
-dialog header h2 {
-    text-decoration: underline;
-    text-decoration-thickness: .04em;
-    text-underline-offset: .2em;
-}
-
-dialog header ul.underline {
-    padding-block: 0.5em;
-    border-block-end: solid 1px black;
-}
-
 dialog button.close {
     border: none;
 }
 
+dialog > form > header, dialog > form > footer {
+    padding: 1rem;
+    background-color: #e9ecef;
+}
+
 dialog > form > header {
     padding: 1rem;
+    background-color: #e9ecef;
 }
 
 dialog > form > article {
     overflow-y: auto; 
     max-block-size: 100%; /* safari */
     overscroll-behavior-y: contain;
-}
-
-dialog > form > footer {
-    padding-block-end: var(--space-s);
 }
 
 dialog hr {
