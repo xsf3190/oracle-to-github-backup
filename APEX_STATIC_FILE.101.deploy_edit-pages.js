@@ -4,7 +4,7 @@
 import { nav, dropdown_details } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
-const nav_items = nav.querySelector("div");
+const nav_items = nav.querySelector("nav>ul");
 const editor = nav.nextElementSibling;
 
 let endpoint;
@@ -113,11 +113,11 @@ editor.addEventListener("click", async (e) => {
             e.target.textContent = "Delete Site";
             return;
         }
-        const target = nav.querySelector("[aria-current='page']");
+        const target = nav.querySelector("[aria-current='page']").parentElement;
         if (target.nextElementSibling) {
-            target.nextElementSibling.setAttribute("aria-current","page");
+            target.nextElementSibling.firstChild.setAttribute("aria-current","page");
         } else {
-            target.previousElementSibling.setAttribute("aria-current","page");
+            target.previousElementSibling.firstChild.setAttribute("aria-current","page");
         }
         const edit = editor.querySelector("input[name='navigation_label']");
         edit.value = nav_items.querySelector("[aria-current='page']").textContent;
@@ -140,14 +140,17 @@ editor.addEventListener("click", async (e) => {
             arr.push(obj);
         })
         await callAPI(endpoint,'POST', arr)
-            .then(() => {
-                console.log("Form changes saved. Now deploy.");
+            .then((data) => {
+                console.log("data",data);
+                if (data.deleted>0) {
+                    window.history.replaceState({}, "", "index.html");
+                }
             })
             .catch((error) => {
                 handleError(error);
             });
 
-        const import_module_name = "./deploy_publish-website.min.js";
+        const import_module_name = "deploy_publish-website";
         await import(import_module_name)
             .then((module) => {
                 module.init(e.target);
