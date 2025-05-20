@@ -20,7 +20,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
     /*
     ** MINIFY CSS FILE USING TOPTAL UTILITY API.
-    ** ARCHAIC APEX MINIFIER DOES NOT RECOGNISE MODERN CSS FEATURES
+    ** N.B. APEX MINIFIER IGNORES SOME MODERN CSS FEATURES
     */
     FUNCTION minifyCss(pFileContent IN CLOB) RETURN CLOB IS
         l_url VARCHAR2(200):='https://www.toptal.com/developers/cssminifier/api/raw';
@@ -79,7 +79,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_website_id website.id%type;
         l_netlify_site_id website.netlify_site_id%type;
         l_ssl_url VARCHAR2(50);
-        ES_MODULES_DOMAIN CONSTANT VARCHAR2(20):='mark-russellbrown';--'es-modules';
 
     BEGIN
         IF (pEnv NOT IN ('test','live')) THEN
@@ -87,7 +86,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             RETURN;
         END IF;
 
-        SELECT id, netlify_site_id INTO l_website_id, l_netlify_site_id FROM website WHERE domain_name=ES_MODULES_DOMAIN;
+        SELECT id, netlify_site_id INTO l_website_id, l_netlify_site_id FROM website WHERE domain_name='es-modules';
 
         /*
         ** DELETE ANY OLD DEPLOYMENTS
@@ -113,7 +112,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         OR 
                         (file_name LIKE 'deploy%' AND mime_type='text/css' AND INSTR(file_name,'.min.')=0)
                        )
-                   --AND file_name<>'deploy_main.min.js'
             )
             SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, CAST(s.last_updated_on AS TIMESTAMP WITH TIME ZONE) updated_source, s.file_content, e.sha1_test, e.sha1_live
               FROM source s, es_modules e
@@ -127,7 +125,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             IF (C.sha1_test IS NULL) THEN 
                 INSERT INTO es_modules (host_name, module_name, updated_source, sha1_test, sha256_test, updated_test, sha1_live, sha256_live, updated_live) 
-                VALUES (l_ssl_url || '/' || C.file_path || C.file_name, C.file_name, C.updated_source, l_sha1_test, l_sha256_test, current_timestamp, l_sha1_test, l_sha256_test, current_timestamp);
+                VALUES (l_ssl_url || '/live/' || C.file_path || C.file_name, C.file_name, C.updated_source, l_sha1_test, l_sha256_test, current_timestamp, l_sha1_test, l_sha256_test, current_timestamp);
             ELSIF(l_sha1_test<>C.sha1_test) THEN 
                 UPDATE es_modules
                    SET updated_source=C.updated_source,
@@ -202,9 +200,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END LOOP;
 
         /*
-        ** WAIT FOR DEPLOYMENT TO COMPLETE
+        ** DELETE ANY MODULES For WHICH SOURCE NO LONGER EXISTS
         */
-        --pck_hosting.waitDeployment(pWebsiteId=>l_website_id ,pUserid=>null, pWaitSeconds=>60);
+        DELETE es_modules WHERE module_name NOT IN (SELECT file_name FROM apex_application_static_files WHERE application_id=101);
 
     END;
 
@@ -418,6 +416,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_is_blog BOOLEAN:=FALSE;
         l_is_product BOOLEAN:=FALSE;
 
+        l_use_test PLS_INTEGER;
         l_importmap  CLOB;
         l_importmap_integrity  CLOB;
         l_importmap_sha256 VARCHAR2(200);
@@ -612,24 +611,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_robots:='User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: ' || l_ssl_url || '/sitemap.xml';
 
         /* 
-        ** BUILD IMPORT MAP OF JAVASCRIPT MODULES (BARE MODULE NAMES ONLY)
-        ** CREATE LiNK ELEMENTS FOR GENERAL AND SITE-SOECIFIC STYLESHEETS
+        ** BUILD IMPORT MAP OF JAVASCRIPT MODULES (BARE MODULE NAMES ONLY) AND CSS STYLESHEETS
+        ** DEPLOY "test" MODULES IF DOMAIN NAME MATCHES ADMIN USER'S EMAIL
         */
         l_importmap:='"imports":{';
         l_importmap_integrity:='"integrity":{';
 
+        SELECT COUNT(*) INTO l_use_test FROM dual
+         WHERE EXISTS
+         (
+            SELECT null
+              FROM website w, users u, apex_workspace_apex_users a
+             WHERE u.id=pUserId
+               AND w.domain_name=REPLACE(SUBSTR(u.email,1,INSTR(u.email,'@')-1),'.','-')
+               AND u.email=a.email
+               AND a.is_admin='Yes'
+         );
+
+        IF (l_use_test>0) THEN
+            buildESModules;
+        END IF;
+
         FOR C IN (
-            SELECT module_name, host_name, hash_value 
-              FROM es_module 
+            SELECT module_name, 
+                    CASE WHEN l_use_test=0 THEN host_name ELSE REPLACE(host_name,'/live/','/test/') END host_name, 
+                    CASE WHEN l_use_test=0 THEN sha256_live ELSE sha256_test END sha256 
+              FROM es_modules 
              ORDER BY 1
         ) LOOP
             IF (C.module_name=MAIN_MODULE_NAME) THEN
                 l_main_module:=
                     '<link rel="modulepreload" href="' || C.host_name || '">' ||
-                    '<script src="' || C.host_name || '" type="module" integrity="' ||  C.hash_value || '" crossorigin></script>';
+                    '<script src="' || C.host_name || '" type="module" integrity="' ||  C.sha256 || '" crossorigin></script>';
             ELSIF (INSTR(C.host_name,'javascript')>0) THEN 
                 l_importmap:=l_importmap || '"' || SUBSTR(C.module_name,1,INSTR(C.module_name,'.')-1) || '":"' || C.host_name || '",';
-                l_importmap_integrity:=l_importmap_integrity || '"' || C.host_name || '":"' || C.hash_value || '",';
+                l_importmap_integrity:=l_importmap_integrity || '"' || C.host_name || '":"' || C.sha256 || '",';
             ELSIF (INSTR(C.host_name,'css')>0) THEN
                 l_css:=l_css || 
                     --'<link rel="stylesheet" href="' || C.host_name || '" integrity="' || C.hash_value || '" crossorigin>';
