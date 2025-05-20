@@ -756,19 +756,18 @@ dialog > form {
     max-inline-size: min(95vw, var(--max-width));
     max-block-size: 80vh;
     max-block-size: 80dvb;
+    font-size: 75%;
 }
 
 dialog button.close {
     border: none;
+    background-color: white;
+    padding: 0.5em;
 }
 
 dialog > form > header, dialog > form > footer {
-    padding: 1rem;
-    background-color: #e9ecef;
-}
-
-dialog > form > header {
-    padding: 1rem;
+    padding-block: 1rem;
+    padding-inline: 1.5rem;
     background-color: #e9ecef;
 }
 
@@ -776,6 +775,7 @@ dialog > form > article {
     overflow-y: auto; 
     max-block-size: 100%; /* safari */
     overscroll-behavior-y: contain;
+    padding: 2rem;
 }
 
 dialog hr {
