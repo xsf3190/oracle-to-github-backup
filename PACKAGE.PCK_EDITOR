@@ -332,6 +332,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
 
         apex_json.open_object;
         apex_json.write('success', TRUE);
+        apex_json.write('deleted',l_article_id.COUNT);
         apex_json.close_object;
 
         pStatus:=200;
