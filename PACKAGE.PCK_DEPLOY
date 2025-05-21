@@ -648,7 +648,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_importmap_integrity:=l_importmap_integrity || '"' || C.host_name || '":"' || C.sha256 || '",';
             ELSIF (INSTR(C.host_name,'css')>0) THEN
                 l_css:=l_css || 
-                    --'<link rel="stylesheet" href="' || C.host_name || '" integrity="' || C.hash_value || '" crossorigin>';
                     '<link rel="stylesheet" href="' || C.host_name || '" crossorigin>';
             END IF;
         END LOOP;
