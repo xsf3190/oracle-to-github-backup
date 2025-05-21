@@ -537,14 +537,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         */
         pHtml:=
             buildNavLabels(pWebsiteId,pArticleId) || 
-            '<form class="edit-header"></form>' ||
+            CASE WHEN pEnv='TEST' THEN '<form class="edit-header"></form>' END ||
             l_header || 
             '<main class="wrapper flow">' || 
                 pPromotion ||
-                '<div id="editor"></div>' ||
+                CASE WHEN pEnv='TEST' THEN '<div id="editor"></div>' END ||
                 pHtml  || 
             '</main>' || 
-            '<form class="edit-footer"></form>' ||
+            CASE WHEN pEnv='TEST' THEN '<form class="edit-footer"></form>' END ||
             l_footer;
 
         /* 
