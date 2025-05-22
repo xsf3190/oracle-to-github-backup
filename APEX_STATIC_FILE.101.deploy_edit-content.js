@@ -192,7 +192,7 @@ export const init = async (element) => {
     /* Listen for DEPLOY requests */
     const toolbar = document.querySelector(".ck-toolbar");
     toolbar.querySelector(".deploy-website").addEventListener("click", () => {
-        deploy_website();
+        dropdown_details.querySelector("button.publish-website").click();
     });
 
     /* Hide all other elements in <main> when in Editor mode */
@@ -277,52 +277,4 @@ export const show_media = async (request) => {
         .catch((error) => {
             handleError(error);
         });
-}
-
-/*
-** USER CLICKS DEPLOY BUTTON
-*/
-export const deploy_website = async () => {
-    if (info_dialog.open) {
-        info_dialog.close();
-    }
-    const content = info_dialog.querySelector("article");
-    callAPI("publish-website/:ID","POST",{})
-        .then( (data) => {
-            content.replaceChildren();
-            content.insertAdjacentHTML('afterbegin',data.content);
-            info_dialog.querySelector("h4").textContent = "";
-            info_dialog.querySelector("footer").replaceChildren();
-            info_dialog.showModal();
-            if (data.stop) return;
-            if (intervalId) {
-                clearInterval(intervalId);
-            }
-            info_dialog.addEventListener("close", () => {
-                window.location.reload();
-            })
-            intervalId = setInterval(getDeploymentStatus,2000);
-        })
-        .catch((error) => {
-            handleError(error);
-        });;
-}
-
-/*
-** SHOW NETLIFY DEPLOYMENT PROGRESS
-*/
-const getDeploymentStatus = () => {
-    callAPI("publish-website/:ID","GET")
-        .then( (data) => {
-            if (data.content) {
-                info_dialog.querySelector(".deploy").insertAdjacentHTML('beforeend',data.content);
-                info_dialog.querySelector(".deploy>li:last-child").scrollIntoView();
-            }
-            if (data.completed) {
-                clearInterval(intervalId);
-            }
-        })
-        .catch((error) => {
-            handleError(error);
-        })
 }
