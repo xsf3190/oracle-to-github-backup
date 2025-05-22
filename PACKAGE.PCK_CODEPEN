@@ -293,7 +293,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     BEGIN
         RETURN(
             '<dialog class="login-email">' ||
-                '<form class="flow">' ||
+                '<form>' ||
                     '<input type="hidden" name="url" value="">' ||
                     '<input type="hidden" name="request_type" value="">' ||
                     '<input type="hidden" name="domain" value="">' ||
