@@ -10,7 +10,7 @@ export const login_dialog = document.querySelector("dialog.login-email");
 
 export const nav = document.querySelector(".topnav");
 export const header = document.querySelector("body>header");
-export const main = document.querySelector("main");
+export const main = document.querySelector("body>main");
 export const footer = document.querySelector("body>footer");
 
 export const set_alert = (alert) => {
