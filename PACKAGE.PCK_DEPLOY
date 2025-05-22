@@ -69,7 +69,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_sha1_test es_modules.sha1_test%type;
         l_sha256_test es_modules.sha256_test%type;
 
-        l_file_name apex_application_static_files.file_name%type;
         l_file_content CLOB;
         
         l_page CLOB;
@@ -417,6 +416,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_is_product BOOLEAN:=FALSE;
 
         l_use_test PLS_INTEGER;
+        l_deploy_env NUMBER;
         l_importmap  CLOB;
         l_importmap_integrity  CLOB;
         l_importmap_sha256 VARCHAR2(200);
@@ -632,11 +632,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             buildESModules;
         END IF;
 
+        l_deploy_env:=CASE WHEN pEnv='TEST' THEN 1 WHEN pEnv='LIVE' THEN 3 END;
+
         FOR C IN (
             SELECT module_name, 
                     CASE WHEN l_use_test=0 THEN host_name ELSE REPLACE(host_name,'/live/','/test/') END host_name, 
                     CASE WHEN l_use_test=0 THEN sha256_live ELSE sha256_test END sha256 
               FROM es_modules 
+             WHERE BITAND(deploy_envs,l_deploy_env)=l_deploy_env
              ORDER BY 1
         ) LOOP
             IF (C.module_name=MAIN_MODULE_NAME) THEN
