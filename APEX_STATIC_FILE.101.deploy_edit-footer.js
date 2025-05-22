@@ -119,16 +119,7 @@ editor.addEventListener("click", async (e) => {
         const formObj = Object.fromEntries(formData);
         await callAPI(endpoint,'PUT', formObj)
             .then(() => {
-                console.log("Form changes saved");
-            })
-            .catch((error) => {
-                handleError(error);
-            });
-
-        const import_module_name = "./deploy_publish-website.min.js";
-        await import(import_module_name)
-            .then((module) => {
-                module.init(e.target);
+                dropdown_details.querySelector("button.publish-website").click();
             })
             .catch((error) => {
                 handleError(error);
