@@ -622,7 +622,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
          (
             SELECT null
               FROM website w, users u, apex_workspace_apex_users a
-             WHERE u.id=pUserId
+             WHERE w.id=pWebsiteId
+               AND u.id=pUserId
                AND w.domain_name=REPLACE(SUBSTR(u.email,1,INSTR(u.email,'@')-1),'.','-')
                AND u.email=a.email
                AND a.is_admin='Yes'
