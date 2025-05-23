@@ -80,13 +80,13 @@ editor.addEventListener("input", (e) => {
 */
 editor.addEventListener("click", async (e) => {
     if (e.target.matches(".add-page")) {
-        const target = nav.querySelector("[aria-current='page']");
+        const target = nav.querySelector("[aria-current='page']").parentElement;  // returns <li>
         removeAriaCurrent();
-        const clone = target.cloneNode();
-        clone.textContent = "[NEW PAGE]";
-        clone.dataset.id = tmp--;
-        clone.dataset.collection = "N/A";
-        clone.setAttribute("aria-current","page");
+        const clone = target.cloneNode(true);
+        clone.firstChild.textContent = "[NEW PAGE]";
+        clone.firstChild.dataset.id = tmp--;
+        clone.firstChild.dataset.collection = "N/A";
+        clone.firstChild.setAttribute("aria-current","page");
         
         nav_items.insertBefore(clone, target.nextSibling);
         const edit = editor.querySelector("input[name='navigation_label']");
@@ -150,13 +150,6 @@ editor.addEventListener("click", async (e) => {
                 handleError(error);
             });
 
-        const import_module_name = "deploy_publish-website";
-        await import(import_module_name)
-            .then((module) => {
-                module.init(e.target);
-            })
-            .catch((error) => {
-                handleError(error);
-            });
+        dropdown_details.querySelector("button.publish-website").click();
     }
 })
