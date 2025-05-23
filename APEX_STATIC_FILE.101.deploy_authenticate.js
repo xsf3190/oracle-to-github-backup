@@ -242,6 +242,7 @@ sendmail_passcode.addEventListener("click", (e) => {
             form.querySelector("#passcodeInput").parentElement.classList.remove("visually-hidden");
             form.querySelector(".validate-passcode").classList.remove("visually-hidden");
             sendmail_magic.classList.add("visually-hidden");
+            sendmail_passcode.previousElementSibling.classList.add("visually-hidden");
             sendmail_passcode.classList.add("visually-hidden");
             validate_passcode.dataset.userid = data.userid;
         })
