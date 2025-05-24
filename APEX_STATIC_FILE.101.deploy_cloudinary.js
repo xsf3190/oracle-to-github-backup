@@ -5,7 +5,19 @@
 import { bodydata } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
-let endpoint;
+let endpoint, widget;
+
+export const init = (element) => {
+    endpoint = element.dataset.endpoint;
+    callAPI( endpoint,"GET","?request=details")
+        .then( (data) => {
+            widget.open();
+            widget.update({tags: [bodydata.articleid], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize, googleApiKey: data.googleApiKey});
+        })
+        .catch((error) => {
+            handleError(error);
+        });
+}
 
 /* 
  ** GENERATE SIGNATURE ON SERVER FOR CLOUDINARY SUSCRIBER IN ORDER TO ENABLE SECURE MEDIA UPLOAD
@@ -20,7 +32,11 @@ const getCldSignature = async (callback, params_to_sign) => {
         });
 };
 
-var widget=cloudinary.createUploadWidget(
+/* 
+ ** CREATE CLOUDINARY UPLOAD WIDGET
+ */
+const createWidget = () => {
+    widget=cloudinary.createUploadWidget(
     { 
         uploadSignature: getCldSignature,
         clientAllowedFormats: ['image','video','audio'],
@@ -82,28 +98,12 @@ var widget=cloudinary.createUploadWidget(
                 });
         };
     }
-)
-
-export const init = (element) => {
-    endpoint = element.dataset.endpoint;
-    callAPI( endpoint,"GET","?request=details")
-        .then( (data) => {
-            console.log("about to widget.open()");
-            widget.open();
-            console.log("about to widget.update");
-            widget.update({tags: [bodydata.articleid], cloudName: data.cloudname, api_key: data.apikey,  maxImageFileSize: data.maxImageFileSize, maxVideoFileSize: data.maxVideoFileSize, googleApiKey: data.googleApiKey});
-        })
-        .catch((error) => {
-            handleError(error);
-        });
-}
+)};
 
 /* 
 ** Add CLOUDINARY UPLOAD WIDGET LIBRARY - THEY DON'T PROVIDE ES MODULE. BOO. 
 */
-/*
 const script = document.createElement('script');
 script.setAttribute('src', "https://upload-widget.cloudinary.com/latest/global/all.js");
 script.onload = createWidget;
 document.head.appendChild(script);
-*/
