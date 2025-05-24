@@ -318,10 +318,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                         '</div>' ||
                         '<div class="loader visually-hidden"></div>' ||
                     '</article>' ||
-                    '<footer class="flex-items space-apart">' ||
-                        '<button class="button sendmail-magic" type="button">Send a Link</button>' ||
+                    '<footer class="flex-items space-apart no-wrap">' ||
+                        '<button class="button sendmail-magic" type="button">Send Link</button>' ||
                         '<div><hr><span>OR</span><hr></div>' ||
-                        '<button class="button sendmail-passcode" type="button">Send a Code</button>' ||
+                        '<button class="button sendmail-passcode" type="button">Send Code</button>' ||
                         '<button class="button validate-passcode visually-hidden" type="button">Submit Passcode</button>' ||
                     '</footer>' ||
                 '</form>' ||
