@@ -77,7 +77,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_clob CLOB;
         l_website_id website.id%type;
         l_netlify_site_id website.netlify_site_id%type;
+        l_user_id website.user_id%type;
         l_ssl_url VARCHAR2(50);
+        l_job_name VARCHAR2(30);
 
     BEGIN
         IF (pEnv NOT IN ('test','live')) THEN
@@ -85,12 +87,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             RETURN;
         END IF;
 
-        SELECT id, netlify_site_id INTO l_website_id, l_netlify_site_id FROM website WHERE domain_name='es-modules';
-
-        /*
-        ** DELETE ANY OLD DEPLOYMENTS
-        */
-        runDelete(pUserId=>null, pWebsiteId=>l_website_id, pSiteId=>l_netlify_site_id);
+        SELECT id, netlify_site_id, user_id INTO l_website_id, l_netlify_site_id, l_user_id FROM website WHERE domain_name='es-modules';
 
         pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'sites/' || l_netlify_site_id, pMethod=>'GET', pData=>l_clob);
         SELECT ssl_url INTO l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS(ssl_url));
@@ -106,10 +103,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                         apex_util.blob_to_clob(file_content) file_content
                   FROM apex_application_static_files 
                  WHERE application_id=101
+                   AND file_name LIKE 'deploy%'
                    AND (
-                        (file_name LIKE 'deploy%' AND mime_type='text/javascript' AND INSTR(file_name,'.min.')>0) 
+                        (mime_type='text/javascript' AND INSTR(file_name,'.min.')>0) 
                         OR 
-                        (file_name LIKE 'deploy%' AND mime_type='text/css' AND INSTR(file_name,'.min.')=0)
+                        (mime_type='text/css' AND INSTR(file_name,'.min.')=0)
                        )
             )
             SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, CAST(s.last_updated_on AS TIMESTAMP WITH TIME ZONE) updated_source, s.file_content, e.sha1_test, e.sha1_live
@@ -190,18 +188,45 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         ** UPLOAD TO NETLIFY ONLY THE FILES IT REQUIRES
         */
         FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
-            pck_core.log('... uploading ' || l_deploy_files(C.sha1).file_name);
+            pck_core.log('... uploading ESM ' || l_deploy_files(C.sha1).file_name);
             pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', 
                 pBody=>l_deploy_files(C.sha1).file_content,
                 pData=>l_clob
             );
-            
         END LOOP;
 
         /*
         ** DELETE ANY MODULES For WHICH SOURCE NO LONGER EXISTS
         */
         DELETE es_modules WHERE module_name NOT IN (SELECT file_name FROM apex_application_static_files WHERE application_id=101);
+
+        /*
+        ** DELETE ANY OLD DEPLOYMENTS
+        */
+        l_job_name:=dbms_scheduler.generate_job_name('DELETE_');
+        dbms_scheduler.create_job(
+            job_name   => l_job_name,
+            job_type   =>'STORED_PROCEDURE',
+            job_action =>'pck_deploy.runDelete',
+            number_of_arguments=>3,
+            start_date=>systimestamp
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 1,
+            argument_value => l_user_id
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 2,
+            argument_value => l_website_id
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 3,
+            argument_value => l_netlify_site_id
+        );
+        dbms_scheduler.enable(l_job_name);
 
     END;
 
@@ -234,7 +259,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         IF (pChars IS NULL) THEN 
             RETURN (NULL);
         END IF;
-        pck_core.log(pFamily||'-'||pFont||'-'||pChars);
 
         l_api_url:='https://fonts.googleapis.com/css?family=' || REPLACE(pFamily,' ','+') || ':' || pFont
                 || '&display=swap'
@@ -275,7 +299,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END LOOP;
             END IF;
         END LOOP;
-        pck_core.log('pBoldItalic:'||pBoldItalic);
 
         l_text:=REGEXP_REPLACE(l_text,l_italics_bold_regex,null);
 
@@ -292,7 +315,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END LOOP;
             END IF;
         END LOOP;
-        pck_core.log('pItalic:'||pItalic);
 
         l_text:=REGEXP_REPLACE(l_text,l_italics_regex,null);
 
@@ -309,7 +331,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END LOOP;
             END IF;
         END LOOP;
-        pck_core.log('pBoldNormal:'||pBoldNormal);
 
 
         l_text:=REGEXP_REPLACE(l_text,l_bold_regex,null);
@@ -325,7 +346,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END IF;
             END LOOP;
         END IF;
-        pck_core.log('pNormal:'||pNormal);
     END;
 
 
@@ -513,7 +533,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                        AND wf.font_id=f.id
                 ) 
                 LOOP
-                --pck_core.log(C.context || '-' || C.family|| '-' ||C.wght_bold|| '-' ||C.wght_normal);
                     l_fonts(C.context).family:=C.family;
                     l_fonts(C.context).wght_bold:=C.wght_bold;
                     l_fonts(C.context).wght_normal:=C.wght_normal;
@@ -523,7 +542,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END iF;
 
             n:=REGEXP_COUNT(l_body_html,l_headings_regex);
-            pck_core.log('extract_styles headings:'||n);
             IF (n>0) THEN
                 FOR j IN 1..n 
                 LOOP
@@ -531,7 +549,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END LOOP;
                 l_body_html:=REGEXP_REPLACE(l_body_html,l_headings_regex,null);
             END IF;
-            pck_core.log('extract_styles text');
             extract_styles(l_body_html, l_fonts('text').chars_bold_italic, l_fonts('text').chars_bold_normal, l_fonts('text').chars_italic, l_fonts('text').chars_normal);                    
 
             IF (l_labels(i).collection_type='BLOG') THEN
@@ -671,7 +688,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[ img-src 'self' res.cloudinary.com;]' ||
             q'[ font-src 'self' fonts.gstatic.com;]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com es-modules.netlify.app;]' ||
-            q'[ script-src 'self' 'strict-dynamic' cdn.ckeditor.com upload-widget.cloudinary.com es-modules.netlify.app ']' || l_importmap_sha256 || q'[';]' ||
+            q'[ script-src 'self' cdn.ckeditor.com upload-widget.cloudinary.com es-modules.netlify.app ']' || l_importmap_sha256 || q'[';]' ||
             q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
             q'[ frame-ancestors 'none';]' ||
             q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
@@ -715,7 +732,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<script type="importmap" integrity="' || l_importmap_sha256 || '">' || l_importmap || '</script>' ||
                     l_main_module ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
-                    
+                    CASE WHEN pEnv='TEST' THEN 
+                    '<script src="https://upload-widget.cloudinary.com/latest/global/all.js" type="text/javascript"></script>'
+                    END ||
                 '</head>' ||
                 
                 l_labels(i).body_html ||
@@ -753,14 +772,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             logDeployment(pWebsiteId, pSiteId, 'Uploading ' || l_deploy_files(C.sha1).file_name);
             n:=n+1;
         END LOOP;
-
-        /*
-        IF (n>0) THEN
-            logDeployment(pWebsiteId, pSiteId, 'Uploaded files: ' || n || ' Unchanged files: ' || TO_CHAR(l_deploy_files.COUNT-n));
-        ELSE
-            logDeployment(pWebsiteId, pSiteId, 'All files unchanged since last deployment');
-        END IF;
-        */
 
         /* Update deployed_date if null */
         CASE pEnv
