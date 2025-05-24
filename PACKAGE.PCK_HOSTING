@@ -28,7 +28,7 @@ end;
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
 
     /*
-    ** POLL NETLIFY "deploys" API FOR STATUS=ready.
+    ** POLL NETLIFY "deploys" API FOR STATUS="ready"
     */
     PROCEDURE waitDeployment(pWebsiteId IN website.id%type, pUserid IN users.id%type, pWaitSeconds IN NUMBER) IS
         l_netlify_deploy_id website.netlify_deploy_id%type;
@@ -36,8 +36,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         l_clob CLOB;
         l_state VARCHAR2(20);
         l_done BOOLEAN:=FALSE;
-        n PLS_INTEGER:=0;
+        n PLS_INTEGER:=2;
     BEGIN
+        /* WAIT A COUPLE OF SECONDS BEFORE STARTING. HOPEFULLY WILL BE "ready"  */
+        dbms_session.sleep(n);
+
         SELECT netlify_deploy_id, netlify_site_id INTO l_netlify_deploy_id, l_netlify_site_id FROM website WHERE id=pWebsiteId;
 
         WHILE NOT l_done 
@@ -47,12 +50,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
             SELECT state INTO l_state FROM JSON_TABLE(l_clob, '$' COLUMNS (state));
 
             n:=n+1;
-            IF (n=pWaitSeconds) THEN
+            IF (n>=pWaitSeconds) THEN
                 l_done:=TRUE;
                 EXIT;
             END IF;
 
-            pck_core.log(l_state);
             IF (l_state='ready') THEN
                 l_done:=TRUE;
             ELSE
