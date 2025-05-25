@@ -49,7 +49,6 @@ const createWidget = () => {
             "unsplash",
             "shutterstock"
         ],
-        defaultSource: "local",
         use_filename: true,
         preBatch: (cb, data) => {
             const maxLength = 248;
