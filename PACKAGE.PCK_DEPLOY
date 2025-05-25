@@ -732,9 +732,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<script type="importmap" integrity="' || l_importmap_sha256 || '">' || l_importmap || '</script>' ||
                     l_main_module ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
-                    CASE WHEN pEnv='TEST' THEN 
-                    '<script src="https://upload-widget.cloudinary.com/latest/global/all.js" type="text/javascript"></script>'
-                    END ||
                 '</head>' ||
                 
                 l_labels(i).body_html ||
