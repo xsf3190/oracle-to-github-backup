@@ -5,7 +5,7 @@
 import { bodydata } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
-let endpoint, widget;
+let endpoint;
 
 export const init = (element) => {
     endpoint = element.dataset.endpoint;
@@ -35,8 +35,7 @@ const getCldSignature = async (callback, params_to_sign) => {
 /* 
  ** CREATE CLOUDINARY UPLOAD WIDGET
  */
-const createWidget = () => {
-    widget=cloudinary.createUploadWidget(
+export const widget=cloudinary.createUploadWidget(
     { 
         uploadSignature: getCldSignature,
         clientAllowedFormats: ['image','video','audio'],
@@ -50,21 +49,6 @@ const createWidget = () => {
             "shutterstock"
         ],
         use_filename: true,
-        preBatch: (cb, data) => {
-            const maxLength = 248;
-            let errors=0;
-            for (let i=0; i<data.files.length; i++) {
-                if (data.files[i].name.length>maxLength) {
-                    errors++;
-                }
-            }
-            if (errors>0) {
-                handleError("Files names selected for upload must be no greater than " + maxLength + " characters in length");
-                cb({cancel: true}); 
-            } else { 
-                cb({}); 
-            }
-        }
     },
     (error, result) => {
         if (error) {
@@ -97,12 +81,4 @@ const createWidget = () => {
                 });
         };
     }
-)};
-
-/* 
-** Add CLOUDINARY UPLOAD WIDGET LIBRARY - THEY DON'T PROVIDE ES MODULE. BOO. 
-*/
-const script = document.createElement('script');
-script.setAttribute('src', "https://upload-widget.cloudinary.com/latest/global/all.js");
-script.onload = createWidget;
-document.head.appendChild(script);
+);
