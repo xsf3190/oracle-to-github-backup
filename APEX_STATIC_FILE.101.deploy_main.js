@@ -2,8 +2,6 @@ import "deploy_metric";
 
 import { dropdown, login_btn } from "deploy_elements";
 
-import { widget } from "./deploy_cloudinary.min.js";
-
 /*
 ** NEW WEBSITE URL INCLUDES OWNER'S JWT TOKENS - SAVE THESE IN STORAGE AND REMOVE FROM URL
 */
@@ -35,10 +33,6 @@ if (localStorage.getItem("refresh")) {
 ** CLICK HANDLER FOR ALL BUTTONS IN DYNAMIC DROPDOWN MENULIST
 */
 dropdown.addEventListener("click", async (e) => {
-    if (e.target.matches(".upload-media")) {
-        widget.open();
-        return;
-    }
     let module_name = e.target.dataset.endpoint;
     if (!module_name) return;
     module_name = "deploy_" + module_name.substring(0,module_name.indexOf("/"));
