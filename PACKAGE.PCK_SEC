@@ -11,6 +11,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
         iat NUMBER,
         exp NUMBER,
         jti NUMBER,
+        cld_cloud_name users.cld_cloud_name%type,
+        cld_upload_preset users.cld_upload_preset%type,
         client_secret user_ords_clients.client_secret%type
     );
     TYPE t_session_data IS RECORD (
@@ -103,9 +105,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_payload:=SUBSTR(pToken,pos1+1,pos2-pos1-1);
         l_decoded:=utl_raw.cast_to_varchar2(utl_encode.base64_decode(utl_raw.cast_to_raw(l_payload)));
 
-        SELECT j.iss, j.sub, j.aud, j.iat, j.exp, j.jti, o.client_secret 
-          INTO l_JWT_data.iss, l_JWT_data.sub, l_JWT_data.aud, l_JWT_data.iat, l_JWT_data.exp, l_JWT_data.jti,  l_JWT_data.client_secret
-          FROM JSON_TABLE(l_decoded, '$' COLUMNS(iss, sub, aud, iat, exp, jti)) j, user_ords_clients o
+        SELECT j.iss, j.sub, j.aud, j.iat, j.exp, j.jti, j.cld_cloud_name, j.cld_upload_preset, o.client_secret 
+          INTO l_JWT_data.iss, l_JWT_data.sub, l_JWT_data.aud, l_JWT_data.iat, l_JWT_data.exp, l_JWT_data.jti, l_JWT_data.cld_cloud_name, l_JWT_data.cld_upload_preset, l_JWT_data.client_secret
+          FROM JSON_TABLE(l_decoded, '$' COLUMNS(iss, sub, aud, iat, exp, jti, cld_cloud_name, cld_upload_preset)) j, user_ords_clients o
          WHERE o.name=j.sub;
 
         RETURN (l_JWT_data);
@@ -581,23 +583,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_issuer:='ORDS.'||pWebsiteId;
         l_scope:=getScope(pWebsiteId,pEmail);
 
-        l_new_token:=apex_jwt.ENCODE (
-            p_iss       =>l_issuer,
-            p_sub       => pEmail,
-            p_aud       => l_scope,
-            p_jti       => pUserId,
-            p_iat_ts    => current_timestamp,
-            p_exp_sec   => ACCESS_TOKEN_EXP,
-            p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
-        );
+        FOR C IN (
+            SELECT u.cld_cloud_name, u.cld_upload_preset
+              FROM users u, apex_workspace_apex_users w
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+             ORDER BY date_created
+             FETCH FIRST ROW ONLY
+        ) LOOP
+            l_new_refresh:=apex_jwt.ENCODE (
+                p_iss       => l_issuer,
+                p_sub       => pEmail,
+                p_aud       => l_scope,
+                p_jti       => pUserId,
+                p_iat_ts    => current_timestamp,
+                p_exp_sec   => REFRESH_TOKEN_EXP,
+                p_other_claims => '"cld_cloud_name":' || apex_json.stringify(C.cld_cloud_name) ||
+                              ',"cld_upload_preset":' || apex_json.stringify(C.cld_upload_preset),
+                p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
+            );
+        END LOOP;
 
-        l_new_refresh:=apex_jwt.ENCODE (
+        l_new_token:=apex_jwt.ENCODE (
             p_iss       => l_issuer,
             p_sub       => pEmail,
             p_aud       => l_scope,
             p_jti       => pUserId,
             p_iat_ts    => current_timestamp,
-            p_exp_sec   => REFRESH_TOKEN_EXP,
+            p_exp_sec   => ACCESS_TOKEN_EXP,
             p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
         );
 
@@ -814,6 +827,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             p_jti       => l_JWT_data.jti,
             p_iat_ts    => current_timestamp,
             p_exp_sec   => REFRESH_TOKEN_EXP,
+            p_other_claims => '"cld_cloud_name":' || apex_json.stringify(l_JWT_data.cld_cloud_name) ||
+                              ',"cld_upload_preset":' || apex_json.stringify(l_JWT_data.cld_upload_preset),
             p_signature_key => UTL_RAW.cast_to_raw (l_JWT_data.client_secret)
         );
 
