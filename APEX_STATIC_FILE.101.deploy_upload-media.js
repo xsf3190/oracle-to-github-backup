@@ -7,12 +7,6 @@ import { callAPI, handleError } from "deploy_callAPI";
 
 let widget, endpoint;
 
-export const init = (element) => {
-    endpoint = element.dataset.endpoint;
-    widget.open();
-    widget.update({tags: [bodydata.articleid]});
-}
-
 /* 
  ** CREATE CLOUDINARY UPLOAD WIDGET
  */
@@ -57,12 +51,37 @@ const createWidget = () => {
     }
 )};
 
-/* 
-** ADD CLOUDINARY UPLOAD WIDGET LIBRARY AND CREATE WIDGET
-*/
-if (!document.querySelector("head > script[src='https://upload-widget.cloudinary.com/latest/global/all.js']")) {
-    const script = document.createElement('script');
-    script.setAttribute('src', "https://upload-widget.cloudinary.com/latest/global/all.js");
-    script.onload = createWidget;
-    document.head.appendChild(script);
+const loadScript = async (url) => {
+    return new Promise((resolve, reject) => {
+        if (widget) {
+            resolve("Widget already created");
+        }
+        let script = document.createElement('script');
+
+        script.addEventListener('load', () => {
+            console.log("Cloudinary upload widget script loaded OK");
+            createWidget();
+            resolve("Widget created");
+        });
+
+        script.addEventListener('error', () => {
+            reject("Cloudinary upload widget script failed to load");
+        });
+
+        script.src = url;
+        document.head.appendChild(script);
+  });
+}
+
+export const init = (element) => {
+    console.log("START INIT");
+    endpoint = element.dataset.endpoint;
+    
+    loadScript("https://upload-widget.cloudinary.com/latest/global/all.js")
+        .then((result) => {
+            console.log(result);
+            widget.open();
+            widget.update({tags: [bodydata.articleid]});
+        })
+        .catch((error) => handleError(error));
 }
