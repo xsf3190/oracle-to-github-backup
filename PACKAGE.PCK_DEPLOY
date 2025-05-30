@@ -122,25 +122,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             IF (C.sha1_test IS NULL) THEN 
                 INSERT INTO es_modules (
-                    host_name, module_name, updated_source, sha1_test, sha256_test, content_test, updated_test, sha1_live, sha256_live, content_live, updated_live) 
+                    host_name, module_name, updated_source, sha1_test, sha256_test, updated_test, sha1_live, sha256_live, updated_live) 
                 VALUES (
-                    CASE WHEN C.file_name='deploy_cloudinary.min.js' THEN './' || C.file_name ELSE l_ssl_url || '/live/' || C.file_path || C.file_name END, 
+                    l_ssl_url || '/live/' || C.file_path || C.file_name, 
                     C.file_name, 
                     C.updated_source, 
                     l_sha1_test, 
                     l_sha256_test, 
-                    CASE WHEN C.file_name='deploy_cloudinary.min.js' THEN l_file_content END, 
                     current_timestamp, 
                     l_sha1_test, 
                     l_sha256_test, 
-                    CASE WHEN C.file_name='deploy_cloudinary.min.js' THEN l_file_content END, 
                     current_timestamp);
             ELSIF(l_sha1_test<>C.sha1_test) THEN 
                 UPDATE es_modules
                    SET updated_source=C.updated_source,
                        sha1_test=l_sha1_test, 
                        sha256_test=l_sha256_test,
-                       content_test=CASE WHEN C.file_name='deploy_cloudinary.min.js' THEN l_file_content END,
                        updated_test=current_timestamp
                  WHERE module_name=C.file_name;
             END IF;
@@ -156,7 +153,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 UPDATE es_modules
                    SET sha1_live=l_sha1_test,
                        sha256_live=l_sha256_test,
-                       content_live=CASE WHEN C.file_name='deploy_cloudinary.min.js' THEN l_file_content END,
                        updated_live=current_timestamp
                  WHERE module_name=C.file_name;
                 l_files.put('live/' || C.file_path || C.file_name, l_sha1_test);
@@ -666,8 +662,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         FOR C IN (
             SELECT module_name, 
                     CASE WHEN l_use_test=0 THEN host_name ELSE REPLACE(host_name,'/live/','/test/') END host_name, 
-                    CASE WHEN l_use_test=0 THEN sha256_live ELSE sha256_test END sha256,
-                    CASE WHEN l_use_test=0 THEN content_live ELSE content_test END content
+                    CASE WHEN l_use_test=0 THEN sha256_live ELSE sha256_test END sha256
               FROM es_modules 
              WHERE BITAND(deploy_envs,l_deploy_env)=l_deploy_env
              ORDER BY 1
@@ -676,10 +671,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_main_module:=l_main_module ||
                     '<link rel="modulepreload" href="' || C.host_name || '">' ||
                     '<script src="' || C.host_name || '" type="module" integrity="' ||  C.sha256 || '" crossorigin></script>';
-            ELSIF (C.content IS NOT NULL) THEN
-                l_main_module:=l_main_module ||
-                    '<script src="./' || C.module_name || '" type="module"></script>';
-                addDeploy(C.module_name, C.content);
+            --ELSIF (C.content IS NOT NULL) THEN
+              --  l_main_module:=l_main_module ||
+                --    '<script src="./' || C.module_name || '" type="module"></script>';
+                --addDeploy(C.module_name, C.content);
             ELSIF (INSTR(C.host_name,'js')>0) THEN 
                 l_importmap:=l_importmap || '"' || SUBSTR(C.module_name,1,INSTR(C.module_name,'.')-1) || '":"' || C.host_name || '",';
                 l_importmap_integrity:=l_importmap_integrity || '"' || C.host_name || '":"' || C.sha256 || '",';
