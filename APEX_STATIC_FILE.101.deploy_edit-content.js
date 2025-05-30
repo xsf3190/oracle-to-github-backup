@@ -227,7 +227,7 @@ const saveData = async ( data, endpoint ) => {
 ** USER CLICKS MEDIA BUTTON. SHOW LIST OF MEDIA. ALLOW USER TO COPY URL
 */
 export const show_media = async (request) => {
-    callAPI("cloudinary/:ID/:PAGE","GET","?request="+request)
+    callAPI("upload-media/:ID/:PAGE","GET","?request="+request)
         .then( (data) => {
             info_dialog.querySelector("header>h4").textContent = data.heading;
 
