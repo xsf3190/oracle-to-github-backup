@@ -1,16 +1,11 @@
 /* 
- ** OPEN CLOUDINARY MEDIA UPLOAD WIDGET
+ ** CREATE AND OPEN CLOUDINARY UPLOAD WIDGET
  */
 
 import { bodydata } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 let widget, endpoint;
-
-/* 
- ** CREATE CLOUDINARY UPLOAD WIDGET
- */
-
 
 const createWidget = () => {
     const arrayToken = localStorage.getItem("refresh").split(".");
@@ -55,13 +50,14 @@ const loadScript = async (url) => {
     return new Promise((resolve, reject) => {
         if (widget) {
             resolve("Widget already created");
+            return;
         }
+
         let script = document.createElement('script');
 
         script.addEventListener('load', () => {
-            console.log("Cloudinary upload widget script loaded OK");
             createWidget();
-            resolve("Widget created");
+            resolve("Cloudinary Upload Widget created");
         });
 
         script.addEventListener('error', () => {
@@ -74,7 +70,6 @@ const loadScript = async (url) => {
 }
 
 export const init = (element) => {
-    console.log("START INIT");
     endpoint = element.dataset.endpoint;
     
     loadScript("https://upload-widget.cloudinary.com/latest/global/all.js")
