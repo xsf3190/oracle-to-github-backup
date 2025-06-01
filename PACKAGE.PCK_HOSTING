@@ -144,7 +144,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         INSERT INTO website_article (website_id, article_id, display_order, navigation_label)
         VALUES (seq_website.currval, seq_article.currval, 1, 'Home');
 
-        pck_deploy.runDeployment(seq_website.currval, pUserid, 'TEST', l_netlify_site_id, pck_core.getRestUrl());
+        pck_deploy.runDeployment(seq_website.currval, pUserid, 'TEST', l_netlify_site_id, pck_core.getRestUrl(),'live');
         
         waitDeployment(seq_website.currval, pUserid);
 
@@ -265,7 +265,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
             IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
                 l_message:='URL successfully changed';
                 UPDATE website SET domain_name=l_subdomain WHERE id=pWebsiteId;
-                pck_deploy.runDeployment(pWebsiteId, l_session_data.user_id, 'TEST', l_netlify_site_id, pck_core.getRestUrl());
+                pck_deploy.runDeployment(pWebsiteId, l_session_data.user_id, 'TEST', l_netlify_site_id, pck_core.getRestUrl(),'live');
             ELSIF (apex_web_service.g_status_code=422) THEN
                 l_message:='Name already taken. Try again';
                 l_valid:=FALSE;
@@ -379,7 +379,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         /*
         ** Deploy LIVE website
         */
-        pck_deploy.runDeployment(pWebsiteId, l_user_id, 'LIVE', l_netlify_site_id_custom, pck_core.getRestUrl());
+        pck_deploy.runDeployment(pWebsiteId, l_user_id, 'LIVE', l_netlify_site_id_custom, pck_core.getRestUrl(),'live');
 
         createURLExistsJob(l_domain_name_custom, l_user_id);
 
