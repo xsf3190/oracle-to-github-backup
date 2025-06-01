@@ -50,9 +50,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_env VARCHAR2(4);
         l_site_id website.netlify_site_id%type;
         l_site_id_custom website.netlify_site_id_custom%type;
+        l_esm_library VARCHAR2(4):='live';
     BEGIN
-        l_session_data:=pck_sec.getSessionData(pWebsiteId);
-
         /* 
         ** Check no other session currently deploying - simultaneous deployments not allowed on Netlify free plan 
         */
@@ -65,21 +64,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             RETURN;
         END LOOP;
 
-        IF (INSTR(l_session_data.url,'netlify.app')>0) THEN
-            l_env:='TEST';
-        ELSE
-            l_env:='LIVE';
-        END IF;
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
-        DELETE website_deploy WHERE website_id=pWebsiteId;
+        /* 
+        ** Rebuild es-modules CDN if Admin user deploying their test site 
+        */
+        FOR C IN (
+            SELECT null
+              FROM website w, users u, apex_workspace_apex_users a
+             WHERE w.id=pWebsiteId
+               AND u.id=l_session_data.user_id
+               AND w.domain_name=REPLACE(SUBSTR(u.email,1,INSTR(u.email,'@')-1),'.','-')
+               AND u.email=a.email
+               AND a.is_admin='Yes'
+         ) LOOP
+            pck_deploy.buildESModules;
+            l_esm_library:='test';
+        END LOOP;
+
+        l_env:=CASE WHEN INSTR(l_session_data.url,'netlify.app')>0 THEN 'TEST' ELSE 'LIVE' END;
+
         UPDATE website SET netlify_deploy_id=NULL WHERE id=pWebsiteId RETURNING netlify_site_id, netlify_site_id_custom INTO l_site_id, l_site_id_custom;
-
+        
+        DELETE website_deploy WHERE website_id=pWebsiteId AND site_id=CASE WHEN l_env='TEST' THEN l_site_id ELSE l_site_id_custom END;
+        
         l_job_name:=dbms_scheduler.generate_job_name('DEPLOY_');
         dbms_scheduler.create_job(
             job_name   => l_job_name,
             job_type   =>'STORED_PROCEDURE',
             job_action =>'pck_deploy.runDeployment',
-            number_of_arguments=>5,
+            number_of_arguments=>6,
             start_date=>systimestamp
         );
         dbms_scheduler.set_job_argument_value(
@@ -106,6 +120,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             job_name => l_job_name,
             argument_position => 5,
             argument_value => pck_core.getRestUrl()
+        );
+        dbms_scheduler.set_job_argument_value(
+            job_name => l_job_name,
+            argument_position => 6,
+            argument_value => l_esm_library
         );
         dbms_scheduler.enable(l_job_name);
 
