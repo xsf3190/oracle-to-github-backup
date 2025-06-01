@@ -10,7 +10,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as
     --
     PROCEDURE runDelete(pUserId IN users.id%type, pWebsiteId IN website.id%type, pSiteId IN website.netlify_site_id%type);
     --
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pResturl IN VARCHAR2) ;
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pRestUrl IN VARCHAR2, pEsmLibrary IN VARCHAR2);
     --
     PROCEDURE setTerraformApikey;
     --
@@ -122,7 +122,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             IF (C.sha1_test IS NULL) THEN 
                 INSERT INTO es_modules (
-                    host_name, module_name, updated_source, sha1_test, sha256_test, updated_test, sha1_live, sha256_live, updated_live) 
+                    host_name, module_name, updated_source, sha1_test, sha256_test, updated_test, sha1_live, sha256_live, updated_live, live_change_ind) 
                 VALUES (
                     l_ssl_url || '/live/' || C.file_path || C.file_name, 
                     C.file_name, 
@@ -132,7 +132,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     current_timestamp, 
                     l_sha1_test, 
                     l_sha256_test, 
-                    current_timestamp);
+                    current_timestamp,
+                    0);
             ELSIF(l_sha1_test<>C.sha1_test) THEN 
                 UPDATE es_modules
                    SET updated_source=C.updated_source,
@@ -147,16 +148,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_files.put('test/' || C.file_path || C.file_name, l_sha1_test);
 
             /*
-            ** UPDATE "live" ON REQUEST ONLY 
+            ** UPDATE "live" HASH VALUES TO THE ALWAYS CALCULATED TEST VALUES WHEN PARAMETER PASSED
             */
             IF (pEnv='live') THEN
                 UPDATE es_modules
                    SET sha1_live=l_sha1_test,
                        sha256_live=l_sha256_test,
+                       live_change_ind=CASE WHEN sha1_live=l_sha1_test THEN 0 ELSE 1 END,
                        updated_live=current_timestamp
                  WHERE module_name=C.file_name;
                 l_files.put('live/' || C.file_path || C.file_name, l_sha1_test);
             ELSE
+            /*
+            ** ENSURE THAT ES_MODULES.NETLIFY.APP IS ALWAYS DEPLOYED INCLUDING "live" ESM FILES
+            */
                 l_files.put('live/' || C.file_path || C.file_name, NVL(C.sha1_live,l_sha1_test) );
             END IF;
             
@@ -195,7 +200,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'sites/' || l_netlify_site_id || '/deploys', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
         
         /*
-        ** UPLOAD TO NETLIFY ONLY THE FILES IT REQUIRES
+        ** UPLOAD TO NETLIFY ALL FILES WITH UNIQUE CONTENT
         */
         FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
             pck_core.log('... uploading ESM ' || l_deploy_files(C.sha1).file_name);
@@ -209,9 +214,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         ** DELETE ANY MODULES For WHICH SOURCE NO LONGER EXISTS
         */
         DELETE es_modules WHERE module_name NOT IN (SELECT file_name FROM apex_application_static_files WHERE application_id=101);
+        COMMIT;
 
         /*
-        ** DELETE ANY OLD DEPLOYMENTS
+        ** DELETE ANY OLD DEPLOYMENTS OF ES-MODULES.NETLIFY.APP
         */
         l_job_name:=dbms_scheduler.generate_job_name('DELETE_');
         dbms_scheduler.create_job(
@@ -238,6 +244,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         );
         dbms_scheduler.enable(l_job_name);
 
+        /*
+        ** REDEPLOY ALL WEBSITES USING CHANGED JAVASCRIPT MODULES
+        */
+        IF (pEnv='live') THEN
+            pck_hosting.waitDeployment(pWebsiteid=>l_website_id, pUserid=>l_user_id, pWaitSeconds=>10);
+            FOR C IN (
+                SELECT deploy_envs, SUM(live_change_ind) live_change_ind
+                  FROM es_modules
+                 WHERE INSTR(module_name,'.js')>0
+                 GROUP BY deploy_envs
+                 ORDER BY deploy_envs DESC
+            ) LOOP
+                IF (C.live_change_ind>0 AND C.deploy_envs=3) THEN
+                    FOR C1 IN (
+                        SELECT id, netlify_site_id_custom FROM website
+                         WHERE netlify_site_id_custom IS NOT NULL
+                    ) LOOP
+                    null;
+                    END LOOP;
+                END IF;
+            END LOOP;
+        END IF;
     END;
 
     /*
@@ -362,7 +390,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     /*
     **  DEPLOY BY UPLOADING HTML FILE CONTENT DIRECTLY TO NETLIFY
     */
-    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pRestUrl IN VARCHAR2) IS
+    PROCEDURE runDeployment(pWebsiteId IN website.id%type, pUserId IN website.user_id%type, pEnv IN VARCHAR2, pSiteId IN website.netlify_site_id%type, pRestUrl IN VARCHAR2, pEsmLibrary IN VARCHAR2) IS
         
         l_clob CLOB;
         l_json JSON_OBJECT_T;
@@ -444,7 +472,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_is_blog BOOLEAN:=FALSE;
         l_is_product BOOLEAN:=FALSE;
 
-        l_use_test PLS_INTEGER;
         l_deploy_env NUMBER;
         l_importmap  CLOB;
         l_importmap_integrity  CLOB;
@@ -641,28 +668,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_importmap:='"imports":{';
         l_importmap_integrity:='"integrity":{';
 
-        SELECT COUNT(*) INTO l_use_test FROM dual
-         WHERE EXISTS
-         (
-            SELECT null
-              FROM website w, users u, apex_workspace_apex_users a
-             WHERE w.id=pWebsiteId
-               AND u.id=pUserId
-               AND w.domain_name=REPLACE(SUBSTR(u.email,1,INSTR(u.email,'@')-1),'.','-')
-               AND u.email=a.email
-               AND a.is_admin='Yes'
-         );
-
-        IF (l_use_test>0) THEN
-            buildESModules;
-        END IF;
-
         l_deploy_env:=CASE WHEN pEnv='TEST' THEN 1 WHEN pEnv='LIVE' THEN 3 END;
 
         FOR C IN (
             SELECT module_name, 
-                    CASE WHEN l_use_test=0 THEN host_name ELSE REPLACE(host_name,'/live/','/test/') END host_name, 
-                    CASE WHEN l_use_test=0 THEN sha256_live ELSE sha256_test END sha256
+                    CASE WHEN pEsmLibrary='live' THEN host_name ELSE REPLACE(host_name,'/live/','/test/') END host_name, 
+                    CASE WHEN pEsmLibrary='live' THEN sha256_live ELSE sha256_test END sha256
               FROM es_modules 
              WHERE BITAND(deploy_envs,l_deploy_env)=l_deploy_env
              ORDER BY 1
@@ -671,10 +682,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_main_module:=l_main_module ||
                     '<link rel="modulepreload" href="' || C.host_name || '">' ||
                     '<script src="' || C.host_name || '" type="module" integrity="' ||  C.sha256 || '" crossorigin></script>';
-            --ELSIF (C.content IS NOT NULL) THEN
-              --  l_main_module:=l_main_module ||
-                --    '<script src="./' || C.module_name || '" type="module"></script>';
-                --addDeploy(C.module_name, C.content);
             ELSIF (INSTR(C.host_name,'js')>0) THEN 
                 l_importmap:=l_importmap || '"' || SUBSTR(C.module_name,1,INSTR(C.module_name,'.')-1) || '":"' || C.host_name || '",';
                 l_importmap_integrity:=l_importmap_integrity || '"' || C.host_name || '":"' || C.sha256 || '",';
@@ -699,7 +706,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[ img-src 'self' res.cloudinary.com;]' ||
             q'[ font-src 'self' fonts.gstatic.com;]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com es-modules.netlify.app;]' ||
-            q'[ script-src 'self' cdn.ckeditor.com upload-widget.cloudinary.com es-modules.netlify.app ']' || l_importmap_sha256 || q'[';]' ||
+            q'[ script-src 'self' 'strict-dynamic' 'unsafe-inline' cdn.ckeditor.com upload-widget.cloudinary.com es-modules.netlify.app ']' || l_importmap_sha256 || q'[';]' ||
             q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
             q'[ frame-ancestors 'none';]' ||
             q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
