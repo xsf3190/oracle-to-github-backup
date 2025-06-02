@@ -1,6 +1,6 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_DEPLOY" as 
     --
-    PROCEDURE buildESModules(pEnv IN VARCHAR2 DEFAULT 'test');
+    PROCEDURE buildESModules(pEsmLibrary IN VARCHAR2 DEFAULT 'test');
     --
     PROCEDURE deleteDirectory(pWebsiteId IN website.id%type, pUserId IN users.id%type);
     --
@@ -54,7 +54,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     ** "TEST" - FOR TESTING BY ADMIN USERS OF ADMIN-oWNED WEBSITES
     ** "LIVE" - ALL DEPLOYED WEBSITES LINK TO THESE
     */
-    PROCEDURE buildESModules(pEnv IN VARCHAR2) IS 
+    PROCEDURE buildESModules(pEsmLibrary IN VARCHAR2) IS 
         TYPE tt_files IS RECORD (
             file_name apex_application_static_files.file_name%type,
             file_content CLOB
@@ -81,8 +81,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_ssl_url VARCHAR2(50);
         l_job_name VARCHAR2(30);
 
+        TYPE tt_websites IS RECORD (
+            id website.id%type,
+            user_id website.user_id%type,
+            netlify_site_id website.netlify_site_id%type,
+            netlify_site_id_custom website.netlify_site_id_custom%type
+        );
+        TYPE t_websites IS TABLE OF tt_websites INDEX BY PLS_INTEGER;
+        l_websites t_websites;
+
     BEGIN
-        IF (pEnv NOT IN ('test','live')) THEN
+        IF (pEsmLibrary NOT IN ('test','live')) THEN
             RAISE_APPLICATION_ERROR(-20100,'Environment must be "live" or "test"');
             RETURN;
         END IF;
@@ -150,7 +159,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             /*
             ** UPDATE "live" HASH VALUES TO THE ALWAYS CALCULATED TEST VALUES WHEN PARAMETER PASSED
             */
-            IF (pEnv='live') THEN
+            IF (pEsmLibrary='live') THEN
                 UPDATE es_modules
                    SET sha1_live=l_sha1_test,
                        sha256_live=l_sha256_test,
@@ -245,27 +254,38 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         dbms_scheduler.enable(l_job_name);
 
         /*
-        ** REDEPLOY ALL WEBSITES USING CHANGED JAVASCRIPT MODULES
+        ** REDEPLOY ALL WEBSITES WHERE USED JAVASCRIPT MODULES HAVE CHANGED
         */
-        IF (pEnv='live') THEN
-            pck_hosting.waitDeployment(pWebsiteid=>l_website_id, pUserid=>l_user_id, pWaitSeconds=>10);
-            FOR C IN (
-                SELECT deploy_envs, SUM(live_change_ind) live_change_ind
-                  FROM es_modules
-                 WHERE INSTR(module_name,'.js')>0
-                 GROUP BY deploy_envs
-                 ORDER BY deploy_envs DESC
-            ) LOOP
-                IF (C.live_change_ind>0 AND C.deploy_envs=3) THEN
-                    FOR C1 IN (
-                        SELECT id, netlify_site_id_custom FROM website
-                         WHERE netlify_site_id_custom IS NOT NULL
-                    ) LOOP
-                    null;
-                    END LOOP;
-                END IF;
-            END LOOP;
+        IF (pEsmLibrary<>'live') THEN
+            RETURN;
         END IF;
+
+        SELECT id, user_id, netlify_site_id, netlify_site_id_custom 
+          BULK COLLECT INTO l_websites
+          FROM website
+         WHERE id<>l_website_id 
+         and id=6602;
+
+        pck_hosting.waitDeployment(pWebsiteid=>l_website_id, pUserid=>l_user_id, pWaitSeconds=>10);
+
+        FOR C IN (
+            SELECT deploy_envs, SUM(live_change_ind) live_change_ind
+              FROM es_modules
+             WHERE INSTR(module_name,'.js')>0
+             GROUP BY deploy_envs
+             ORDER BY deploy_envs DESC
+        ) LOOP
+            IF (C.live_change_ind>0) THEN
+                FOR i IN 1..l_websites.COUNT LOOP
+                    IF (C.deploy_envs=1) THEN
+                        pck_deploy.runDeployment(pWebsiteId=>l_websites(i).id, pUserId=>l_websites(i).user_id, pEnv=>'TEST', pSiteId=>l_websites(i).netlify_site_id, pRestUrl=>pck_core.getRestURL(), pEsmLibrary=>pEsmLibrary);
+                    END IF;
+                    IF (C.deploy_envs=3 AND l_websites(i).netlify_site_id_custom IS NOT NULL) THEN
+                        pck_deploy.runDeployment(pWebsiteId=>l_websites(i).id, pUserId=>l_websites(i).user_id, pEnv=>'LIVE', pSiteId=>l_websites(i).netlify_site_id_custom, pRestUrl=>pck_core.getRestURL(), pEsmLibrary=>pEsmLibrary);
+                    END IF;
+                END LOOP;
+            END IF;
+        END LOOP;
     END;
 
     /*
@@ -503,8 +523,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         pck_sec.g_session_user_id:=pUserId;
         pck_sec.g_website_id:=pWebsiteId;
 
-        SELECT title, subtitle, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, SUBSTR(color_primary,2), favicon_asset_id
-          INTO l_title, l_subtitle, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_color_primary, l_favicon_asset_id
+        SELECT 'https://' || domain_name, title, subtitle, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, SUBSTR(color_primary,2), favicon_asset_id
+          INTO l_ssl_url, l_title, l_subtitle, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_color_primary, l_favicon_asset_id
           FROM website
          WHERE id=pWebsiteId;
 
@@ -534,10 +554,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
-
-        /* Get URL of site to be deployed */
-        pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId, pMethod=>'GET', pData=>l_clob);
-        SELECT ssl_url INTO l_ssl_url FROM JSON_TABLE(l_clob, '$' COLUMNS(ssl_url));
         
         FOR i IN 1..l_labels.COUNT LOOP
 
