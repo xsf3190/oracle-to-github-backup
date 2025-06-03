@@ -1,5 +1,13 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_CODEPEN" is
     --
+    TYPE tt_nav_labels IS RECORD (
+        article_id website_article.article_id%type,
+        navigation_label website_article.navigation_label%type,
+        collection_type website_article.collection_type%type
+    );
+    TYPE t_nav_labels IS TABLE OF tt_nav_labels;
+    g_nav_labels t_nav_labels;
+    --
     PROCEDURE getCodepen(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pStatus OUT NUMBER);
     --
     FUNCTION buildCssRoot(pWebsiteId IN website.id%type) RETURN VARCHAR2;
@@ -32,13 +40,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
     g_curve CONSTANT VARCHAR2(100):='<svg class="curve full-width" aria-hidden="true" focusable="false"><use href="#curve"></use></svg>';
 
-    TYPE tt_nav_labels IS RECORD (
-        article_id website_article.article_id%type,
-        navigation_label website_article.navigation_label%type,
-        collection_type website_article.collection_type%type
-    );
-    TYPE t_nav_labels IS TABLE OF tt_nav_labels;
-    g_nav_labels t_nav_labels;
+    
 
     g_font_styles_title VARCHAR2(1000);
     g_font_styles_subtitle VARCHAR2(1000);
