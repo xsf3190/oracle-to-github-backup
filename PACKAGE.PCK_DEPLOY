@@ -80,6 +80,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_user_id website.user_id%type;
         l_ssl_url VARCHAR2(50);
         l_job_name VARCHAR2(30);
+        l_netlify_deploy_id website.netlify_deploy_id%type;
 
         TYPE tt_websites IS RECORD (
             id website.id%type,
@@ -212,12 +213,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         ** UPLOAD TO NETLIFY ALL FILES WITH UNIQUE CONTENT
         */
         FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
+            l_netlify_deploy_id:=C.id;
             pck_core.log('... uploading ESM ' || l_deploy_files(C.sha1).file_name);
             pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', 
                 pBody=>l_deploy_files(C.sha1).file_content,
                 pData=>l_clob
             );
         END LOOP;
+
+        UPDATE website SET netlify_deploy_id=l_netlify_deploy_id WHERE id=l_website_id;
 
         /*
         ** DELETE ANY MODULES For WHICH SOURCE NO LONGER EXISTS
@@ -226,66 +230,51 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         COMMIT;
 
         /*
-        ** DELETE ANY OLD DEPLOYMENTS OF ES-MODULES.NETLIFY.APP
+        ** WAIT FOR DEPLOYMENT OF ES-MODULES TO COMPLETE
         */
-        l_job_name:=dbms_scheduler.generate_job_name('DELETE_');
-        dbms_scheduler.create_job(
-            job_name   => l_job_name,
-            job_type   =>'STORED_PROCEDURE',
-            job_action =>'pck_deploy.runDelete',
-            number_of_arguments=>3,
-            start_date=>systimestamp
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 1,
-            argument_value => l_user_id
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 2,
-            argument_value => l_website_id
-        );
-        dbms_scheduler.set_job_argument_value(
-            job_name => l_job_name,
-            argument_position => 3,
-            argument_value => l_netlify_site_id
-        );
-        dbms_scheduler.enable(l_job_name);
+        pck_hosting.waitDeployment(pWebsiteid=>l_website_id, pUserid=>l_user_id, pWaitSeconds=>10);
 
         /*
-        ** REDEPLOY ALL WEBSITES WHERE USED JAVASCRIPT MODULES HAVE CHANGED
+        ** DELETE OLD DEPLOYMENTS OF ES-MODULES.NETLIFY.APP
         */
+        pck_deploy.runDelete(pUserId=>l_user_id, pWebsiteId=>l_website_id, pSiteId=>l_netlify_site_id);
+
         IF (pEsmLibrary<>'live') THEN
             RETURN;
         END IF;
 
+        /*
+        ** REDEPLOY ALL WEBSITES WHERE USED JAVASCRIPT MODULES HAVE CHANGED
+        */
         SELECT id, user_id, netlify_site_id, netlify_site_id_custom 
           BULK COLLECT INTO l_websites
           FROM website
-         WHERE id<>l_website_id 
-         and id=6602;
-
-        pck_hosting.waitDeployment(pWebsiteid=>l_website_id, pUserid=>l_user_id, pWaitSeconds=>10);
+         WHERE id<>l_website_id;
 
         FOR C IN (
             SELECT deploy_envs, SUM(live_change_ind) live_change_ind
               FROM es_modules
              WHERE INSTR(module_name,'.js')>0
              GROUP BY deploy_envs
+             HAVING SUM(live_change_ind)>0
              ORDER BY deploy_envs DESC
         ) LOOP
-            IF (C.live_change_ind>0) THEN
-                FOR i IN 1..l_websites.COUNT LOOP
-                    IF (C.deploy_envs=1) THEN
-                        pck_deploy.runDeployment(pWebsiteId=>l_websites(i).id, pUserId=>l_websites(i).user_id, pEnv=>'TEST', pSiteId=>l_websites(i).netlify_site_id, pRestUrl=>pck_core.getRestURL(), pEsmLibrary=>pEsmLibrary);
-                    END IF;
-                    IF (C.deploy_envs=3 AND l_websites(i).netlify_site_id_custom IS NOT NULL) THEN
-                        pck_deploy.runDeployment(pWebsiteId=>l_websites(i).id, pUserId=>l_websites(i).user_id, pEnv=>'LIVE', pSiteId=>l_websites(i).netlify_site_id_custom, pRestUrl=>pck_core.getRestURL(), pEsmLibrary=>pEsmLibrary);
-                    END IF;
-                END LOOP;
-            END IF;
+            FOR i IN 1..l_websites.COUNT LOOP
+                DELETE website_deploy WHERE website_id=l_websites(i).id AND site_id=CASE WHEN C.deploy_envs=1 THEN l_websites(i).netlify_site_id ELSE l_websites(i).netlify_site_id_custom END;
+                INSERT INTO website_deploy(id, website_id, site_id, message) VALUES (seq_log.nextval, l_websites(i).id, CASE WHEN C.deploy_envs=1 THEN l_websites(i).netlify_site_id ELSE l_websites(i).netlify_site_id_custom END, 'START ESM DEPLOY');
+                IF (C.deploy_envs=1) THEN
+                    pck_deploy.runDeployment(pWebsiteId=>l_websites(i).id, pUserId=>l_websites(i).user_id, pEnv=>'TEST', pSiteId=>l_websites(i).netlify_site_id, pRestUrl=>pck_core.getRestURL(), pEsmLibrary=>pEsmLibrary);
+                END IF;
+                IF (C.deploy_envs=3 AND l_websites(i).netlify_site_id_custom IS NOT NULL) THEN
+                    pck_deploy.runDeployment(pWebsiteId=>l_websites(i).id, pUserId=>l_websites(i).user_id, pEnv=>'LIVE', pSiteId=>l_websites(i).netlify_site_id_custom, pRestUrl=>pck_core.getRestURL(), pEsmLibrary=>pEsmLibrary);
+                END IF;
+                INSERT INTO website_deploy(id, website_id, site_id, message) VALUES (seq_log.nextval, l_websites(i).id, CASE WHEN C.deploy_envs=1 THEN l_websites(i).netlify_site_id ELSE l_websites(i).netlify_site_id_custom END, 'END ESM DEPLOY');
+            END LOOP;
         END LOOP;
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                pck_core.log_error;
     END;
 
     /*
@@ -522,6 +511,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /* For logging when running in scheduler */
         pck_sec.g_session_user_id:=pUserId;
         pck_sec.g_website_id:=pWebsiteId;
+
+        pck_codepen.g_nav_labels:=null;
 
         SELECT 'https://' || domain_name, title, subtitle, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, SUBSTR(color_primary,2), favicon_asset_id
           INTO l_ssl_url, l_title, l_subtitle, l_contact_email, l_telephone_number, l_mobile_number, l_linkedin_name, l_instagram_name, l_color_primary, l_favicon_asset_id
@@ -803,14 +794,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             logDeployment(pWebsiteId, pSiteId, 'Uploading ' || l_deploy_files(C.sha1).file_name);
             n:=n+1;
         END LOOP;
-
-        /* Update deployed_date if null */
-        CASE pEnv
-            WHEN 'TEST' THEN
-                UPDATE article SET deployed_date=current_timestamp WHERE deployed_date IS NULL AND parent_id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteId AND collection_type<>'N/A');
-            WHEN 'LIVE' THEN
-                UPDATE article SET deployed_date_custom=current_timestamp WHERE deployed_date_custom IS NULL AND parent_id IN (SELECT article_id FROM website_article WHERE website_id=pWebsiteId AND collection_type<>'N/A');
-        END CASE;
 
         EXCEPTION
             WHEN OTHERS THEN
