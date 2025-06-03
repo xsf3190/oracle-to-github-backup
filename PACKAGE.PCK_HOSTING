@@ -198,7 +198,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
 
             END LOOP;
 
-            /* DELETE WEBSITE (CASCADES TO WEBSITE_FONT) */
+            /* DELETE WEBSITE (CASCADES) */
             DELETE refresh_token WHERE website_id=pWebsiteId;
             DELETE website WHERE id=pWebsiteId;
 
