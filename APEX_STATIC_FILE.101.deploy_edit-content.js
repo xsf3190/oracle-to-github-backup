@@ -229,8 +229,12 @@ const saveData = async ( data, endpoint ) => {
 export const show_media = async (request) => {
     callAPI("upload-media/:ID/:PAGE","GET","?request="+request)
         .then( (data) => {
-            info_dialog.querySelector("header>h4").textContent = data.heading;
+            if (!data.thumbnails) {
+                dropdown_details.querySelector("button.upload-media").click();
+                return;
+            }
 
+            info_dialog.querySelector("header>h4").textContent = data.heading;
             const media = info_dialog.querySelector("article");
             media.replaceChildren();
             media.insertAdjacentHTML('afterbegin',data.thumbnails);
