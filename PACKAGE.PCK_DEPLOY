@@ -787,6 +787,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /* upload to Netlify if required - i.e. file content has changed since last deployment  */
         n:=0;
         FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
+            pck_core.log(l_deploy_files(C.sha1).file_name || ':' || dbms_lob.getlength(l_deploy_files(C.sha1).file_content));
             pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', 
                 pBody=>l_deploy_files(C.sha1).file_content,
                 pData=>l_clob
