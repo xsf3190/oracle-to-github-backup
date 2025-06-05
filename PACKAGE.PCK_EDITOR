@@ -314,24 +314,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         TYPE t_arr IS TABLE OF tt_arr INDEX BY PLS_INTEGER;
         l_arr t_arr;
         l_current_date TIMESTAMP:=current_timestamp;
+        l_moved_article_id website_article.article_id%type;
         TYPE t_article_id IS TABLE OF website_article.article_id%type;
         l_article_id t_article_id;
+        l_clob CLOB;
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
         SELECT display_order, article_id, navigation_label, collection_type
           BULK COLLECT INTO l_arr
           FROM JSON_TABLE(pBodyText, '$[*]' COLUMNS (display_order FOR ORDINALITY, article_id, navigation_label, collection_type));
 
-       -- Create ARTICLE rows for new pages
+       -- Create ARTICLE rows for new pages. Retain rows where labels have been moved.
         FOR i IN 1..l_arr.COUNT LOOP
             IF (l_arr(i).article_id<=0) THEN
-                INSERT INTO article (id, body_html, author_user_id) 
-                VALUES (seq_article.nextval, '<article></article>', l_session_data.user_id);
-                
-                INSERT INTO website_article (website_id, article_id, navigation_label, collection_type, user_id, display_order)
-                VALUES (pWebsiteId, seq_article.currval, l_arr(i).navigation_label, l_arr(i).collection_type, l_session_data.user_id, 1);
-
-                l_arr(i).article_id:=seq_article.currval;
+                FOR C IN (
+                    SELECT article_id FROM website_article WHERE website_id=pWebsiteId AND navigation_label=l_arr(i).navigation_label
+                ) LOOP
+                    l_moved_article_id:=C.article_id;
+                    l_arr(i).article_id:=C.article_id;
+                END LOOP;
+                IF (l_moved_article_id IS NULL) THEN
+                    INSERT INTO article (id, body_html, author_user_id) 
+                    VALUES (seq_article.nextval, '<article class="flow"></article>', l_session_data.user_id);
+                    INSERT INTO website_article (website_id, article_id, navigation_label, collection_type, user_id, display_order)
+                    VALUES (pWebsiteId, seq_article.currval, l_arr(i).navigation_label, l_arr(i).collection_type, l_session_data.user_id, 1);
+                    l_arr(i).article_id:=seq_article.currval;
+                END IF;
             END IF;
         END LOOP;
 
@@ -346,6 +354,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
 
         -- Delete pages not passed from client
         DELETE website_article WHERE website_id=pWebsiteId AND updated_date<l_current_date RETURNING article_id BULK COLLECT INTO l_article_id;
+
+        -- Delete Cloudinary assets tagged by article_id
+        FOR i IN 1..l_article_id.COUNT LOOP
+            FOR C IN (
+                SELECT DISTINCT cld_cloud_name, resource_type
+                  FROM asset
+                 WHERE article_id=l_article_id(i)
+            )   
+            LOOP
+                pck_api.callCloudinaryAPI(pUserId=>l_session_data.user_id, pEndpoint=>C.cld_cloud_name || '/resources/' || C.resource_type || '/tags/' || l_article_id(i), pMethod=>'DELETE', pData=>l_clob);
+            END LOOP;
+        END LOOP;
+
         FORALL i IN l_article_id.FIRST .. l_article_id.LAST
             DELETE article WHERE id=l_article_id(i);
 
