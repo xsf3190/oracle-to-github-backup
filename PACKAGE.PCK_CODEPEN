@@ -606,7 +606,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /* Get page content */
 
         FOR C IN (
-            SELECT w.css, w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, wa.contact_form, wa.collection_type
+            SELECT w.css, w.domain_name, w.title, w.subtitle, w.header_effect, w.hero_asset_id, w.promotion, a.body_html, w.contact_email, w.telephone_number, w.mobile_number, w.linkedin_name, w.instagram_name, wa.collection_type
               FROM website w, website_article wa, article a
              WHERE w.id=pWebsiteId
                AND wa.website_id=w.id
