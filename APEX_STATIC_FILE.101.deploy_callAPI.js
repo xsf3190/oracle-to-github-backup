@@ -1,4 +1,4 @@
-import { bodydata, menulist, login_btn } from "deploy_elements";
+import { bodydata, dropdown, login_btn } from "deploy_elements";
 
 let access_token = sessionStorage.getItem("token");
 let refresh_token = localStorage.getItem("refresh");
@@ -41,7 +41,9 @@ const replaceTokens = (data) => {
 const forceLogout = () => {
     sessionStorage.clear();
     localStorage.clear();
-    menulist.replaceChildren();
+    dropdown.querySelectorAll("li:nth-child(n+4)").forEach((item) => {
+        item.remove();
+    });
     login_btn.textContent = "Log In";
 }
 
