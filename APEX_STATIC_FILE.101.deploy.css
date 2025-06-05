@@ -743,6 +743,7 @@ html:has(dialog[open]) {
 }
 
 dialog[class] {
+  inline-size: min(95vw, var(--max-width));
   border-radius: 0.5em;
   padding: 0;
   inset: 0;
@@ -751,14 +752,13 @@ dialog[class] {
 }
 
 dialog[class]::backdrop {
-    backdrop-filter: blur(25px);
+    backdrop-filter: blur(2px);
 }
 
 dialog > form {
     display: grid;
     grid-template-rows: auto 1fr auto;
     align-items: start;
-    max-inline-size: min(95vw, var(--max-width));
     max-block-size: 80vh;
     max-block-size: 80dvb;
     font-size: 75%;
@@ -949,7 +949,7 @@ pre:has(.language-sql)::after {
   min-height: 44px;
 }
 
-.dropdown .button:hover, .dropdown .button:focus, .menulist:empty + li>.button {
+.dropdown .button:hover, .dropdown .button:focus {
   background-color: var(--color-text);
   color: var(--color-background);
 }
@@ -984,12 +984,12 @@ pre:has(.language-sql)::after {
   transform: rotate(-45deg) translate(-16px, -6px);
 }
 
-.menulist {
-    max-height: 75vh;
+.dropdown-content {
+    max-height: calc(100dvh - 2lh);
     overflow: auto;
 }
 
-.menulist li + li {
+.dropdown-content li + li {
   border-block-start: solid 1px black;
 }
 
