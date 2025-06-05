@@ -2,7 +2,7 @@
 ** RETRIEVE CURRENT MENULIST FOR USER
 */
 
-import { login_btn, email, expires, menulist } from "deploy_elements";
+import { login_btn, email, expires, dropdown } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 export const init = (endpoint) => {
@@ -12,18 +12,11 @@ export const init = (endpoint) => {
     expires.textContent = new Date(parsedToken.exp*1000).toLocaleString();
     login_btn.textContent="Log Out";
 
-    /*
-    if (!document.querySelector("head > link[href='/website_edit.min.css']")) {
-        const link_edit = document.createElement('link');
-        link_edit.setAttribute('rel', 'stylesheet');
-        link_edit.setAttribute('href', '/website_edit.min.css');
-        document.head.appendChild(link_edit);
-    }
-    */
-
     if (sessionStorage.getItem("menulist")) {
-        menulist.replaceChildren();
-        menulist.insertAdjacentHTML('afterbegin',sessionStorage.getItem("menulist"));
+        dropdown.querySelectorAll("li:nth-child(n+4)").forEach((item) => {
+            item.remove();
+        });
+        dropdown.insertAdjacentHTML('beforeend',sessionStorage.getItem("menulist"));
         document.body.insertAdjacentHTML('beforeend',sessionStorage.getItem("dialogs"));
         closeBtnEvents();
         return;
@@ -33,8 +26,10 @@ export const init = (endpoint) => {
         .then((data) => {
             sessionStorage.setItem("menulist",data.menulist);
             sessionStorage.setItem("dialogs",data.dialogs);
-            menulist.replaceChildren();
-            menulist.insertAdjacentHTML('afterbegin',data.menulist);
+            dropdown.querySelectorAll("li:nth-child(n+4)").forEach((item) => {
+                item.remove();
+            });
+            dropdown.insertAdjacentHTML('beforeend',data.menulist);
             document.body.insertAdjacentHTML('beforeend',data.dialogs);
             closeBtnEvents();
         })
