@@ -372,11 +372,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             '</li>';
         END LOOP;
 
-        IF (n=0) THEN
+        /*IF (n=0) THEN
             l_clob:=
                 '<p class="align-center">NO IMAGES UPLOADED FOR THIS PAGE</p>' ||
                 '<p class="align-center">Upload Media from editor menu</p>';
-        END IF;
+        END IF;*/
 
         RETURN (l_clob);
     END;
