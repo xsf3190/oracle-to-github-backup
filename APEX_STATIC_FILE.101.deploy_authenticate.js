@@ -3,7 +3,7 @@
 /* ALSO USED TO CREATE A NEW WEBSITE                              */
 /* ************************************************************** */
 
-import { login_dialog, login_btn, email, expires, menulist, bodydata } from "deploy_elements";
+import { login_dialog, login_btn, email, expires, dropdown, bodydata } from "deploy_elements";
 
 const form = login_dialog.querySelector("form");
 const emailInput = form.querySelector("[name='email']");
@@ -26,7 +26,9 @@ export const init = (element) => {
         localStorage.clear();
         email.classList.add("visually-hidden");
         expires.classList.add("visually-hidden");
-        menulist.replaceChildren();
+        dropdown.querySelectorAll("li:nth-child(n+4)").forEach((item) => {
+            item.remove();
+        });
         login_btn.textContent = "Log In";
         return;
     }
@@ -174,8 +176,10 @@ const setTokens = (data) => {
     sessionStorage.setItem("menulist",data.menulist);
     sessionStorage.setItem("dialogs",data.dialogs);
 
-    menulist.replaceChildren();
-    menulist.insertAdjacentHTML('afterbegin',data.menulist);
+    dropdown.querySelectorAll("li:nth-child(n+4)").forEach((item) => {
+        item.remove();
+    });
+    dropdown.insertAdjacentHTML('beforeend',data.menulist);
     
     const nb_dialogs = document.querySelectorAll("dialog").length;
     if (nb_dialogs===1) {
