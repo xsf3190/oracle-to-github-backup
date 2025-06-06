@@ -674,7 +674,7 @@ fieldset {
   color: var(--button-hover-color);
 }
 
-.button:not(.no-focus):focus {
+.button:not(.no-focus):focus-visible {
   outline-width: var(--button-outline-width, var(--button-border-width));
   outline-style: var(--button-outline-style, var(--button-border-style));
   outline-color: var(--button-outline-color, var(--button-border-color));
