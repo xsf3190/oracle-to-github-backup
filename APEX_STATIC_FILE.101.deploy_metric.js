@@ -3,7 +3,7 @@
 */
 import {onLCP, onINP, onCLS} from 'deploy_web_vitals';
 
-import { bodydata } from "deploy_elements";
+import { bodydata, getJWTClaim } from "deploy_elements";
 
 /*
 ** SETUP COLLECTION OF METRICS. 
@@ -21,6 +21,9 @@ const vitalsQueue = new Set(),
       mediaQueue = new Set();
 
 const flushQueues = () => {
+
+    const aud = getJWTClaim("aud");
+    if (aud === "admin" || aud === "owner") return;
 
     if (vitalsQueue.size === 0 && page_loaded === 0) return;
 
@@ -81,7 +84,6 @@ const addToVitalsQueue = (metric) => {
 };
 
 addEventListener('visibilitychange', () => {
-    console.log("visibilityState",document.visibilityState);
     if (document.visibilityState === "hidden") {
         flushQueues();
     } else {
@@ -91,7 +93,6 @@ addEventListener('visibilitychange', () => {
 
 if ('onpagehide' in self) {
     addEventListener('pagehide', () => {
-        console.log("pagehide");
         flushQueues();
     }, { capture: true} );
 }
