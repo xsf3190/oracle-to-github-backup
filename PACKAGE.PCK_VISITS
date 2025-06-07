@@ -500,14 +500,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
             IF (COALESCE(C.lcp_rating,C.cls_rating,C.inp_rating) IS NULL) THEN
                 l_rating:='-';
+            ELSIF ((C.lcp_rating='good' OR C.lcp_rating IS NULL) AND (C.cls_rating='good' OR C.cls_rating IS NULL) AND (C.inp_rating='good' OR C.inp_rating IS NULL)) THEN
+               l_rating:='<span class="good">GOOD</span>';
+            ELSIF (C.lcp_rating='poor') OR (C.cls_rating='poor') OR (C.inp_rating='poor') THEN
+                l_rating:='<span class="poor">POOR</span>' || cwv(C.lcp_rating,C.cls_rating,C.inp_rating, C.lcp,C.cls,C.inp);
             ELSE
-                IF ((C.lcp_rating='good' OR C.lcp_rating IS NULL) AND (C.cls_rating='good' OR C.cls_rating IS NULL) AND (C.inp_rating='good' OR C.inp_rating IS NULL)) THEN
-                   l_rating:='<span class="good">GOOD</span>';
-                ELSIF ((C.lcp_rating='poor' OR C.lcp_rating IS NULL) OR (C.cls_rating='poor' OR C.cls_rating IS NULL) OR (C.inp_rating='poor' OR C.inp_rating IS NULL)) THEN
-                    l_rating:='<span class="poor">POOR</span>' || cwv(C.lcp_rating,C.cls_rating,C.inp_rating, C.lcp,C.cls,C.inp);
-                ELSE
-                    l_rating:='<span class="needs-improvement">NEEDS IMPROVEMENT</span>' || cwv(C.lcp_rating,C.cls_rating,C.inp_rating, C.lcp,C.cls,C.inp);
-                END IF;
+                l_rating:='<span class="needs-improvement">IMPROVE</span>' || cwv(C.lcp_rating,C.cls_rating,C.inp_rating, C.lcp,C.cls,C.inp);
             END IF;
 
             l_content:=l_content ||
@@ -1097,7 +1095,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             pck_sec.g_session_user_id:=C.id;
         END LOOP;
 
-        FOR C IN (SELECT id, domain_name, login_form FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
+        FOR C IN (SELECT id, domain_name FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
             pck_core.log('START visit data processing for ' || C.domain_name);
             uploadPageHits(C.id);
             COMMIT;
