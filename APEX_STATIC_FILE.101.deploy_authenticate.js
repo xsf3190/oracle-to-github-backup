@@ -3,7 +3,7 @@
 /* ALSO USED TO CREATE A NEW WEBSITE                              */
 /* ************************************************************** */
 
-import { login_dialog, login_btn, email, expires, dropdown, bodydata } from "deploy_elements";
+import { login_dialog, login_btn, email, expires, dropdown, bodydata, getJWTClaim } from "deploy_elements";
 
 const form = login_dialog.querySelector("form");
 const emailInput = form.querySelector("[name='email']");
@@ -193,8 +193,8 @@ const setTokens = (data) => {
   
     const arrayToken = data.refresh.split(".");
     const parsedToken = JSON.parse(atob(arrayToken[1]));
-    email.textContent = parsedToken.sub;
-    expires.textContent = new Date(parsedToken.exp*1000).toLocaleString();
+    email.textContent = getJWTClaim("sub") + " (" + getJWTClaim("aud") + ")";
+    expires.textContent = getJWTClaim("exp");
   
     login_btn.textContent = "Log Out";
     email.classList.remove("visually-hidden");
