@@ -12,6 +12,25 @@ export const header = document.querySelector("body>header");
 export const main = document.querySelector("body>main");
 export const footer = document.querySelector("body>footer");
 
+export const getJWTClaim = (claim) => {
+    const arrayToken = localStorage.getItem("refresh")?.split(".");
+    if (!arrayToken) return;
+    const parsedToken = JSON.parse(atob(arrayToken[1]));
+    let value;
+    switch (claim) {
+        case "sub":
+            value = parsedToken.sub;
+            break;
+        case "aud":
+            value = parsedToken.aud;
+            break;
+        case "exp":
+            value = new Date(parsedToken.exp*1000).toLocaleString();
+            break;
+    }
+    return value;
+}
+
 export const set_alert = (alert) => {
     alert.textContent = "SAVED";
     alert.style.background="green";
