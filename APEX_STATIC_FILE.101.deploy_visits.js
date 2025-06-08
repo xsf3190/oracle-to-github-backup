@@ -25,7 +25,7 @@ export const init = (element) => {
             let buttons="";
             for (let i = 0; i < reports.length; i++) {
                 const elements = reports[i].split("|");
-                buttons += `<button class="button" type="button" data-report="${elements[0]}" data-button-variant="small">${elements[1]}</button>`;
+                buttons += `<li><button class="button" type="button" data-report="${elements[0]}" data-button-variant="small">${elements[1]}</button></li>`;
             }
             reportlist.replaceChildren();
             reportlist.insertAdjacentHTML('afterbegin',buttons);
@@ -78,7 +78,9 @@ const getReport = async (report, offset) => {
 ** COMMON ENTRY POINT FOR HANDLING REPORTS
 */
 reportlist.addEventListener("click", (e) => {
-    getReport(e.target.dataset.report, 0);
+    if (e.target.dataset.report) {
+        getReport(e.target.dataset.report, 0);
+    }
 })
 
 /*
