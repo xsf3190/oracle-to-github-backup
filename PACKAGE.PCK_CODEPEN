@@ -309,12 +309,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                     '<article class="flow">' ||
                         '<div>' ||
                             '<label for="emailInput">Email</label>' ||
-                            '<input type="email" id="emailInput" name="email" required maxlength="50" autocapitalize="none" autocorrect="off">' ||
+                            '<input type="email" id="emailInput" name="email" required maxlength="50" autocapitalize="none" autocorrect="off" autocomplete="on">' ||
                             '<span class="sendmail-result"></span>' ||
                         '</div>' ||
                         '<div class="visually-hidden">' ||
                             '<label for="passcodeInput">Enter Passcode</label>' ||
-                            '<input type="text" id="passcodeInput" name="passcode" pattern="\d{6}" inputmode="numeric" maxlength="6" autocomplete="6-digit-passcode">' ||
+                            '<input type="text" id="passcodeInput" name="passcode" pattern="\d{6}" inputmode="numeric" maxlength="6" autocomplete="one-time-code">' ||
                             '<span class="passcode-result"></span>' ||
                         '</div>' ||
                         '<div class="loader visually-hidden"></div>' ||
