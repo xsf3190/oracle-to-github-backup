@@ -6,6 +6,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE insertMessage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NuMBER);
     --
+    PROCEDURE loadVisits(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
+    --
     PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB);
     --
     PROCEDURE uploadIpLookup;
@@ -847,6 +849,27 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         apex_json.write('count', l_count);
         apex_json.write('article', l_html);
         apex_json.write('offset', pOffset + ROWS_PER_PAGE);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
+    /* 
+    **  RUN UPLOADVISITS PROCEDURE REQUESTED FROM WEBSITE
+    */
+    PROCEDURE loadVisits(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        uploadPageHits(pWebsiteId);
+        
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
         apex_json.close_object;
 
         pStatus:=200;
