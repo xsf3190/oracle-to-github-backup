@@ -822,7 +822,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         END LOOP;
         l_height:=l_height + 5;
         l_content:=l_content || '<polyline points="' || RTRIM(l_points) || '" />';
-        pHtml:='<svg class="graph" viewBox="0 0 ' || l_width || ' ' || l_height || '">' || l_content || '</svg>';
+
+        pHtml:=
+        '<svg class="graph" viewBox="0 0 ' || l_width || ' ' || l_height || '"' || 
+            ' aria-labelledby="graph-title graph-desc" role="img">' || 
+            '<title id="graph-title">Website visit trends</title>' ||
+            '<desc id="graph-desc">Number of visits over last ' || n || ' periods</desc>' ||
+            l_content || 
+        '</svg>';
     END;
 
     /* 
@@ -834,7 +841,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_count NUMBER;
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
-
+        
         CASE pReport
             WHEN 'website' THEN getWebsiteVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
             WHEN 'page' THEN getPageVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
