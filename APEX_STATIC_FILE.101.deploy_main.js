@@ -18,6 +18,7 @@ if (url.searchParams.has("refresh")) {
 /*
 ** SET DROPDOWN ELEMENTS IF REFRESH TOKEN EXISTS
 */
+/*
 if (localStorage.getItem("refresh")) {
     import("deploy_menulist")
         .then((module) => {
@@ -28,6 +29,7 @@ if (localStorage.getItem("refresh")) {
             console.error("Failed to load deploy_menulist");
         });
 }
+*/
 
 /*
 ** CLICK HANDLER FOR ALL BUTTONS IN DYNAMIC DROPDOWN MENULIST
