@@ -166,11 +166,13 @@ sendmail_magic.addEventListener("click", () => {
 });
 
 /* 
-** SET NEW TOKENS IN STORAGE AND MEMORY. UPDATE DROPDOWN MENULIST. "URL" SENT FROM SERVER IS FOR A REQUESTED WEBSITE
+** USER LOGGED IN. SET NEW TOKENS IN STORAGE AND MEMORY. UPDATE DROPDOWN MENULIST.
 */
 const setTokens = (data) => {
     
     localStorage.setItem("refresh",data.refresh);
+    localStorage.setItem("menulist",data.menulist);
+    localStorage.setItem("dialogs",data.dialogs);
   
     sessionStorage.setItem("token",data.token);
     sessionStorage.setItem("menulist",data.menulist);
