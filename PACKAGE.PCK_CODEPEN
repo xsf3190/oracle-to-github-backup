@@ -584,7 +584,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         /*
         ** Return complete <body> element with data attributes identifying internal id of website and article
         */
-        pHtml:='<body data-websiteid="' || pWebsiteId || '" data-articleid="' || pArticleId || '" data-resturl="' || pRestUrl || '">' || pHtml || '</body>';
+        pHtml:=
+            '<body data-websiteid="' || pWebsiteId || '" data-articleid="' || pArticleId || '" data-resturl="' || pRestUrl || '">' || 
+            pHtml || 
+            '</body>';
 
     END;
 
