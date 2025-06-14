@@ -427,8 +427,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
         
-        --l_headings_regex varchar2(20):='<h.+?>(.+?)<\/h.+?>';
         l_headings_regex varchar2(30):='<h[1-4]>(.+?)<\/h[1-4]>';
+        l_src_url_regex varchar2(30):='url\(([^)]*)\';
 
          TYPE tt_fonts IS RECORD (
             family font.family%type,
@@ -488,8 +488,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_message VARCHAR2(100);
         l_main_module  VARCHAR2(1000);
+        l_footer_module VARCHAR2(1000);
         l_css VARCHAR2(1000);
         l_fontfaces CLOB;
+        l_font_preload VARCHAR2(4000);
         l_styles_edit CLOB;
         
         l_sitemap CLOB;
@@ -648,12 +650,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_context:=l_fonts.NEXT(l_context);
         END LOOP;
 
+        
         /*
         ** Append website-specific design tokens defined in a :root element and minify
         */
         l_fontfaces:=minifyCss(l_fontfaces || pck_codepen.buildCssRoot(pWebsiteid));
         addDeploy('site.min.css', l_fontfaces);
         l_css:='<link rel="stylesheet" href="/site.min.css">';
+
+        n:=REGEXP_COUNT(l_fontfaces,l_src_url_regex);
+        IF (n>0) THEN
+            FOR j IN 1..n 
+            LOOP
+                l_font_preload:=l_font_preload || 
+                '<link rel="preload" href="' || REGEXP_SUBSTR(l_fontfaces,l_src_url_regex,1,j,null,1) || '" as="font" type="font/woff2" crossorigin>';
+            END LOOP;
+        END IF;
 
         /* 
         ** The site favicon is an SVG format image file uploaded through the CMS to the Asset table.
@@ -663,7 +675,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
            l_favicon_url:=REPLACE(l_favicon_url,'q_auto,f_auto','f_auto,w_96,h_96');
         END LOOP;
         IF (l_favicon_url IS NULL) THEN
-            logDeployment(pWebsiteId, pSiteId,'Website favicon missing','NOK');
+            --logDeployment(pWebsiteId, pSiteId,'Website favicon missing','NOK');
+            l_favicon_url:=
+            'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#128516;</text></svg>';
         END IF;
 
         l_robots:='User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: ' || l_ssl_url || '/sitemap.xml';
@@ -685,7 +699,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
              WHERE BITAND(deploy_envs,l_deploy_env)=l_deploy_env
              ORDER BY 1
         ) LOOP
-            IF (C.module_name='deploy_main.min.js') THEN
+            IF (C.module_name IN ('deploy_main.min.js')) THEN
                 l_main_module:=l_main_module ||
                     '<link rel="modulepreload" href="' || C.host_name || '">' ||
                     '<script src="' || C.host_name || '" type="module"></script>';
@@ -711,7 +725,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[Content-Security-Policy: default-src 'none';]' ||
             q'[ base-uri 'none';]' ||
             q'[ object-src 'none';]' ||
-            q'[ img-src 'self' res.cloudinary.com;]' ||
+            CASE WHEN INSTR(l_favicon_url,'cloudinary')>0 THEN
+            q'[ img-src 'self' res.cloudinary.com;]'
+            ELSE
+            q'[ img-src 'self' res.cloudinary.com data:;]'
+            END ||
             q'[ font-src 'self' fonts.gstatic.com;]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com es-modules.netlify.app;]' ||
             q'[ script-src 'self' 'strict-dynamic' 'unsafe-inline' ']' || l_importmap_sha256 || q'[';]' ||
@@ -753,14 +771,19 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<meta name="description" content="' || l_labels(i).page_description || '">' ||
                     '<meta name="author" content="restartnet.com">' ||
                     '<meta name="mobile-web-app-capable" content="yes">' ||
-                    '<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>' ||
+                    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' ||
+                    '<link rel="preconnect" href="https://es-modules.netlify.app">' ||
+                    '<link rel="preconnect" href="https://es-modules.netlify.app" crossorigin>' ||
+                    '<link rel="preconnect" href="https://res.cloudinary.com">' ||
                     '<script type="importmap" integrity="' || l_importmap_sha256 || '">' || l_importmap || '</script>' ||
-                    l_main_module ||
+                    l_font_preload ||
                     l_css ||
+                    l_main_module ||
+                    
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
                 '</head>' ||
                 
-                l_labels(i).body_html ||
+                l_labels(i).body_html || l_footer_module || '</body>' ||
             '</html>';
 
             addDeploy(CASE WHEN i=1 THEN 'index.html' ELSE l_labels(i).path_name || '.html' END, l_page);
