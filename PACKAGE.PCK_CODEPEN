@@ -582,12 +582,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         END IF;
 
         /*
-        ** Return complete <body> element with data attributes identifying internal id of website and article
+        ** Return <body> element with data attributes identifying internal id of website and article
+        ** Note that </body> is appended in calling routine in case we need to add scripts
         */
         pHtml:=
             '<body data-websiteid="' || pWebsiteId || '" data-articleid="' || pArticleId || '" data-resturl="' || pRestUrl || '">' || 
-            pHtml || 
-            '</body>';
+            pHtml;
 
     END;
 
@@ -637,6 +637,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 C.instagram_name,
                 C.promotion,
                 l_html);
+
+            l_html:=l_html || '</body>';
 
             /* Import font-face first for codepen */
             FOR C1 IN (
