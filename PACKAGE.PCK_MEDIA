@@ -399,7 +399,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
              WHERE id=pAssetId )
         LOOP
             l_img_html:=
-            '<img draggable="false" style="margin-inline:auto;border-radius:initial"';
+            '<img width="' || C.width || '" height="' || C.height || '" draggable="false" style="margin-inline:auto;border-radius:initial"';
 
             WHILE NOT done LOOP
                 l_img_src:='https://res.cloudinary.com/' || C.cld_cloud_name || CASE WHEN l_image_width>C.width THEN '/e_upscale' END || '/f_auto,q_auto,w_' || l_image_width || '/' || C.public_id;
