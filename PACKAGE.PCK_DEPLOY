@@ -732,6 +732,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             ELSE
             q'[ img-src 'self' res.cloudinary.com data:;]'
             END ||
+            q'[ media-src res.cloudinary.com;]' ||
             q'[ font-src 'self' fonts.gstatic.com;]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com es-modules.netlify.app;]' ||
             q'[ script-src 'self' 'strict-dynamic' 'unsafe-inline' ']' || l_importmap_sha256 || q'[';]' ||
