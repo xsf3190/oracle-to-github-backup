@@ -50,6 +50,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_env VARCHAR2(4);
         l_site_id website.netlify_site_id%type;
         l_site_id_custom website.netlify_site_id_custom%type;
+        l_src_last_updated es_modules.updated_source%type;
+        l_cdn_last_updated es_modules.updated_test%type;
         l_esm_library VARCHAR2(4):='live';
     BEGIN
         /* 
@@ -67,7 +69,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
         /* 
-        ** Rebuild es-modules CDN if Admin user deploying their test site 
+        ** Rebuild es-modules CDN if Admin user deploying their test site AND last source updated date is after last CDN updated_date
         */
         FOR C IN (
             SELECT null
@@ -77,9 +79,28 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                AND w.domain_name=REPLACE(SUBSTR(u.email,1,INSTR(u.email,'@')-1),'.','-')
                AND u.email=a.email
                AND a.is_admin='Yes'
-         ) LOOP
-            pck_deploy.buildESModules;
+         ) 
+         LOOP
             l_esm_library:='test';
+            
+            WITH 
+                src AS (
+                    SELECT MAX(CAST(last_updated_on AS TIMESTAMP WITH TIME ZONE)) last_updated
+                      FROM apex_application_static_files
+                     WHERE application_id=101
+                       AND file_name LIKE 'deploy%'
+                ),
+                cdn AS (
+                    SELECT MAX(updated_test) last_updated 
+                      FROM es_modules
+                )
+            SELECT src.last_updated, cdn.last_updated
+              INTO l_src_last_updated, l_cdn_last_updated
+              FROM src, cdn;
+
+            IF (l_src_last_updated>l_cdn_last_updated) THEN
+                pck_deploy.buildESModules;
+            END IF;
         END LOOP;
 
         l_env:=CASE WHEN INSTR(l_session_data.url,'netlify.app')>0 THEN 'TEST' ELSE 'LIVE' END;
