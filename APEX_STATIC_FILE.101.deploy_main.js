@@ -32,12 +32,14 @@ const closeBtnEvents = () => {
 if (sessionStorage.getItem("menulist")) {
     dropdown.insertAdjacentHTML('beforeend',sessionStorage.getItem("menulist"));
     document.body.insertAdjacentHTML('beforeend',sessionStorage.getItem("dialogs"));
+    login_btn.textContent = "Log Out";
     closeBtnEvents();
 } else if (localStorage.getItem("menulist")) {
     dropdown.insertAdjacentHTML('beforeend',localStorage.getItem("menulist"));
     document.body.insertAdjacentHTML('beforeend',localStorage.getItem("dialogs"));
     sessionStorage.setItem("menulist",localStorage.getItem("menulist"));
     sessionStorage.setItem("dialogs",localStorage.getItem("dialogs"));
+    login_btn.textContent = "Log Out";
     closeBtnEvents();
 }
 
