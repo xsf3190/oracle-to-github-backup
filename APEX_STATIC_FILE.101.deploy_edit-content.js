@@ -45,7 +45,7 @@ export const init = async (element) => {
     /* Get apprpriate set of plugins from CKEDITOR CDN */
     const { ClassicEditor, Essentials, Alignment, Autosave, BlockQuote, Bold, ButtonView, Clipboard, Code, CodeBlock, FontColor, GeneralHtmlSupport, Heading, HorizontalLine,
             Image, ImageCaption, ImageResize, ImageStyle, ImageToolbar, ImageInsert, ImageInsertViaUrl,
-            Italic, Link, List, Paragraph, Plugin, SelectAll, SourceEditing, Underline, WordCount
+            Italic, Link, List, MenuBarMenuListItemButtonView, Paragraph, Plugin, SelectAll, ShowBlocks, SourceEditing, Underline, WordCount
             } = await import(CK_JS)
             .catch((error) => {
                 handleError(error);
@@ -94,10 +94,13 @@ export const init = async (element) => {
                     Deploy, FontColor, GeneralHtmlSupport, Heading, HorizontalLine, 
                     Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, 
                     Italic, Link, List, Media, Paragraph, 
-                    SelectAll, SourceEditing, Underline, WordCount ],
-        toolbar: [ 'heading', '|', 'undo', 'redo', 'selectAll', '|', 'horizontalLine', 'bold', 'italic', 'fontColor',
-                    'underline', 'code', 'alignment', 'link', 
-                    'bulletedList', 'numberedList', 'blockQuote','codeBlock','insertImage', 'sourceEditing', '|', 'media'],
+                    SelectAll, ShowBlocks, SourceEditing, Underline, WordCount ],
+        toolbar: [ 'heading', '|', 'undo', 'redo',  '|', 'bold', 'italic',
+                    'alignment', 'link', 
+                    'bulletedList', 'numberedList', 'blockQuote', 'insertImage', '|', 'media'],
+        menuBar: {
+            isVisible: true
+        },
         initialData: initialdata,
         alignment: {
             options: [
