@@ -581,14 +581,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             '<form action="https://codepen.io/pen/define" method="POST" target="_blank"><input type="hidden" name="data" value=""></form>';
         END IF;
 
-        /*
-        ** Return <body> element with data attributes identifying internal id of website and article
-        ** Note that </body> is appended in calling routine in case we need to add scripts
-        */
-        pHtml:=
-            '<body data-websiteid="' || pWebsiteId || '" data-articleid="' || pArticleId || '" data-resturl="' || pRestUrl || '">' || 
-            pHtml;
-
     END;
 
     /*
