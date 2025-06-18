@@ -484,11 +484,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_env NUMBER;
         l_importmap  CLOB;
         l_importmap_integrity  CLOB;
-        l_importmap_sha256 VARCHAR2(200);
+        l_importmap_sha256 es_modules.sha256_live%type;
 
         l_message VARCHAR2(100);
         l_main_module  VARCHAR2(1000);
-        l_footer_module VARCHAR2(1000);
         l_css VARCHAR2(1000);
         l_fontfaces CLOB;
         l_font_preload VARCHAR2(4000);
@@ -702,7 +701,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
              ORDER BY 1
         ) LOOP
             IF (C.module_name IN ('deploy_main.min.js')) THEN
-                l_main_module:=l_main_module ||
+                l_main_module:=
                     '<link rel="modulepreload" href="' || C.host_name || '">' ||
                     '<script src="' || C.host_name || '" type="module"></script>';
             ELSIF (INSTR(C.host_name,'js')>0) THEN 
@@ -722,6 +721,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_importmap_sha256:=getSha256(l_importmap);
 
+        /*
+        **  script-src 'strict-dynamic' - allows modules to dynamically create scripts, eg. cloudinary upload widget, CJEditor
+        */
+
         l_headers:=
         '/*' || chr(10) || 
             q'[Content-Security-Policy: default-src 'none';]' ||
@@ -735,7 +738,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[ media-src res.cloudinary.com;]' ||
             q'[ font-src 'self' fonts.gstatic.com;]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com es-modules.netlify.app;]' ||
-            q'[ script-src 'self' 'strict-dynamic' 'unsafe-inline' ']' || l_importmap_sha256 || q'[';]' ||
+            q'[ script-src 'strict-dynamic' 'unsafe-inline' ']' || l_importmap_sha256 || q'[';]' ||
             q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
             q'[ frame-ancestors 'none';]' ||
             q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
@@ -782,11 +785,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     l_font_preload ||
                     l_css ||
                     l_main_module ||
-                    
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
                 '</head>' ||
-                
-                l_labels(i).body_html || l_footer_module || '</body>' ||
+                '<body data-websiteid="' || pWebsiteId || '" data-articleid="' || l_labels(i).article_id || '" data-resturl="' || pRestUrl || '">' || 
+                    l_labels(i).body_html || 
+                '</body>' ||
             '</html>';
 
             addDeploy(CASE WHEN i=1 THEN 'index.html' ELSE l_labels(i).path_name || '.html' END, l_page);
