@@ -111,9 +111,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         l_ssl_url VARCHAR2(100);
         l_body_html article.body_html%type:=
         '<article class="flow">' ||
-        '<h2>This is a heading</h2>' ||
-        '<p>Choose the "Edit Content" option to change using a WYSIWYG editor.</p>' ||
-        '<h3>This is what a sub-heading looks like</h3>' ||
+        '<h2>Starter font</h2>' ||
+        '<p>the quick brown fox jumps over the lazy dog!</p>' ||
+        '<p>PACK MY BOX WITH FIVE DOZEN LIQUOR JUGS?</p>' ||
         '</article>';
     BEGIN
         l_domain:=getEditorDomain(pEmail);
