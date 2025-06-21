@@ -386,6 +386,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
      */
     FUNCTION getImageSrcset(pAssetId IN asset.id%type, pFullWidth IN BOOLEAN) RETURN VARCHAR2
     IS
+        gWidthThumbnail PLS_INTEGER:=200;
         l_img_html VARCHAR2(1000);
         l_img_src VARCHAR2(200);
         l_sizes VARCHAR2(500);
@@ -402,7 +403,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             '<img width="' || C.width || '" height="' || C.height || '" draggable="false" style="margin-inline:auto;border-radius:initial"';
 
             WHILE NOT done LOOP
-                l_img_src:='https://res.cloudinary.com/' || C.cld_cloud_name || CASE WHEN l_image_width>C.width THEN '/e_upscale' END || '/f_auto,q_auto,w_' || l_image_width || '/' || C.public_id;
+                l_img_src:='https://res.cloudinary.com/' || C.cld_cloud_name || CASE WHEN l_image_width>C.width THEN '/e_upscale' END || '/f_avif,q_50,w_' || l_image_width || '/' || C.public_id;
                 IF (l_image_width=gWidthThumbnail) THEN
                     l_img_html:=l_img_html || ' src="' || l_img_src || '"';
                     l_img_html:=l_img_html || ' srcset="';
