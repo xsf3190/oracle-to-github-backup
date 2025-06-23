@@ -1,5 +1,5 @@
 import { dropdown, login_btn, bodydata, getJWTClaim } from "deploy_elements";
-import {onLCP, onINP, onCLS} from 'deploy_web_vitals';
+import {onLCP, onINP, onCLS, onFCP} from 'deploy_web_vitals';
 
 
 
@@ -175,3 +175,4 @@ observer.observe({ type: "resource", buffered: true });
 onCLS(addToVitalsQueue);
 onLCP(addToVitalsQueue);
 onINP(addToVitalsQueue);
+onFCP(addToVitalsQueue);
