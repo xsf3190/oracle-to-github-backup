@@ -372,7 +372,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_icon_id icon.id%type;
         l_icons apex_t_varchar2:=apex_t_varchar2();
         l_svg_html CLOB;
-        nb_articles PLS_INTEGER;
+        m PLS_INTEGER;
         n PLS_INTEGER;
 
     BEGIN
@@ -465,11 +465,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             --l_javascript:=l_javascript || getJSCode('deploy_gallery.js');
         END IF;
 
-        /* Remove all style="width:n%;" */
-        --pHtml:=regexp_replace(pHtml,'style="width:.+?"',null);
-
-        /* 
-        ** All images lazy loaded except first
+         /* 
+        ** Lazy load all images in <main> content except first if page has hero image
         */
         n:=regexp_count(pHtml,'<img');
         FOR i IN 1..n 
@@ -481,7 +478,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             END IF;
         END LOOP;
 
-        nb_articles:=MOD(regexp_count(pHtml,'<article'),2);
+        --nb_articles:=MOD(regexp_count(pHtml,'<article'),2);
 
         /* 
         ** Build website header 
