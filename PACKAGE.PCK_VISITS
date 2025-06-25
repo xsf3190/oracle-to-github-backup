@@ -31,15 +31,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_bodytext CLOB:=pBodyText;
         l_ip_address website_article_cwv.ip_address%type:=OWA_UTIL.get_cgi_env ('REMOTE_ADDR');
         l_user_agent website_article_cwv.user_agent%type:=SUBSTR(OWA_UTIL.get_cgi_env('HTTP_USER_AGENT'),1,255);
-        l_this_referrer VARCHAR2(50):=LOWER(sys_context('userenv','db_name'));
     BEGIN
         INSERT INTO website_article_cwv (
             website_id, article_id, seq, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fcp, fcp_rating,
             user_agent, mobile, connection, url, website_loaded, duration_visible, transfer_size)
-        SELECT website_id, article_id, seq, CASE WHEN referrer LIKE '%' || l_this_referrer || '%' THEN l_this_referrer ELSE referrer END, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fcp, fcp_rating,
+        SELECT website_id, article_id, seq, referrer, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fcp, fcp_rating,
                 l_user_agent, mobile, connection, url, website_loaded, duration_visible, transfer_size
           FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' 
-            COLUMNS (website_id, article_id, seq, referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fcp, fcp_rating,
+            COLUMNS (website_id, article_id, seq, referrer, LCP, LCP_rating, CLS, CLS_rating, INP, INP_rating, FCP, FCP_rating,
                     mobile, connection, url, website_loaded, duration_visible, transfer_size, webdriver))
           WHERE webdriver='false';  
 
