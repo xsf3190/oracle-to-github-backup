@@ -465,26 +465,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             --l_javascript:=l_javascript || getJSCode('deploy_gallery.js');
         END IF;
 
-         /* 
-        ** Lazy load all images in <main> content except first if page has hero image
-        */
-        n:=regexp_count(pHtml,'<img');
-        FOR i IN 1..n 
-        LOOP
-            IF (i=1) THEN
-                pHtml:=REGEXP_REPLACE(pHtml,'<img', '<img loading="eager" fetchpriority="high"',1,i);
-            ELSE
-                pHtml:=REGEXP_REPLACE(pHtml,'<img', '<img loading="lazy"',1,i);
-            END IF;
-        END LOOP;
-
-        --nb_articles:=MOD(regexp_count(pHtml,'<article'),2);
-
         /* 
         ** Build website header 
         */
-        
-
         l_header:=
             '<header>' ||
                 '<div>' ||
