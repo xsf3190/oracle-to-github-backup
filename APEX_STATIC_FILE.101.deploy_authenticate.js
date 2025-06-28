@@ -7,12 +7,12 @@ import { login_dialog, login_btn, email, expires, dropdown, bodydata, getJWTClai
 
 const form = login_dialog.querySelector("form");
 const emailInput = form.querySelector("[name='email']");
-const emailError = form.querySelector("#emailInput + span");
+const emailError = form.querySelector("#emailInput + output");
 const sendmail_magic = form.querySelector(".sendmail-magic");
 const sendmail_passcode = form.querySelector(".sendmail-passcode");
 const sendmail_msg = form.querySelector(".sendmail-result");
 const passcodeInput = form.querySelector("[name='passcode']");
-const passcodeError = form.querySelector("#passcodeInput + span");
+const passcodeError = form.querySelector("#passcodeInput + output");
 const validate_passcode =  form.querySelector(".validate-passcode");
 const validate_msg = form.querySelector(".passcode-result");
 const loader = form.querySelector(".loader");
