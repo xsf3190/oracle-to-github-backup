@@ -4,7 +4,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_MEDIA" IS
     --
     FUNCTION getCloudinaryUrl(pCloudname IN VARCHAR2, pResourceType IN VARCHAR2, pPublicId IN VARCHAR2, pFormat IN VARCHAR2, pWidth IN INTEGER, pDimension IN NUMBER DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION getImageSrcset(pAssetId IN asset.id%type, pFullWidth IN BOOLEAN DEFAULT FALSE) RETURN VARCHAR2;
+    FUNCTION getImageSrcset(pAssetId IN asset.id%type, pSizes IN VARCHAR2) RETURN VARCHAR2;
     --
     FUNCTION getThumbnails(pArticleId IN article.id%type) RETURN CLOB;
     --
@@ -13,6 +13,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_MEDIA" IS
     PROCEDURE getCldSignature(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pParamsToSign IN CLOB, pStatus OUT NUMBER);
     --
     PROCEDURE getCldDetails(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pRequest IN VARCHAR2, pStatus OUT NUMBER);
+    --
+    PROCEDURE updateCldAsset(pWebsiteId IN website.id%type, pArticleId IN article.id%type DEFAULT NULL);
     --
     PROCEDURE uploadCldMetadata(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
 END;
@@ -124,6 +126,131 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
         
         EXCEPTION WHEN OTHERS THEN
             pck_core.log_error(pStatus);
+    END;
+
+    /*
+    ** UPDATE EXISTING CLOUDINARY ASSETS CONVERTING TO AVIF FORMAT AND 50% COMPRESSION
+    */
+    PROCEDURE updateCldAsset(pWebsiteid IN website.id%type, pArticleId IN article.id%type) IS
+        TYPE tt_assets IS RECORD(
+            domain_name website.domain_name%type, 
+            id asset.id%type,
+            cld_cloud_name asset.cld_cloud_name%type, 
+            public_id asset.public_id%type, 
+            format asset.format%type,
+            breakpoints asset.breakpoints%type, 
+            cld_api_key users.cld_api_key%type, 
+            cld_api_secret users.cld_api_secret%type
+        );
+        TYPE t_assets IS TABLE OF tt_assets INDEX BY PLS_INTEGER;
+        l_assets t_assets;
+
+        l_parm_names apex_application_global.VC_ARR2;
+        l_parm_values apex_application_global.VC_ARR2;
+        l_timestamp NUMBER:=trunc((cast(current_timestamp at time zone 'UTC' as date) - to_date('01-jan-1970','dd-mon-yyyy')) * (86400));
+        l_signature VARCHAR2(100);
+        l_string_to_sign varchar2(2000);  
+        l_clob CLOB;
+        l_json JSON_OBJECT_T;
+        l_return CLOB;
+        n PLS_INTEGER:=0;
+    BEGIN
+        /*
+        ** CLOUDINARY SIGNATURE IS URL QUERY STRING OF ALL PARAMETERS EXCEPT "api_key" ARRANGED ALPHABETICALLY BY NAME
+        */
+        l_parm_names(1):='eager';
+        l_parm_values(1):='f_avif,q_50';
+        l_parm_names(3):='timestamp';    
+        l_parm_values(3):=l_timestamp;
+        l_parm_names(4):='type';
+        l_parm_values(4):='upload';
+        
+        SELECT domain_name, id, cld_cloud_name, public_id, format, breakpoints, cld_api_key, cld_api_secret
+          BULK COLLECT INTO l_assets
+          FROM
+            ( 
+                SELECT w.domain_name, a.id, a.cld_cloud_name, a.public_id, a.format, a.breakpoints, u.cld_api_key, u.cld_api_secret 
+                  FROM website w, website_article wa, asset a, users u 
+                 WHERE w.id=pWebsiteid
+                   AND wa.website_id=w.id
+                   AND wa.article_id=NVL(pArticleId,wa.article_id)
+                   AND a.article_id=wa.article_id
+                   AND a.resource_type='image'
+                   AND a.format<>'avif'
+                   AND u.id=a.user_id
+                 UNION ALL
+                SELECT w.domain_name, a.id, a.cld_cloud_name, a.public_id, a.format, a.breakpoints, u.cld_api_key, u.cld_api_secret 
+                  FROM website w, asset a, users u 
+                 WHERE w.id=pWebsiteid
+                   AND w.hero_asset_id=a.id
+                   AND a.resource_type='image'
+                   AND a.format<>'avif'
+                   AND u.id=a.user_id
+            );
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'Content-Type';
+        apex_web_service.g_request_headers(1).value := 'application/json';
+
+        FOR i IN 1..l_assets.COUNT LOOP
+
+            l_parm_names(2):='public_id';
+            l_parm_values(2):=l_assets(i).public_id;
+            
+            l_string_to_sign:=NULL;
+            FOR i IN 1..4 LOOP
+                l_string_to_sign:=l_string_to_sign || l_parm_names(i) || '=' || l_parm_values(i) || '&';
+            END LOOP;
+            -- append user's secret to query string
+            l_string_to_sign:=RTRIM(l_string_to_sign,'&') || l_assets(i).cld_api_secret;
+
+            l_parm_names(5):='signature';    
+            l_parm_values(5):=dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign), dbms_crypto.HASH_SH1);
+
+            l_parm_names(6):='api_key';    
+            l_parm_values(6):=l_assets(i).cld_api_key;
+
+            l_json:=new JSON_OBJECT_T;
+            FOR i IN 1..l_parm_names.COUNT LOOP
+                l_json.put(l_parm_names(i), l_parm_values(i));
+            END LOOP;            
+
+            l_return:=apex_web_service.make_rest_request(
+                p_url=>'https://api.cloudinary.com/v1_1/' || l_assets(i).cld_cloud_name || '/image/explicit', 
+                p_http_method=>'POST', 
+                p_body=>l_json.stringify);
+
+            IF (apex_web_service.g_status_code<>200) THEN
+                pck_core.log('Got Error ' || apex_web_service.g_status_code || ' converting ' || l_assets(i).public_id || ' for domain ' || l_assets(i).domain_name);
+                RAISE_APPLICATION_ERROR(-20000,'Error in avif conversion - see log for details');
+                EXIT;
+            END IF;
+
+            l_assets(i).format:='avif';
+
+            -- Get responsive vreakpoints and update ASSET table
+            
+            l_return:=apex_web_service.make_rest_request(
+                p_url=>'https://res.cloudinary.com/' || l_assets(i).cld_cloud_name || '/w_auto:breakpoints_200_1920_5_10:json/' || l_assets(i).public_id, 
+                p_http_method=>'GET');
+
+            l_assets(i).breakpoints:=LTRIM(RTRIM(SUBSTR(l_return,INSTR(l_return,':')+1),']}'),'[');
+
+            pck_core.log(TO_CHAR(i)|| '/' || TO_CHAR(l_assets.COUNT) ||  ' - Successful conversion to avif of ' || l_assets(i).public_id || ' for domain ' || l_assets(i).domain_name);
+
+        END LOOP;
+
+        FORALL i IN 1..l_assets.COUNT
+            UPDATE asset 
+               SET format=l_assets(i).format,
+                   breakpoints=l_assets(i).breakpoints,
+                   updated_date=current_timestamp
+             WHERE id=l_assets(i).id;
+
+        pck_core.log('Updated ' || l_assets.COUNT || ' assets');
+        
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error;
     END;
 
     /*
@@ -386,7 +513,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
     /*
      **  Build gallery of thumbnail images for a given article
      */
-    FUNCTION getImageSrcset(pAssetId IN asset.id%type, pFullWidth IN BOOLEAN) RETURN VARCHAR2
+    FUNCTION getImageSrcset(pAssetId IN asset.id%type, pSizes IN VARCHAR2) RETURN VARCHAR2
     IS
         l_img_html VARCHAR2(1000);
         l_img_src VARCHAR2(200);
@@ -399,9 +526,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
         LOOP
             l_img_html:=
             '<img width="' || C.width || '" height="' || C.height || '" draggable="false" id="' || pAssetId || '" style="margin-inline:auto;border-radius:initial"';
-
+            
             l_img_html:=l_img_html || 
-            ' sizes="(max-width: ' || LEAST(C.width,1920) || 'px) 100vw, ' || LEAST(C.width,1920) || 'px"';
+            ' sizes=';
+
+            IF (pSizes='any') THEN
+                l_img_html:=l_img_html || '"any"';
+            ELSE
+                l_img_html:=l_img_html || '"(max-width: ' || LEAST(C.width,1920) || 'px) 100vw, ' || LEAST(C.width,1920) || 'px"';
+            END IF;
 
             FOR C1 IN (SELECT column_value AS breakpoint FROM TABLE(apex_string.split(C.breakpoints,','))) LOOP
                 l_img_src:='https://res.cloudinary.com/' || C.cld_cloud_name || '/w_' || C1.breakpoint || '/' || C.public_id;
