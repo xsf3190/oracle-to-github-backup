@@ -874,7 +874,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         l_session_data pck_sec.t_session_data;
         l_bodytext CLOB:=pBodyText;
         l_hero_asset_id website.hero_asset_id%type;
-        l_img VARCHAR2(500);
+        l_img VARCHAR2(1000);
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
         
@@ -883,12 +883,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         UPDATE website SET hero_asset_id=l_hero_asset_id, updated_date=current_timestamp WHERE id=pWebsiteId;
 
         FOR C IN (
-            SELECT a.cld_cloud_name, a.resource_type, a.public_id, a.width, a.height, a.format
-              FROM asset a
+            SELECT cld_cloud_name, resource_type, public_id, width, height, format, breakpoints
+              FROM asset
              WHERE id=l_hero_asset_id
             ) 
         LOOP
-            l_img:='<img src="' || pck_media.getCloudinaryUrl(C.cld_cloud_name, C.resource_type, C.public_id, C.format, C.width) || '" width="' || C.width || '" height="' || C.height || '">';
+            l_img:='<img "width="' || C.width || '" height="' || C.height || '"';
+            l_img:=l_img || ' sizes=""';
+            l_img:=l_img || ' srcset="';
+            FOR C1 IN (SELECT column_value AS breakpoint FROM TABLE(apex_string.split(C.breakpoints,','))) LOOP
+                l_img:=l_img || 'https://res.cloudinary.com/' || C.cld_cloud_name || '/w_' || C1.breakpoint || '/' || C.public_id || ' w_' || C1.breakpoint || ',';
+            END LOOP;
+            l_img:=RTRIM(l_img,',') || '">';
         END LOOP;
         
         apex_json.open_object;
