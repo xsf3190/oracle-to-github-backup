@@ -1,5 +1,5 @@
 import { dropdown, login_btn, bodydata, getJWTClaim } from "deploy_elements";
-import {onLCP, onINP, onCLS, onFCP} from 'deploy_web_vitals';
+import {onLCP, onINP, onCLS, onFCP, onTTFB} from 'deploy_web_vitals';
 
 
 
@@ -80,8 +80,7 @@ let page_loaded = Date.now(),
     page_visit = 0,
     transfer_size = 0;
 
-const vitalsQueue = new Set(),
-      mediaQueue = new Set();
+const vitalsQueue = new Set();
 
 const flushQueues = () => {
 
@@ -130,15 +129,6 @@ const flushQueues = () => {
     const body = JSON.stringify(json);
     page_visit++;
     (navigator.sendBeacon && navigator.sendBeacon(bodydata.resturl+"page-visit", body)) || fetch(visit_url, {body, method: 'POST', keepalive: true});
-
-
-    /* Send any media performance metrics */
-    if (mediaQueue.size > 0) {    
-        const body = JSON.stringify([...mediaQueue]);
-        let url = gRestUrl + "media-performance";
-        (navigator.sendBeacon && navigator.sendBeacon(url, body)) || fetch(url, {body, method: 'POST', keepalive: true});
-        mediaQueue.clear();
-    }
 }
 
 const addToVitalsQueue = (metric) => {
@@ -161,7 +151,7 @@ if ('onpagehide' in self) {
 }
 
 /*
-** PERFORMANCE OBSERVER
+** PERFORMANCE OBSERVER FOR LOADED RESOURCE TRANSFER SIZE
 */
 const observer = new PerformanceObserver((list) => {
   list.getEntries().forEach((entry) => {
@@ -176,3 +166,4 @@ onCLS(addToVitalsQueue);
 onLCP(addToVitalsQueue);
 onINP(addToVitalsQueue);
 onFCP(addToVitalsQueue);
+onTTFB(addToVitalsQueue);
