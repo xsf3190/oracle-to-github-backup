@@ -27,7 +27,7 @@ const closeBtnEvents = () => {
 }
 
 /*
-** SET DROPDOWN ELEMENTS IF REFRESH TOKEN EXISTS
+** SET DROPDOWN ELEMENTS IF LOGGED IN
 */
 if (sessionStorage.getItem("menulist")) {
     dropdown.insertAdjacentHTML('beforeend',sessionStorage.getItem("menulist"));
@@ -82,8 +82,10 @@ let page_loaded = Date.now(),
 
 const vitalsQueue = new Set();
 
+/*
+** SEND PAGE VISIT METRICS TO DATABASE SERVER UNLESS LOGGED IN AS "ADMIN" OR "OWNER"
+*/
 const flushQueues = () => {
-
     const aud = getJWTClaim("aud");
     if (aud === "admin" || aud === "owner") return;
 
@@ -96,7 +98,7 @@ const flushQueues = () => {
     const json = {};
     json["website_id"] = bodydata.websiteid;
     json["article_id"] = bodydata.articleid;
-    json["website_loaded"] = Number(sessionStorage.getItem("website_loaded"));
+    json["website_loaded"] = website_loaded;
     json["seq"] = page_visit;
     json["webdriver"] = navigator.webdriver;
     if (page_loaded !== 0) {
@@ -106,7 +108,7 @@ const flushQueues = () => {
 
     if (vitalsQueue.size > 0) {
         for (const item of vitalsQueue.values()) {
-            json[item.name] = item.name === "CLS" ? item.value.toFixed(2) : item.value.toFixed();
+            json[item.name] = item.value;
             json[item.name+"_rating"] = item.rating;
         }
         vitalsQueue.clear();
@@ -131,8 +133,10 @@ const flushQueues = () => {
     (navigator.sendBeacon && navigator.sendBeacon(bodydata.resturl+"page-visit", body)) || fetch(visit_url, {body, method: 'POST', keepalive: true});
 }
 
-const addToVitalsQueue = (metric) => {
-    console.log(metric.name,metric.value);
+const addToVitalsQueue = ({name,value,rating}) => {
+    const valueRnd = name==="CLS" ? value.toFixed(2) : value.toFixed();
+    const metric = {name:name,value:valueRnd,rating:rating};
+    console.log(name,value);
     vitalsQueue.add(metric);
 };
 
@@ -151,19 +155,48 @@ if ('onpagehide' in self) {
 }
 
 /*
+** ON PAGE "LOAD" REPORT TOTAL PAGE WEIGHT AND NON-CACHE REQUESTS
+*/
+window.addEventListener("load", () => {
+    console.log("load event");
+    const navigation = performance.getEntriesByType('navigation');
+    const resources = performance.getEntriesByType('resource');
+
+    let page_weight = 0;
+    let total_requests = 0;
+
+    navigation.forEach((entry) => {
+        if (entry.transferSize>0) {
+            page_weight += entry.transferSize;
+            total_requests++;
+        }
+    });
+
+    resources.forEach((entry) => {
+        if (entry.transferSize>0) {
+            page_weight += entry.transferSize;
+            total_requests++;
+        }
+    });
+
+    vitalsQueue.add({name:"page_weight",value:page_weight});
+    vitalsQueue.add({name:"total_requests",value:total_requests});
+})
+
+/*
 ** PERFORMANCE OBSERVER FOR LOADED RESOURCE TRANSFER SIZE
 */
 const observer = new PerformanceObserver((list) => {
   list.getEntries().forEach((entry) => {
-    console.log(entry.name,entry.transferSize);
     transfer_size+=entry.transferSize;
   });
 });
 
 observer.observe({ type: "resource", buffered: true });
+observer.observe({ type: "navigation", buffered: true });
 
-onCLS(addToVitalsQueue);
-onLCP(addToVitalsQueue);
-onINP(addToVitalsQueue);
-onFCP(addToVitalsQueue);
 onTTFB(addToVitalsQueue);
+onFCP(addToVitalsQueue);
+onLCP(addToVitalsQueue);
+onCLS(addToVitalsQueue);
+onINP(addToVitalsQueue);
