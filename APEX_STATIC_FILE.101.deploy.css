@@ -1191,3 +1191,129 @@ ol.deploy span + span {
   from {transform: rotate(0turn)}
   to   {transform: rotate(1turn)}
 }
+
+/* CKEDITOR STYLES */
+#editor-status {
+    color: green;
+}
+
+.ck-word-count {
+    display: flex;
+    gap: 1em;
+    font-size: var(--step--2);
+}
+
+/* SELECT ELEMENT */
+select,
+::picker(select) {
+    appearance: base-select;
+}
+
+
+/* EDITOR STYLES */
+
+/* COMMON EDITOR STYLES */
+.edit-header, .edit-footer {
+    font-size: var(--step--2);
+}
+.edit-header legend, .edit-footer legend {
+    font-stretch: 125%;
+    font-weight: 600;
+}
+.edit-header label, .edit-footer label {
+    font-weight:500;
+}
+.edit-header label > *, .edit-footer label > * {
+    margin-inline-start: 0.5em;
+    font: inherit;
+}
+
+/* EDIT HEADER STYLES */
+.edit-header:has(*) {
+    display: grid;
+    grid-template-areas:
+        "background title"
+        "buttons subtitle";
+    grid-template-columns: max-content 1fr;
+    gap: 1em;
+    padding: 0.5em;
+}
+
+@media (width <= 600px) {
+    .edit-header {
+        grid-template-areas: 
+            "background"
+            "buttons"
+            "title"
+            "subtitle";
+        grid-template-columns: 1fr;
+    }
+}
+
+.edit-header > fieldset {
+    inline-size: fit-content;
+}
+.edit-header > fieldset.background-color {
+    grid-area: background;
+    align-self: start;
+    justify-self: center;
+}
+.edit-header > fieldset.title-font {
+    grid-area: title;
+}
+.edit-header > fieldset.subtitle-font {
+    grid-area: subtitle;
+}
+.edit-header > div.buttons {
+    grid-area: buttons;
+}
+.edit-header > svg {
+    display: none;
+}
+
+
+/* EDIT FOOTER STYLES */
+edit-footer, edit-footer>div {
+    margin: 3vh;
+}
+
+.icon-with-text:has(span:empty) {
+    display: none;
+}
+
+
+/* ALERT STYLES - CHANGE SAVE BUTTON TEXT AND BACKGROUND COLOR WHEN CLICKED */
+
+ul[class] {
+  list-style:none;
+}
+
+li:has([role='alert']) {
+  position: relative;
+}
+
+[role='alert'] {
+  position: absolute;
+  inset:0;
+  align-content: center;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+[role='alert']:empty {
+  display: none;
+}
+
+/* EYEDROPPER STYLE - SAD EFFORT TO EMULATE INPUT COLOR TYPE*/
+
+.eyedropper {
+  width: 50px;
+  block-size: 27px;
+  background-color: rebeccapurple;
+  border-width:5px;
+  border-color:pink;
+}
+
+.eyedropper:hover {
+  border-color:red;
+}
