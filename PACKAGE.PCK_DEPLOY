@@ -177,7 +177,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             
         END LOOP;
 
-        l_headers:='/*' || chr(10) || 'Access-Control-Allow-Origin: *';
+        l_headers:='/*' || chr(10) || 'Access-Control-Allow-Origin: *' || chr(10) || 'Timing-Allow-Origin: *';
         l_sha1_test:=LOWER(dbms_crypto.hash(src=>l_headers, typ=>dbms_crypto.hash_sh1));
         l_deploy_files(l_sha1_test).file_name:='_headers';
         l_deploy_files(l_sha1_test).file_content:=l_headers;
