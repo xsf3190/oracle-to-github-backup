@@ -114,11 +114,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                   FROM apex_application_static_files 
                  WHERE application_id=101
                    AND file_name LIKE 'deploy%'
+                   AND mime_type='text/javascript' 
+                   AND INSTR(file_name,'.min.')>0
+                   /*
                    AND (
                         (mime_type='text/javascript' AND INSTR(file_name,'.min.')>0) 
                         OR 
                         (mime_type='text/css' AND INSTR(file_name,'.min.')=0)
                        )
+                    */
             )
             SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, CAST(s.last_updated_on AS TIMESTAMP WITH TIME ZONE) updated_source, s.file_content, e.sha1_test, e.sha1_live
               FROM source s, es_modules e
@@ -685,11 +689,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         
         /*
-        ** Append website-specific design tokens defined in a :root element and minify
+        ** Assemble website css file
         */
-        l_fontfaces:=minifyCss(l_fontfaces || pck_codepen.buildCssRoot(pWebsiteid));
-        addDeploy('site.min.css', l_fontfaces);
-        l_css:='<link rel="stylesheet" href="/site.min.css">';
+        
 
         n:=REGEXP_COUNT(l_fontfaces,l_src_url_regex);
         IF (n>0) THEN
@@ -699,6 +701,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 '<link rel="preload" href="' || REGEXP_SUBSTR(l_fontfaces,l_src_url_regex,1,j,null,1) || '" as="font" type="font/woff2" crossorigin>';
             END LOOP;
         END IF;
+
+        FOR C IN (
+            SELECT apex_util.blob_to_clob(file_content) file_content 
+              FROM apex_application_static_files 
+             WHERE application_id=101
+               AND file_name='deploy.css'
+        ) LOOP
+            l_fontfaces:=minifyCss(l_fontfaces || pck_codepen.buildCssRoot(pWebsiteid) || C.file_content);
+            addDeploy('css/styles.min.css', l_fontfaces);
+            l_css:='<link rel="stylesheet" href="/css/styles.min.css">';
+        END LOOP;
 
         /* 
         ** The site favicon is an SVG format image file uploaded through the CMS to the Asset table.
@@ -741,10 +754,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             ELSIF (INSTR(C.host_name,'js')>0) THEN 
                 l_importmap:=l_importmap || '"' || SUBSTR(C.module_name,1,INSTR(C.module_name,'.')-1) || '":"' || C.host_name || '",';
                 l_importmap_integrity:=l_importmap_integrity || '"' || C.host_name || '":"' || C.sha256 || '",';
-            ELSIF (INSTR(C.host_name,'css')>0) THEN
-                l_css:=l_css || 
-                    '<link rel="preload" href="' || C.host_name || '" as="style">' ||
-                    '<link rel="stylesheet" href="' || C.host_name || '">';
             END IF;
         END LOOP;
         
@@ -814,7 +823,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<meta name="mobile-web-app-capable" content="yes">' ||
                     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' ||
                     '<link rel="preconnect" href="https://es-modules.netlify.app">' ||
-                    '<link rel="preconnect" href="https://es-modules.netlify.app" crossorigin>' ||
                     '<link rel="preconnect" href="https://res.cloudinary.com">' ||
                     '<script type="importmap" integrity="' || l_importmap_sha256 || '">' || l_importmap || '</script>' ||
                     l_font_preload ||
