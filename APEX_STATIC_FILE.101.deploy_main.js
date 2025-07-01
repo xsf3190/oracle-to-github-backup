@@ -83,6 +83,36 @@ let page_loaded = Date.now(),
 const vitalsQueue = new Set();
 
 /*
+** REPORT TOTAL PAGE WEIGHT AND REQUESTS
+*/
+const getPerfEntries = () => {
+    console.log("getPerfEntries");
+    const navigation = performance.getEntriesByType('navigation');
+    const resources = performance.getEntriesByType('resource');
+
+    let page_weight = 0;
+    let total_requests = 0;
+
+    navigation.forEach((entry) => {
+        if (entry.transferSize>0) {
+            page_weight += entry.transferSize;
+            total_requests++;
+        }
+    });
+
+    resources.forEach((entry) => {
+        if (entry.transferSize>0) {
+            page_weight += entry.transferSize;
+            total_requests++;
+        }
+    });
+
+    vitalsQueue.add({name:"page_weight",value:page_weight});
+    vitalsQueue.add({name:"total_requests",value:total_requests});
+}
+
+
+/*
 ** SEND PAGE VISIT METRICS TO DATABASE SERVER UNLESS LOGGED IN AS "ADMIN" OR "OWNER"
 */
 const flushQueues = () => {
@@ -106,14 +136,6 @@ const flushQueues = () => {
         page_loaded = 0;
     }
 
-    if (vitalsQueue.size > 0) {
-        for (const item of vitalsQueue.values()) {
-            json[item.name] = item.value;
-            json[item.name+"_rating"] = item.rating;
-        }
-        vitalsQueue.clear();
-    }
-
     /* Send full details only on first page visit to save network cost */
     if (page_visit === 0) {
         const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -126,6 +148,15 @@ const flushQueues = () => {
         json["url"] = window.location.hostname;
         json["referrer"] = document.referrer;
         json["transfer_size"] = transfer_size;
+        getPerfEntries();
+    }
+
+    if (vitalsQueue.size > 0) {
+        for (const item of vitalsQueue.values()) {
+            json[item.name] = item.value;
+            json[item.name+"_rating"] = item.rating;
+        }
+        vitalsQueue.clear();
     }
 
     const body = JSON.stringify(json);
@@ -154,34 +185,6 @@ if ('onpagehide' in self) {
     }, { capture: true} );
 }
 
-/*
-** ON PAGE "LOAD" REPORT TOTAL PAGE WEIGHT AND NON-CACHE REQUESTS
-*/
-window.addEventListener("load", () => {
-    console.log("load event");
-    const navigation = performance.getEntriesByType('navigation');
-    const resources = performance.getEntriesByType('resource');
-
-    let page_weight = 0;
-    let total_requests = 0;
-
-    navigation.forEach((entry) => {
-        if (entry.transferSize>0) {
-            page_weight += entry.transferSize;
-            total_requests++;
-        }
-    });
-
-    resources.forEach((entry) => {
-        if (entry.transferSize>0) {
-            page_weight += entry.transferSize;
-            total_requests++;
-        }
-    });
-
-    vitalsQueue.add({name:"page_weight",value:page_weight});
-    vitalsQueue.add({name:"total_requests",value:total_requests});
-})
 
 /*
 ** PERFORMANCE OBSERVER FOR LOADED RESOURCE TRANSFER SIZE
