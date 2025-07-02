@@ -68,8 +68,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_sha1_test es_modules.sha1_test%type;
         l_sha256_test es_modules.sha256_test%type;
-
-        l_file_content CLOB;
         
         l_page CLOB;
         l_table CLOB;
@@ -107,32 +105,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         FOR C IN (
             WITH source AS (
-                SELECT CASE WHEN mime_type='text/css' THEN SUBSTR(file_name,1,INSTR(file_name,'.')) || 'min.css' ELSE file_name END file_name, 
-                        last_updated_on, 
-                        mime_type, 
-                        apex_util.blob_to_clob(file_content) file_content
+                SELECT file_name, 
+                       last_updated_on, 
+                       mime_type, 
+                       apex_util.blob_to_clob(file_content) file_content
                   FROM apex_application_static_files 
                  WHERE application_id=101
                    AND file_name LIKE 'deploy%'
                    AND mime_type='text/javascript' 
                    AND INSTR(file_name,'.min.')>0
-                   /*
-                   AND (
-                        (mime_type='text/javascript' AND INSTR(file_name,'.min.')>0) 
-                        OR 
-                        (mime_type='text/css' AND INSTR(file_name,'.min.')=0)
-                       )
-                    */
             )
             SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, CAST(s.last_updated_on AS TIMESTAMP WITH TIME ZONE) updated_source, s.file_content, e.sha1_test, e.sha1_live
               FROM source s, es_modules e
              WHERE s.file_name=e.module_name(+)
             )
         LOOP
-            l_file_content:=CASE WHEN C.file_path='css/' THEN minifyCss(C.file_content) ELSE C.file_content END;
-
-            l_sha1_test:=LOWER(dbms_crypto.hash(src=>l_file_content, typ=>dbms_crypto.hash_sh1));
-            l_sha256_test:=getSha256(l_file_content);
+            l_sha1_test:=LOWER(dbms_crypto.hash(src=>C.file_content, typ=>dbms_crypto.hash_sh1));
+            l_sha256_test:=getSha256(C.file_content);
 
             IF (C.sha1_test IS NULL) THEN 
                 INSERT INTO es_modules (
@@ -158,7 +147,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END IF;
             
             l_deploy_files(l_sha1_test).file_name:=C.file_path || C.file_name;
-            l_deploy_files(l_sha1_test).file_content:=l_file_content;
+            l_deploy_files(l_sha1_test).file_content:=C.file_content;
             l_files.put('test/' || C.file_path || C.file_name, l_sha1_test);
 
             /*
@@ -521,6 +510,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_message VARCHAR2(100);
         l_main_module  VARCHAR2(1000);
+        l_script_sha256 VARCHAR2(500);
         l_css VARCHAR2(1000);
         l_fontfaces CLOB;
         l_font_preload VARCHAR2(4000);
@@ -747,10 +737,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
              WHERE BITAND(deploy_envs,l_deploy_env)=l_deploy_env
              ORDER BY 1
         ) LOOP
-            IF (C.module_name IN ('deploy_main.min.js')) THEN
-                l_main_module:=
-                    '<link rel="modulepreload" href="' || C.host_name || '">' ||
-                    '<script src="' || C.host_name || '" type="module"></script>';
+            IF (C.module_name IN ('deploy_start.min.js')) THEN
+                l_main_module:=l_main_module ||
+                    '<script src="' || C.host_name || '" integrity="' || C.sha256 || '" crossorigin></script>';
+                l_script_sha256:=l_script_sha256 || '''' || C.sha256 || '''';
             ELSIF (INSTR(C.host_name,'js')>0) THEN 
                 l_importmap:=l_importmap || '"' || SUBSTR(C.module_name,1,INSTR(C.module_name,'.')-1) || '":"' || C.host_name || '",';
                 l_importmap_integrity:=l_importmap_integrity || '"' || C.host_name || '":"' || C.sha256 || '",';
@@ -764,6 +754,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_importmap:='{' || l_importmap || ',' || l_importmap_integrity || '}';
 
         l_importmap_sha256:=getSha256(l_importmap);
+        l_script_sha256:=l_script_sha256 || ' ''' || l_importmap_sha256 || '''';
 
         /*
         **  script-src 'strict-dynamic' - allows modules to dynamically create scripts, eg. cloudinary upload widget, CJEditor
@@ -771,7 +762,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_headers:=
         '/*' || chr(10) || 
-            q'[Content-Security-Policy: default-src 'none';]' ||
+            q'[Content-Security-Policy-Report-Only: default-src 'none';]' ||
             q'[ base-uri 'none';]' ||
             q'[ object-src 'none';]' ||
             CASE WHEN INSTR(l_favicon_url,'cloudinary')>0 THEN
@@ -781,8 +772,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END ||
             q'[ media-src res.cloudinary.com;]' ||
             q'[ font-src 'self' fonts.gstatic.com;]' ||
-            q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com es-modules.netlify.app;]' ||
-            q'[ script-src 'strict-dynamic' 'unsafe-inline' ']' || l_importmap_sha256 || q'[';]' ||
+            q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com;]' ||
+            q'[ script-src 'strict-dynamic' ]' || l_script_sha256 || q'[;]' ||
             q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
             q'[ frame-ancestors 'none';]' ||
             q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
