@@ -136,14 +136,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             domain_name website.domain_name%type, 
             id asset.id%type,
             cld_cloud_name asset.cld_cloud_name%type, 
-            public_id asset.public_id%type, 
-            format asset.format%type,
-            breakpoints asset.breakpoints%type, 
+            public_id asset.public_id%type,
             cld_api_key users.cld_api_key%type, 
-            cld_api_secret users.cld_api_secret%type
+            cld_api_secret users.cld_api_secret%type,
+            cld_upload_preset users.cld_upload_preset%type
         );
         TYPE t_assets IS TABLE OF tt_assets INDEX BY PLS_INTEGER;
         l_assets t_assets;
+
+        l_breakpoints asset.breakpoints%type;
 
         l_parm_names apex_application_global.VC_ARR2;
         l_parm_values apex_application_global.VC_ARR2;
@@ -158,35 +159,32 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
         /*
         ** CLOUDINARY SIGNATURE IS URL QUERY STRING OF ALL PARAMETERS EXCEPT "api_key" ARRANGED ALPHABETICALLY BY NAME
         */
-        l_parm_names(1):='eager';
-        l_parm_values(1):='f_avif,q_50';
-        l_parm_names(3):='timestamp';    
-        l_parm_values(3):=l_timestamp;
-        l_parm_names(4):='type';
-        l_parm_values(4):='upload';
+
+        --curl https://api.cloudinary.com/v1_1/cld-docs/image/upload -X POST --data 'file=https://www.example.com/sample.jpg&responsive_breakpoint=[{"create_derived":true,"bytes_step":20000,"min_width":200,"max_width":1000}]&timestamp=173719931&api_key=614335564976464&signature=a788d68f86a6f868af'
+
         
-        SELECT domain_name, id, cld_cloud_name, public_id, format, breakpoints, cld_api_key, cld_api_secret
+        SELECT domain_name, id, cld_cloud_name, public_id, cld_api_key, cld_api_secret, cld_upload_preset
           BULK COLLECT INTO l_assets
           FROM
             ( 
-                SELECT w.domain_name, a.id, a.cld_cloud_name, a.public_id, a.format, a.breakpoints, u.cld_api_key, u.cld_api_secret 
-                  FROM website w, website_article wa, asset a, users u 
+                SELECT w.domain_name, a.id, a.cld_cloud_name, a.public_id
+                  FROM website w, website_article wa, asset a
                  WHERE w.id=pWebsiteid
                    AND wa.website_id=w.id
                    AND wa.article_id=NVL(pArticleId,wa.article_id)
                    AND a.article_id=wa.article_id
                    AND a.resource_type='image'
                    AND a.format<>'avif'
-                   AND u.id=a.user_id
                  UNION ALL
-                SELECT w.domain_name, a.id, a.cld_cloud_name, a.public_id, a.format, a.breakpoints, u.cld_api_key, u.cld_api_secret 
-                  FROM website w, asset a, users u 
+                SELECT w.domain_name, a.id, a.cld_cloud_name, a.public_id
+                  FROM website w, asset a
                  WHERE w.id=pWebsiteid
                    AND w.hero_asset_id=a.id
                    AND a.resource_type='image'
                    AND a.format<>'avif'
-                   AND u.id=a.user_id
-            );
+            ),
+            (SELECT cld_api_key, cld_api_secret, cld_upload_preset from users where id=44);
+
 
         apex_web_service.clear_request_headers;
         apex_web_service.g_request_headers(1).name := 'Content-Type';
@@ -194,9 +192,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
 
         FOR i IN 1..l_assets.COUNT LOOP
 
-            l_parm_names(2):='public_id';
-            l_parm_values(2):=l_assets(i).public_id;
-            
+            l_parm_names(1):='public_id';
+            l_parm_values(1):=l_assets(i).public_id;
+
+            l_parm_names(2):='responsive_breakpoints';
+            l_parm_values(2):='[{"create_derived":false,"bytes_step":10000,"min_width":200,"max_width":1200,"max_images":10}]';
+
+            l_parm_names(3):='timestamp';    
+            l_parm_values(3):=l_timestamp;
+
+            l_parm_names(4):='upload_preset';
+            l_parm_values(4):=l_assets(i).cld_upload_preset;
+
+            l_parm_names(5):='file';
+            l_parm_values(5):='https://res.cloudinary.com/' || l_assets(i).cld_cloud_name || '/image/upload/v1744548339/' || l_assets(i).public_id || '.jpg';
+
             l_string_to_sign:=NULL;
             FOR i IN 1..4 LOOP
                 l_string_to_sign:=l_string_to_sign || l_parm_names(i) || '=' || l_parm_values(i) || '&';
@@ -204,48 +214,52 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             -- append user's secret to query string
             l_string_to_sign:=RTRIM(l_string_to_sign,'&') || l_assets(i).cld_api_secret;
 
-            l_parm_names(5):='signature';    
-            l_parm_values(5):=dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign), dbms_crypto.HASH_SH1);
+            l_parm_names(6):='signature';    
+            l_parm_values(6):=dbms_crypto.hash(utl_raw.cast_to_raw(l_string_to_sign), dbms_crypto.HASH_SH1);
 
-            l_parm_names(6):='api_key';    
-            l_parm_values(6):=l_assets(i).cld_api_key;
+            l_parm_names(7):='api_key';    
+            l_parm_values(7):=l_assets(i).cld_api_key;
 
             l_json:=new JSON_OBJECT_T;
             FOR i IN 1..l_parm_names.COUNT LOOP
                 l_json.put(l_parm_names(i), l_parm_values(i));
+                --pck_core.log(l_parm_names(i) || '='|| l_parm_values(i));
             END LOOP;            
 
             l_return:=apex_web_service.make_rest_request(
-                p_url=>'https://api.cloudinary.com/v1_1/' || l_assets(i).cld_cloud_name || '/image/explicit', 
+                p_url=>'https://api.cloudinary.com/v1_1/' || l_assets(i).cld_cloud_name || '/image/upload', 
                 p_http_method=>'POST', 
                 p_body=>l_json.stringify);
 
+            --pck_core.log(l_return);
+
             IF (apex_web_service.g_status_code<>200) THEN
                 pck_core.log('Got Error ' || apex_web_service.g_status_code || ' converting ' || l_assets(i).public_id || ' for domain ' || l_assets(i).domain_name);
+                pck_core.log(l_return);
                 RAISE_APPLICATION_ERROR(-20000,'Error in avif conversion - see log for details');
                 EXIT;
             END IF;
 
-            l_assets(i).format:='avif';
-
-            -- Get responsive vreakpoints and update ASSET table
-            
+            /*
             l_return:=apex_web_service.make_rest_request(
-                p_url=>'https://res.cloudinary.com/' || l_assets(i).cld_cloud_name || '/w_auto:breakpoints_200_1920_5_10:json/' || l_assets(i).public_id, 
+                p_url=>'https://res.cloudinary.com/' || l_assets(i).cld_cloud_name || '/w_auto:breakpoints_200_1220_5_10:json/' || l_assets(i).public_id, 
                 p_http_method=>'GET');
 
             l_assets(i).breakpoints:=LTRIM(RTRIM(SUBSTR(l_return,INSTR(l_return,':')+1),']}'),'[');
+            */
+            
+            -- Get responsive breakpoints and update ASSET table
+            SELECT LISTAGG(width,',') WiTHIN GROUP (ORDER BY width) 
+              INTO l_breakpoints
+              FROM JSON_TABLE(l_return, '$.responsive_breakpoints[0].breakpoints[*]' COLUMNS (width number PATH '$.width'));
 
-            pck_core.log(TO_CHAR(i)|| '/' || TO_CHAR(l_assets.COUNT) ||  ' - Successful conversion to avif of ' || l_assets(i).public_id || ' for domain ' || l_assets(i).domain_name);
-
-        END LOOP;
-
-        FORALL i IN 1..l_assets.COUNT
             UPDATE asset 
-               SET format=l_assets(i).format,
-                   breakpoints=l_assets(i).breakpoints,
+               SET format='avif',
+                   breakpoints=l_breakpoints,
                    updated_date=current_timestamp
              WHERE id=l_assets(i).id;
+
+        END LOOP;
 
         pck_core.log('Updated ' || l_assets.COUNT || ' assets');
         
@@ -515,8 +529,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
      */
     FUNCTION getImageSrcset(pAssetId IN asset.id%type, pSizes IN VARCHAR2) RETURN VARCHAR2
     IS
-        l_img_html VARCHAR2(1000);
-        l_img_src VARCHAR2(200);
+        l_img_html LONG;
+        l_img_src VARCHAR2(500);
         n PLS_INTEGER:=0;
     BEGIN
         FOR C IN (
