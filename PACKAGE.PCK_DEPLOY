@@ -391,29 +391,43 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     /*
     ** ADJUST <img> ELEMENTS TO INCLUDE SRCSET WITH SIZES="ANY"
     */
-    PROCEDURE setImgSrcset(pArticleid IN article.id%type, pStartIndex IN PLS_INTEGER, pBodyHtml IN OUT NOCOPY article.body_html%type) IS
+    PROCEDURE setImgSrcset(pArticleid IN article.id%type, pHeroAssetid IN website.hero_asset_id%type, pBodyHtml IN OUT NOCOPY article.body_html%type) IS
         l_img_regex varchar2(50):='("https://res.cloudinary.com(.+?)")';
-        l_img_src VARCHAR2(200);
+        l_img_src VARCHAR2(2000);
+        l_srcset VARCHAR2(2000);
         l_public_id asset.public_id%type;
-        l_srcset VARCHAR2(1000);
         n PLS_INTEGER;
     BEGIN
+        -- ONLY DO THIS IF IMAGE FORMATS ARE AVIF
+        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM asset WHERE article_id=pArticleid AND format='avif');
+        IF (n=0) THEN 
+            RETURN;
+        END IF;
+
         n:=REGEXP_COUNT(pBodyHtml,l_img_regex);
-        dbms_output.put_line('n:'||n);
-        FOR i IN pStartIndex..n LOOP
+        IF (n=0) THEN 
+            RETURN;
+        END IF;
+
+        -- APPEND srcset attribute to <img> element. "alt" attribute is entered by user in editor
+
+        FOR i IN 1..n LOOP
             l_img_src:=REGEXP_SUBSTR(pBodyHtml,l_img_regex,1,i);
             l_public_id:=RTRIM(SUBSTR(l_img_src,INSTR(l_img_src,'/',-1)+1),'"');
-            dbms_output.put_line('l_public_id:'||l_public_id);
             FOR C IN (
                 SELECT cld_cloud_name, breakpoints FROM asset WHERE article_id=pArticleid AND public_id=l_public_id
             ) LOOP
-                dbms_output.put_line('breakpoints:'||C.breakpoints);
                 FOR C1 IN (SELECT column_value AS breakpoint FROM TABLE(apex_string.split(C.breakpoints,','))) LOOP
-                    l_srcset:=l_srcset || 'https://res.cloudinary.com/' || C.cld_cloud_name || '/w_' || C1.breakpoint || '/' || l_public_id || ' w_' || C1.breakpoint || ',';
+                    l_srcset:=l_srcset || 'https://res.cloudinary.com/' || C.cld_cloud_name || '/w_' || C1.breakpoint || '/' || l_public_id || ' ' || C1.breakpoint || 'w,';
                 END LOOP;
                 l_srcset:=RTRIM(l_srcset,',');
             END LOOP;
-            l_img_src:=l_img_src || ' loading="lazy" sizes="any" srcset="' || l_srcset || '"';
+            l_img_src:=l_img_src || ' sizes="any" srcset="' || l_srcset || '"';
+            IF (pHeroAssetid IS NOT NULL) THEN
+                l_img_src:=l_img_src || ' loading="lazy"';
+            ELSIF (i>1) THEN
+                l_img_src:=l_img_src || ' loading="lazy"';
+            END IF;
             pBodyHtml:=REGEXP_REPLACE(pBodyHtml,l_img_regex,l_img_src,1,i);
         END LOOP;
     END;
@@ -511,7 +525,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_message VARCHAR2(100);
         l_main_module  VARCHAR2(1000);
         l_script_sha256 VARCHAR2(500);
-        l_css VARCHAR2(1000);
+        l_css CLOB;
+        l_css_minified CLOB;
         l_fontfaces CLOB;
         l_font_preload VARCHAR2(4000);
         l_styles_edit CLOB;
@@ -619,7 +634,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             /*
             ** SET IMAGE SRCSET FOR ANY IMAGES INCLUDED IN BODY_HTML
             */
-            setImgSrcset(l_labels(i).article_id, CASE WHEN l_labels(i).hero_asset_id IS NULL THEN 1 ELSE 2 END, l_labels(i).body_html);
+            setImgSrcset(l_labels(i).article_id, l_labels(i).hero_asset_id, l_labels(i).body_html);
 
             IF (l_labels(i).collection_type='BLOG') THEN
                 l_is_blog:=TRUE;
@@ -676,13 +691,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END CASE;
             l_context:=l_fonts.NEXT(l_context);
         END LOOP;
-
         
-        /*
-        ** Assemble website css file
-        */
-        
-
         n:=REGEXP_COUNT(l_fontfaces,l_src_url_regex);
         IF (n>0) THEN
             FOR j IN 1..n 
@@ -692,15 +701,21 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             END LOOP;
         END IF;
 
+        /*
+        ** Assemble complete css file
+        */
         FOR C IN (
             SELECT apex_util.blob_to_clob(file_content) file_content 
               FROM apex_application_static_files 
              WHERE application_id=101
                AND file_name='deploy.css'
         ) LOOP
-            l_fontfaces:=minifyCss(l_fontfaces || pck_codepen.buildCssRoot(pWebsiteid) || C.file_content);
-            addDeploy('css/styles.min.css', l_fontfaces);
-            l_css:='<link rel="stylesheet" href="/css/styles.min.css">';
+            dbms_lob.createtemporary(l_css,true);
+            dbms_lob.append(l_css,minifyCss(l_fontfaces));
+            dbms_lob.append(l_css,minifyCss(pck_codepen.buildCssRoot(pWebsiteid)));
+            dbms_lob.append(l_css,minifyCss(C.file_content));
+            addDeploy('css/styles.min.css', l_css);
+            dbms_lob.freetemporary(l_css);
         END LOOP;
 
         /* 
@@ -726,8 +741,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         */
         l_importmap:='"imports":{';
         l_importmap_integrity:='"integrity":{';
-
+        pck_core.log('pEnv:'||pEnv);
         l_deploy_env:=CASE WHEN pEnv='TEST' THEN 1 WHEN pEnv='LIVE' THEN 3 END;
+        pck_core.log('l_deploy_env:'||l_deploy_env);
 
         FOR C IN (
             SELECT module_name, 
@@ -817,7 +833,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     '<link rel="preconnect" href="https://res.cloudinary.com">' ||
                     '<script type="importmap" integrity="' || l_importmap_sha256 || '">' || l_importmap || '</script>' ||
                     l_font_preload ||
-                    l_css ||
+                    '<link rel="stylesheet" href="/css/styles.min.css">' ||
                     l_main_module ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
                 '</head>' ||
@@ -861,6 +877,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         EXCEPTION
             WHEN OTHERS THEN
+                IF (dbms_lob.istemporary(l_css)=1) THEN
+                    dbms_lob.freetemporary(l_css);
+                END IF;
                 logDeployment(pWebsiteId, pSiteId, SUBSTR(SQLERRM,1,100),'NOK');
                 pck_core.log_error;
     END;
