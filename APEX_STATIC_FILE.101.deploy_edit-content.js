@@ -238,6 +238,7 @@ export const show_media = async (request) => {
             }
 
             info_dialog.querySelector("header>h4").textContent = data.heading;
+            const heading = info_dialog.querySelector("header>:first-child");
             const media = info_dialog.querySelector("article");
             media.replaceChildren();
             media.insertAdjacentHTML('afterbegin',data.thumbnails);
@@ -251,13 +252,14 @@ export const show_media = async (request) => {
                             try {
                                 await navigator.clipboard.writeText(src);
                                 media.querySelectorAll(".copied").forEach((copied) => {
-                                copied.textContent = "COPY";
-                                copied.classList.toggle("copied");
+                                    copied.style.fill = "initial";
+                                    copied.style.backgroundColor = "white";
+                                    copied.classList.toggle("copied");
                                 });
-                                if (e.target.textContent = "COPY") {
-                                e.target.textContent = "copied";
+                                e.target.style.fill = "green";
+                                e.target.style.backgroundColor = "white";
                                 e.target.classList.toggle("copied");
-                                }
+                                heading.textContent = "Image URL copied";
                             } catch (error) {
                                 handleError(error);
                             }
