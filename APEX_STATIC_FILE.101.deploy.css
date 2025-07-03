@@ -672,6 +672,7 @@ fieldset {
 .button:hover {
   background: var(--button-hover-bg);
   color: var(--button-hover-color);
+  fill: var(--button-hover-color);
 }
 
 .button:not(.no-focus):focus-visible {
@@ -814,7 +815,7 @@ dialog hr+span {
   block-size:100%;
   aspect-ratio: var(--aspect-ratio);
 }
-.overlay button {
+.overlay div {
   grid-area: overlay;
   place-self: start center;
   font-size:var(--step--2);
@@ -827,21 +828,18 @@ dialog hr+span {
 /* STYLES FOR CAROUSEL COMPONENT */
 
 .carousel {
-  container-type: inline-size;
-  display: flex;
-  block-size: auto;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 30%;
+  gap: 1rem;
   overflow-x: auto;
-  overflow-y: hidden;
-  padding-block-end: 1rem;
   scrollbar-color: var(--color-primary) var(--color-primary-lightest);
 }
 
-.carousel > * {
-  flex: 0 0 7rem;
-}
-
-.carousel > * + * {
-  margin-inline-start: 1rem;
+.carousel figcaption {
+    /* background-color: pink; */
+    font-size: 50%;
+    /* padding: 0.5em; */
 }
 
 .no-border {
