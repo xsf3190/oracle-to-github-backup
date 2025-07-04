@@ -53,9 +53,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             l_thumbnails:=pck_media.getThumbnails(pArticleId);
             IF (SUBSTR(l_thumbnails,1,3)='<ul') THEN
                 IF (pRequest='copy') THEN 
-                    l_heading:='Click image to copy URL';
+                    l_heading:='Article images';
                 ELSIF (pRequest='hero') THEN
-                    l_heading:='Click image for header background';
+                    l_heading:='Background header images';
                 END IF;
             END IF;
 
@@ -259,6 +259,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
                    updated_date=current_timestamp
              WHERE id=l_assets(i).id;
 
+            COMMIT; -- Each conversion takes a long time, so commit work done as soon as possible
+
         END LOOP;
 
         pck_core.log('Updated ' || l_assets.COUNT || ' assets');
@@ -286,7 +288,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
               FROM JSON_TABLE(l_bodytext, '$.images[*]' COLUMNS (seq FOR ORDINALITY, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes,  format))
         ) LOOP
             IF (C.resource_type='image') THEN
-                l_url:='https://res.cloudinary.com/' || C.cld_cloud_name || '/w_auto:breakpoints_200_1920_5_10:json/' || C.public_id;
+                -- breakpoints [min_width]_[max_width]_[bytes_step_in_KBs]_[max_images]
+                l_url:='https://res.cloudinary.com/' || C.cld_cloud_name || '/w_auto:breakpoints_200_1200_5_10:json/' || C.public_id;
                 l_response:=apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'GET');
                 l_breakpoints:=LTRIM(RTRIM(SUBSTR(l_response,INSTR(l_response,':')+1),']}'),'[');
             END IF;
@@ -483,7 +486,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
              ORDER BY display_order )
         LOOP
             l_clob:=l_clob ||
-                '<li class="overlay" data-id="' || C.id || '">';
+                '<li data-id="' || C.id || '">' ||
+                    '<figure>' ||
+                        '<figcaption class="flex-items space-between">' ||
+                            '<button type="button" class="icon-with-text button copy-url">' || 
+                                '<svg class="icon" aria-hidden="true" focusable="false"><use href="#copy"></use></svg>' ||
+                                '<span>URL</span>' ||
+                            '</button>' ||
+                            '<button type="button" class="icon-with-text button delete-asset">' || 
+                                '<svg class="icon" aria-hidden="true" focusable="false"><use href="#delete"></use></svg>' ||
+                                '<span>DELETE</span>' ||
+                            '</button>' ||
+                        '</figcaption>';
 
             l_url_image:=
                 '<img draggable="false" src="https://res.cloudinary.com/' || C.cld_cloud_name || '/' ||
@@ -513,8 +527,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
                 '</audio>';
             END IF;
 
-            l_clob:=l_clob || 
-                '<button type="button" class="copy-url">⮺</button>' ||
+            l_clob:=l_clob ||
+                '</figure>' ||
             '</li>';
         END LOOP;
 
