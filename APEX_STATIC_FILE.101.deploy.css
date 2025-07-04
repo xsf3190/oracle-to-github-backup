@@ -991,6 +991,39 @@ pre:has(.language-sql)::after {
   border-block-start: solid 1px black;
 }
 
+/* POPOVER AND ANCHOR STYLES */
+.settings-popover {
+  background: ghostwhite;
+  position: relative;
+  padding: 1rem;
+  max-width:100%;
+  box-shadow: 0 0 25px dimgray;
+  inset: auto;
+}
+
+.settings-popover::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  bottom: -0.9rem;
+  width: 0; 
+  height: 0; 
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 16px solid ghostwhite;
+} 
+
+[popover] {
+  overflow: unset;
+  bottom: calc(anchor(top) + 1rem);
+  left: anchor(left);
+  position-try-fallbacks: flip-block;
+}
+
+:popover-open {
+  max-width:50ch;
+}
+
 /* TABLE STYLES */
 
 table {
