@@ -88,7 +88,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                     SELECT MAX(CAST(last_updated_on AS TIMESTAMP WITH TIME ZONE)) last_updated
                       FROM apex_application_static_files
                      WHERE application_id=101
-                       AND file_name LIKE 'deploy%'
+                       AND mime_type='text/javascript'
+                       AND file_name LIKE 'deploy%.min.js'
                 ),
                 cdn AS (
                     SELECT MAX(updated_test) last_updated 
@@ -889,10 +890,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
             ) 
         LOOP
             l_img:='<img "width="' || C.width || '" height="' || C.height || '"';
-            l_img:=l_img || ' sizes=""';
+            l_img:=l_img || ' sizes="50vw"';
             l_img:=l_img || ' srcset="';
             FOR C1 IN (SELECT column_value AS breakpoint FROM TABLE(apex_string.split(C.breakpoints,','))) LOOP
-                l_img:=l_img || 'https://res.cloudinary.com/' || C.cld_cloud_name || '/w_' || C1.breakpoint || '/' || C.public_id || ' w_' || C1.breakpoint || ',';
+                l_img:=l_img || 'https://res.cloudinary.com/' || C.cld_cloud_name || '/w_' || C1.breakpoint || '/' || C.public_id || ' ' || C1.breakpoint || 'w,';
             END LOOP;
             l_img:=RTRIM(l_img,',') || '">';
         END LOOP;
