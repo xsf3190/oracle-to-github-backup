@@ -111,9 +111,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                        apex_util.blob_to_clob(file_content) file_content
                   FROM apex_application_static_files 
                  WHERE application_id=101
-                   AND file_name LIKE 'deploy%'
-                   AND mime_type='text/javascript' 
-                   AND INSTR(file_name,'.min.')>0
+                   AND file_name LIKE 'deploy%.min.js'
+                   AND mime_type='text/javascript'
             )
             SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, CAST(s.last_updated_on AS TIMESTAMP WITH TIME ZONE) updated_source, s.file_content, e.sha1_test, e.sha1_live
               FROM source s, es_modules e
@@ -247,7 +246,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         FOR C IN (
             SELECT deploy_envs, SUM(live_change_ind) live_change_ind
               FROM es_modules
-             WHERE INSTR(module_name,'.js')>0
              GROUP BY deploy_envs
              HAVING SUM(live_change_ind)>0
              ORDER BY deploy_envs DESC
@@ -422,7 +420,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END LOOP;
                 l_srcset:=RTRIM(l_srcset,',');
             END LOOP;
-            l_img_src:=l_img_src || ' sizes="any" srcset="' || l_srcset || '"';
+            l_img_src:=l_img_src || ' sizes="10vw" srcset="' || l_srcset || '"';
             IF (pHeroAssetid IS NOT NULL) THEN
                 l_img_src:=l_img_src || ' loading="lazy"';
             ELSIF (i>1) THEN
@@ -823,7 +821,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 '<html lang="en">' ||
                 '<head>' ||
                     '<meta charset="UTF-8">' ||
-                    '<meta name="viewport" content="width=device-width, initial-scale=1.0">' ||
+                    --'<meta name="viewport" content="width=device-width, initial-scale=1.0">' ||
+                    '<meta name="viewport" content="width=device-width">' ||
                     '<title>' || l_labels(i).page_title || '</title>' ||
                     '<meta name="description" content="' || l_labels(i).page_description || '">' ||
                     '<meta name="author" content="restartnet.com">' ||
