@@ -545,6 +545,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             l_icon_id:=REGEXP_SUBSTR(pHtml,'<use href="#([^"]+)',1,i,null,1);
             apex_string.push(l_icons,l_icon_id);
         END LOOP;
+        
+        IF (pEnv='TEST') THEN
+            apex_string.push(l_icons,'copy');
+            apex_string.push(l_icons,'delete');
+        END IF;
 
         IF (n>0) THEN
             pHtml:=pHtml || '<svg width="0" height="0">';
