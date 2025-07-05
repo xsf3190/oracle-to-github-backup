@@ -992,6 +992,7 @@ pre:has(.language-sql)::after {
 }
 
 /* POPOVER AND ANCHOR STYLES */
+
 .settings-popover {
   background: ghostwhite;
   position: relative;
@@ -1008,9 +1009,9 @@ pre:has(.language-sql)::after {
   bottom: -0.9rem;
   width: 0; 
   height: 0; 
-  border-left: 10px solid transparent;
-  border-right: 10px solid transparent;
-  border-top: 16px solid ghostwhite;
+  /* border-left: 10px solid transparent; */
+  /* border-right: 10px solid transparent; */
+  /* border-top: 16px solid ghostwhite; */
 } 
 
 [popover] {
@@ -1051,14 +1052,14 @@ td.centered {
   font-weight: 900;
 }
 td.centered span {
-  display; inline-block;
-  padding: 0.5ch;
-  border-radius: 0.5ch;
+  display: inline-block;
+  padding: 0.15em 0.5em;
+  border-radius: 0.25em;
 }
 .good {
   background: chartreuse;
 }
-.needs-improvement {
+.improve, .needs-improvement {
   background: orange;
 }
 .poor {
