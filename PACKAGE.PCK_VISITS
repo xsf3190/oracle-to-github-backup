@@ -402,6 +402,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_rating VARCHAR2(200);
         l_total PLS_INTEGER;
         l_ela_time VARCHAR2(11);
+        l_nb_pages PLS_INTEGER;
         n PLS_INTEGER:=0;
 
         FUNCTION cwv (pLCPr IN VARCHAR2 DEFAULT NULL, pCLSr IN VARCHAR2 DEFAULT NULL, pINPr IN VARCHAR2 DEFAULT NULL, pLCP IN VARCHAR2 DEFAULT NULL, pCLS IN VARCHAR2 DEFAULT NULL, pINP IN VARCHAR2 DEFAULT NULL) RETuRN VARCHAR2
@@ -428,26 +429,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         END;
     BEGIN
         IF (pOffset=0) THEN
-            l_content:='<details><summary>Overview</summary>';
-            l_content:=l_content || '<section class="grid grid__4col">';
-            l_content:=l_content || '<span class="grid-heading">Total Visits</span>';
-            l_content:=l_content || '<span class="grid-heading">Since</strong></span>';
-            l_content:=l_content || '<span class="grid-heading">Distinct Visitors</strong></span>';
-            l_content:=l_content || '<span class="grid-heading">Average Visit</strong></span>';
-            
-            FOR C IN (
-                SELECT COUNT(DISTINCT website_loaded||ip_address) nb_visit, COUNT(DISTINCT ip_address) nb_distinct_ip, TRUNC(current_date)-TRUNC(MIN(visit_date)) ela_days, ROUND(AVG(duration_visible),0) viewing_time
-                  FROM page_hit
-                 WHERE website_id=pWebsiteId
-                   AND url=pUrl
-            ) LOOP
-                l_content:=l_content ||
-                    '<span>' || C.nb_visit || '</span><span>' || NVL(C.ela_days,0) || ' days</span><span>' || C.nb_distinct_ip || '</span><span>' || elapsedTime(NVL(C.viewing_time,0)) || '</span>';
-            END LOOP;
-            l_content:=l_content || '</section>';
-            l_content:=l_content || '</details>';
-
-            l_content:=l_content ||
+            l_content:=
             '<table role="presentation">
                 <thead>
                     <tr>
@@ -459,6 +441,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     </tr>
                 </thead>
                 <tbody>';
+            SELECT COUNT(*) INTO l_nb_pages FRom website_article WHERE website_id=pWebsiteId;
         END IF;
 
         FOR C IN (
@@ -466,10 +449,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             (
                 SELECT p.website_id, p.ip_address, p.visit_date, 
                         COUNT(*) OVER() total,
+                        COUNT(DISTINCT article_id) page_views,
                         MAX(p.referrer) referrer, 
+                        MAX(p.ttfb_rating) ttfb_rating, MAX(p.fcp_rating) fcp_rating,
                         MAX(p.lcp_rating) lcp_rating, MAX(p.cls_rating) cls_rating, MAX(p.inp_rating) inp_rating, 
-                        MAX(p.lcp) lcp, MAX(p.cls) cls, MAX(p.inp) inp, 
-                        SUM(p.duration_visible) duration_visible, MAX(p.browser) browser, MAX(p.connection) connection, MAX(p.mobile) mobile
+                        MAX(p.ttfb) ttfb, MAX(p.fcp) fcp, MAX(p.lcp) lcp, MAX(p.cls) cls, MAX(p.inp) inp, 
+                        MAX(p.page_weight) page_weight, 
+                        MAX(p.total_requests) total_requests,
+                        SUM(p.duration_visible) duration_visible, 
+                        MAX(p.browser) browser, 
+                        MAX(p.connection) connection, 
+                        MAX(p.mobile) mobile
                   FROM website w, page_hit p
                  WHERE w.id=pWebsiteId
                    AND p.website_id=w.id
@@ -479,8 +469,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                  OFFSET pOffset ROWS
                  FETCH FIRST ROWS_PER_PAGE ROWS ONLY
             )
-            SELECT wh.total, wh.visit_date, wh.referrer, ip.city||', '||ip.country_code||' '||ip.postal location, CASE WHEN ip.error_message IS NOT NULL THEN ip.ip END ip_address,
-                    wh.browser, wh.connection, wh.mobile, wh.duration_visible, wh.lcp_rating, wh.cls_rating, wh.inp_rating, RouND(wh.lcp/1000,1) lcp, cls, inp
+            SELECT wh.total, wh.page_views, wh.visit_date, wh.referrer, ip.city||', '||ip.country_code||' '||ip.postal location, CASE WHEN ip.error_message IS NOT NULL THEN ip.ip END ip_address,
+                    wh.browser, wh.connection || CASE WHEN wh.mobile='true' THEN ' (Mobile)' END connection, 
+                    wh.duration_visible, 
+                    wh.ttfb_rating, wh.fcp_rating, wh.lcp_rating, wh.cls_rating, wh.inp_rating, 
+                    ROUND(wh.ttfb/1000,1) ttfb, ROUND(wh.fcp/1000,1) fcp, ROUND(wh.lcp/1000,1) lcp, cls, inp,
+                    wh.page_weight,
+                    wh.total_requests
               FROM website_hits wh, ip_lookup ip
              WHERE ip.ip=wh.ip_address
         ) 
@@ -490,18 +485,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 pCount:=C.total;
             END IF;
             n:=pOffset+n;
-            
-            l_popover:=C.browser;
 
             l_ela_time:=elapsedTime(C.duration_visible);
-
-            IF (C.connection IS NOT NULL) THEN
-                l_popover:=l_popover || ' (' || C.connection;
-                IF ( C.mobile='true') THEN
-                    l_popover:=l_popover || ' Mobile';
-                END IF;
-                l_popover:=l_popover || ')';
-            END IF;
 
             IF (COALESCE(C.lcp_rating,C.cls_rating,C.inp_rating) IS NULL) THEN
                 l_rating:='-';
@@ -516,8 +501,33 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             l_content:=l_content ||
                 '<tr>
                     <td>' || TO_CHAR(C.visit_date at time zone pTimeZone, 'dd-mm-yy fmhh24:fmmi')  || 
-                    '<button type="button" class="button" data-button-variant="no-styles" popovertarget="popover_' || n || '" id="anchor_' || n || '">&#9432;</button>' ||
-                    '<span id="popover_' || n || '" popover anchor="anchor_' || n || '">' || l_popover || '</span>' ||
+                    '<button type="button" class="button" data-button-variant="no-styles" popovertarget="popover_' || n || '" style="anchor-name: --info-btn-' || n || '">&#9432;</button>' ||
+                    '<table id="popover_' || n || '" class="settings-popover" popover style="position-anchor: --info-btn-' || n || '">' || 
+                        '<tr><td>Browser</td><td>' || C.browser || '</td></tr>' || 
+                        CASE WHEN C.connection IS NOT NULL THEN 
+                        '<tr><td>Connection</td><td>' || C.connection || '</td></tr>'
+                        END ||
+                        CASE WHEN l_nb_pages>1 THEN 
+                        '<tr><td>Page Views</td><td>' || C.page_views || '</td></tr>' 
+                        END || 
+                        '<tr><td>Max Page Weight</td><td>' || C.page_weight || '</td></tr>' || 
+                        '<tr><td>Max Page Requests</td><td>' || C.total_requests || '</td></tr>' || 
+                        CASE WHEN C.TTFB IS NOT NULL THEN
+                        '<tr><td>Max TTFB</td><td>' || C.TTFB || 's</td></tr>' 
+                        END || 
+                        CASE WHEN C.FCP IS NOT NULL THEN
+                        '<tr><td>Max FCP</td><td>' || C.FCP || 's</td></tr>' 
+                        END || 
+                        CASE WHEN C.LCP IS NOT NULL THEN
+                        '<tr><td>Max LCP</td><td>' || C.LCP || 's</td></tr>'
+                        END || 
+                        CASE WHEN C.CLS IS NOT NULL THEN
+                        '<tr><td>Max CLS</td><td>' || C.CLS || '</td></tr>' 
+                        END || 
+                        CASE WHEN C.INP IS NOT NULL THEN
+                        '<tr><td>Max INP</td><td>' || C.INP || 's</td></tr>' 
+                        END || 
+                    '</table>' ||
                     '</td>
                     <td>' || COALESCE(C.ip_address,LTRIM(RTRIM(C.location,','),',')) || '</td>
                     <td>' || l_ela_time || '</td>
