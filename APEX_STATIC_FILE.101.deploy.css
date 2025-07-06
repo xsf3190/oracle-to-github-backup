@@ -1051,16 +1051,20 @@ td.centered {
   text-align: center;
   font-weight: 900;
 }
-td.centered span {
-  display: inline-block;
-  padding: 0.15em 0.5em;
-  border-radius: 0.25em;
+.cwv {
+    --button-padding: 0.15em 0.5em;
+    border: none;
+}
+.cwv:hover {
+    font-weight: 850;
 }
 .good {
-  background: chartreuse;
+  background-color: chartreuse;
+  color: black;
 }
 .improve, .needs-improvement {
-  background: orange;
+  background-color: orange;
+  color: black;
 }
 .poor {
   background: red;
