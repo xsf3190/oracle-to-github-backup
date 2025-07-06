@@ -37,6 +37,14 @@ export const init = (element) => {
         });
 }
 
+const listenCwv = () => {
+    article.querySelectorAll(".cwv").forEach( (button) => {
+        button.addEventListener("click", (e) => {
+            e.target.closest("tr").querySelector("button:first-of-type").click();
+        });
+    });
+}
+
 const getReport = async (report, offset) => {
     const query = "?report=" + report + "&offset=" + offset;
     
@@ -48,14 +56,16 @@ const getReport = async (report, offset) => {
             showmore.classList.add("visually-hidden");
             status.classList.add("visually-hidden");
         } else {
+            
             if (offset===0) {
                 article.replaceChildren();
                 article.insertAdjacentHTML('afterbegin',data.article);
                 showmore.dataset.report = report;
+                listenCwv();
             } else if (data.article) {            
                 article.querySelector("tbody").insertAdjacentHTML('beforeend',data.article);
+                listenCwv();
             }
-
             const tbody = article.querySelector("tbody");
             if (tbody.childElementCount >= data.count) {
                 showmore.classList.add("visually-hidden");
