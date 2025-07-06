@@ -399,34 +399,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     PROCEDURE getWebsiteVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB) IS
         l_content CLOB;
         l_popover VARCHAR2(300);
-        l_rating VARCHAR2(200);
+        l_rating VARCHAR2(7);
         l_total PLS_INTEGER;
         l_ela_time VARCHAR2(11);
         l_nb_pages PLS_INTEGER;
         n PLS_INTEGER:=0;
-
-        FUNCTION cwv (pLCPr IN VARCHAR2 DEFAULT NULL, pCLSr IN VARCHAR2 DEFAULT NULL, pINPr IN VARCHAR2 DEFAULT NULL, pLCP IN VARCHAR2 DEFAULT NULL, pCLS IN VARCHAR2 DEFAULT NULL, pINP IN VARCHAR2 DEFAULT NULL) RETuRN VARCHAR2
-        IS
-            l_rating VARCHAR2(50);
-        BEGIN
-            l_rating:='<br>';
-            IF (pLCPr IS NOT NULL) THEN
-                IF (pLCP>2.5) THEN
-                    l_rating:=l_rating || '<span>LCP:' || pLCP || 's</span>';
-                END IF;
-            END IF;
-            IF (pCLSr IS NOT NULL) THEN
-                IF (pCLS>0.1) THEN
-                    l_rating:=l_rating || '<span>CLS:' || pCLS || '</span>';
-                END IF;
-            END IF;
-            IF (pINPr IS NOT NULL) THEN
-                IF (pINP>200) THEN
-                    l_rating:=l_rating || '<span>INP:' || pINP || 'ms</span>';
-                END IF;
-            END IF;
-            RETURN (l_rating);
-        END;
     BEGIN
         IF (pOffset=0) THEN
             l_content:=
@@ -473,7 +450,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     wh.browser, wh.connection || CASE WHEN wh.mobile='true' THEN ' (Mobile)' END connection, 
                     wh.duration_visible, 
                     wh.ttfb_rating, wh.fcp_rating, wh.lcp_rating, wh.cls_rating, wh.inp_rating, 
-                    ROUND(wh.ttfb/1000,1) ttfb, ROUND(wh.fcp/1000,1) fcp, ROUND(wh.lcp/1000,1) lcp, cls, inp,
+                    TO_CHAR(ROUND(wh.ttfb/1000,2),'fm90.99') || NVL2(wh.ttfb,'s',null) ttfb, 
+                    TO_CHAR(ROUND(wh.fcp/1000,2),'fm90.99') || NVL2(wh.fcp,'s',null) fcp, 
+                    TO_CHAR(ROUND(wh.lcp/1000,2),'fm90.99') || NVL2(wh.lcp,'s',null) lcp, 
+                    cls, 
+                    TO_CHAR(ROUND(wh.inp/1000,2),'fm90.99') || NVL2(wh.inp,'s',null) inp,
                     wh.page_weight,
                     wh.total_requests
               FROM website_hits wh, ip_lookup ip
@@ -488,14 +469,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
             l_ela_time:=elapsedTime(C.duration_visible);
 
+            -- Compute overall Google Core web vitals rating
             IF (COALESCE(C.lcp_rating,C.cls_rating,C.inp_rating) IS NULL) THEN
-                l_rating:='-';
+                l_rating:=null;
             ELSIF ((C.lcp_rating='good' OR C.lcp_rating IS NULL) AND (C.cls_rating='good' OR C.cls_rating IS NULL) AND (C.inp_rating='good' OR C.inp_rating IS NULL)) THEN
-               l_rating:='<span class="good">GOOD</span>';
+               l_rating:='good';
             ELSIF (C.lcp_rating='poor') OR (C.cls_rating='poor') OR (C.inp_rating='poor') THEN
-                l_rating:='<span class="poor">POOR</span>' || cwv(C.lcp_rating,C.cls_rating,C.inp_rating, C.lcp,C.cls,C.inp);
+                l_rating:='poor';
             ELSE
-                l_rating:='<span class="needs-improvement">IMPROVE</span>' || cwv(C.lcp_rating,C.cls_rating,C.inp_rating, C.lcp,C.cls,C.inp);
+                l_rating:='improve';
             END IF;
 
             l_content:=l_content ||
@@ -510,29 +492,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                         CASE WHEN l_nb_pages>1 THEN 
                         '<tr><td>Page Views</td><td>' || C.page_views || '</td></tr>' 
                         END || 
-                        '<tr><td>Max Page Weight</td><td>' || C.page_weight || '</td></tr>' || 
-                        '<tr><td>Max Page Requests</td><td>' || C.total_requests || '</td></tr>' || 
+                        '<tr><td>Page Weight</td><td>' || apex_string_util.to_display_filesize(C.page_weight) || '</td></tr>' || 
+                        '<tr><td>Page Requests</td><td>' || C.total_requests || '</td></tr>' || 
                         CASE WHEN C.TTFB IS NOT NULL THEN
-                        '<tr><td>Max TTFB</td><td>' || C.TTFB || 's</td></tr>' 
+                        '<tr><td>TTFB</td><td class="' || C.TTFB_rating || '">' || C.TTFB || '</td></tr>' 
                         END || 
                         CASE WHEN C.FCP IS NOT NULL THEN
-                        '<tr><td>Max FCP</td><td>' || C.FCP || 's</td></tr>' 
+                        '<tr><td>FCP</td><td class="' || C.FCP_rating || '">' || C.FCP || '</td></tr>' 
                         END || 
                         CASE WHEN C.LCP IS NOT NULL THEN
-                        '<tr><td>Max LCP</td><td>' || C.LCP || 's</td></tr>'
+                        '<tr><td>LCP</td><td class="' || C.LCP_rating || '">' || C.LCP || '</td></tr>'
                         END || 
                         CASE WHEN C.CLS IS NOT NULL THEN
-                        '<tr><td>Max CLS</td><td>' || C.CLS || '</td></tr>' 
+                        '<tr><td>CLS</td><td class="' || C.CLS_rating || '">' || C.CLS || '</td></tr>' 
                         END || 
                         CASE WHEN C.INP IS NOT NULL THEN
-                        '<tr><td>Max INP</td><td>' || C.INP || 's</td></tr>' 
+                        '<tr><td>INP</td><td class="' || C.INP_rating || '">' || C.INP || '</td></tr>' 
                         END || 
                     '</table>' ||
                     '</td>
-                    <td>' || COALESCE(C.ip_address,LTRIM(RTRIM(C.location,','),',')) || '</td>
+                    <td>' || COALESCE(C.location,LTRIM(RTRIM(C.ip_address,','),',')) || '</td>
                     <td>' || l_ela_time || '</td>
                     <td>' || NVL(REPLACE(C.referrer,'.','&#173;.'),'-') || '</td>
-                    <td class="centered">' || l_rating || '</td>
+                    <td class="centered"><span class="' || l_rating ||  '"> ' || UPPER(l_rating) || '</span></td>
                 </tr>';
         END LOOP;
 
