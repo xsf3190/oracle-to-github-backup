@@ -346,7 +346,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         LOOP
             l_reports:=NULL;
             IF (INSTR(C.uri_template,'visits/')>0) THEN
-                l_reports:='daily|Daily;website|Visits;location|Locations;browser|Browsers';
+                l_reports:='website|Visits;daily|Daily;location|Locations;browser|Browsers';
                 SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId;
                 IF (n>1) THEN
                     l_reports:=l_reports || ';page|Pages';
