@@ -167,7 +167,7 @@ const flushQueues = () => {
 const addToVitalsQueue = ({name,value,rating}) => {
     const valueRnd = name==="CLS" ? value.toFixed(2) : value.toFixed();
     const metric = {name:name,value:valueRnd,rating:rating};
-    console.log(name,value);
+    console.log(name,valueRnd);
     vitalsQueue.add(metric);
 };
 
