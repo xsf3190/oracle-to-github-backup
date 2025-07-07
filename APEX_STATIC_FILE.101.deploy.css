@@ -255,7 +255,6 @@ body>footer>a {
   background-color: var(--color-background);
   --flex-wrap: nowrap;
   --flex-gap: 0;
-  line-height: 2;
 }
 
 .topnav :last-child {
@@ -264,30 +263,35 @@ body>footer>a {
 
 nav {
   font-family: var(--font-family-ui);
-  font-size: var(--step--1);
   font-variant: all-small-caps;
+  font-stretch: 120%;
 }
 
-nav li {
-  display:inline-block;
+nav > ul:before {
+  content:"";
+  position: absolute;
+  position-anchor: --li;
+  bottom: anchor(bottom);
+  left: anchor(left);
+  right: anchor(right);
+  height: .2em;  
+  background: var(--color-primary);
+  transition: .2s;
+}
+
+ul li:is(:hover,.active) {
+  anchor-name: --li;
+}
+ul:has(li:hover) li.active:not(:hover) {
+  anchor-name: none;
 }
 
 nav a {
-   padding: max(1em,48px) 0.6em;
   text-decoration: none;
-  color: inherit;
-  transition: .5s ease-in-out;
-  font-variation-settings: "GRAD" 400;
-}
-
-nav a:not([aria-current="page"]):hover {
-  font-variation-settings: "GRAD" 800;
-}
-
-[aria-current="page"] {
-  text-decoration: underline;
-  text-decoration-thickness: 20%;
-  text-underline-offset: 20%;
+  font-weight: 550;
+  display: block;
+  line-height: 1.5;
+  padding-inline: .2em;
 }
 
 .curve {
@@ -999,6 +1003,8 @@ pre:has(.language-sql)::after {
   padding: 1rem;
   max-width:100%;
   box-shadow: 0 0 25px dimgray;
+  text-align: initial;
+  font-weight: initial;
   inset: auto;
 }
 
