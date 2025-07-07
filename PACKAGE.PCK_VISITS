@@ -481,41 +481,49 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             END IF;
 
             l_content:=l_content ||
-                '<tr>
-                    <td>' || TO_CHAR(C.visit_date at time zone pTimeZone, 'dd-mm-yy fmhh24:fmmi')  || 
-                    '<button type="button" class="button" data-button-variant="no-styles" popovertarget="popover_' || n || '" style="anchor-name: --info-btn-' || n || '">&#9432;</button>' ||
-                    '<table id="popover_' || n || '" class="settings-popover" popover style="position-anchor: --info-btn-' || n || '">' || 
-                        '<tr><td>Browser</td><td>' || C.browser || '</td></tr>' || 
-                        CASE WHEN C.connection IS NOT NULL THEN 
-                        '<tr><td>Connection</td><td>' || C.connection || '</td></tr>'
-                        END ||
-                        CASE WHEN l_nb_pages>1 THEN 
-                        '<tr><td>Page Views</td><td>' || C.page_views || '</td></tr>' 
-                        END || 
-                        '<tr><td>Page Weight</td><td>' || apex_string_util.to_display_filesize(C.page_weight) || '</td></tr>' || 
-                        '<tr><td>Page Requests</td><td>' || C.total_requests || '</td></tr>' || 
-                        CASE WHEN C.TTFB IS NOT NULL THEN
-                        '<tr><td>TTFB</td><td class="' || C.TTFB_rating || '">' || C.TTFB || '</td></tr>' 
-                        END || 
-                        CASE WHEN C.FCP IS NOT NULL THEN
-                        '<tr><td>FCP</td><td class="' || C.FCP_rating || '">' || C.FCP || '</td></tr>' 
-                        END || 
-                        CASE WHEN C.LCP IS NOT NULL THEN
-                        '<tr><td>LCP</td><td class="' || C.LCP_rating || '">' || C.LCP || '</td></tr>'
-                        END || 
-                        CASE WHEN C.CLS IS NOT NULL THEN
-                        '<tr><td>CLS</td><td class="' || C.CLS_rating || '">' || C.CLS || '</td></tr>' 
-                        END || 
-                        CASE WHEN C.INP IS NOT NULL THEN
-                        '<tr><td>INP</td><td class="' || C.INP_rating || '">' || C.INP || '</td></tr>' 
-                        END || 
-                    '</table>' ||
-                    '</td>
-                    <td>' || COALESCE(C.location,LTRIM(RTRIM(C.ip_address,','),',')) || '</td>
-                    <td>' || l_ela_time || '</td>
-                    <td>' || NVL(REPLACE(C.referrer,'.','&#173;.'),'-') || '</td>
-                    <td class="centered"><span class="' || l_rating ||  '"> ' || UPPER(l_rating) || '</span></td>
-                </tr>';
+                '<tr>' ||
+                    '<td>' || TO_CHAR(C.visit_date at time zone pTimeZone, 'dd-mm-yy fmhh24:fmmi')  || 
+                        '<button type="button" class="button" data-button-variant="no-styles" popovertarget="popover_' || n || '" style="anchor-name: --info-btn-' || n || '">&#9432;</button>' ||
+                        '<div id="popover_' || n || '" class="settings-popover" popover style="position-anchor: --info-btn-' || n || '">' || 
+                            '<button class="close-btn" popovertarget="popover-' || n || '" popovertargetaction="hide">' ||
+                                '<span>X</span>' ||
+                                '<span class="visually-hidden">Close</span>' ||
+                            '</button>' ||
+                            '<table>' || 
+                                '<tr><td>Browser</td><td>' || C.browser || '</td></tr>' || 
+                                CASE WHEN C.connection IS NOT NULL THEN 
+                                '<tr><td>Connection</td><td>' || C.connection || '</td></tr>'
+                                END ||
+                                CASE WHEN l_nb_pages>1 THEN 
+                                '<tr><td>Page Views</td><td>' || C.page_views || '</td></tr>' 
+                                END || 
+                                '<tr><td>Page Weight</td><td>' || apex_string_util.to_display_filesize(C.page_weight) || '</td></tr>' || 
+                                '<tr><td>Page Requests</td><td>' || C.total_requests || '</td></tr>' || 
+                                CASE WHEN C.TTFB IS NOT NULL THEN
+                                '<tr><td>TTFB</td><td class="' || C.TTFB_rating || '">' || C.TTFB || '</td></tr>' 
+                                END || 
+                                CASE WHEN C.FCP IS NOT NULL THEN
+                                '<tr><td>FCP</td><td class="' || C.FCP_rating || '">' || C.FCP || '</td></tr>' 
+                                END || 
+                                CASE WHEN C.LCP IS NOT NULL THEN
+                                '<tr><td>LCP</td><td class="' || C.LCP_rating || '">' || C.LCP || '</td></tr>'
+                                END || 
+                                CASE WHEN C.CLS IS NOT NULL THEN
+                                '<tr><td>CLS</td><td class="' || C.CLS_rating || '">' || C.CLS || '</td></tr>' 
+                                END || 
+                                CASE WHEN C.INP IS NOT NULL THEN
+                                '<tr><td>INP</td><td class="' || C.INP_rating || '">' || C.INP || '</td></tr>' 
+                                END || 
+                            '</table>' ||
+                        '</div>' ||
+                    '</td>' ||
+                    '<td>' || COALESCE(C.location,LTRIM(RTRIM(C.ip_address,','),',')) || '</td>' ||
+                    '<td>' || l_ela_time || '</td>' ||
+                    '<td>' || NVL(REPLACE(C.referrer,'.','&#173;.'),'-') || '</td>' ||
+                    CASE WHEN l_rating IS NOT NULL THEN
+                    '<td class="centered"><button type="button" class="button cwv ' || l_rating ||  '">' || UPPER(l_rating) || '</button></td>'
+                    END ||
+                '</tr>';
         END LOOP;
 
         IF (pOffset=0) THEN
