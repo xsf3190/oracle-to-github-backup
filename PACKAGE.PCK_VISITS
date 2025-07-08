@@ -400,6 +400,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_content CLOB;
         l_popover VARCHAR2(300);
         l_rating VARCHAR2(7);
+        l_rating_popover VARCHAR2(1000);
         l_total PLS_INTEGER;
         l_ela_time VARCHAR2(11);
         l_nb_pages PLS_INTEGER;
@@ -407,17 +408,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     BEGIN
         IF (pOffset=0) THEN
             l_content:=
-            '<table role="presentation">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Location</th>
-                        <th>Visit Time</th>
-                        <th>Referrer</th>
-                        <th>Web Vitals</th>
-                    </tr>
-                </thead>
-                <tbody>';
+            '<table role="presentation">' ||
+                '<thead>' ||
+                    '<tr>' ||
+                        '<th>Web Vitals</th>' ||
+                        '<th>Started</th>' ||
+                        '<th>Location</th>' ||
+                        '<th>Viewing Time</th>' ||
+                        '<th>Referrer</th>' ||
+                    '</tr>' ||
+                '</thead>' ||
+                '<tbody>';
             SELECT COUNT(*) INTO l_nb_pages FRom website_article WHERE website_id=pWebsiteId;
         END IF;
 
@@ -470,7 +471,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             l_ela_time:=elapsedTime(C.duration_visible);
 
             -- Compute overall Google Core web vitals rating
-            IF (COALESCE(C.lcp_rating,C.cls_rating,C.inp_rating) IS NULL) THEN
+            
+            IF (COALESCE(C.ttfb_rating,C.fcp_rating,C.lcp_rating,C.cls_rating,C.inp_rating) IS NULL) THEN
                 l_rating:=null;
             ELSIF ((C.lcp_rating='good' OR C.lcp_rating IS NULL) AND (C.cls_rating='good' OR C.cls_rating IS NULL) AND (C.inp_rating='good' OR C.inp_rating IS NULL)) THEN
                l_rating:='good';
@@ -480,49 +482,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 l_rating:='improve';
             END IF;
 
+            IF (l_rating IS NOT NULL) THEN
+                l_rating_popover:=
+                '<button type="button" class="button cwv ' || l_rating ||  '" popovertarget="popover_' || n || '" style="anchor-name: --info-btn-' || n || '">' || UPPER(l_rating) || '</button>' ||
+                '<table id="popover_' || n || '" class="settings-popover" popover style="position-anchor: --info-btn-' || n || '">' || 
+                    '<tr><td>Browser</td><td>' || C.browser || '</td></tr>' || 
+                    CASE WHEN C.connection IS NOT NULL THEN 
+                    '<tr><td>Connection</td><td>' || C.connection || '</td></tr>'
+                    END ||
+                    CASE WHEN l_nb_pages>1 THEN 
+                    '<tr><td>Page Views</td><td>' || C.page_views || '</td></tr>' 
+                    END || 
+                    '<tr><td>Page Weight</td><td>' || apex_string_util.to_display_filesize(C.page_weight) || '</td></tr>' || 
+                    '<tr><td>Page Requests</td><td>' || C.total_requests || '</td></tr>' || 
+                    '<tr><td>Web Vitals</td>' ||
+                        '<td>' ||
+                            '<table>' ||
+                                '<thead><tr><th>TTFB</th><th>FCP</th><th>LCP</th><th>CLS</th><th>INP</th></tr></thead>' ||
+                                '<tbody><tr><td class="' || C.TTFB_rating || '">' || C.TTFB || '</td><td class="' || C.FCP_rating || '">' || C.FCP || '</td><td class="' || C.LCP_rating || '">' || C.LCP || '</td><td class="' || C.CLS_rating || '">' || C.CLS || '</td><td class="' || C.INP_rating || '">' || C.INP || '</td></tr></tbody>' ||
+                            '</table>' ||
+                        '</td>' ||
+                    '</tr>' ||
+                '</table>';
+            END IF;
+
             l_content:=l_content ||
                 '<tr>' ||
-                    '<td>' || TO_CHAR(C.visit_date at time zone pTimeZone, 'dd-mm-yy fmhh24:fmmi')  || 
-                        '<button type="button" class="button" data-button-variant="no-styles" popovertarget="popover_' || n || '" style="anchor-name: --info-btn-' || n || '">&#9432;</button>' ||
-                        '<div id="popover_' || n || '" class="settings-popover" popover style="position-anchor: --info-btn-' || n || '">' || 
-                            '<button class="close-btn" popovertarget="popover-' || n || '" popovertargetaction="hide">' ||
-                                '<span>X</span>' ||
-                                '<span class="visually-hidden">Close</span>' ||
-                            '</button>' ||
-                            '<table>' || 
-                                '<tr><td>Browser</td><td>' || C.browser || '</td></tr>' || 
-                                CASE WHEN C.connection IS NOT NULL THEN 
-                                '<tr><td>Connection</td><td>' || C.connection || '</td></tr>'
-                                END ||
-                                CASE WHEN l_nb_pages>1 THEN 
-                                '<tr><td>Page Views</td><td>' || C.page_views || '</td></tr>' 
-                                END || 
-                                '<tr><td>Page Weight</td><td>' || apex_string_util.to_display_filesize(C.page_weight) || '</td></tr>' || 
-                                '<tr><td>Page Requests</td><td>' || C.total_requests || '</td></tr>' || 
-                                CASE WHEN C.TTFB IS NOT NULL THEN
-                                '<tr><td>TTFB</td><td class="' || C.TTFB_rating || '">' || C.TTFB || '</td></tr>' 
-                                END || 
-                                CASE WHEN C.FCP IS NOT NULL THEN
-                                '<tr><td>FCP</td><td class="' || C.FCP_rating || '">' || C.FCP || '</td></tr>' 
-                                END || 
-                                CASE WHEN C.LCP IS NOT NULL THEN
-                                '<tr><td>LCP</td><td class="' || C.LCP_rating || '">' || C.LCP || '</td></tr>'
-                                END || 
-                                CASE WHEN C.CLS IS NOT NULL THEN
-                                '<tr><td>CLS</td><td class="' || C.CLS_rating || '">' || C.CLS || '</td></tr>' 
-                                END || 
-                                CASE WHEN C.INP IS NOT NULL THEN
-                                '<tr><td>INP</td><td class="' || C.INP_rating || '">' || C.INP || '</td></tr>' 
-                                END || 
-                            '</table>' ||
-                        '</div>' ||
-                    '</td>' ||
+                    '<td class="centered">' || l_rating_popover || '</td>' ||
+                    '<td>' || TO_CHAR(C.visit_date at time zone pTimeZone, 'dd-mm-yy fmhh24:fmmi')  || '</td>' ||
                     '<td>' || COALESCE(C.location,LTRIM(RTRIM(C.ip_address,','),',')) || '</td>' ||
                     '<td>' || l_ela_time || '</td>' ||
                     '<td>' || NVL(REPLACE(C.referrer,'.','&#173;.'),'-') || '</td>' ||
-                    CASE WHEN l_rating IS NOT NULL THEN
-                    '<td class="centered"><button type="button" class="button cwv ' || l_rating ||  '">' || UPPER(l_rating) || '</button></td>'
-                    END ||
                 '</tr>';
         END LOOP;
 
