@@ -279,10 +279,11 @@ nav > ul:before {
   transition: .2s;
 }
 
-ul li:is(:hover,.active) {
+nav > ul li:is(:hover,.active) {
   anchor-name: --li;
 }
-ul:has(li:hover) li.active:not(:hover) {
+
+nav > ul:has(li:hover) li.active:not(:hover) {
   anchor-name: none;
 }
 
@@ -1031,7 +1032,20 @@ pre:has(.language-sql)::after {
   max-width:50ch;
 }
 
-/* TABLE STYLES */
+/* TABLE STYLES, E.G. WEBSITE ANALYTICS */
+
+sup {
+    position: relative;
+    vertical-align: baseline;
+    font-size: 0.7em;
+    top: -0.5em;
+}
+
+sup.first-visit {
+    color: #12D900;
+    font-weight: 900;
+    font-stretch:150%;
+}
 
 table {
   width: 100%;
