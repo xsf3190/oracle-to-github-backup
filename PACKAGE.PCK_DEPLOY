@@ -623,6 +623,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             IF (n>0) THEN
                 FOR j IN 1..n 
                 LOOP
+                    IF (j=1) THEN
+                        l_labels(i).page_title:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j)));
+                    END IF;
                     extract_styles(REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j), l_fonts('headings').chars_bold_italic, l_fonts('headings').chars_bold_normal, l_fonts('headings').chars_italic, l_fonts('headings').chars_normal);
                 END LOOP;
                 l_body_html:=REGEXP_REPLACE(l_body_html,l_headings_regex,null);
@@ -739,9 +742,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         */
         l_importmap:='"imports":{';
         l_importmap_integrity:='"integrity":{';
-        pck_core.log('pEnv:'||pEnv);
         l_deploy_env:=CASE WHEN pEnv='TEST' THEN 1 WHEN pEnv='LIVE' THEN 3 END;
-        pck_core.log('l_deploy_env:'||l_deploy_env);
 
         FOR C IN (
             SELECT module_name, 
