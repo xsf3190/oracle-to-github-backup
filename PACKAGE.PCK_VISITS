@@ -374,7 +374,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     */
     FUNCTION elapsedTime(pSeconds IN NUMBER) RETUrN VARCHAR2 IS
         t_ela_time apex_t_varchar2;
-        l_ela_time VARCHAR2(11);
+        l_ela_time VARCHAR2(13);
     BEGIN
         IF (pSeconds>86399) THEN
             RETURN ('>24h');
@@ -385,12 +385,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             l_ela_time:=l_ela_time || t_ela_time(1) || 'h';
         END if;
         IF (t_ela_time(2)<>'0') THEN
-            l_ela_time:=l_ela_time || t_ela_time(2) || 'm';
+            l_ela_time:=l_ela_time || ' ' ||t_ela_time(2) || 'm';
         END if;
         IF (t_ela_time(3)<>'0') THEN
-            l_ela_time:=l_ela_time || t_ela_time(3) || 's';
+            l_ela_time:=l_ela_time || ' ' || t_ela_time(3) || 's';
         END if;
-        RETURN (l_ela_time);
+        RETURN (LTRIM(l_ela_time));
     END;
 
     /*
@@ -407,19 +407,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         n PLS_INTEGER:=0;
     BEGIN
         IF (pOffset=0) THEN
+            SELECT COUNT(*) INTO l_nb_pages FRom website_article WHERE website_id=pWebsiteId;
+
             l_content:=
             '<table role="presentation">' ||
                 '<thead>' ||
                     '<tr>' ||
                         '<th>Web Vitals</th>' ||
-                        '<th>Started</th>' ||
-                        '<th>Location</th>' ||
-                        '<th>Viewing Time</th>' ||
+                        '<th>Started At</th>' ||
+                        '<th>Location<sup>Visit#</sup></th>' ||
+                        '<th>' || CASE WHEN l_nb_pages>1 THEN 'Pages Seen (Time)' ELSE 'Time' END || '</th>' ||
                         '<th>Referrer</th>' ||
                     '</tr>' ||
                 '</thead>' ||
                 '<tbody>';
-            SELECT COUNT(*) INTO l_nb_pages FRom website_article WHERE website_id=pWebsiteId;
         END IF;
 
         FOR C IN (
@@ -427,7 +428,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             (
                 SELECT p.website_id, p.ip_address, p.visit_date, 
                         COUNT(*) OVER() total,
-                        COUNT(DISTINCT article_id) page_views,
+                        COUNT(DISTINCT article_id) pages_viewed,
+                        ROW_NUMBER() OVER (PARTITION BY p.ip_address ORDER BY p.visit_date) visit_count,
                         MAX(p.referrer) referrer, 
                         MAX(p.ttfb_rating) ttfb_rating, MAX(p.fcp_rating) fcp_rating,
                         MAX(p.lcp_rating) lcp_rating, MAX(p.cls_rating) cls_rating, MAX(p.inp_rating) inp_rating, 
@@ -447,7 +449,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                  OFFSET pOffset ROWS
                  FETCH FIRST ROWS_PER_PAGE ROWS ONLY
             )
-            SELECT wh.total, wh.page_views, wh.visit_date, wh.referrer, ip.city||', '||ip.country_code||' '||ip.postal location, CASE WHEN ip.error_message IS NOT NULL THEN ip.ip END ip_address,
+            SELECT wh.total,
+                   '<sup' || CASE WHEN wh.visit_count=1 THEN ' class="first-visit"' END || '>' || wh.visit_count || SUBSTR(TO_CHAR(TO_DATE(wh.visit_count,'j'),'jspth'),-2) || '</sup>' visit_count,
+                    wh.pages_viewed, wh.visit_date, wh.referrer, ip.city||', '||ip.country_code||' '||ip.postal location, 
                     wh.browser, wh.connection || CASE WHEN wh.mobile='true' THEN ' (Mobile)' END connection, 
                     wh.duration_visible, 
                     wh.ttfb_rating, wh.fcp_rating, wh.lcp_rating, wh.cls_rating, wh.inp_rating, 
@@ -490,11 +494,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     CASE WHEN C.connection IS NOT NULL THEN 
                     '<tr><td>Connection</td><td>' || C.connection || '</td></tr>'
                     END ||
-                    CASE WHEN l_nb_pages>1 THEN 
-                    '<tr><td>Page Views</td><td>' || C.page_views || '</td></tr>' 
-                    END || 
                     '<tr><td>Page Weight</td><td>' || apex_string_util.to_display_filesize(C.page_weight) || '</td></tr>' || 
-                    '<tr><td>Page Requests</td><td>' || C.total_requests || '</td></tr>' || 
+                    '<tr><td>Resource Requests</td><td>' || C.total_requests || '</td></tr>' || 
                     '<tr><td>Web Vitals</td>' ||
                         '<td>' ||
                             '<table>' ||
@@ -510,8 +511,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 '<tr>' ||
                     '<td class="centered">' || l_rating_popover || '</td>' ||
                     '<td>' || TO_CHAR(C.visit_date at time zone pTimeZone, 'dd-mm-yy fmhh24:fmmi')  || '</td>' ||
-                    '<td>' || COALESCE(C.location,LTRIM(RTRIM(C.ip_address,','),',')) || '</td>' ||
-                    '<td>' || l_ela_time || '</td>' ||
+                    '<td>' || C.location || ' ' || C.visit_count || '</td>' ||
+                    '<td>' || CASE WHEN l_nb_pages>1 THEN C.pages_viewed || ' (' || l_ela_time || ')' ELSE l_ela_time END || '</td>' ||
                     '<td>' || NVL(REPLACE(C.referrer,'.','&#173;.'),'-') || '</td>' ||
                 '</tr>';
         END LOOP;
