@@ -1,7 +1,9 @@
-import { dropdown, login_btn, bodydata, getJWTClaim } from "deploy_elements";
-import {onLCP, onINP, onCLS, onFCP, onTTFB} from 'deploy_web_vitals';
+//import { dropdown, login_btn, bodydata, getJWTClaim } from "deploy_elements";
+import {onLCP, onINP, onCLS, onFCP, onTTFB} from '../javascript/deploy_web_vitals5.min.js';
 
-
+const bodydata = document.body.dataset;
+const dropdown = document.querySelector(".dropdown-content");
+const login_btn = dropdown.querySelector(".login-btn");
 
 /*
 ** NEW WEBSITE URL INCLUDES OWNER'S JWT TOKENS - SAVE THESE IN STORAGE AND REMOVE FROM URL
@@ -116,8 +118,8 @@ const getPerfEntries = () => {
 ** SEND PAGE VISIT METRICS TO DATABASE SERVER UNLESS LOGGED IN AS "ADMIN" OR "OWNER"
 */
 const flushQueues = () => {
-    const aud = getJWTClaim("aud");
-    if (aud === "admin" || aud === "owner") return;
+    //const aud = getJWTClaim("aud");
+    //if (aud === "admin" || aud === "owner") return;
 
     if (vitalsQueue.size === 0 && page_loaded === 0) return;
 
