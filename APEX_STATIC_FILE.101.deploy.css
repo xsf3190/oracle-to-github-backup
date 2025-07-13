@@ -271,20 +271,29 @@ nav > ul:before {
   content:"";
   position: absolute;
   position-anchor: --li;
-  bottom: anchor(bottom);
-  left: anchor(left);
-  right: anchor(right);
+  inset: auto anchor(right) anchor(bottom) anchor(left);
   height: .2em;  
-  background: var(--color-primary);
+  background: lightblue;
+  transition: .2s .2s;
+}
+
+nav > ul li {
+  background: 
+    conic-gradient(lightblue 0 0)
+    bottom/100% 0% no-repeat;
   transition: .2s;
 }
 
 nav > ul li:is(:hover,.active) {
   anchor-name: --li;
+  background-size: 100% 100%;
+  transition: .2s .4s;
 }
 
 nav > ul:has(li:hover) li.active:not(:hover) {
   anchor-name: none;
+  background-size: 100% 0%;
+  transition: .2s;
 }
 
 nav a {
@@ -861,7 +870,7 @@ pre {
   color: #353535;
   direction: ltr;
   font-style: normal;
-  font-size: 70%;
+  font-size: 60%;
   tab-size: 4;
   text-align: left;
   overflow-x: auto;
@@ -1039,12 +1048,6 @@ sup {
     vertical-align: baseline;
     font-size: 0.7em;
     top: -0.5em;
-}
-
-sup.first-visit {
-    color: #12D900;
-    font-weight: 900;
-    font-stretch:150%;
 }
 
 table {
