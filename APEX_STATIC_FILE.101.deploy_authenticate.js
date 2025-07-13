@@ -3,7 +3,7 @@
 /* ALSO USED TO CREATE A NEW WEBSITE                              */
 /* ************************************************************** */
 
-import { login_dialog, login_btn, email, expires, dropdown, bodydata, getJWTClaim } from "deploy_elements";
+import { login_dialog, login_btn, email, dropdown, bodydata, getJWTClaim } from "deploy_elements";
 
 const form = login_dialog.querySelector("form");
 const emailInput = form.querySelector("[name='email']");
@@ -25,7 +25,6 @@ export const init = (element) => {
         sessionStorage.clear();
         localStorage.clear();
         email.classList.add("visually-hidden");
-        expires.classList.add("visually-hidden");
         dropdown.querySelectorAll("li:nth-child(n+4)").forEach((item) => {
             item.remove();
         });
@@ -192,15 +191,11 @@ const setTokens = (data) => {
             });
         });
     }
-  
-    const arrayToken = data.refresh.split(".");
-    const parsedToken = JSON.parse(atob(arrayToken[1]));
+
     email.textContent = getJWTClaim("sub") + " (" + getJWTClaim("aud") + ")";
-    expires.textContent = getJWTClaim("exp");
   
     login_btn.textContent = "Log Out";
     email.classList.remove("visually-hidden");
-    expires.classList.remove("visually-hidden");
 }
 
 /* 
