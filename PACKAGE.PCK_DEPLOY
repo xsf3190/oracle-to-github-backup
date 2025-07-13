@@ -461,6 +461,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_file_name VARCHAR2(200);
         l_sha1 VARCHAR2(40);
         
+        l_code_regex varchar2(30):='<code(.+?)<\/code>';
         l_headings_regex varchar2(30):='<h[1-4]>(.+?)<\/h[1-4]>';
         l_src_url_regex varchar2(30):='url\(([^)]*)\';
 
@@ -587,6 +588,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             /* For each context collect distinct set of italic and normal characters in order to optimise font */
             l_body_html:=l_labels(i).body_html;
+
+            /* Remove <code> ... </code> */
+            l_body_html:=REGEXP_REPLACE(l_body_html,l_code_regex,null);
+
             IF (i=1) THEN
                 FOR C IN (
                     SELECT 
@@ -752,11 +757,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
              WHERE BITAND(deploy_envs,l_deploy_env)=l_deploy_env
              ORDER BY 1
         ) LOOP
-            IF (C.module_name IN ('deploy_start.min.js')) THEN
-                l_main_module:=l_main_module ||
-                    '<script src="' || C.host_name || '" integrity="' || C.sha256 || '" crossorigin></script>';
-                l_script_sha256:=l_script_sha256 || '''' || C.sha256 || '''';
-            ELSIF (INSTR(C.host_name,'js')>0) THEN 
+            IF (INSTR(C.host_name,'js')>0) THEN 
                 l_importmap:=l_importmap || '"' || SUBSTR(C.module_name,1,INSTR(C.module_name,'.')-1) || '":"' || C.host_name || '",';
                 l_importmap_integrity:=l_importmap_integrity || '"' || C.host_name || '":"' || C.sha256 || '",';
             END IF;
@@ -798,6 +799,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[Access-Control-Allow-Origin: *]' || chr(10) ||
             q'[Permissions-Policy: microphone=(), geolocation=()]';
 
+        /*
+        **  EVERY PAGE INCLUDES WEB VITALS AND MAIN JAVASCRIPT MODULES 
+        */
+        FOR C IN (
+            SELECT file_name, apex_util.blob_to_clob(file_content) file_content 
+              FROM apex_application_static_files 
+             WHERE application_id=101
+               AND file_name IN ( 'deploy_web_vitals5.min.js','deploy_main.min.js')
+        ) LOOP
+            addDeploy('javascript/' || C.file_name, C.file_content);
+            l_script_sha256:=l_script_sha256 || '''' || getSha256(C.file_content) || '''';
+        END LOOP;
+
+
         /* 
         ** Build individual website pages
         */
@@ -822,19 +837,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 '<html lang="en">' ||
                 '<head>' ||
                     '<meta charset="UTF-8">' ||
-                    --'<meta name="viewport" content="width=device-width, initial-scale=1.0">' ||
                     '<meta name="viewport" content="width=device-width, initial-scale=1">' ||
                     '<title>' || l_labels(i).page_title || '</title>' ||
                     '<meta name="description" content="' || l_labels(i).page_description || '">' ||
                     '<meta name="author" content="restartnet.com">' ||
                     '<meta name="mobile-web-app-capable" content="yes">' ||
                     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' ||
-                    '<link rel="preconnect" href="https://es-modules.netlify.app">' ||
                     '<link rel="preconnect" href="https://res.cloudinary.com">' ||
                     '<script type="importmap" integrity="' || l_importmap_sha256 || '">' || l_importmap || '</script>' ||
                     l_font_preload ||
                     '<link rel="stylesheet" href="/css/styles.min.css">' ||
-                    l_main_module ||
+                    '<script>' ||
+                        'document.addEventListener(''DOMContentLoaded'',()=>{' || 
+                            'const script = document.createElement(''script'');' ||
+                            'script.src = "/javascript/deploy_main.min.js";' ||
+                            'script.type = "module";' ||
+                            'document.body.appendChild(script);' ||
+                        '})' ||
+                    '</script>' ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
                 '</head>' ||
                 '<body data-websiteid="' || pWebsiteId || '" data-articleid="' || l_labels(i).article_id || '" data-resturl="' || pRestUrl || '">' || 
