@@ -2,8 +2,10 @@
 import {onLCP, onINP, onCLS, onFCP, onTTFB} from '../javascript/deploy_web_vitals5.min.js';
 
 const bodydata = document.body.dataset;
+const dropdown_details = document.querySelector(".dropdown details");
 const dropdown = document.querySelector(".dropdown-content");
 const login_btn = dropdown.querySelector(".login-btn");
+const email = dropdown.querySelector(".email");
 
 /*
 ** NEW WEBSITE URL INCLUDES OWNER'S JWT TOKENS - SAVE THESE IN STORAGE AND REMOVE FROM URL
@@ -44,6 +46,14 @@ if (sessionStorage.getItem("menulist")) {
     login_btn.textContent = "Log Out";
     closeBtnEvents();
 }
+
+const jwt = sessionStorage.getItem("token") || localStorage.getItem("refresh");
+if (jwt) {
+    const array = jwt.split(".");
+    const parse = JSON.parse(atob(array[1]));
+    email.textContent = parse.sub;
+}
+
 
 /*
 ** CLICK HANDLER FOR ALL BUTTONS IN DYNAMIC DROPDOWN MENULIST
@@ -88,7 +98,6 @@ const vitalsQueue = new Set();
 ** REPORT TOTAL PAGE WEIGHT AND REQUESTS
 */
 const getPerfEntries = () => {
-    console.log("getPerfEntries");
     const navigation = performance.getEntriesByType('navigation');
     const resources = performance.getEntriesByType('resource');
 
@@ -97,6 +106,7 @@ const getPerfEntries = () => {
 
     navigation.forEach((entry) => {
         if (entry.transferSize>0) {
+            console.log(entry.name,entry.transferSize)
             page_weight += entry.transferSize;
             total_requests++;
         }
@@ -104,16 +114,26 @@ const getPerfEntries = () => {
 
     resources.forEach((entry) => {
         if (entry.transferSize>0) {
+            console.log(entry.name,entry.transferSize)
             page_weight += entry.transferSize;
             total_requests++;
         }
     });
 
-    vitalsQueue.add({name:"page_weight",value:page_weight});
-    vitalsQueue.add({name:"total_requests",value:total_requests});
+    return {
+        page_weight: page_weight,
+        total_requests: total_requests
+    }
 }
 
-
+dropdown_details.addEventListener("toggle", (e) => {
+    if (dropdown_details.open) {
+        const {page_weight,total_requests} = getPerfEntries();
+        const k = 1024;
+        const i = Math.floor(Math.log(page_weight) / Math.log(k));
+        dropdown.querySelector(".page-weight").textContent =`${parseFloat((page_weight / Math.pow(k, i)).toFixed(0))}KB`;
+    }
+})
 /*
 ** SEND PAGE VISIT METRICS TO DATABASE SERVER UNLESS LOGGED IN AS "ADMIN" OR "OWNER"
 */
@@ -150,7 +170,10 @@ const flushQueues = () => {
         json["url"] = window.location.hostname;
         json["referrer"] = document.referrer;
         json["transfer_size"] = transfer_size;
-        getPerfEntries();
+
+        const {page_weight,total_requests} = getPerfEntries();
+        vitalsQueue.add({name:"page_weight",value:page_weight});
+        vitalsQueue.add({name:"total_requests",value:total_requests});
     }
 
     if (vitalsQueue.size > 0) {
@@ -171,6 +194,12 @@ const addToVitalsQueue = ({name,value,rating}) => {
     const metric = {name:name,value:valueRnd,rating:rating};
     console.log(name,valueRnd);
     vitalsQueue.add(metric);
+    
+    const el = dropdown.querySelector("."+name);
+    if (el) {
+        el.textContent = valueRnd;
+        el.classList.add(rating);
+    }
 };
 
 addEventListener('visibilitychange', () => {
