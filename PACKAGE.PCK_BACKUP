@@ -223,12 +223,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
               BULK COLLECT INTO l_backup
              FROM
                 (
-                    SELECT 'APEX_APPLICATION' object_type, TO_CHAR(application_id) object_name
-                    FROM apex_applications
-                    WHERE owner=sys_context('userenv','current_schema') 
-                    UNION ALL 
-
-                    SELECT 'APEX_STATIC_FILE',f.application_id || '.' || f.file_name
+                    SELECT 'APEX_STATIC_FILE' object_type,f.application_id || '.' || f.file_name object_name
                     FROM apex_application_static_files f, apex_applications a
                     WHERE f.application_id=a.application_id
                     AND SUBSTR(f.mime_type,INSTR(f.mime_type,'/')+1) IN ('javascript','css')
