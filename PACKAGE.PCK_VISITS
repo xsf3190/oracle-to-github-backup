@@ -18,6 +18,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE daily_job;
     --
+    PROCEDURE test(pWebsiteid IN website.id%type, pIntervalDays IN INTEGER DEFAULT 28);
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
@@ -416,7 +417,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                         '<th>Web Vitals</th>' ||
                         '<th>Started</th>' ||
                         '<th>Location<br>Visit No.</th>' ||
-                        '<th>' || CASE WHEN l_nb_pages>1 THEN 'Engagement<br>Pages Seen' ELSE 'Engagement' END || '</th>' ||
+                        '<th>Engagement' || CASE WHEN l_nb_pages>1 THEN '<br>Pages Seen' END || '</th>' ||
                         '<th>Referrer</th>' ||
                     '</tr>' ||
                 '</thead>' ||
@@ -512,7 +513,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     '<td class="centered">' || l_rating_popover || '</td>' ||
                     '<td>' || TO_CHAR(C.visit_date at time zone pTimeZone, 'dd-mm-yy')  || '<br>' || TO_CHAR(C.visit_date at time zone pTimeZone, 'fmhh24:fmmipm') || '</td>' ||
                     '<td>' || C.location || '<br>' || C.visit_count || '</td>' ||
-                    '<td>' || CASE WHEN l_nb_pages>1 THEN l_ela_time || '<br>' || C.pages_viewed ELSE l_ela_time END || '</td>' ||
+                    '<td>' || l_ela_time || CASE WHEN l_nb_pages>1 THEN '<br>' || C.pages_viewed END || '</td>' ||
                     '<td>' || NVL(REPLACE(C.referrer,'.','&#173;.'),'-') || '</td>' ||
                 '</tr>';
         END LOOP;
@@ -1125,6 +1126,117 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             COMMIT;
             pck_core.log('END visit data processing for ' || C.domain_name);
         END LOOP;
+    END;
+
+    PROCEDURE test(pWebsiteid IN website.id%type, pIntervalDays IN INTEGER) IS
+        l_graph CLOB;
+        l_pct_total NUMBER;
+        l_pct_first NUMBER;
+        l_start_x PLS_INTEGER;
+        l_width_x PLS_INTEGER;
+    BEGIN
+        l_graph:=
+        '<svg width="100%" height="10vh" aria-labelledby="graph-title graph-desc" role="img">' ||
+        '<style>' || 
+            'text {' ||
+                'font-family:system-ui;' ||
+                'font-size: var(--step--2);' ||
+            '}' || 
+        '</style>' ||
+        '<title id="graph-title">Website visit trends</title>' ||
+        '<desc id="graph-desc">Number of visits over last 28 periods</desc>' ||
+        '<text x="50%" y="30%" dominant-baseline="middle" text-anchor="middle" font-size="30">Title</text>' ||
+        '<text x="50%" y="70%" dominant-baseline="middle" text-anchor="middle" font-size="20">Legend</text>' ||
+        '</svg>';
+        
+        FOR C IN (
+            WITH x AS
+            (
+                SELECT MIN(visit_date) start_date, MAX(visit_date) end_date, FLOOR((TRUNC(MAX(visit_date))-TRUNC(MIN(visit_date)))/pIntervalDays) intervals 
+                FROM page_hit
+                 WHERE website_id=pWebsiteid
+            ),
+            end_date AS
+            (
+                SELECT end_date-((level-1) * pIntervalDays)+1 end_date
+                FROM x CONNECT BY level<=intervals
+            ),
+            range AS
+            (
+                SELECT end_date + INTERVAL '1' SECOND start_date, LEAD(end_date) OVER (ORDER BY end_date) end_date FROM end_date
+            ),
+            first_visit as
+            (
+                SELECT ip_address, MIN(visit_date) first_visit 
+                FROM page_hit 
+                WHERE website_id=pWebsiteid
+                GROUP BY ip_address
+            ),
+            website_hit AS
+            (
+                SELECT p.visit_date, f.first_visit, COUNT(*) visits, MAX(lcp) lcp, MAX(cls) cls, MAX(inp) inp
+                FROM page_hit p, first_visit f
+                WHERE p.website_id=pWebsiteid
+                AND f.ip_address=p.ip_address
+                GROUP BY p.ip_address, p.visit_date, f.first_visit
+            ),
+            dataset AS
+            (
+            SELECT start_date, end_date, 
+                SUM(visits) total_visits, 
+                SUM(CASE WHEN first_visit BETWEEN start_date AND end_date THEN 1 ELSE 0 END) first_time_visits, 
+                APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY lcp) lcp75,
+                APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY cls) cls75,
+                APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY inp) inp75
+            FROM range, website_hit p
+            WHERE p.visit_date BETWEEN start_date AND end_date
+            GROUP BY start_date, end_date
+            )
+            SELECT start_date, end_date, total_visits, first_time_visits, lcp75, cls75, inp75, 
+                MAX(total_visits) OVER () max_visits, 
+                ROW_NUMBER() OVER (ORDER BY start_date) rn,
+                COUNT(*) OVER () nb
+            FROM dataset
+            ORDER BY start_date
+        )
+        LOOP
+            l_pct_total:=C.total_visits/C.max_visits*100;
+            l_pct_first:=C.first_time_visits/C.max_visits*100;
+            l_start_x:=((C.rn-1)/C.nb)*100+5;
+            IF (C.rn=1) THEN
+                l_graph:=l_graph || 
+                '<svg width="100%" height="60vh" aria-labelledby="graph-title graph-desc" role="img">' ||
+                    '<style>' || 
+                        'text {' ||
+                            'font-family:system-ui;' ||
+                            'font-size: var(--step--2);' ||
+                        '}' || 
+                    '</style>';
+                    
+                l_width_x:=ROUND(100/C.nb,2)-5;
+
+                l_graph:=l_graph || 
+                '<rect x="4%" y="0%" width=".25%" height="100%" fill="black"/>';
+
+                FOR i IN 1..5 LOOP
+                    l_graph:=l_graph || 
+                    '<rect x="4%" y="' || TO_CHAR((i-1)*20) || '%" width="100%" height=".05%" fill="black"/>' ||
+                    '<text x="2%" y="' || TO_CHAR((i-1)*20) || '%" dominant-baseline="' || CASE WHEN i=1 THEN 'hanging' ELSE 'middle' END || '" text-anchor="middle" font-size="20">' || ROUND(C.max_visits/i) || '</text>';
+                END LOOP;
+                
+            END IF;
+
+            l_graph:=l_graph || 
+            '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_total,2) || '%" width="' || l_width_x || '%" height="' || ROUND(l_pct_total,2) || '%" fill="pink"/>' || 
+            '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_first,2) || '%" width="' || l_width_x || '%" height="' || ROUND(l_pct_first,2) || '%" fill="blue"/>';
+
+            IF (C.rn=C.nb) THEN
+                l_graph:=l_graph || '</svg>';
+            END IF;
+
+        END LOOP;
+        
+        dbms_output.put_line(l_graph);
     END;
     
 END;
