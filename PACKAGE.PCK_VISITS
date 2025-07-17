@@ -1129,41 +1129,76 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     END;
 
     PROCEDURE test(pWebsiteid IN website.id%type, pIntervalDays IN INTEGER) IS
+        l_start_date page_hit.visit_date%type;
+        l_end_date page_hit.visit_date%type;
+        l_days_diff NUMBER;
+        l_days_period PLS_INTEGER:=7;
+        l_title VARCHAR2(200);
         l_graph CLOB;
         l_pct_total NUMBER;
         l_pct_first NUMBER;
         l_start_x PLS_INTEGER;
         l_width_x PLS_INTEGER;
+        l_footer VARCHAR2(2000);
+
+        FUNCTION getStyles RETURN VARCHAR2 IS
+        BEGIN
+            RETURN(
+            '<style>' || 
+                'text {' ||
+                    'font-family:system-ui;' ||
+                    'font-size: var(--step--2);' ||
+                '}' || 
+                '.total {' ||
+                    'fill: var(--color-primary-lighter);' ||
+                '}' ||
+                '.first {' ||
+                    'fill: var(--color-primary);' ||
+                '}' ||
+            '</style>');
+        END;
     BEGIN
+        SELECT MIN(visit_date) start_date, MAX(visit_date) end_date, TRUNC(MAX(visit_date))-TRUNC(MIN(visit_date)) 
+          INTO l_start_date, l_end_date, l_days_diff
+          FROM page_hit
+         WHERE website_id=pWebsiteid;
+
+        dbms_output.put_line(l_start_date||':'||l_end_date||':'||l_days_diff);
+
+        FOR i IN REVERSE 1..4  LOOP
+            IF (l_days_diff/(i*7)>=10) THEN
+                l_days_period:=i*7;
+                EXIT;
+            END IF;
+        END LOOP;
+
+        l_title:='Website visits in ' || l_days_period || ' day periods up to ' || TO_CHAR(l_end_date,'fmMon dd, YYYY hh24:mipm');
+
         l_graph:=
         '<svg width="100%" height="10vh" aria-labelledby="graph-title graph-desc" role="img">' ||
         '<style>' || 
             'text {' ||
                 'font-family:system-ui;' ||
-                'font-size: var(--step--2);' ||
-            '}' || 
+                'font-size: var(--step--1);' ||
+                'font-weight: 650;' ||
+            '}' ||
         '</style>' ||
         '<title id="graph-title">Website visit trends</title>' ||
-        '<desc id="graph-desc">Number of visits over last 28 periods</desc>' ||
-        '<text x="50%" y="30%" dominant-baseline="middle" text-anchor="middle" font-size="30">Title</text>' ||
-        '<text x="50%" y="70%" dominant-baseline="middle" text-anchor="middle" font-size="20">Legend</text>' ||
+        '<desc id="graph-desc">' || l_title || '</desc>' ||
+        '<text x="50%" y="30%" dominant-baseline="middle" text-anchor="middle">' || l_title || '</text>' ||
+        '<text x="50%" y="70%" dominant-baseline="middle" text-anchor="middle">Legend</text>' ||
         '</svg>';
         
         FOR C IN (
-            WITH x AS
+            WITH end_date AS
             (
-                SELECT MIN(visit_date) start_date, MAX(visit_date) end_date, FLOOR((TRUNC(MAX(visit_date))-TRUNC(MIN(visit_date)))/pIntervalDays) intervals 
-                FROM page_hit
-                 WHERE website_id=pWebsiteid
-            ),
-            end_date AS
-            (
-                SELECT end_date-((level-1) * pIntervalDays)+1 end_date
-                FROM x CONNECT BY level<=intervals
+                SELECT l_end_date-((level-1) * l_days_period)+1 end_date
+                FROM dual CONNECT BY level<=l_days_period
             ),
             range AS
             (
-                SELECT end_date + INTERVAL '1' SECOND start_date, LEAD(end_date) OVER (ORDER BY end_date) end_date FROM end_date
+                SELECT end_date + INTERVAL '1' SECOND start_date, LEAD(end_date) OVER (ORDER BY end_date) end_date 
+                FROM end_date
             ),
             first_visit as
             (
@@ -1190,7 +1225,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY inp) inp75
             FROM range, website_hit p
             WHERE p.visit_date BETWEEN start_date AND end_date
+            AND end_date IS NOT NULL
             GROUP BY start_date, end_date
+            ORDER BY end_date DESC NULLS LAST
+                FETCH FIRST 10 ROWS ONLY
             )
             SELECT start_date, end_date, total_visits, first_time_visits, lcp75, cls75, inp75, 
                 MAX(total_visits) OVER () max_visits, 
@@ -1200,38 +1238,66 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             ORDER BY start_date
         )
         LOOP
-            l_pct_total:=C.total_visits/C.max_visits*100;
-            l_pct_first:=C.first_time_visits/C.max_visits*100;
-            l_start_x:=((C.rn-1)/C.nb)*100+5;
             IF (C.rn=1) THEN
                 l_graph:=l_graph || 
-                '<svg width="100%" height="60vh" aria-labelledby="graph-title graph-desc" role="img">' ||
-                    '<style>' || 
-                        'text {' ||
-                            'font-family:system-ui;' ||
-                            'font-size: var(--step--2);' ||
-                        '}' || 
-                    '</style>';
-                    
-                l_width_x:=ROUND(100/C.nb,2)-5;
-
+                '<svg width="100%" height="60vh" aria-labelledby="graph-title graph-desc" role="img">' || 
+                '<style>' || 
+                    'text {' ||
+                        'font-family:system-ui;' ||
+                        'font-size: var(--step--2);' ||
+                    '}' || 
+                    '.total {' ||
+                        'fill: var(--color-primary-lighter);' ||
+                    '}' ||
+                    '.first {' ||
+                        'fill: var(--color-primary);' ||
+                    '}' ||
+                '</style>';
+                
+                /* Draw Y-axis */
                 l_graph:=l_graph || 
                 '<rect x="4%" y="0%" width=".25%" height="100%" fill="black"/>';
 
+                /* Draw horizontal lines for each 20% of max visits in computed range */
                 FOR i IN 1..5 LOOP
                     l_graph:=l_graph || 
                     '<rect x="4%" y="' || TO_CHAR((i-1)*20) || '%" width="100%" height=".05%" fill="black"/>' ||
-                    '<text x="2%" y="' || TO_CHAR((i-1)*20) || '%" dominant-baseline="' || CASE WHEN i=1 THEN 'hanging' ELSE 'middle' END || '" text-anchor="middle" font-size="20">' || ROUND(C.max_visits/i) || '</text>';
+                    '<text x="2%" y="' || TO_CHAR((i-1)*20) || '%" dominant-baseline="' || CASE WHEN i=1 THEN 'hanging' ELSE 'middle' END || '" text-anchor="middle">' || ROUND(C.max_visits*(100-((i-1)*20))/100) || '</text>';
                 END LOOP;
-                
+
+                l_width_x:=ROUND(100/C.nb,2)-5;
             END IF;
 
+            l_pct_total:=C.total_visits/C.max_visits*100;
+            l_pct_first:=C.first_time_visits/C.max_visits*100;
+            l_start_x:=((C.rn-1)/C.nb)*100+5;
+
+            /* Draw bar chart using percentages */
             l_graph:=l_graph || 
-            '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_total,2) || '%" width="' || l_width_x || '%" height="' || ROUND(l_pct_total,2) || '%" fill="pink"/>' || 
-            '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_first,2) || '%" width="' || l_width_x || '%" height="' || ROUND(l_pct_first,2) || '%" fill="blue"/>';
+            '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_total,2) || '%" width="' || l_width_x || '%" height="' || ROUND(l_pct_total,2) || '%" class="total"/>' || 
+            '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_first,2) || '%" width="' || l_width_x || '%" height="' || ROUND(l_pct_first,2) || '%" class="first"/>';
+
+            /* Print periods in footer - more detail if <=5 periods */
+            IF (C.nb>5) THEN
+                l_footer:=l_footer ||
+                ' <text x="' || l_start_x || '%" y="25%" dominant-baseline="middle" text-anchor="start">' || TO_CHAR(C.end_date,'Mondd') || '</text>' ||
+                ' <text x="' || l_start_x || '%" y="75%" dominant-baseline="middle" text-anchor="start">' || TO_CHAR(C.end_date,'YYYY') || '</text>';
+            ELSE
+                l_footer:=l_footer ||
+                ' <text x="' || l_start_x || '%" y="25%" dominant-baseline="middle" text-anchor="start">' || TO_CHAR(C.end_date,'Mon dd, YYYY') || '</text>';
+            END IF;
 
             IF (C.rn=C.nb) THEN
-                l_graph:=l_graph || '</svg>';
+                l_graph:=l_graph || 
+                '</svg>' ||
+                '<svg width="100%" height="5vh" role="img">' || 
+                    '<style>' || 
+                    'text {' ||
+                        'font-family:system-ui;' ||
+                        'font-size: var(--step--2);' ||
+                    '}' ||
+                '</style>' || l_footer || 
+                '</svg>';
             END IF;
 
         END LOOP;
