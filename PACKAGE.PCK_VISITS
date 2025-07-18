@@ -1177,10 +1177,31 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_graph:=
         '<svg width="100%" height="10vh" aria-labelledby="graph-title graph-desc" role="img">' ||
         '<style>' || 
+            'line {' ||
+                'stroke: slategrey;' ||
+                'stroke-width: 0.5;' ||
+            '}' ||
+            '.y-axis {' ||
+                'stroke-width: 2;' ||
+            '}' ||
             'text {' ||
                 'font-family:system-ui;' ||
                 'font-size: var(--step--1);' ||
                 'font-weight: 650;' ||
+            '}' ||
+            '.total {' ||
+                'fill: var(--color-primary-lighter);' ||
+            '}' ||
+            '.first {' ||
+                'fill: var(--color-primary);' ||
+            '}' ||
+            '.label {' ||
+               'font-size: var(--step--2);' ||
+            '}' ||
+            '@media (max-width: 640px) {' ||
+               '.label {' ||
+                    'writing-mode: vertical-rl;' ||
+                '}' || 
             '}' ||
         '</style>' ||
         '<title id="graph-title">Website visit trends</title>' ||
@@ -1240,63 +1261,41 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         LOOP
             IF (C.rn=1) THEN
                 l_graph:=l_graph || 
-                '<svg width="100%" height="60vh" aria-labelledby="graph-title graph-desc" role="img">' || 
-                '<style>' || 
-                    'text {' ||
-                        'font-family:system-ui;' ||
-                        'font-size: var(--step--2);' ||
-                    '}' || 
-                    '.total {' ||
-                        'fill: var(--color-primary-lighter);' ||
-                    '}' ||
-                    '.first {' ||
-                        'fill: var(--color-primary);' ||
-                    '}' ||
-                '</style>';
+                '<svg width="100%" height="60vh" role="img">';
                 
                 /* Draw Y-axis */
                 l_graph:=l_graph || 
-                '<rect x="4%" y="0%" width=".25%" height="100%" fill="black"/>';
+                '<!-- Y AXIS -->' ||
+                '<line x1="4%" y1="0%" x2="4%" y2="100%" class="y-axis"/>';
 
                 /* Draw horizontal lines for each 20% of max visits in computed range */
                 FOR i IN 1..5 LOOP
-                    l_graph:=l_graph || 
-                    '<rect x="4%" y="' || TO_CHAR((i-1)*20) || '%" width="100%" height=".05%" fill="black"/>' ||
-                    '<text x="2%" y="' || TO_CHAR((i-1)*20) || '%" dominant-baseline="' || CASE WHEN i=1 THEN 'hanging' ELSE 'middle' END || '" text-anchor="middle">' || ROUND(C.max_visits*(100-((i-1)*20))/100) || '</text>';
+                    l_graph:=l_graph || CASE WHEN i=1 THEN '<!-- Y AXIS LABELS -->' END ||
+                    '<line x1="4%" y1="' || TO_CHAR((i-1)*20) || '%" x2="100%" y2="' || TO_CHAR((i-1)*20) || '%"/>' ||
+                    '<text x="2%" y="' || TO_CHAR((i-1)*20) || '%" dominant-baseline="' || CASE WHEN i=1 THEN 'hanging' ELSE 'central' END || '" text-anchor="middle" class="label">' || ROUND(C.max_visits*(100-((i-1)*20))/100) || '</text>';
                 END LOOP;
 
-                l_width_x:=ROUND(100/C.nb,2)-5;
+                l_width_x:=ROUND(100/C.nb,2)-4;
             END IF;
 
             l_pct_total:=C.total_visits/C.max_visits*100;
             l_pct_first:=C.first_time_visits/C.max_visits*100;
-            l_start_x:=((C.rn-1)/C.nb)*100+5;
+            l_start_x:=((C.rn-1)/C.nb)*100+6;
 
             /* Draw bar chart using percentages */
-            l_graph:=l_graph || 
+            l_graph:=l_graph || CASE WHEN C.rn=1 THEN '<!-- BAR CHART -->' END ||
             '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_total,2) || '%" width="' || l_width_x || '%" height="' || ROUND(l_pct_total,2) || '%" class="total"/>' || 
             '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_first,2) || '%" width="' || l_width_x || '%" height="' || ROUND(l_pct_first,2) || '%" class="first"/>';
 
-            /* Print periods in footer - more detail if <=5 periods */
-            IF (C.nb>5) THEN
-                l_footer:=l_footer ||
-                ' <text x="' || l_start_x || '%" y="25%" dominant-baseline="middle" text-anchor="start">' || TO_CHAR(C.end_date,'Mondd') || '</text>' ||
-                ' <text x="' || l_start_x || '%" y="75%" dominant-baseline="middle" text-anchor="start">' || TO_CHAR(C.end_date,'YYYY') || '</text>';
-            ELSE
-                l_footer:=l_footer ||
-                ' <text x="' || l_start_x || '%" y="25%" dominant-baseline="middle" text-anchor="start">' || TO_CHAR(C.end_date,'Mon dd, YYYY') || '</text>';
-            END IF;
+            /* Print dates in footer */
+            l_footer:=l_footer || CASE WHEN C.rn=1 THEN '<!-- X AXIS LABELS -->' END ||
+            '<text x="' || l_start_x || '%" y="25" dominant-baseline="middle" text-anchor="start" class="label">' || TO_CHAR(C.end_date,'fmMon dd') || '</text>';
 
             IF (C.rn=C.nb) THEN
                 l_graph:=l_graph || 
                 '</svg>' ||
-                '<svg width="100%" height="5vh" role="img">' || 
-                    '<style>' || 
-                    'text {' ||
-                        'font-family:system-ui;' ||
-                        'font-size: var(--step--2);' ||
-                    '}' ||
-                '</style>' || l_footer || 
+                '<svg width="100%" role="img">' || 
+                     l_footer || 
                 '</svg>';
             END IF;
 
