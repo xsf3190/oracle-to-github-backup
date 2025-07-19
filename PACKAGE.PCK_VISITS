@@ -1134,36 +1134,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_days_diff NUMBER;
         l_days_period PLS_INTEGER:=7;
         l_title VARCHAR2(200);
+        l_legend VARCHAR2(200);
         l_graph CLOB;
+        l_y_axis_width PLS_INTEGER:=6; 
+        l_bar_width PLS_INTEGER:=7;
+        l_gap NUMBER;
         l_pct_total NUMBER;
         l_pct_first NUMBER;
-        l_start_x PLS_INTEGER;
-        l_width_x PLS_INTEGER;
+        l_start_x NUMBER;
         l_footer VARCHAR2(2000);
-
-        FUNCTION getStyles RETURN VARCHAR2 IS
-        BEGIN
-            RETURN(
-            '<style>' || 
-                'text {' ||
-                    'font-family:system-ui;' ||
-                    'font-size: var(--step--2);' ||
-                '}' || 
-                '.total {' ||
-                    'fill: var(--color-primary-lighter);' ||
-                '}' ||
-                '.first {' ||
-                    'fill: var(--color-primary);' ||
-                '}' ||
-            '</style>');
-        END;
     BEGIN
         SELECT MIN(visit_date) start_date, MAX(visit_date) end_date, TRUNC(MAX(visit_date))-TRUNC(MIN(visit_date)) 
           INTO l_start_date, l_end_date, l_days_diff
           FROM page_hit
          WHERE website_id=pWebsiteid;
 
-        dbms_output.put_line(l_start_date||':'||l_end_date||':'||l_days_diff);
+        l_start_x:=l_y_axis_width;
+        l_gap:=(100-l_y_axis_width-(10*l_bar_width))/9;
 
         FOR i IN REVERSE 1..4  LOOP
             IF (l_days_diff/(i*7)>=10) THEN
@@ -1172,7 +1159,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             END IF;
         END LOOP;
 
-        l_title:='Website visits in ' || l_days_period || ' day periods up to ' || TO_CHAR(l_end_date,'fmMon dd, YYYY hh24:mipm');
+        l_title:='Website visits in ' || l_days_period || ' day periods';
+        l_legend:='Last visit registered ' || TO_CHAR(l_end_date,'fmMon dd, YYYY hh24:mipm');
 
         l_graph:=
         '<svg width="100%" height="10vh" aria-labelledby="graph-title graph-desc" role="img">' ||
@@ -1205,9 +1193,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             '}' ||
         '</style>' ||
         '<title id="graph-title">Website visit trends</title>' ||
-        '<desc id="graph-desc">' || l_title || '</desc>' ||
+        '<desc id="graph-desc">' || 'Website visits in ' || l_days_period || ' day periods</desc>' ||
         '<text x="50%" y="30%" dominant-baseline="middle" text-anchor="middle">' || l_title || '</text>' ||
-        '<text x="50%" y="70%" dominant-baseline="middle" text-anchor="middle">Legend</text>' ||
+        '<text x="50%" y="70%" dominant-baseline="middle" text-anchor="middle">' || l_legend || '</text>' ||
         '</svg>';
         
         FOR C IN (
@@ -1274,22 +1262,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     '<line x1="4%" y1="' || TO_CHAR((i-1)*20) || '%" x2="100%" y2="' || TO_CHAR((i-1)*20) || '%"/>' ||
                     '<text x="2%" y="' || TO_CHAR((i-1)*20) || '%" dominant-baseline="' || CASE WHEN i=1 THEN 'hanging' ELSE 'central' END || '" text-anchor="middle" class="label">' || ROUND(C.max_visits*(100-((i-1)*20))/100) || '</text>';
                 END LOOP;
-
-                l_width_x:=ROUND(100/C.nb,2)-4;
             END IF;
 
             l_pct_total:=C.total_visits/C.max_visits*100;
             l_pct_first:=C.first_time_visits/C.max_visits*100;
-            l_start_x:=((C.rn-1)/C.nb)*100+6;
+            
 
             /* Draw bar chart using percentages */
             l_graph:=l_graph || CASE WHEN C.rn=1 THEN '<!-- BAR CHART -->' END ||
-            '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_total,2) || '%" width="' || l_width_x || '%" height="' || ROUND(l_pct_total,2) || '%" class="total"/>' || 
-            '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_first,2) || '%" width="' || l_width_x || '%" height="' || ROUND(l_pct_first,2) || '%" class="first"/>';
+            '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_total,2) || '%" width="' || l_bar_width || '%" height="' || ROUND(l_pct_total,2) || '%" class="total"/>' || 
+            '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_first,2) || '%" width="' || l_bar_width || '%" height="' || ROUND(l_pct_first,2) || '%" class="first"/>';
 
             /* Print dates in footer */
             l_footer:=l_footer || CASE WHEN C.rn=1 THEN '<!-- X AXIS LABELS -->' END ||
-            '<text x="' || l_start_x || '%" y="25" dominant-baseline="middle" text-anchor="start" class="label">' || TO_CHAR(C.end_date,'fmMon dd') || '</text>';
+            '<text x="' || TO_CHAR(l_start_x+1) || '%" y="25" dominant-baseline="middle" text-anchor="start" class="label">' || TO_CHAR(C.end_date,'fmMon dd') || '</text>';
 
             IF (C.rn=C.nb) THEN
                 l_graph:=l_graph || 
@@ -1297,6 +1283,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 '<svg width="100%" role="img">' || 
                      l_footer || 
                 '</svg>';
+            ELSE
+                l_start_x:=ROUND(l_start_x+l_bar_width+l_gap,2);
             END IF;
 
         END LOOP;
