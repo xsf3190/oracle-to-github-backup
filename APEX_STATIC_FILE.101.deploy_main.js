@@ -89,8 +89,7 @@ if (!sessionStorage.getItem("website_loaded")) {
 }
 
 let page_loaded = Date.now(),
-    page_visit = 0,
-    transfer_size = 0;
+    page_visit = 0;
 
 const vitalsQueue = new Set();
 
@@ -169,7 +168,6 @@ const flushQueues = () => {
         }
         json["url"] = window.location.hostname;
         json["referrer"] = document.referrer;
-        json["transfer_size"] = transfer_size;
 
         const {page_weight,total_requests} = getPerfEntries();
         vitalsQueue.add({name:"page_weight",value:page_weight});
@@ -216,13 +214,12 @@ if ('onpagehide' in self) {
     }, { capture: true} );
 }
 
-
 /*
 ** PERFORMANCE OBSERVER FOR LOADED RESOURCE TRANSFER SIZE
 */
 const observer = new PerformanceObserver((list) => {
   list.getEntries().forEach((entry) => {
-    transfer_size+=entry.transferSize;
+    console.log(entry.transferSize, entry.name, entry.startTime, entry.duration);
   });
 });
 
