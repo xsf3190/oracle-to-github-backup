@@ -42,7 +42,7 @@ const getReport = async (report, offset) => {
     
     callAPI(endpoint, "GET", query)
     .then((data) => {
-        if (data.article.startsWith("<svg")) {
+        if (report==="trends") {
             article.replaceChildren();
             article.insertAdjacentHTML('afterbegin',data.article);
             showmore.classList.add("visually-hidden");
