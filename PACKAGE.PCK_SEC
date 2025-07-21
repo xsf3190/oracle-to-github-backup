@@ -388,7 +388,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     FUNCTION buildContentDialog RETURN VARCHAR2 IS
     BEGIN
         RETURN(
-            '<dialog class="output" style="--max-width:70rem">' ||
+            '<dialog class="output">' ||
                 '<form>' ||
                     '<header class="flex-items space-between no-wrap">' ||
                         '<ul role="list" class="flex-items"></ul>' ||
