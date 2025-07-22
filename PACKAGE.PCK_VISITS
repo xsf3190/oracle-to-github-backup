@@ -669,44 +669,55 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     BEGIN
         IF (pOffset=0) THEN
             l_content:=
-            '<table role="presentation">
-                <thead>
-                    <tr>
-                        <th>Title</th>
-                        <th>Views</th>
-                        <th>Avg Viewing time</th>
-                         <th>Distinct Visitors</th>
-                    </tr>
-                </thead>
-                <tbody>';
+            '<table role="presentation">' ||
+                '<thead>' ||
+                    '<tr>' ||
+                        '<th>Page</th>' ||
+                        '<th>Page Views</th>' ||
+                    '</tr>' ||
+                '</thead>' ||
+                '<tbody>';
         END IF;
 
-        FOR C IN (SELECT a.title, 
-                            COUNT(*) OVER() total,
-                            COUNT(*) nb_views, 
-                            NVL(ROUND(AVG(p.duration_visible),0),0) avg_viewing_time,
-                            COUNT(DISTINCT p.ip_address) nb_distinct_visitors
-                    FROM article a, website_article wa, page_hit p
-                   WHERE wa.website_id=pWebsiteId
-                     AND wa.collection_type='BLOG'
-                     AND a.parent_id=wa.article_id
-                     AND a.id=p.article_id(+)
-                     AND p.url(+)=pUrl
-                   GROUP BY a.title
-                   ORDER BY nb_views DESC
-                  OFFSET pOffset ROWS
-                   FETCH FIRST ROWS_PER_PAGE ROWS ONLY) 
+        FOR C IN (
+            WITH pages AS
+                (
+                    SELECT navigation_label, article_id 
+                    FROM website_article 
+                    WHERE website_id=pWebsiteId
+                    UNION ALL
+                    SELECT wa.navigation_label || '/' || utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(a.body_html,'<h[1-4]>(.+?)<\/h[1-4]>',1,1))), a.id 
+                    FROM website_article wa, article a
+                    WHERE a.parent_id=wa.article_id
+                    AND wa.website_id=pWebsiteId
+                ),
+                sessions AS
+                (
+                    SELECT ph.visit_date, ph.ip_address, p.navigation_label, COUNT(*) nb
+                      FROM pages p, page_hit ph
+                     WHERE ph.website_id=pWebsiteId
+                       AND ph.url=pUrl
+                       AND ph.article_id=p.article_id
+                     GROUP BY ph.visit_date, ph.ip_address, p.navigation_label
+                ),
+                dataset AS
+                (
+                    SELECT navigation_label, SUM(nb) page_views FROM sessions GROUP BY navigation_label 
+                )
+                SELECT navigation_label, page_views, RATIO_TO_REPORT(page_views) OVER () pct, COUNT(*) OVER () total
+                FROM dataset 
+                ORDER BY 2 DESC
+                OFFSET pOffset ROWS
+                FETCH FIRST ROWS_PER_PAGE ROWS ONLY) 
         LOOP
             n:=n+1;
             IF (n=1) THEN
                 pCount:=C.total;
             END IF;
             l_content:=l_content ||
-            '<tr><td>' 
-                || C.title || '</td><td>'
-                || C.nb_views || '</td><td>' 
-                || elapsedTime(C.avg_viewing_time) || '</td><td>'
-                || C.nb_distinct_visitors || '</td>' ||
+            '<tr>' ||
+                '<td>'|| C.navigation_label || '</td>' ||
+                '<td>'|| C.page_views || ' (' || TO_CHAR(C.pct*100,'fm990D00') || '%)</td>' ||
             '</tr>';
         END LOOP;
 
@@ -718,7 +729,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         pHtml:=l_content;
     END;
 
-    PROCEDURE getPageViewHistory(pWebsiteId IN website.id%type, pUrl IN VARCHAR2, pHtml IN OUT NOCOPY CLOB) IS
+    PROCEDURE getWebsiteTrends(pWebsiteId IN website.id%type, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pHtml IN OUT NOCOPY CLOB) IS
         l_end_date page_hit.visit_date%type;
         l_days_diff NUMBER;
         l_days_period PLS_INTEGER:=7;
@@ -751,7 +762,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         END LOOP;
 
         l_title:='Website visits in ' || l_days_period || ' day periods';
-        l_legend:='Last visit recorded ' || TO_CHAR(l_end_date,'Mon dd, YYYY hh24:mipm');
+        l_legend:='Last visit recorded ' || TO_CHAR(l_end_date at time zone pTimeZone,'Mon dd, YYYY hh24:mipm');
 
         l_graph:=
         '<svg width="100%" aria-labelledby="graph-title graph-desc" role="img">' ||
@@ -878,11 +889,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_first,2) || '%" width="' || l_bar_width || '%" height="' || ROUND(l_pct_first,2) || '%" class="first"/>';
 
             l_table:=l_table || 
-            '<tr><td>' || TO_CHAR(C.start_date,'Mon dd yy hh24:mi:ss') || '</td><td>' || TO_CHAR(C.end_date,'Mon dd yy hh24:mi:ss') || '</td><td>' || C.total_visits || '</td><td>' || C.first_time_visits || '</td></tr>';
+            '<tr><td>' || TO_CHAR(C.start_date,'Mon dd yy hh24:mi:ss') || '</td><td>' || TO_CHAR(C.end_date at time zone pTimeZone,'Mon dd yy hh24:mi:ss') || '</td><td>' || C.total_visits || '</td><td>' || C.first_time_visits || '</td></tr>';
 
             /* Print dates in footer */
             l_footer:=l_footer || CASE WHEN C.rn=1 THEN '<!-- X AXIS LABELS -->' END ||
-            '<text x="' || TO_CHAR(l_start_x+1) || '%" y="15" dominant-baseline="middle" text-anchor="start" class="label">' || TO_CHAR(C.end_date,'fmMon dd') || '</text>';
+            '<text x="' || TO_CHAR(l_start_x+1) || '%" y="15" dominant-baseline="middle" text-anchor="start" class="label">' || TO_CHAR(C.end_date at time zone pTimeZone,'fmMon dd') || '</text>';
 
             IF (C.rn=C.nb) THEN
                 l_graph:=l_graph || 
@@ -890,11 +901,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 '<svg width="100%" height="1lh" role="img" class="x-axis">' || 
                      l_footer || 
                 '</svg>' ||
-                '<details>' ||
-                    '<summary>First Time Visit</summary>' ||
-                    '<p>Signifies the first time that the website is opened from a unique IP address within the reporting period.</p>' ||
-                    '<p>Visits from the same IP address but different browsers are not counted as "first time". Note that Google Analytics uses cookies to report visits.</p>' ||
-                '</details>' ||
                 '<table style="text-align:center">' ||
                     '<thead><tr><th>Start</th><th>End</th><th>Total Visits</th><th>First Time Visits</th></tr></thead>' || 
                     '<tbody>' || l_table || '</tbody>' ||
@@ -904,6 +910,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             END IF;
 
         END LOOP;
+
+        /*
+        ** PERFORMANCE CHART
+        */
 
         pHtml:=l_graph;
     END;
@@ -924,7 +934,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             WHEN 'location' THEN getVisitsByLocation(pWebsiteId, pOffset, l_session_data.url, l_count, l_html);
             WHEN 'browser' THEN getVisitsByBrowser(pWebsiteId, pOffset, l_session_data.url, l_count, l_html);
             WHEN 'blog' THEN getBlogVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
-            WHEN 'trends' THEN getPageViewHistory(pWebsiteId, l_session_data.url, l_html);
+            WHEN 'trends' THEN getWebsiteTrends(pWebsiteId, l_session_data.timezone, l_session_data.url, l_html);
         END CASE;
         
         apex_json.open_object; 
