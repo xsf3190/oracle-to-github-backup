@@ -346,14 +346,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         LOOP
             l_reports:=NULL;
             IF (INSTR(C.uri_template,'visits/')>0) THEN
-                l_reports:='website|Visits;trends|Trends;location|Locations;browser|Browsers';
+                l_reports:='website|Visits;trends|Trends;engagement|Engagement;location|Locations;browser|Browsers';
                 SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId;
                 IF (n>1) THEN
                     l_reports:=l_reports || ';page|Pages';
-                    SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId AND collection_type='BLOG';
-                    IF (n>0) THEN
-                        l_reports:=l_reports || ';blog|Blogs';
-                    END IF;
                 END IF;
             END IF;
             IF (l_test_site) THEN
@@ -383,7 +379,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
     END;
 
     /*
-     **  Build Content Dialog - includee pagination button
+     **  Build Content Dialog - include pagination button
      */
     FUNCTION buildContentDialog RETURN VARCHAR2 IS
     BEGIN
