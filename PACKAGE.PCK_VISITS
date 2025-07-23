@@ -663,17 +663,25 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         pHtml:=l_content;
     END;
 
-    PROCEDURE getBlogVisits(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB)  IS
+    PROCEDURE getEngagement(pWebsiteId IN website.id%type, pOffset IN NUMBER, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB)  IS
         l_content CLOB;
         n PLS_INTEGER:=0;
     BEGIN
         IF (pOffset=0) THEN
             l_content:=
-            '<table role="presentation">' ||
+            '<table role="presentation" style="font-size:var(--step--2)">' ||
+                '<caption style="padding-block-end:1rem"><span style="font-stretch:120%;font-weight:550">Engaged page views ordered by popularity for first time and repeat visitors</span>' ||
+                    '<br>Visitors are engaged when viewing content for more than 10 seconds' ||
+                    '<br>Bounce rate is percentage of all unengaged visits' ||
+                    '<br>Engagement is at 75 percentile across all visits' ||
+                '</caption>' ||
                 '<thead>' ||
                     '<tr>' ||
                         '<th>Page</th>' ||
-                        '<th>Page Views</th>' ||
+                        '<th>First Visit</th>' ||
+                        '<th>Repeat Visit</th>' ||
+                        '<th>Engagement</th>' ||
+                        '<th>Bounce</th>' ||
                     '</tr>' ||
                 '</thead>' ||
                 '<tbody>';
@@ -693,7 +701,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 ),
                 sessions AS
                 (
-                    SELECT ph.visit_date, ph.ip_address, p.navigation_label, COUNT(*) nb
+                    SELECT p.navigation_label, ROW_NUMBER() OVER (PARTITION BY ph.ip_address ORDER BY ph.visit_date) visit, SUM(CASE WHEN ph.duration_visible>10 THEN 1 ELSE 0 END) engaged, MAX(ph.duration_visible) duration_visible
                       FROM pages p, page_hit ph
                      WHERE ph.website_id=pWebsiteId
                        AND ph.url=pUrl
@@ -702,9 +710,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 ),
                 dataset AS
                 (
-                    SELECT navigation_label, SUM(nb) page_views FROM sessions GROUP BY navigation_label 
+                    SELECT  navigation_label, SUM(CASE WHEN visit=1 AND engaged=1 THEN 1 ELSE 0 END) first_time, SUM(CASE WHEN visit>1 AND engaged=1 THEN 1 ELSE 0 END) repeat_visit, SUM(visit) total_visits, SUM(CASE WHEN engaged=0 THEN 1 ELSE 0 END) bounce, 
+                    APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY duration_visible) duration_visibleP75
+                    FROM sessions
+                    GROUP BY navigation_label 
                 )
-                SELECT navigation_label, page_views, RATIO_TO_REPORT(page_views) OVER () pct, COUNT(*) OVER () total
+                SELECT navigation_label, first_time, RATIO_TO_REPORT(first_time) OVER () pct1, repeat_visit, RATIO_TO_REPORT(repeat_visit) OVER () pct2, ROUND((bounce/total_visits)*100) bounce_rate, COUNT(*) OVER () total, duration_visibleP75
                 FROM dataset 
                 ORDER BY 2 DESC
                 OFFSET pOffset ROWS
@@ -717,7 +728,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             l_content:=l_content ||
             '<tr>' ||
                 '<td>'|| C.navigation_label || '</td>' ||
-                '<td>'|| C.page_views || ' (' || TO_CHAR(C.pct*100,'fm990D00') || '%)</td>' ||
+                '<td>'|| C.first_time || ' (' || CASE WHEN C.pct1<.01 THEN '<1' ELSE TO_CHAR(C.pct1*100,'fm990') END || '%)</td>' ||
+                '<td>'|| C.repeat_visit || ' (' || CASE WHEN C.pct2<.01 THEN '<1' ELSE TO_CHAR(C.pct2*100,'fm990') END || '%)</td>' ||
+                '<td>'|| elapsedTime(C.duration_visibleP75) ||'</td>' ||
+                '<td>'|| C.bounce_rate || '%</td>' ||
             '</tr>';
         END LOOP;
 
@@ -933,7 +947,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             WHEN 'page' THEN getPageVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
             WHEN 'location' THEN getVisitsByLocation(pWebsiteId, pOffset, l_session_data.url, l_count, l_html);
             WHEN 'browser' THEN getVisitsByBrowser(pWebsiteId, pOffset, l_session_data.url, l_count, l_html);
-            WHEN 'blog' THEN getBlogVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
+            WHEN 'engagement' THEN getEngagement(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
             WHEN 'trends' THEN getWebsiteTrends(pWebsiteId, l_session_data.timezone, l_session_data.url, l_html);
         END CASE;
         
