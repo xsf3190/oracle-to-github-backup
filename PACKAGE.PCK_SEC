@@ -346,11 +346,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         LOOP
             l_reports:=NULL;
             IF (INSTR(C.uri_template,'visits/')>0) THEN
-                l_reports:='website|Visits;trends|Trends;engagement|Engagement;location|Locations;browser|Browsers';
-                SELECT COUNT(*) INTO n FROM website_article WHERE website_id=pWebsiteId;
-                IF (n>1) THEN
-                    l_reports:=l_reports || ';page|Pages';
-                END IF;
+                l_reports:='website|Visits;trends|Trends;performance|Performance;engagement|Engagement;location|Locations;browser|Browsers';
             END IF;
             IF (l_test_site) THEN
                 l_menulist:=l_menulist || addButton(C.uri_template, C.method, C.label);
