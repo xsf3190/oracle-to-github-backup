@@ -19,22 +19,18 @@ export const init = (element) => {
 
     dropdown_details.removeAttribute("open");
 
-    callAPI(endpoint, "POST", {})
-        .then(() => {
-            const reports = element.dataset.reports.split(";");
-            let buttons="";
-            for (let i = 0; i < reports.length; i++) {
-                const elements = reports[i].split("|");
-                buttons += `<li><button class="button" type="button" data-report="${elements[0]}" data-button-variant="small">${elements[1]}</button></li>`;
-            }
-            reportlist.replaceChildren();
-            reportlist.insertAdjacentHTML('afterbegin',buttons);
-            output_dialog.showModal();
-            reportlist.querySelector("button:first-of-type").click();
-        })
-        .catch((error) => {
-            handleError(error);
-        });
+    const reports = element.dataset.reports.split(";");
+    let buttons="";
+    for (let i = 0; i < reports.length; i++) {
+        const elements = reports[i].split("|");
+        buttons += `<li><button class="button" type="button" data-report="${elements[0]}" data-button-variant="small">${elements[1]}</button></li>`;
+    }
+    reportlist.replaceChildren();
+    reportlist.insertAdjacentHTML('afterbegin',buttons);
+    article.replaceChildren();
+    article.insertAdjacentHTML('afterbegin',"<h4>Real User Monitoring</h4><p>Click a button</p>");
+
+    output_dialog.showModal();
 }
 
 const getReport = async (report, offset) => {
