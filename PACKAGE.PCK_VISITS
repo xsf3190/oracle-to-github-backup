@@ -479,26 +479,97 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
 
     PROCEDURE getPerformance(pWebsiteId IN website.id%type, pTimeZone IN VARCHAR2, pUrl IN VARCHAR2, pHtml IN OUT NOCOPY CLOB)  IS
+        l_start_date page_hit.visit_date%type;
         l_end_date page_hit.visit_date%type;
         l_days_diff NUMBER;
         l_days_period PLS_INTEGER:=7;
         l_title VARCHAR2(200);
         l_legend VARCHAR2(200);
+        l_summary LONG;
         l_graph CLOB;
         l_y_axis_width PLS_INTEGER:=6; 
         l_bar_width PLS_INTEGER:=7;
         l_gap NUMBER;
-        l_pct_total NUMBER;
-        l_pct_first NUMBER;
         l_start_x NUMBER;
         l_footer VARCHAR2(2000);
         l_table VARCHAR2(4000);
     BEGIN
-        SELECT MAX(visit_date) end_date, TRUNC(MAX(visit_date))-TRUNC(MIN(visit_date)) 
-          INTO l_end_date, l_days_diff
+        SELECT MIN(visit_date) start_date, MAX(visit_date) end_date, TRUNC(MAX(visit_date))-TRUNC(MIN(visit_date)) 
+          INTO l_start_date, l_end_date, l_days_diff
           FROM page_hit
          WHERE website_id=pWebsiteid
            AND url=pUrl;
+
+        /*
+        ** OVERALL CWV RATINGS 
+        */
+
+        FOR C IN (
+            WITH 
+            sessions AS
+            (
+            SELECT ROW_NUMBER() OVER (PARTITION BY ph.ip_address ORDER BY ph.visit_date) visit, MAX(lcp_rating) lcp_rating, MAX(cls_rating) cls_rating, MAX(inp_rating) inp_rating
+              FROM page_hit ph
+             WHERE ph.website_id=pWebsiteid
+               AND ph.url=pUrl
+             GROUP BY ph.visit_date, ph.ip_address
+            ),
+            dataset AS
+            (
+            SELECT 'LCP' metric,lcp_rating rating, COUNT(*) value
+            FROM sessions p
+            WHERE p.visit=1
+            AND lcp_rating IS NOT NULL
+            GROUP BY lcp_rating
+            UNION ALL
+            SELECT 'CLS',cls_rating, COUNT(*)
+            FROM sessions p
+            WHERE p.visit=1
+            AND cls_rating IS NOT NULL
+            GROUP BY cls_rating
+            UNION ALL
+            SELECT 'INP',inp_rating, COUNT(*)
+            FROM sessions p
+            WHERE p.visit=1
+            AND inp_rating IS NOT NULL
+            GROUP BY inp_rating
+            ),
+            cwv AS
+            (
+            SELECT metric, rating, RATIO_TO_REPORT(value) OVER (PARTITION BY metric) pct
+            FROM dataset
+            )
+            SELECT 
+                MAX(CASE WHEN metric='LCP' AND rating='good' THEN pct ELSE 0 END) LCP_good, MAX(CASE WHEN metric='LCP' AND rating='needs-improvement' THEN pct ELSE 0 END) LCP_improve, MAX(CASE WHEN metric='LCP' AND rating='poor' THEN pct ELSE 0 END) LCP_poor,
+                MAX(CASE WHEN metric='CLS' AND rating='good' THEN pct ELSE 0 END) CLS_good, MAX(CASE WHEN metric='CLS' AND rating='needs-improvement' THEN pct  ELSE 0 END) CLS_improve, MAX(CASE WHEN metric='CLS' AND rating='poor' THEN pct ELSE 0 END) CLS_poor,
+                MAX(CASE WHEN metric='INP' AND rating='good' THEN pct ELSE 0 END) INP_good, MAX(CASE WHEN metric='INP' AND rating='needs-improvement' THEN pct  ELSE 0 END) INP_improve, MAX(CASE WHEN metric='INP' AND rating='poor' THEN pct ELSE 0 END) INP_poor
+            FROM cwv
+        ) LOOP
+            l_summary:=
+            '<div class="grid grid__auto_fit">' ||
+                '<svg viewBox="0 0 100 25" role="img">' ||
+                    '<rect x="0" y="0" width="' || ROUND(C.lcp_good*100) || '" height="25" fill="green"/>' ||
+                    '<text x="' || ROUND(C.lcp_good*100) || '%" y="50%" dominant-baseline="central" text-anchor="end">' || ROUND(C.lcp_good*100) || '%</text>' ||
+
+                    '<rect x="' || ROUND(C.lcp_good*100) || '" y="0" width="' || ROUND(C.lcp_improve*100) || '" height="25" fill="orange"/>' ||
+                    '<text x="' || ROUND((C.lcp_good+C.lcp_improve)*100) || '%" y="50%" dominant-baseline="central" text-anchor="end"' || ROUND(C.lcp_improve*100) || '%</text>' ||
+
+                    '<rect x="' || ROUND((C.lcp_good+C.lcp_improve)*100) || '" y="0" width="' || ROUND(C.lcp_poor*100) || '" height="25" fill="red"/>' ||
+                    '<text x="100%" y="50%" dominant-baseline="central" text-anchor="end">' || ROUND(C.lcp_poor*100) || '%</text>' ||
+                 '</svg>' ||
+                 '<svg viewBox="0 0 100 25" role="img">' ||
+                    '<rect x="0" y="0" width="' || ROUND(C.cls_good*100) || '" height="25" fill="green"/>' ||
+                    '<text x="' || ROUND(C.cls_good*100) || '%" y="50%" dominant-baseline="central" text-anchor="end">' || ROUND(C.cls_good*100) || '%</text>' ||
+
+                    '<rect x="' || ROUND(C.cls_good*100) || '" y="0" width="' || ROUND(C.cls_improve*100) || '" height="25" fill="orange"/>' ||
+                    '<text x="' || ROUND((C.cls_good+C.cls_improve)*100) || '%" y="50%" dominant-baseline="central" text-anchor="end">' || ROUND(C.cls_improve*100) || '%</text>' ||
+
+                    '<rect x="' || ROUND((C.cls_good+C.cls_improve)*100) || '" y="0" width="' || ROUND(C.cls_poor*100) || '" height="25" fill="red"/>' ||
+                    '<text x="100%" y="50%" dominant-baseline="central" text-anchor="end">' || ROUND(C.cls_poor*100) || '%</text>' ||
+                 '</svg>' ||
+             '</div>';
+        END LOOP;
+        pck_core.log(l_summary);
 
         l_start_x:=l_y_axis_width+0.5;
         l_gap:=(100-l_y_axis_width-0.5 -(10*l_bar_width))/9;
@@ -554,10 +625,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         '<desc id="graph-desc">' || 'Website visits in ' || l_days_period || ' day periods</desc>' ||
         '<text x="50%" y="30" dominant-baseline="middle" text-anchor="middle">' || l_title || '</text>' ||
         '<text x="50%" y="70" dominant-baseline="middle" text-anchor="middle">' || l_legend || '</text>' ||
-        '<rect  x="33%" y="100" width="10%" height="50" class="total" />' ||
-        '<text x="38%" y="125" alignment-baseline="middle" text-anchor="middle" fill="white" stroke="white" >Total</text>' ||
-        '<rect  x="50%" y="100" width="10%" height="50" class="first" />' ||
-        '<text x="55%" y="125" alignment-baseline="middle" text-anchor="middle" fill="white" stroke="white" >First</text>' ||
         '</svg>';
         
         FOR C IN (
@@ -568,7 +635,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             ),
             range AS
             (
-                SELECT end_date + INTERVAL '1' SECOND start_date, LEAD(end_date) OVER (ORDER BY end_date) end_date 
+                SELECT l_start_date start_date, l_end_date end_date FROM dual
+                UNION ALL
+                SELECT end_date + INTERVAL '1' SECOND, LEAD(end_date) OVER (ORDER BY end_date) 
                 FROM end_date
             ),
             sessions AS
@@ -590,7 +659,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 APPROX_PERCENTILE(0.90 DETERMINISTIC) WITHIN GROUP (ORDER BY cls) cls90,
                 APPROX_PERCENTILE(0.90 DETERMINISTIC) WITHIN GROUP (ORDER BY inp) inp90
             FROM range r, sessions p
-            WHERE p.visit_date BETWEEN r.start_date AND r.end_date
+            WHERE p.visit=1
+            AND p.visit_date BETWEEN r.start_date AND r.end_date
             AND r.end_date IS NOT NULL
             GROUP BY r.start_date, r.end_date
             ORDER BY r.end_date DESC NULLS LAST
@@ -619,18 +689,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     '<text x="3%" y="' || TO_CHAR((i-1)*20) || '%" dominant-baseline="' || CASE WHEN i=1 THEN 'hanging' ELSE 'central' END || '" text-anchor="middle" class="label">' || 'secs' || '</text>';
                 END LOOP;
             END IF;
-
-            l_pct_total:=C.total_visits/C.max_visits*100;
-            l_pct_first:=C.first_time_visits/C.max_visits*100;
             
 
             /* Draw bar chart using percentages */
             l_graph:=l_graph || CASE WHEN C.rn=1 THEN '<!-- BAR CHART -->' END ||
-            '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_total,2) || '%" width="' || l_bar_width || '%" height="' || ROUND(l_pct_total,2) || '%" class="total"/>' || 
-            '<rect x="' || l_start_x || '%" y="' || ROUND(100-l_pct_first,2) || '%" width="' || l_bar_width || '%" height="' || ROUND(l_pct_first,2) || '%" class="first"/>';
+            '<rect x="' || l_start_x || '%" y="' || C.lcp || '" width="' || l_bar_width || '%" height="' || C.lcp || '"/>';
 
             l_table:=l_table || 
-            '<tr><td>' || TO_CHAR(C.start_date,'Mon dd yy hh24:mi:ss') || '</td><td>' || TO_CHAR(C.end_date at time zone pTimeZone,'Mon dd yy hh24:mi:ss') || '</td><td>' || C.total_visits || '</td><td>' || C.first_time_visits || '</td></tr>';
+            '<tr><td>' || TO_CHAR(C.start_date,'Mon dd yy hh24:mi:ss') || '</td><td>' || TO_CHAR(C.end_date at time zone pTimeZone,'Mon dd yy hh24:mi:ss') || '</td><td>' || elapsedTime(ROUND(C.lcp/1000)) || '</td><td>' || elapsedTime(ROUND(C.lcp90)) || '</td></tr>';
 
             /* Print dates in footer */
             l_footer:=l_footer || CASE WHEN C.rn=1 THEN '<!-- X AXIS LABELS -->' END ||
@@ -643,7 +709,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                      l_footer || 
                 '</svg>' ||
                 '<table style="text-align:center">' ||
-                    '<thead><tr><th>Start</th><th>End</th><th>Total Visits</th><th>First Time Visits</th></tr></thead>' || 
+                    '<thead><tr><th>Start</th><th>End</th><th>LCP P75</th><th>LCP P90</th></tr></thead>' || 
                     '<tbody>' || l_table || '</tbody>' ||
                 '</table>';
             ELSE
