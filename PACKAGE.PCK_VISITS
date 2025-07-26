@@ -87,10 +87,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_clob2 clob;
         n PLS_INTEGER;
     BEGIN
-        DELETE website_article_cwv WHERE INSTR(UPPER(referrer),UPPER(sys_context('userenv','db_name')))>0;
-        DELETE website_article_cwv WHERE INSTR(user_agent,'Headless')>0;
-        DELETE website_article_cwv cwv WHERE cwv.website_id=pWebsiteId AND NOT EXISTS (SELECT null FROM article a WHERE a.id=cwv.article_id);
-
         FOR C IN (SELECT DISTINCT user_agent FROM website_article_cwv c WHERE website_id=pWebsiteId AND NOT EXISTS (SELECT NULL FROM browser_lookup b WHERE b.user_agent=c.user_agent))
         LOOP
             l_array:= new JSON_ARRAY_T;
@@ -126,6 +122,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     SUM(duration_visible) duration_visible, MAX(website_article_cwv.user_agent) user_agent, MAX(browser_lookup.browser) browser, MAX(connection) connection, MAX(url) url, MAX(mobile) mobile, MAX(page_weight) page_weight, MAX(total_requests) total_requests
                 FROM website_article_cwv, browser_lookup
                 WHERE website_id=pWebsiteId
+                AND INSTR(website_article_cwv.user_agent,'Headless')=0
                 AND browser_lookup.user_agent(+)=website_article_cwv.user_agent
                 GROUP BY website_id, article_id, ip_address, website_loaded
             )
@@ -493,6 +490,52 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_start_x NUMBER;
         l_footer VARCHAR2(2000);
         l_table VARCHAR2(4000);
+
+        FUNCTION buildSVG(pTitle IN VARCHAR2, pScore IN NUMBER, pGood IN NUMBER, pNeedsImprovement in NUMBER, pPoor IN NUMBER) RETURN VARCHAR2 IS
+            l_cwv_score VARCHAR2(20);
+        BEGIN
+            l_cwv_score:=
+            CASE pTitle
+                WHEN 'Largest Contentful Paint' THEN
+                    CASE 
+                        WHEN pScore <= 2500 THEN 'good' 
+                        WHEN pScore <= 4000 THEN 'needs-improvement'
+                        ELSE 'poor'
+                    END
+                WHEN 'Content Layout Shift' THEN
+                    CASE 
+                        WHEN pScore <= 0.1 THEN 'good' 
+                        WHEN pScore <= 0.25 THEN 'needs-improvement'
+                        ELSE 'poor'
+                    END
+                WHEN 'Interaction to Next Paint' THEN
+                    CASE 
+                        WHEN pScore <= 200 THEN 'good' 
+                        WHEN pScore <= 500 THEN 'needs-improvement'
+                        ELSE 'poor'
+                    END
+            END; 
+            RETURN(
+                '<text x="0" y="10" class="metric-title">' || pTitle || '</text>' ||
+                '<text x="100" y="10" class="metric-score '|| l_cwv_score || '">' || CASE WHEN pTitle='Content Layout Shift' THEN TO_CHAR(pScore) ELSE elapsedTime(ROUND(pScore/1000)) END || '</text>' ||
+
+                '<rect x="0" y="20" width="' || pGood || '" height="25" class="good"/>' ||
+                CASE WHEN pGood>0 THEN
+                '<text x="' || ROUND(pGood/2) || '" y="32.5" class="metric">' || pGood || '%</text>'
+                END ||
+
+                '<rect x="' || pGood || '" y="20" width="' || pNeedsImprovement || '" height="25" class="needs-improvement"/>' ||
+                CASE WHEN pNeedsImprovement>0 THEN
+                '<text x="' || ROUND(pGood+(pNeedsImprovement/2)) || '" y="32.5" class="metric">' || pNeedsImprovement || '%</text>'
+                END ||
+
+                '<rect x="' || ROUND(100- pPoor) || '" y="20" width="' || pPoor || '" height="25" class="poor"/>' ||
+                CASE WHEN pPoor>0 THEN
+                '<text x="' || ROUND(100- pPoor + (pPoor/2)) || '" y="32.5" class="metric">' || pPoor || '%</text>' 
+                END ||
+                '</svg>'
+            );
+        END;
     BEGIN
         SELECT MIN(visit_date) start_date, MAX(visit_date) end_date, TRUNC(MAX(visit_date))-TRUNC(MIN(visit_date)) 
           INTO l_start_date, l_end_date, l_days_diff
@@ -508,7 +551,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             WITH 
             sessions AS
             (
-            SELECT ROW_NUMBER() OVER (PARTITION BY ph.ip_address ORDER BY ph.visit_date) visit, MAX(lcp_rating) lcp_rating, MAX(cls_rating) cls_rating, MAX(inp_rating) inp_rating
+            SELECT ROW_NUMBER() OVER (PARTITION BY ph.ip_address ORDER BY ph.visit_date) visit, 
+                MAX(lcp) lcp, MAX(cls) cls, MAX(inp) inp,  
+                MAX(lcp_rating) lcp_rating, MAX(cls_rating) cls_rating, MAX(inp_rating) inp_rating
               FROM page_hit ph
              WHERE ph.website_id=pWebsiteid
                AND ph.url=pUrl
@@ -536,193 +581,66 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             ),
             cwv AS
             (
-            SELECT metric, rating, RATIO_TO_REPORT(value) OVER (PARTITION BY metric) pct
+            SELECT metric, rating, ROUND(RATIO_TO_REPORT(value) OVER (PARTITION BY metric)*100) pct
             FROM dataset
+            ),
+            score AS
+            (
+            SELECT APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY lcp) lcp75, APPROX_PERCENTILE(0.90 DETERMINISTIC) WITHIN GROUP (ORDER BY lcp) lcp90,
+                APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY cls) cls75, APPROX_PERCENTILE(0.90 DETERMINISTIC) WITHIN GROUP (ORDER BY cls) cls90,
+                APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY inp) inp75, APPROX_PERCENTILE(0.90 DETERMINISTIC) WITHIN GROUP (ORDER BY inp) inp90
+            FROM sessions p
+            WHERE p.visit=1
+            GROUP BY p.visit
             )
             SELECT 
+                MAX(score.lcp75) lcp75, MAX(score.lcp90) lcp90, MAX(score.cls75) cls75, MAX(score.cls90) cls90, MAX(score.inp75) inp75, MAX(score.inp90) inp90,
                 MAX(CASE WHEN metric='LCP' AND rating='good' THEN pct ELSE 0 END) LCP_good, MAX(CASE WHEN metric='LCP' AND rating='needs-improvement' THEN pct ELSE 0 END) LCP_improve, MAX(CASE WHEN metric='LCP' AND rating='poor' THEN pct ELSE 0 END) LCP_poor,
                 MAX(CASE WHEN metric='CLS' AND rating='good' THEN pct ELSE 0 END) CLS_good, MAX(CASE WHEN metric='CLS' AND rating='needs-improvement' THEN pct  ELSE 0 END) CLS_improve, MAX(CASE WHEN metric='CLS' AND rating='poor' THEN pct ELSE 0 END) CLS_poor,
                 MAX(CASE WHEN metric='INP' AND rating='good' THEN pct ELSE 0 END) INP_good, MAX(CASE WHEN metric='INP' AND rating='needs-improvement' THEN pct  ELSE 0 END) INP_improve, MAX(CASE WHEN metric='INP' AND rating='poor' THEN pct ELSE 0 END) INP_poor
-            FROM cwv
+            FROM cwv, score
         ) LOOP
-            l_summary:=
+            pHtml:=
             '<div class="grid grid__auto_fit">' ||
-                '<svg viewBox="0 0 100 25" role="img">' ||
-                    '<rect x="0" y="0" width="' || ROUND(C.lcp_good*100) || '" height="25" fill="green"/>' ||
-                    '<text x="' || ROUND(C.lcp_good*100) || '%" y="50%" dominant-baseline="central" text-anchor="end">' || ROUND(C.lcp_good*100) || '%</text>' ||
-
-                    '<rect x="' || ROUND(C.lcp_good*100) || '" y="0" width="' || ROUND(C.lcp_improve*100) || '" height="25" fill="orange"/>' ||
-                    '<text x="' || ROUND((C.lcp_good+C.lcp_improve)*100) || '%" y="50%" dominant-baseline="central" text-anchor="end"' || ROUND(C.lcp_improve*100) || '%</text>' ||
-
-                    '<rect x="' || ROUND((C.lcp_good+C.lcp_improve)*100) || '" y="0" width="' || ROUND(C.lcp_poor*100) || '" height="25" fill="red"/>' ||
-                    '<text x="100%" y="50%" dominant-baseline="central" text-anchor="end">' || ROUND(C.lcp_poor*100) || '%</text>' ||
-                 '</svg>' ||
-                 '<svg viewBox="0 0 100 25" role="img">' ||
-                    '<rect x="0" y="0" width="' || ROUND(C.cls_good*100) || '" height="25" fill="green"/>' ||
-                    '<text x="' || ROUND(C.cls_good*100) || '%" y="50%" dominant-baseline="central" text-anchor="end">' || ROUND(C.cls_good*100) || '%</text>' ||
-
-                    '<rect x="' || ROUND(C.cls_good*100) || '" y="0" width="' || ROUND(C.cls_improve*100) || '" height="25" fill="orange"/>' ||
-                    '<text x="' || ROUND((C.cls_good+C.cls_improve)*100) || '%" y="50%" dominant-baseline="central" text-anchor="end">' || ROUND(C.cls_improve*100) || '%</text>' ||
-
-                    '<rect x="' || ROUND((C.cls_good+C.cls_improve)*100) || '" y="0" width="' || ROUND(C.cls_poor*100) || '" height="25" fill="red"/>' ||
-                    '<text x="100%" y="50%" dominant-baseline="central" text-anchor="end">' || ROUND(C.cls_poor*100) || '%</text>' ||
-                 '</svg>' ||
-             '</div>';
+                '<svg viewBox="0 0 100 50" role="img">' ||
+                    '<style>' ||
+                        'text {' ||
+                            'font-family: system-ui;' ||
+                            'font-size: 20%;' ||
+                            'fill: white;' ||
+                            'dominant-baseline: central;' ||
+                            'text-anchor: middle;' ||
+                        '}' ||
+                        '.metric-title {' ||
+                            'fill: black;' ||
+                            'text-anchor: start;' ||
+                        '}' ||
+                        '.metric-score {' ||
+                            'text-anchor: end;' ||
+                            'font-weight: 900;' ||
+                        '}' ||
+                        '.metric {' ||
+                            'text-anchor: middle;' ||
+                            'font-weight: 750;' ||
+                        '}' ||
+                        '.good {' ||
+                            'fill: #355E3B;' ||
+                        '}' ||
+                        '.needs-improvement {' ||
+                            'fill: orange;' ||
+                        '}' ||
+                        '.poor {' ||
+                            'fill: red;' ||
+                        '}' ||
+                    '</style>' || 
+                    buildSVG('Largest Contentful Paint', C.lcp75, C.lcp_good, C.lcp_improve, C.lcp_poor) ||
+                    '<svg viewBox="0 0 100 50" role="img">' ||
+                    buildSVG('Content Layout Shift', C.cls75, C.cls_good, C.cls_improve, C.cls_poor) ||
+                    '<svg viewBox="0 0 100 50" role="img">' ||
+                    buildSVG('Interaction to Next Paint', C.inp75, C.inp_good, C.inp_improve, C.inp_poor) ||
+            '</div>';
         END LOOP;
-        pck_core.log(l_summary);
-
-        l_start_x:=l_y_axis_width+0.5;
-        l_gap:=(100-l_y_axis_width-0.5 -(10*l_bar_width))/9;
-
-        FOR i IN REVERSE 1..4  LOOP
-            IF (l_days_diff/(i*7)>=10) THEN
-                l_days_period:=i*7;
-                EXIT;
-            END IF;
-        END LOOP;
-
-        l_title:='Website performance in ' || l_days_period || ' day periods';
-        l_legend:='Last visit recorded ' || TO_CHAR(l_end_date at time zone pTimeZone,'Mon dd, YYYY hh24:mipm');
-
-        l_graph:=
-        '<svg width="100%" aria-labelledby="graph-title graph-desc" role="img">' ||
-        '<style>' || 
-            'line {' ||
-                'stroke: slategrey;' ||
-                'stroke-width: 0.5;' ||
-            '}' ||
-            '.y-axis {' ||
-                'stroke-width: 2;' ||
-            '}' ||
-            'text {' ||
-                'font-family:system-ui;' ||
-                'font-size: var(--step--1);' ||
-                'font-weight: 650;' ||
-            '}' ||
-            '.total {' ||
-                'fill: var(--color-primary-lighter);' ||
-            '}' ||
-            '.first {' ||
-                'fill: var(--color-primary);' ||
-            '}' ||
-            '.label {' ||
-               'font-size: var(--step--2);' ||
-            '}' ||
-            '@media (max-width: 640px) {' ||
-                '.x-axis {' ||
-                    'height:2.5lh;' ||
-                '}' ||
-                '.label {' ||
-                    'writing-mode: vertical-rl;' ||
-                    'font-size: 70%;' ||
-                '}' || 
-                '[dominant-baseline="hanging"] {' ||
-                    'visibility: hidden;' ||
-                '}' || 
-            '}' ||
-        '</style>' ||
-        '<title id="graph-title">Website visit trends</title>' ||
-        '<desc id="graph-desc">' || 'Website visits in ' || l_days_period || ' day periods</desc>' ||
-        '<text x="50%" y="30" dominant-baseline="middle" text-anchor="middle">' || l_title || '</text>' ||
-        '<text x="50%" y="70" dominant-baseline="middle" text-anchor="middle">' || l_legend || '</text>' ||
-        '</svg>';
         
-        FOR C IN (
-            WITH end_date AS
-            (
-                SELECT l_end_date-((level-1) * l_days_period) end_date
-                FROM dual CONNECT BY level<=l_days_period
-            ),
-            range AS
-            (
-                SELECT l_start_date start_date, l_end_date end_date FROM dual
-                UNION ALL
-                SELECT end_date + INTERVAL '1' SECOND, LEAD(end_date) OVER (ORDER BY end_date) 
-                FROM end_date
-            ),
-            sessions AS
-            (
-            SELECT ROW_NUMBER() OVER (PARTITION BY ph.ip_address ORDER BY ph.visit_date) visit, 
-                    ph.visit_date, MAX(ttfb) ttfb, MAX(fcp) fcp, MAX(lcp) lcp, MAX(cls) cls, MAX(inp) inp
-              FROM page_hit ph
-             WHERE ph.website_id=pWebsiteId
-               AND ph.url=pUrl
-             GROUP BY ph.visit_date, ph.ip_address
-            ),
-            dataset AS
-            (
-            SELECT start_date, end_date, 
-                APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY lcp) lcp,
-                APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY cls) cls,
-                APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY inp) inp,
-                APPROX_PERCENTILE(0.90 DETERMINISTIC) WITHIN GROUP (ORDER BY lcp) lcp90,
-                APPROX_PERCENTILE(0.90 DETERMINISTIC) WITHIN GROUP (ORDER BY cls) cls90,
-                APPROX_PERCENTILE(0.90 DETERMINISTIC) WITHIN GROUP (ORDER BY inp) inp90
-            FROM range r, sessions p
-            WHERE p.visit=1
-            AND p.visit_date BETWEEN r.start_date AND r.end_date
-            AND r.end_date IS NOT NULL
-            GROUP BY r.start_date, r.end_date
-            ORDER BY r.end_date DESC NULLS LAST
-            FETCH FIRST 10 ROWS ONLY
-            )
-            SELECT start_date, end_date, lcp, cls, inp, lcp90, cls90, inp90, 
-                ROW_NUMBER() OVER (ORDER BY start_date) rn,
-                COUNT(*) OVER () nb
-            FROM dataset
-            ORDER BY start_date
-        )
-        LOOP
-            IF (C.rn=1) THEN
-                l_graph:=l_graph || 
-                '<svg width="100%" height="60vh" role="img">';
-                
-                /* Draw Y-axis */
-                l_graph:=l_graph || 
-                '<!-- Y AXIS -->' ||
-                '<line x1="' || l_y_axis_width || '%" y1="0%" x2="' || l_y_axis_width || '%" y2="100%" class="y-axis"/>';
-
-                /* Draw horizontal lines for each 20% of max visits in computed range */
-                FOR i IN 1..5 LOOP
-                    l_graph:=l_graph || CASE WHEN i=1 THEN '<!-- Y AXIS LABELS -->' END ||
-                    '<line x1="6%" y1="' || TO_CHAR((i-1)*20) || '%" x2="100%" y2="' || TO_CHAR((i-1)*20) || '%"/>' ||
-                    '<text x="3%" y="' || TO_CHAR((i-1)*20) || '%" dominant-baseline="' || CASE WHEN i=1 THEN 'hanging' ELSE 'central' END || '" text-anchor="middle" class="label">' || 'secs' || '</text>';
-                END LOOP;
-            END IF;
-            
-
-            /* Draw bar chart using percentages */
-            l_graph:=l_graph || CASE WHEN C.rn=1 THEN '<!-- BAR CHART -->' END ||
-            '<rect x="' || l_start_x || '%" y="' || C.lcp || '" width="' || l_bar_width || '%" height="' || C.lcp || '"/>';
-
-            l_table:=l_table || 
-            '<tr><td>' || TO_CHAR(C.start_date,'Mon dd yy hh24:mi:ss') || '</td><td>' || TO_CHAR(C.end_date at time zone pTimeZone,'Mon dd yy hh24:mi:ss') || '</td><td>' || elapsedTime(ROUND(C.lcp/1000)) || '</td><td>' || elapsedTime(ROUND(C.lcp90)) || '</td></tr>';
-
-            /* Print dates in footer */
-            l_footer:=l_footer || CASE WHEN C.rn=1 THEN '<!-- X AXIS LABELS -->' END ||
-            '<text x="' || TO_CHAR(l_start_x+1) || '%" y="15" dominant-baseline="middle" text-anchor="start" class="label">' || TO_CHAR(C.end_date at time zone pTimeZone,'fmMon dd') || '</text>';
-
-            IF (C.rn=C.nb) THEN
-                l_graph:=l_graph || 
-                '</svg>' ||
-                '<svg width="100%" height="1lh" role="img" class="x-axis">' || 
-                     l_footer || 
-                '</svg>' ||
-                '<table style="text-align:center">' ||
-                    '<thead><tr><th>Start</th><th>End</th><th>LCP P75</th><th>LCP P90</th></tr></thead>' || 
-                    '<tbody>' || l_table || '</tbody>' ||
-                '</table>';
-            ELSE
-                l_start_x:=ROUND(l_start_x+l_bar_width+l_gap,2);
-            END IF;
-
-        END LOOP;
-
-        /*
-        ** PERFORMANCE CHART
-        */
-
-        pHtml:=l_graph;
     END;
 
     PROCEDURE getVisitsByLocation(pWebsiteId IN website.id%type, pOffset IN NUMBER, pUrl IN VARCHAR2, pCount IN OUT NUMBER, pHtml IN OUT NOCOPY CLOB)  IS
@@ -935,12 +853,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_graph:=
         '<svg width="100%" aria-labelledby="graph-title graph-desc" role="img">' ||
         '<style>' || 
-            'line {' ||
-                'stroke: slategrey;' ||
-                'stroke-width: 0.5;' ||
-            '}' ||
             '.y-axis {' ||
+                'stroke: slategrey;' ||
                 'stroke-width: 2;' ||
+            '}' ||
+            '.x-axis {' ||
+                 'stroke: slategrey;' ||
+                'stroke-width: 0.5;' ||
             '}' ||
             'text {' ||
                 'font-family:system-ui;' ||
@@ -1042,7 +961,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 /* Draw horizontal lines for each 20% of max visits in computed range */
                 FOR i IN 1..5 LOOP
                     l_graph:=l_graph || CASE WHEN i=1 THEN '<!-- Y AXIS LABELS -->' END ||
-                    '<line x1="6%" y1="' || TO_CHAR((i-1)*20) || '%" x2="100%" y2="' || TO_CHAR((i-1)*20) || '%"/>' ||
+                    '<line x1="6%" y1="' || TO_CHAR((i-1)*20) || '%" x2="100%" y2="' || TO_CHAR((i-1)*20) || '%" class="x-axis"/>' ||
                     '<text x="3%" y="' || TO_CHAR((i-1)*20) || '%" dominant-baseline="' || CASE WHEN i=1 THEN 'hanging' ELSE 'central' END || '" text-anchor="middle" class="label">' || ROUND(C.max_visits*(100-((i-1)*20))/100) || '</text>';
                 END LOOP;
             END IF;
