@@ -346,7 +346,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         LOOP
             l_reports:=NULL;
             IF (INSTR(C.uri_template,'visits/')>0) THEN
-                l_reports:='website|Visits;trends|Trends;performance|Performance;engagement|Engagement;location|Locations;browser|Browsers';
+                l_reports:='visits|table;trends|graph;performance|graph;engagement|table;location|table;browser|table';
             END IF;
             IF (l_test_site) THEN
                 l_menulist:=l_menulist || addButton(C.uri_template, C.method, C.label);
@@ -390,10 +390,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                             '</svg>' ||
                         '</button>' ||
                     '</header>' ||
-                    '<article></article>' ||
+                    '<article class="flow"></article>' ||
                     '<footer class="flex-items space-between">' ||
                         '<span></span>' ||
-                        '<button type="button" class="button show-more" data-button-variant="no-styles">More >></button>' ||
+                        '<button type="button" class="button show-more visually-hidden" data-button-variant="no-styles">More >></button>' ||
                     '</footer>' ||
                 '</form>' ||
              '</dialog>');
