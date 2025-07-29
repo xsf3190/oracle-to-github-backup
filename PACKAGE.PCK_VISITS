@@ -357,7 +357,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         n PLS_INTEGER:=0;
     BEGIN
         IF (pOffset=0) THEN
-            SELECT COUNT(*) INTO l_nb_pages FRom website_article WHERE website_id=pWebsiteId;
+            uploadPageHits(pWebsiteId);
+            SELECT COUNT(*) INTO l_nb_pages FROM website_article WHERE website_id=pWebsiteId;
 
             l_content:=
             '<table role="presentation">' ||
