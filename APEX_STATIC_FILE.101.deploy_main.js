@@ -1,4 +1,3 @@
-//import { dropdown, login_btn, bodydata, getJWTClaim } from "deploy_elements";
 import {onLCP, onINP, onCLS, onFCP, onTTFB} from '../javascript/deploy_web_vitals5.min.js';
 
 const bodydata = document.body.dataset;
@@ -6,6 +5,28 @@ const dropdown_details = document.querySelector(".dropdown details");
 const dropdown = document.querySelector(".dropdown-content");
 const login_btn = dropdown.querySelector(".login-btn");
 const email = dropdown.querySelector(".email");
+
+const vitalsQueue = new Set();
+
+const addToVitalsQueue = ({name,value,rating}) => {
+    const valueRnd = name==="CLS" ? value.toFixed(2) : (value/1000).toFixed(2);
+    const metric = {name:name,value:value,rating:rating};
+    console.log(name,valueRnd);
+    vitalsQueue.add(metric);
+    
+    const el = dropdown.querySelector("."+name);
+    if (el) {
+        const units = name==="CLS" ? "" : "s";
+        el.textContent = valueRnd + units;
+        el.classList.add(rating);
+    }
+};
+
+onTTFB(addToVitalsQueue);
+onFCP(addToVitalsQueue);
+onLCP(addToVitalsQueue);
+onCLS(addToVitalsQueue);
+onINP(addToVitalsQueue);
 
 /*
 ** NEW WEBSITE URL INCLUDES OWNER'S JWT TOKENS - SAVE THESE IN STORAGE AND REMOVE FROM URL
@@ -33,27 +54,29 @@ const closeBtnEvents = () => {
 /*
 ** SET DROPDOWN ELEMENTS IF LOGGED IN
 */
-if (sessionStorage.getItem("menulist")) {
-    dropdown.insertAdjacentHTML('beforeend',sessionStorage.getItem("menulist"));
-    document.body.insertAdjacentHTML('beforeend',sessionStorage.getItem("dialogs"));
-    login_btn.textContent = "Log Out";
-    closeBtnEvents();
-} else if (localStorage.getItem("menulist")) {
-    dropdown.insertAdjacentHTML('beforeend',localStorage.getItem("menulist"));
-    document.body.insertAdjacentHTML('beforeend',localStorage.getItem("dialogs"));
-    sessionStorage.setItem("menulist",localStorage.getItem("menulist"));
-    sessionStorage.setItem("dialogs",localStorage.getItem("dialogs"));
-    login_btn.textContent = "Log Out";
-    closeBtnEvents();
-}
-
-const jwt = sessionStorage.getItem("token") || localStorage.getItem("refresh");
-if (jwt) {
-    const array = jwt.split(".");
-    const parse = JSON.parse(atob(array[1]));
-    email.textContent = parse.sub;
-}
-
+setTimeout(() => {
+    let jwt;
+    if (sessionStorage.getItem("menulist")) {
+        console.log("sessionStorage.getItem(menulist)");
+        dropdown.insertAdjacentHTML('beforeend',sessionStorage.getItem("menulist"));
+        document.body.insertAdjacentHTML('beforeend',sessionStorage.getItem("dialogs"));
+        jwt = sessionStorage.getItem("token");
+    } else if (localStorage.getItem("menulist")) {
+        console.log("localStorage.getItem(menulist)");
+        dropdown.insertAdjacentHTML('beforeend',localStorage.getItem("menulist"));
+        document.body.insertAdjacentHTML('beforeend',localStorage.getItem("dialogs"));
+        sessionStorage.setItem("menulist",localStorage.getItem("menulist"));
+        sessionStorage.setItem("dialogs",localStorage.getItem("dialogs"));
+        jwt = localStorage.getItem("refresh");
+    }
+    if (jwt) {
+        login_btn.textContent = "Log Out";
+        closeBtnEvents();
+        const array = jwt.split(".");
+        const parse = JSON.parse(atob(array[1]));
+        email.textContent = parse.sub;
+    }
+},0);
 
 /*
 ** CLICK HANDLER FOR ALL BUTTONS IN DYNAMIC DROPDOWN MENULIST
@@ -83,15 +106,15 @@ document.querySelector(".promotion")?.addEventListener("click", () => {
 /*
 ** SETUP COLLECTION OF METRICS. 
 */
-if (!sessionStorage.getItem("website_loaded")) {
+let website_loaded = Number(sessionStorage.getItem("website_loaded"));
+if (!website_loaded) {
     console.log("setting sessionStorage.website_loaded");
-    sessionStorage.setItem("website_loaded",Math.round(Date.now()/1000));
+    website_loaded = Math.round(Date.now()/1000);
+    sessionStorage.setItem("website_loaded",website_loaded);
 }
 
 let page_loaded = Date.now(),
     page_visit = 0;
-
-const vitalsQueue = new Set();
 
 /*
 ** REPORT TOTAL PAGE WEIGHT AND REQUESTS
@@ -142,9 +165,9 @@ const flushQueues = () => {
 
     if (vitalsQueue.size === 0 && page_loaded === 0) return;
 
-    const website_loaded = Number(sessionStorage.getItem("website_loaded"));
+    // const website_loaded = Number(sessionStorage.getItem("website_loaded"));
     /* This would happen if user manually clears sessionStorage for example */
-    if (website_loaded === 0) return; 
+    // if (website_loaded === 0) return; 
 
     const json = {};
     json["website_id"] = bodydata.websiteid;
@@ -187,19 +210,7 @@ const flushQueues = () => {
     (navigator.sendBeacon && navigator.sendBeacon(bodydata.resturl+"page-visit", body)) || fetch(visit_url, {body, method: 'POST', keepalive: true});
 }
 
-const addToVitalsQueue = ({name,value,rating}) => {
-    const valueRnd = name==="CLS" ? value.toFixed(2) : (value/1000).toFixed(2);
-    const metric = {name:name,value:value,rating:rating};
-    console.log(name,valueRnd);
-    vitalsQueue.add(metric);
-    
-    const el = dropdown.querySelector("."+name);
-    if (el) {
-        const units = name==="CLS" ? "" : "s";
-        el.textContent = valueRnd + units;
-        el.classList.add(rating);
-    }
-};
+
 
 addEventListener('visibilitychange', () => {
     if (document.visibilityState === "hidden") {
@@ -227,8 +238,3 @@ const observer = new PerformanceObserver((list) => {
 observer.observe({ type: "resource", buffered: true });
 observer.observe({ type: "navigation", buffered: true });
 
-onTTFB(addToVitalsQueue);
-onFCP(addToVitalsQueue);
-onLCP(addToVitalsQueue);
-onCLS(addToVitalsQueue);
-onINP(addToVitalsQueue);
