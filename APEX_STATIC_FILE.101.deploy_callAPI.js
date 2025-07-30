@@ -1,14 +1,15 @@
-import { bodydata, dropdown, login_btn } from "deploy_elements";
+import { bodydata, dropdown, login_btn, output_dialog } from "deploy_elements";
 
 let access_token = sessionStorage.getItem("token");
 let refresh_token = localStorage.getItem("refresh");
 
 const handleError = (error) => {
-    const error_dialog = document.querySelector("dialog.error");
-    const article = error_dialog.querySelector("article");
+    if (!output_dialog.open) {
+        output_dialog.showModal();
+    }
+    const article = output_dialog.querySelector("article");
     article.replaceChildren();
     article.insertAdjacentHTML('afterbegin',error);
-    error_dialog.showModal();
 }
 
 /* 
