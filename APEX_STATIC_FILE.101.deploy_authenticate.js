@@ -171,26 +171,13 @@ const setTokens = (data) => {
     
     localStorage.setItem("refresh",data.refresh);
     localStorage.setItem("menulist",data.menulist);
-    localStorage.setItem("dialogs",data.dialogs);
   
     sessionStorage.setItem("token",data.token);
-    sessionStorage.setItem("menulist",data.menulist);
-    sessionStorage.setItem("dialogs",data.dialogs);
 
     dropdown.querySelectorAll("li:nth-child(n+4)").forEach((item) => {
         item.remove();
     });
     dropdown.insertAdjacentHTML('beforeend',data.menulist);
-    
-    const nb_dialogs = document.querySelectorAll("dialog").length;
-    if (nb_dialogs===1) {
-        document.body.insertAdjacentHTML('beforeend',data.dialogs);
-        document.querySelectorAll("dialog button.close").forEach((button) => {
-            button.addEventListener("click", (e) => {
-            e.target.closest("dialog").close();
-            });
-        });
-    }
 
     email.textContent = getJWTClaim("sub") + " (" + getJWTClaim("aud") + ")";
   
