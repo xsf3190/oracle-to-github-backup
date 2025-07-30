@@ -3,9 +3,11 @@
 */
 
 import { callAPI, handleError } from "deploy_callAPI";
-import { dropdown_details } from "deploy_elements";
+import { dropdown_details, output_dialog } from "deploy_elements";
 
-const info_dialog = document.querySelector("dialog.info");
+const header = output_dialog.querySelector("header");
+const content = output_dialog.querySelector("article");
+const footer = output_dialog.querySelector("footer");
 
 let endpoint;
 let intervalId;
@@ -16,22 +18,19 @@ export const init = (element) => {
     }
     
     endpoint = element.dataset.endpoint;
-    
-    
-    const content = info_dialog.querySelector("article");
-    
+
     callAPI(endpoint,"POST",{})
         .then( (data) => {
             content.replaceChildren();
             content.insertAdjacentHTML('afterbegin',data.content);
-            info_dialog.querySelector("h4").textContent = "";
-            info_dialog.querySelector("footer").replaceChildren();
-            info_dialog.showModal();
+            header.querySelector(":first-child").replaceChildren();
+            footer.replaceChildren();
+            output_dialog.showModal();
             if (data.stop) return;
             if (intervalId) {
                 clearInterval(intervalId);
             }
-            info_dialog.addEventListener("close", () => {
+            output_dialog.addEventListener("close", () => {
                 window.location.reload();
             })
             intervalId = setInterval(getDeploymentStatus,2000);
@@ -48,8 +47,9 @@ const getDeploymentStatus = () => {
     callAPI(endpoint,"GET")
         .then( (data) => {
             if (data.content) {
-                info_dialog.querySelector(".deploy").insertAdjacentHTML('beforeend',data.content);
-                info_dialog.querySelector(".deploy>li:last-child").scrollIntoView();
+                const tbody = content.querySelector("tbody");
+                tbody.insertAdjacentHTML('beforeend',data.content);
+                tbody.querySelector(":last-child").scrollIntoView();
             }
             if (data.completed) {
                 clearInterval(intervalId);
