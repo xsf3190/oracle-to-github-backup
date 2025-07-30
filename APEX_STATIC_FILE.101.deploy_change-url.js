@@ -1,11 +1,11 @@
 /*
 **  CHANGE SUBDOMAIN OF EDiTOR SITE
 */
+import { output_dialog } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
-const info_dialog = document.querySelector("dialog.info");
-const form = info_dialog.querySelector("form");
-const header = form.querySelector("h4");
+const form = output_dialog.querySelector("form");
+const header = form.querySelector("header");
 const article = form.querySelector("article");
 const footer = form.querySelector("footer");
 
@@ -17,9 +17,8 @@ export const init = (element) => {
 
     callAPI(endpoint, "GET")
         .then((data) => {
-            
-            header.textContent = "Change URL";
 
+            header.querySelector(":first-child").replaceChildren();
             article.replaceChildren();
             article.insertAdjacentHTML("afterbegin", data.article);
 
@@ -30,12 +29,9 @@ export const init = (element) => {
 
             footer.replaceChildren();
             footer.insertAdjacentHTML("afterbegin", data.footer);
-
             footer.querySelector(".change-url")?.addEventListener("click", changeURL);
 
-            form.style.inlineSize="37ch";
-            
-            info_dialog.showModal();
+            output_dialog.showModal();
         })
         .catch((error) => {
             handleError(error);
