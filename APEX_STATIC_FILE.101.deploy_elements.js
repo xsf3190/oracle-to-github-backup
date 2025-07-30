@@ -6,6 +6,7 @@ export const email = dropdown.querySelector(".email");
 export const expires = dropdown.querySelector(".expires");
 export const login_btn = dropdown.querySelector(".login-btn");
 export const login_dialog = document.querySelector("dialog.login-email");
+export const output_dialog = document.querySelector("dialog.output");
 
 export const nav = document.querySelector(".topnav");
 export const header = document.querySelector("body>header");
@@ -49,7 +50,3 @@ export const selectColorFromScreen = async (abortController) => {
     return null;
   }
 }
-
-login_dialog.querySelector("button.close").addEventListener("click", () => {
-    login_dialog.close();
-})
