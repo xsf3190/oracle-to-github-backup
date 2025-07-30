@@ -41,42 +41,28 @@ if (url.searchParams.has("refresh")) {
 }
 
 /*
-** CLOSE DIALOGS BY CLICKING X BUTTON
+** DIALOG CLOSE BUTTON HANDLERS
 */
-const closeBtnEvents = () => {
-    document.querySelectorAll("dialog button.close").forEach((button) => {
-        button.addEventListener("click", (e) => {
-            e.target.closest("dialog").close();
-        });
+document.querySelectorAll("dialog button.close").forEach((button) => {
+    button.addEventListener("click", (e) => {
+        e.target.closest("dialog").close();
     });
-}
+});
 
 /*
 ** SET DROPDOWN ELEMENTS IF LOGGED IN
 */
-setTimeout(() => {
-    let jwt;
-    if (sessionStorage.getItem("menulist")) {
-        console.log("sessionStorage.getItem(menulist)");
-        dropdown.insertAdjacentHTML('beforeend',sessionStorage.getItem("menulist"));
-        document.body.insertAdjacentHTML('beforeend',sessionStorage.getItem("dialogs"));
-        jwt = sessionStorage.getItem("token");
-    } else if (localStorage.getItem("menulist")) {
-        console.log("localStorage.getItem(menulist)");
-        dropdown.insertAdjacentHTML('beforeend',localStorage.getItem("menulist"));
-        document.body.insertAdjacentHTML('beforeend',localStorage.getItem("dialogs"));
-        sessionStorage.setItem("menulist",localStorage.getItem("menulist"));
-        sessionStorage.setItem("dialogs",localStorage.getItem("dialogs"));
-        jwt = localStorage.getItem("refresh");
-    }
+// setTimeout(() => {
+    const jwt = localStorage.getItem("refresh");
     if (jwt) {
+        console.log("Refresh token exists. User is logged in");
+        dropdown.insertAdjacentHTML('beforeend',localStorage.getItem("menulist"));
         login_btn.textContent = "Log Out";
-        closeBtnEvents();
         const array = jwt.split(".");
         const parse = JSON.parse(atob(array[1]));
         email.textContent = parse.sub;
     }
-},0);
+// },0)
 
 /*
 ** CLICK HANDLER FOR ALL BUTTONS IN DYNAMIC DROPDOWN MENULIST
