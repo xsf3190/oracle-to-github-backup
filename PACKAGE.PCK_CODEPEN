@@ -330,6 +330,29 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
     END;
 
     /*
+     **  Build Content Dialog - include pagination button
+     */
+    FUNCTION buildContentDialog RETURN VARCHAR2 IS
+    BEGIN
+        RETURN(
+            '<dialog class="output">' ||
+                '<form method="dialog">' ||
+                    '<header class="flex-items space-between no-wrap">' ||
+                        '<div></div>' ||
+                        '<button type="button" class="button close no-focus" data-button-variant="round-icon">' ||
+                            '<svg class="icon" aria-hidden="true" focusable="false">' ||
+                                '<use href="#cross"></use>' ||
+                            '</svg>' ||
+                        '</button>' ||
+                    '</header>' ||
+                    '<article class="flow"></article>' ||
+                    '<footer class="flex-items space-between">' ||
+                    '</footer>' ||
+                '</form>' ||
+             '</dialog>');
+    END;
+
+    /*
     ** HTML document body structure
     **
     ** <header>
@@ -533,7 +556,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         */
         
         
-        pHtml:=pHtml || buildLoginForm;
+        pHtml:=pHtml || buildLoginForm || buildContentDialog;
 
 
         /* 
