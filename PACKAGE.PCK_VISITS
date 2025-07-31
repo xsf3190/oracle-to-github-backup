@@ -6,8 +6,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE loadVisits(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
     --
-    PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB);
-    --
     PROCEDURE uploadIpLookup;
     --
     PROCEDURE uploadPageHits(pWebsiteId IN website.id%type DEFAULT NULL);
@@ -1007,24 +1005,49 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     */
     PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
-        l_html CLOB;
+        l_header LONG;
+        l_article CLOB;
+        l_footer LONG;
         l_count NUMBER;
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
-        
-        CASE pReport
-            WHEN 'visits' THEN getWebsiteVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
-            WHEN 'performance' THEN getPerformance(pWebsiteId, l_session_data.timezone, l_session_data.url, l_html);
-            WHEN 'location' THEN getVisitsByLocation(pWebsiteId, pOffset, l_session_data.url, l_count, l_html);
-            WHEN 'browser' THEN getVisitsByBrowser(pWebsiteId, pOffset, l_session_data.url, l_count, l_html);
-            WHEN 'engagement' THEN getEngagement(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_html);
-            WHEN 'trends' THEN getWebsiteTrends(pWebsiteId, l_session_data.timezone, l_session_data.url, l_html);
-        END CASE;
+
+        IF (pReport='list') THEN
+            l_header:=
+            '<ul role="list" class="flex-items">' || 
+                '<li><button class="button" type="button" data-report="visits" data-report-type="table" data-button-variant="small">Visits</button></li>' ||
+                '<li><button class="button" type="button" data-report="trends" data-report-type="graph" data-button-variant="small">Trends</button></li>' ||
+                '<li><button class="button" type="button" data-report="performance" data-report-type="graph" data-button-variant="small">Performance</button></li>' ||
+                '<li><button class="button" type="button" data-report="engagement" data-report-type="table" data-button-variant="small">Engagement</button></li>' ||
+                '<li><button class="button" type="button" data-report="location" data-report-type="table" data-button-variant="small">Locations</button></li>' ||
+                '<li><button class="button" type="button" data-report="browser" data-report-type="table" data-button-variant="small">Browsers</button></li>' ||
+            '</ul>';
+            l_article:=
+            '<h4>Real User Monitoring</h4>' ||
+            '<p>Whenever a website page is downloaded to a visitor''s device a background process captures details about their experience, one of the most important being how long they had to wait before being able to view the content.</p>' ||
+            '<p>An equally important metric is how long they engaged with the content.</p>' ||
+            '<p>Was this the first time they visited the page? How many pages did they view? How were they referred to the site? How much data was downloaded? Was the content stable? How responsive was the page to interactions? What was their connection speed and where did they connect from?</p>' ||
+            '<p>Real User Monitoring is about collecting these details so website owners can measure how their site performs in the field and thereby make informed decisions to improve it</p>';
+            l_footer:=
+            '<span></span>' ||
+            '<button type="button" class="button show-more visually-hidden" data-button-variant="no-styles">More &gt;&gt;</button>';
+        ELSE
+            CASE pReport
+                WHEN 'visits' THEN getWebsiteVisits(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_article);
+                WHEN 'performance' THEN getPerformance(pWebsiteId, l_session_data.timezone, l_session_data.url, l_article);
+                WHEN 'location' THEN getVisitsByLocation(pWebsiteId, pOffset, l_session_data.url, l_count, l_article);
+                WHEN 'browser' THEN getVisitsByBrowser(pWebsiteId, pOffset, l_session_data.url, l_count, l_article);
+                WHEN 'engagement' THEN getEngagement(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_article);
+                WHEN 'trends' THEN getWebsiteTrends(pWebsiteId, l_session_data.timezone, l_session_data.url, l_article);
+            END CASE;
+        END IF;
         
         apex_json.open_object; 
         apex_json.write('success', TRUE);
+        apex_json.write('header', l_header);
+        apex_json.write('article', l_article);
+        apex_json.write('footer', l_footer);
         apex_json.write('count', l_count);
-        apex_json.write('article', l_html);
         apex_json.write('offset', pOffset + ROWS_PER_PAGE);
         apex_json.close_object;
 
@@ -1054,68 +1077,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     EXCEPTION WHEN OTHERS THEN
         pck_core.log_error(pStatus);
 
-    END;
-
-    PROCEDURE sendContactForm(pWebsiteid IN website.id%type, pBodyText IN CLOB) IS
-        l_body_text CLOB:=pBodyText;
-        l_clob CLOB;
-        l_json JSON_OBJECT_T;
-        l_payload CLOB;
-        l_table_html LONG;
-    BEGIN
-        
-        FOR C IN (SELECT w.domain_name, NVL(w.contact_email,u.email) contact_email, j.url form_url, j.email form_email, j.name form_name, j.message form_message
-                    FROM website w, users u, JSON_TABLE(l_body_text, '$' COLUMNS (url, email, name, message)) j 
-                   WHERE w.id=pWebsiteid
-                     AND w.user_id=u.id)
-        LOOP
-            l_table_html:=
-            '<html>
-            <head>
-            <style type="text/css">
-            table {
-                border-collapse: collapse;
-                letter-spacing: 1px;
-                font-family: system-ui;
-                font-size: 1.3rem;
-            }
-            th, td {
-                padding: 1rem;
-                border: 2px solid rgb(190, 190, 190);
-            }
-            </style>
-            </head>
-            <body>
-            <table>
-            <thead>
-                <tr bgcolor="#d7d9f2">
-                    <th scope="col">Name</th>
-                    <th scope="col">Email</th>
-                    <th scope="col">Message</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>' || C.form_name || '</td>
-                    <td>' || C.form_email || '</td>
-                    <td style="width:50%">' || C.form_message || '</td>
-                </tr>
-            <tbody>
-            </table>
-            </body>
-            </html>';
-            l_json:=new JSON_OBJECT_T;
-            l_json.put('contactEmail',C.contact_email);
-            l_json.put('subject','Contact Form submitted from '|| C.form_url);
-            l_json.put('body', l_table_html);
-            l_json.put('sourceEmail','contact.form@adfreesites.com');
-
-            l_payload:=l_json.stringify;
-            pck_api.callAWSemailAPI(pMethod=>'POST',pBody=>l_payload,pData=>l_clob);
-        END LOOP;
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.close_object;
     END;
 
     /*
