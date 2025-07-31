@@ -59,7 +59,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         */
         FOR C IN (SELECT job_name FROM user_scheduler_running_jobs WHERE job_name LIKE 'DEPLOY_%') LOOP
             apex_json.open_object;
-            apex_json.write('content', '<h2>Someone else is deploying ... try again later</h2>');
+            apex_json.write('content', '<h4>Someone else is deploying ... try again later</h4>');
             apex_json.write('stop', TRUE);
             apex_json.write('success', TRUE);
             apex_json.close_object;
@@ -142,7 +142,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
-        apex_json.write('content', '<ol role="list" class="deploy"><li><span>' || TO_CHAR(current_timestamp AT TIME ZONE l_session_data.timezone,'hh24:mi:ss') || '</span><span>Starting deployment</span></li></ol>');
+        apex_json.write('content', '<table role="presentation" style="font-family:monospace;background:#342a21;color:white"><tbody><tr><td>' || TO_CHAR(current_timestamp AT TIME ZONE l_session_data.timezone,'hh24:mi:ss') || '</td><td>Starting deployment</td></tr></tbody></table>');
         apex_json.close_object;
 
         pStatus:=200;
@@ -206,9 +206,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
         /* Now return list of all deployment status messages to client */
         FOR i IN 1..l_deploy_log.COUNT
         LOOP
-            l_content:=l_content ||'<li' || CASE WHEN l_deploy_log(i).status='NOK' THEN ' style="color:red"' END || '><span>' || TO_CHAR(l_deploy_log(i).log_time AT TIME ZONE l_session_data.timezone,'hh24:mi:ss') || '</span><span>' || l_deploy_log(i).message || '</span></li>'; 
+            l_content:=l_content ||'<tr' || CASE WHEN l_deploy_log(i).status='NOK' THEN ' style="color:red"' END || '><td>' || TO_CHAR(l_deploy_log(i).log_time AT TIME ZONE l_session_data.timezone,'hh24:mi:ss') || '</td><td>' || l_deploy_log(i).message || '</td></tr>'; 
             IF (l_deploy_log(i).message='Netlify is ready') THEN 
-                l_content:=l_content ||'<li style="color:green"><span>' || TO_CHAR(l_deploy_log(i).log_time AT TIME ZONE l_session_data.timezone,'hh24:mi:ss') || '</span><span>SUCCESSFUL DEPLOYMENT</span></li>'; 
+                l_content:=l_content ||'<tr style="color:green"><td>' || TO_CHAR(l_deploy_log(i).log_time AT TIME ZONE l_session_data.timezone,'hh24:mi:ss') || '</td><td>SUCCESSFUL DEPLOYMENT</td></tr>'; 
                 l_deployment_complete:=TRUE;
             END IF;
         END LOOP;
