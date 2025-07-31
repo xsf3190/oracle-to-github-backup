@@ -2,6 +2,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EMAIL" is
     --
     FUNCTION emailTemplate(pAuthMethod IN VARCHAR2, pWebsite IN VARCHAR2, pAuthData IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
+    PROCEDURE getMessageForm(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
+    --
+    PROCEDURE insertMessage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NuMBER);
+    --
     PROCEDURE sendmail(pEmail IN VARCHAR2, pSubject IN VARCHAR2, pBody IN VARCHAR2);
     --
 end;
@@ -196,6 +200,129 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EMAIL" is
         l_json.put('sourceEmail','login@adfreesites.com');
         l_email_payload:=l_json.stringify;
         pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_email_payload, pData=>l_clob);
+    END;
+
+    /* 
+    **  BUILD ELEMENTS FOR SENDING MESSAGE
+    */
+    PROCEDURE getMessageForm(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_header LONG;
+        l_article CLOB;
+        l_footer LONG;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        l_header:=
+        '<h2>Send Message</h2>';
+        l_article:=
+        '<div>' ||
+            '<label for="messageInput">Message</label>' ||
+            '<textarea id="messageInput" name="message" required minlength="1" maxlength="400" rows="5" cols="40"></textarea>' ||
+            '<div class="flex-items space-between">' ||
+                '<span class="messageInput-result"></span>' ||
+                '<span class="charcounter"></span>' ||
+            '</div>' ||
+        '</div>';
+        l_footer:=
+        '<button type="button" class="button send">SEND</button>' ||
+        '<span class="send-result"></span>';
+        
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.write('header', l_header);
+        apex_json.write('article', l_article);
+        apex_json.write('footer', l_footer);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
+    /*
+    ** LOGGED IN USER SENDS MESSAGE TO WEBSITE OWNER
+    */
+    PROCEDURE insertMessage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NuMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_message_id article_message.id%type;
+        l_json JSON_OBJECT_T;
+        l_clob CLOB;
+        l_payload CLOB;
+        l_body_html CLOB:=
+        '<!DOCTYPE html>
+         <html>
+            <head>
+                <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta name="format-detection" content="telephone=no">
+                <meta name="format-detection" content="date=no">
+                <meta name="format-detection" content="address=no">
+                <meta name="format-detection" content="email=no">
+                <style type="text/css">
+                    body {
+                        font-family: system-ui,sans-serif;
+                        font-size: 24px;
+                    }
+                    td,
+                    th {
+                        border: 1px solid rgb(190, 190, 190);
+                        padding: 0.5rem;
+                    }
+                    table {
+                        border-collapse: collapse;
+                        border: 2px solid rgb(200, 200, 200);
+                        width: 100%;
+                    }
+                    thead {
+                        background-color: #d7d9f2;
+                    }
+                </style>
+            </head>
+        <body>';
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        l_message_id:=seq_article_message.nextval;
+
+        INSERT INTO article_message (id, article_id, sending_user_id, message)
+        SELECT l_message_id, pArticleId, l_session_data.user_id, message FROM JSON_TABLE(pBodyText,  '$' COLUMNS (message));
+
+        FOR C IN (
+            SELECT m.message, w.contact_email, w.domain_name, u.email 
+              FROM article_message m, website w, users u
+             WHERE w.id=pWebsiteId 
+               AND m.id=l_message_id
+               AND u.id=l_session_data.user_id
+        ) LOOP
+            l_body_html:=l_body_html || 
+            '<table role="presentation">' ||
+                '<thead><tr><th>Message Content</th></tr></thead>' ||
+                '<tbody>' ||
+                    '<tr><td>' || C.message || '</td></tr>' ||
+                '</tbody>' ||
+            '</table></body></html>';          
+
+            l_json:=new JSON_OBJECT_T; 
+            l_json.put('contactEmail',C.contact_email);
+            l_json.put('subject','Message sent by ' || C.email || ' via ' || C.domain_name);
+            l_json.put('body', l_body_html);
+            l_json.put('sourceEmail','message@adfreesites.com');
+            l_payload:=l_json.stringify;
+            pck_core.log('Sending email to ' || C.contact_email || ' from ' || C.email);
+            pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_payload, pData=>l_clob);
+        END LOOP;
+        
+        apex_json.open_object; 
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
     END;
 
 end;
