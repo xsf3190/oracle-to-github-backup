@@ -1,31 +1,33 @@
 /*
 ** CREATE NETLIFY DNS ZONE FOR WEBSITE OR GET DNS SERVER NAMES TO BE CHANGED IN WEBSITE'S DOMAIN REGISTRAR
 */
-
+import { dropdown_details, output_dialog } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 let endpoint;
 
-
-const info_dialog = document.querySelector("dialog.info");
-const form = info_dialog.querySelector("form");
+const form = output_dialog.querySelector("form");
+const header = form.querySelector("header");
 const article = form.querySelector("article");
 const footer = form.querySelector("footer");
 
 export const init = (element) => {
     endpoint = element.dataset.endpoint;
+    
+    dropdown_details.removeAttribute("open");
+
     form.reset();
     
     callAPI(endpoint, "GET")
         .then((data) => {
-            const header = info_dialog.querySelector("h4");
-            header.textContent = "DNS Name Servers";
+            header.querySelector(":first-child").replaceChildren();
+            header.insertAdjacentHTML('afterbegin',data.header);
 
             updateForm(data.article, data.footer);
 
             footer.querySelector(".create-dns")?.addEventListener("click", createDNS);
             
-            info_dialog.showModal();
+            output_dialog.showModal();
         })
         .catch((error) => {
             handleError(error);
@@ -33,6 +35,14 @@ export const init = (element) => {
 }
 
 const createDNS = () => {
+    const domain = article.querySelector("[name='domain_name_custom']");
+    const result = article.querySelector(".result");
+    if (domain.validity.valueMissing) {
+        result.textContent = "Enter registered Domain name";
+        result.style.color = "red";
+        return;
+    }
+
     const formData = new FormData(form);
     const formObj = Object.fromEntries(formData);
     const loader = form.querySelector(".loader");
@@ -41,9 +51,7 @@ const createDNS = () => {
         .then((data) => {
             loader.classList.add("visually-hidden");
             if (data.error) {
-                const result = article.querySelector(".result");
-                result.textContent = data.error;
-                result.style.color = "red";
+                handleError(data.error);
                 return;
             }
             updateForm(data.article, data.footer);
