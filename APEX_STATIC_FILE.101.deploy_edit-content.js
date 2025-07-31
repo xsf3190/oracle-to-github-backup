@@ -3,7 +3,7 @@
 ** INCLUDE DEPLOY BUTTON IN CKEDITOR TOOLBAR
 */
 
-import { dropdown_details, header } from "deploy_elements";
+import { dropdown_details, output_dialog, header } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 const CK_CSS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css";
@@ -96,7 +96,7 @@ export const init = async (element) => {
                     Italic, Link, List, Media, Paragraph, 
                     SelectAll, ShowBlocks, SourceEditing, Underline, WordCount ],
         toolbar: [ 'heading', '|', 'undo', 'redo',  '|', 'bold', 'italic',
-                    'alignment', 'link', 
+                    'link', 
                     'bulletedList', 'numberedList', 'blockQuote', 'insertImage', '|', 'media'],
         menuBar: {
             isVisible: true
@@ -232,12 +232,7 @@ const saveData = async ( data, endpoint ) => {
 export const show_media = async (request) => {
     callAPI("upload-media/:ID/:PAGE","GET","?request="+request)
         .then( (data) => {
-            if (!data.thumbnails) {
-                dropdown_details.querySelector("button.upload-media").click();
-                return;
-            }
-
-            info_dialog.querySelector("header>h4").textContent = data.heading;
+            output_dialog.querySelector("header>h4").textContent = data.heading;
             const heading = info_dialog.querySelector("header>:first-child");
             const media = info_dialog.querySelector("article");
             media.replaceChildren();
