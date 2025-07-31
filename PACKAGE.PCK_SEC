@@ -490,7 +490,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         APEX_JSON.open_object;
         APEX_JSON.write ('success', TRUE);
         APEX_JSON.write ('menulist', getMenulist(pWebsiteId, l_session_data.scope, l_session_data.url));
-        APEX_JSON.write ('dialogs', buildContentDialog || buildInfoDialog || buildMessageDialog  || buildErrorDialog);
+        --APEX_JSON.write ('dialogs', buildContentDialog || buildInfoDialog || buildMessageDialog  || buildErrorDialog);
         APEX_JSON.close_object;
 
         EXCEPTION WHEN OTHERS THEN
