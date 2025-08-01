@@ -2,14 +2,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_VISITS" AS
     --
     PROCEDURE getVisits(pWebsiteId IN website.id%type, pReport IN VARCHAR2, pOffset IN NUMBER, pStatus OUT NUMBER);
     --
-    PROCEDURE insertMessage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NuMBER);
-    --
-    PROCEDURE loadVisits(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
-    --
-    PROCEDURE uploadIpLookup;
-    --
-    PROCEDURE uploadPageHits(pWebsiteId IN website.id%type DEFAULT NULL);
-    --
     PROCEDURE uploadPageVisit(pBodyText IN CLOB);
     --
     PROCEDURE daily_job;
@@ -46,13 +38,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     /*
      **  Update IP_LOOKUP table with any new IP address details. This procedure does not fail, just reports errors to avoid loss of service (e.g. upgrade to paid plan)
      */
-    PROCEDURE uploadIpLookup IS 
+    PROCEDURE uploadIpLookup(pWebsiteId IN website.id%type) IS 
         l_clob clob;
         TYPE t_ip_lookup IS TABLE OF ip_lookup%rowtype;
         l_ip_lookup t_ip_lookup:=t_ip_lookup();
         l_current_timestamp ip_lookup.created_date%type:=current_timestamp;
     BEGIN
-        FOR C IN (SELECT DISTINCT ip_address FROM page_hit MINUS SELECT ip FROM ip_lookup )
+        FOR C IN (SELECT DISTINCT ip_address FROM page_hit WHERE website_id=pWebsiteId MINUS SELECT ip FROM ip_lookup )
         LOOP
             pck_api.callIpdataAPI(null,C.ip_address,'GET',l_clob);
             FOR C1 IN (SELECT city,country_code,postal,error_code,error_message FROM JSON_TABLE(l_clob, '$' COLUMNS(city,country_code,postal,error_code,error_message)))
@@ -76,7 +68,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
      **  This procedure aggregates the data into the page_hit table.
      **  Each page_hit row represents one visit from one ip address to a web page in a discrete client session.
      */
-    PROCEDURE uploadPageHits(pWebsiteId IN website.id%type) IS
+    FUNCTION uploadPageHits(pWebsiteId IN website.id%type) RETURN INTEGER IS
         TYPE t_browser_lookup IS TABLE OF browser_lookup%rowtype;
         l_browser_lookup t_browser_lookup:=t_browser_lookup();
         l_object JSON_OBJECT_T;
@@ -148,11 +140,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 t.url=COALESCE(t.url,s.url) 
                 ;
         n:=SQL%ROWCOUNT;
-        pck_core.log(n||' rows loaded into page_hit table');
 
         DELETE website_article_cwv WHERE website_id=pWebsiteId;
 
-        uploadIpLookup;
+        uploadIpLookup(pWebsiteId);
+
+        RETURN(n);
     END;
 
     
@@ -355,7 +348,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         n PLS_INTEGER:=0;
     BEGIN
         IF (pOffset=0) THEN
-            uploadPageHits(pWebsiteId);
             SELECT COUNT(*) INTO l_nb_pages FROM website_article WHERE website_id=pWebsiteId;
 
             l_content:=
@@ -839,12 +831,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_start_x:=l_y_axis_width+0.5;
         l_gap:=(100-l_y_axis_width-0.5 -(10*l_bar_width))/9;
 
-        FOR i IN REVERSE 1..4  LOOP
-            IF (l_days_diff/(i*7)>=10) THEN
-                l_days_period:=i*7;
-                EXIT;
-            END IF;
-        END LOOP;
+        /* Depending on number of days since website has visits set reporting period to highest multiple of 7-day periods  */
+        IF (l_days_diff<147) THEN
+            l_days_period:=1;
+        ELSE
+            FOR i IN REVERSE 1..4  LOOP
+                IF (l_days_diff/(i*7)>=10) THEN
+                    l_days_period:=i*7;
+                    EXIT;
+                END IF;
+            END LOOP;
+        END IF;
 
         l_title:='Website visits in ' || l_days_period || ' day periods';
         l_legend:='Last visit recorded ' || TO_CHAR(l_end_date at time zone pTimeZone,'Mon dd, YYYY hh24:mipm');
@@ -901,35 +898,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             WITH end_date AS
             (
                 SELECT l_end_date-((level-1) * l_days_period) end_date
-                FROM dual CONNECT BY level<=l_days_period
+                FROM dual CONNECT BY level<=CASE WHEN l_days_period=1 THEN 10 ELSE l_days_period END
             ),
             range AS
             (
                 SELECT end_date + INTERVAL '1' SECOND start_date, LEAD(end_date) OVER (ORDER BY end_date) end_date 
                 FROM end_date
             ),
-            first_visit as
-            (
-                SELECT ip_address, MIN(visit_date) first_visit 
-                FROM page_hit 
-                WHERE website_id=pWebsiteid
-                  AND url=pUrl
-                GROUP BY ip_address
-            ),
             website_hit AS
             (
-                SELECT p.visit_date, f.first_visit, COUNT(*) visits, MAX(lcp) lcp, MAX(cls) cls, MAX(inp) inp
-                FROM page_hit p, first_visit f
+                SELECT p.visit_date, ROW_NUMBER() OVER (PARTITION BY p.ip_address ORDER BY p.visit_date) visit_count, COUNT(*) visits, MAX(lcp) lcp, MAX(cls) cls, MAX(inp) inp
+                FROM page_hit p
                 WHERE p.website_id=pWebsiteid
-                AND f.ip_address=p.ip_address
                 AND url=pUrl
-                GROUP BY p.ip_address, p.visit_date, f.first_visit
+                GROUP BY p.ip_address, p.visit_date
             ),
             dataset AS
             (
             SELECT start_date, end_date, 
                 SUM(visits) total_visits, 
-                SUM(CASE WHEN first_visit BETWEEN start_date AND end_date THEN 1 ELSE 0 END) first_time_visits, 
+                SUM(CASE WHEN visit_count=1 THEN 1 ELSE 0 END) first_time_visits, 
                 APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY lcp) lcp75,
                 APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY cls) cls75,
                 APPROX_PERCENTILE(0.75 DETERMINISTIC) WITHIN GROUP (ORDER BY inp) inp75
@@ -1009,6 +997,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         l_article CLOB;
         l_footer LONG;
         l_count NUMBER;
+        n PLS_INTEGER;
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
@@ -1021,13 +1010,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 '<li><button class="button" type="button" data-report="engagement" data-report-type="table" data-button-variant="small">Engagement</button></li>' ||
                 '<li><button class="button" type="button" data-report="location" data-report-type="table" data-button-variant="small">Locations</button></li>' ||
                 '<li><button class="button" type="button" data-report="browser" data-report-type="table" data-button-variant="small">Browsers</button></li>' ||
+                '<li><button class="button" type="button" data-report="latest" data-report-type="table" data-button-variant="small">Latest</button></li>' ||
             '</ul>';
             l_article:=
             '<h4>Real User Monitoring</h4>' ||
-            '<p>Whenever a website page is downloaded to a visitor''s device a background process captures details about their experience, one of the most important being how long they had to wait before being able to view the content.</p>' ||
-            '<p>An equally important metric is how long they engaged with the content.</p>' ||
-            '<p>Was this the first time they visited the page? How many pages did they view? How were they referred to the site? How much data was downloaded? Was the content stable? How responsive was the page to interactions? What was their connection speed and where did they connect from?</p>' ||
-            '<p>Real User Monitoring is about collecting these details so website owners can measure how their site performs in the field and thereby make informed decisions to improve it</p>';
+            '<p>When visitors download your website we capture details about their experience, one of the most important being how long they had to wait before being able to view the content.</p>' ||
+            '<p>Equally important is how long they engaged with the content.</p>' ||
+            '<p>Was it their first visit? How many pages did they view? How were they referred to the site? How much data was downloaded? What was their location and connection speed?</p>' ||
+            '<p>Real User Monitoring collects these details so that owners can measure their site performance as experienced by real users.</p>';
             l_footer:=
             '<span></span>' ||
             '<button type="button" class="button show-more visually-hidden" data-button-variant="no-styles">More &gt;&gt;</button>';
@@ -1039,6 +1029,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                 WHEN 'browser' THEN getVisitsByBrowser(pWebsiteId, pOffset, l_session_data.url, l_count, l_article);
                 WHEN 'engagement' THEN getEngagement(pWebsiteId, pOffset, l_session_data.timezone, l_session_data.url, l_count, l_article);
                 WHEN 'trends' THEN getWebsiteTrends(pWebsiteId, l_session_data.timezone, l_session_data.url, l_article);
+                WHEN 'latest' THEN 
+                    n:=uploadPageHits(pWebsiteId);
+                    l_article:=
+                    '<h4>' || n || ' Page Views uploaded</h4>' ||
+                    '<table role="presentation"><tbody><tr></tr></tbody></table>';
             END CASE;
         END IF;
         
@@ -1053,26 +1048,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
         pStatus:=200;
 
-    EXCEPTION WHEN OTHERS THEN
-        pck_core.log_error(pStatus);
-
-    END;
-
-    /* 
-    **  RUN UPLOADVISITS PROCEDURE REQUESTED FROM WEBSITE
-    */
-    PROCEDURE loadVisits(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
-        l_session_data pck_sec.t_session_data;
-    BEGIN
-        l_session_data:=pck_sec.getSessionData(pWebsiteId);
-
-        uploadPageHits(pWebsiteId);
-        
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.close_object;
-
-        pStatus:=200;
+        pck_sec.updateCpuUsed(pUserid=>l_session_data.user_id, pCpuUsedStart=>l_session_data.cpu_used_session);
 
     EXCEPTION WHEN OTHERS THEN
         pck_core.log_error(pStatus);
@@ -1080,91 +1056,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     END;
 
     /*
-    ** USER LEAVES AE ON A WEBSITE PAGE
+    **  DAILY JOB TO PROCESS ANY VISITS WAITING IN WEBSITE_ARTICE_CWV TABLE 
     */
-    PROCEDURE insertMessage(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NuMBER) IS
-        l_session_data pck_sec.t_session_data;
-        l_message_id article_message.id%type;
-        l_json JSON_OBJECT_T;
-        l_clob CLOB;
-        l_payload CLOB;
-        l_body_html CLOB:=
-        '<!DOCTYPE html>
-         <html>
-            <head>
-                <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta name="format-detection" content="telephone=no">
-                <meta name="format-detection" content="date=no">
-                <meta name="format-detection" content="address=no">
-                <meta name="format-detection" content="email=no">
-                <style type="text/css">
-                    body {
-                        font-family: system-ui,sans-serif;
-                        font-size: 24px;
-                    }
-                    td,
-                    th {
-                        border: 1px solid rgb(190, 190, 190);
-                        padding: 0.5rem;
-                    }
-                    table {
-                        border-collapse: collapse;
-                        border: 2px solid rgb(200, 200, 200);
-                        width: 100%;
-                    }
-                    thead {
-                        background-color: #d7d9f2;
-                    }
-                </style>
-            </head>
-        <body>';
-    BEGIN
-        l_session_data:=pck_sec.getSessionData(pWebsiteId);
-
-        l_message_id:=seq_article_message.nextval;
-
-        INSERT INTO article_message (id, article_id, sending_user_id, message)
-        SELECT l_message_id, pArticleId, l_session_data.user_id, message FROM JSON_TABLE(pBodyText,  '$' COLUMNS (message));
-
-        FOR C IN (
-            SELECT m.message, w.contact_email, w.domain_name, u.email 
-              FROM article_message m, website w, users u
-             WHERE w.id=pWebsiteId 
-               AND m.id=l_message_id
-               AND u.id=l_session_data.user_id
-        ) LOOP
-            l_body_html:=l_body_html || 
-            '<table role="presentation">' ||
-                '<thead><tr><th>Message Content</th></tr></thead>' ||
-                '<tbody>' ||
-                    '<tr><td>' || C.message || '</td></tr>' ||
-                '</tbody>' ||
-            '</table></body></html>';          
-
-            l_json:=new JSON_OBJECT_T; 
-            l_json.put('contactEmail',C.contact_email);
-            l_json.put('subject','Message sent by ' || C.email || ' via ' || C.domain_name);
-            l_json.put('body', l_body_html);
-            l_json.put('sourceEmail','message@adfreesites.com');
-            l_payload:=l_json.stringify;
-            pck_core.log('Sending email to ' || C.contact_email || ' from ' || C.email);
-            pck_api.callAWSemailAPI(pMethod=>'POST', pBody=>l_payload, pData=>l_clob);
-        END LOOP;
-        
-        apex_json.open_object; 
-        apex_json.write('success', TRUE);
-        apex_json.close_object;
-
-        pStatus:=200;
-
-        EXCEPTION WHEN OTHERS THEN
-            pck_core.log_error(pStatus);
-    END;
-
-
     PROCEDURE daily_job IS
         l_content VARCHAR2(300);
+        n PLS_INTEGER;
     BEGIN
         /* Set Administrator user id for logging */
         FOR C IN (
@@ -1179,7 +1075,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
 
         FOR C IN (SELECT id, domain_name FROM website WHERE netlify_site_id_custom IS NOT NULL) LOOP
             pck_core.log('START visit data processing for ' || C.domain_name);
-            uploadPageHits(C.id);
+            n:=uploadPageHits(C.id);
             COMMIT;
             pck_core.log('END visit data processing for ' || C.domain_name);
         END LOOP;
