@@ -25,7 +25,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
         iss VARCHAR2(10),
         sub VARCHAR2(100),
         client_secret user_ords_clients.client_secret%type,
-        valid BOOLEAN
+        valid BOOLEAN,
+        cpu_used_session NUMBER
     );
 
     g_session_user_id NUMBER;
@@ -44,6 +45,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_SEC" AS
     PROCEDURE refreshOrdsEndpoints(pWebsiteId IN website.id%type);
     --
     FUNCTION getSessionData(pWebsiteId IN website.id%type) RETURN t_session_data;
+    --
+    PROCEDURE updateCpuUsed(pUserid IN users.id%type, pCpuUsedStart IN users.cpu_used%type);
     --
     PROCEDURE post_auth_facebook;
     --
@@ -122,10 +125,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_email users.email%type;
         
         l_JWT_data t_JWT_data;
+        l_cpu_used_session NUMBER;
         l_session_data t_session_data;
-        n PLS_INTEGER;
-
     BEGIN
+        SELECT ms.value INTO l_cpu_used_session FROM v$statname sn, v$mystat ms WHERE sn.name='CPU used by this session' AND sn.statistic# = ms.statistic#;
+
         l_bearer_token := SUBSTR(OWA_UTIL.get_cgi_env('Authorization'), 8);
         l_JWT_data:=decodeJWT(l_bearer_token);
         
@@ -154,8 +158,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_session_data.client_secret:=l_JWT_data.client_secret;
         l_session_data.timezone:=OWA_UTIL.get_cgi_env('timezone');
         l_session_data.url:=OWA_UTIL.get_cgi_env('url');
+        l_session_data.cpu_used_session:=l_cpu_used_session;
 
         RETURN l_session_data;
+    END;
+
+    /*
+    ** USAGE ACCOUNTING BASED ON CPU USED IN SESSION
+    */
+    PROCEDURE updateCpuUsed(pUserid IN users.id%type, pCpuUsedStart IN users.cpu_used%type) IS
+        l_cpu_used_session users.cpu_used%type;
+    BEGIN
+        SELECT ms.value INTO l_cpu_used_session FROM v$statname sn, v$mystat ms WHERE sn.name='CPU used by this session' AND sn.statistic# = ms.statistic#;
+        UPDATE users
+           SET cpu_used_last_updated=current_timestamp, 
+               cpu_used_created_date=NVL(cpu_used_created_date,current_timestamp),
+               cpu_used=NVL(cpu_used,0)+l_cpu_used_session-pCpuUsedStart WHERE id=pUserid;
     END;
 
     /*
