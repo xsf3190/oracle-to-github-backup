@@ -51,36 +51,23 @@ export const init = async (element) => {
                 handleError(error);
                 return;
             })
-    
-    /* Add PUBLISH button to CKEDITOR toolbar */
-    class Deploy extends Plugin {
-        init() {
-            const editor = this.editor;
-            editor.ui.componentFactory.add( 'deploy', () => {
-                const button = new ButtonView();
-                button.set( {
-                    label: 'PUBLISH',
-                    class: 'deploy-website',
-                    tooltip: 'Deploy website',
-                    withText: true
-                } );
-                return button;
-            } );
-        }
-    }
 
     /* Add MEDIA button to CKEDITOR toolbar */
-    class Media extends Plugin {
+    class UploadImage extends Plugin {
         init() {
             const editor = this.editor;
-            editor.ui.componentFactory.add( 'media', () => {
+            editor.ui.componentFactory.add( 'uploadImage', () => {
                 const button = new ButtonView();
                 button.set( {
-                    label: 'MEDIA',
-                    class: 'show-media',
-                    tooltip: 'Select Uploaded Image',
-                    withText: true
+                    label: 'Upload Image',
+                    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M1.201 1C.538 1 0 1.47 0 2.1v14.363c0 .64.534 1.037 1.186 1.037h9.494a3 3 0 0 1-.414-.287 3 3 0 0 1-1.055-2.03 3 3 0 0 1 .693-2.185l.383-.455-.02.018-3.65-3.41a.695.695 0 0 0-.957-.034L1.5 13.6V2.5h15v5.535a2.97 2.97 0 0 1 1.412.932l.088.105V2.1c0-.63-.547-1.1-1.2-1.1zm11.713 2.803a2.146 2.146 0 0 0-2.049 1.992 2.14 2.14 0 0 0 1.28 2.096 2.13 2.13 0 0 0 2.644-3.11 2.13 2.13 0 0 0-1.875-.978"/><path d="M15.522 19.1a.79.79 0 0 0 .79-.79v-5.373l2.059 2.455a.79.79 0 1 0 1.211-1.015l-3.352-3.995a.79.79 0 0 0-.995-.179.8.8 0 0 0-.299.221l-3.35 3.99a.79.79 0 1 0 1.21 1.017l1.936-2.306v5.185c0 .436.353.79.79.79"/><path d="M15.522 19.1a.79.79 0 0 0 .79-.79v-5.373l2.059 2.455a.79.79 0 1 0 1.211-1.015l-3.352-3.995a.79.79 0 0 0-.995-.179.8.8 0 0 0-.299.221l-3.35 3.99a.79.79 0 1 0 1.21 1.017l1.936-2.306v5.185c0 .436.353.79.79.79"/></svg>',
+                    tooltip: 'Upload Image',
+                    withText: false
                 } );
+                button.on('execute', (_) => {
+                    console.log('upload image clicked');
+                    show_media("copy");
+                });
                 return button;
             } );
         }
@@ -91,13 +78,13 @@ export const init = async (element) => {
 
     editor = await ClassicEditor.create( document.querySelector( '#editor' ), {
         plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock,  
-                    Deploy, FontColor, GeneralHtmlSupport, Heading, HorizontalLine, 
+                    FontColor, GeneralHtmlSupport, Heading, HorizontalLine, 
                     Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, 
-                    Italic, Link, List, Media, Paragraph, 
-                    SelectAll, ShowBlocks, SourceEditing, Underline, WordCount ],
+                    Italic, Link, List, UploadImage, Paragraph, 
+                    SelectAll, ShowBlocks, SourceEditing, Underline, UploadImage, WordCount ],
         toolbar: [ 'heading', '|', 'undo', 'redo',  '|', 'bold', 'italic',
                     'link', 
-                    'bulletedList', 'numberedList', 'blockQuote', 'insertImage', '|', 'media'],
+                    'bulletedList', 'numberedList', '|', 'uploadImage', 'insertImage'],
         menuBar: {
             isVisible: true
         },
@@ -182,21 +169,15 @@ export const init = async (element) => {
 
     /* Put editor status element at end of the toolbar */
     const toolbar_items = document.querySelector(".ck-toolbar__items");
-    toolbar_items.insertAdjacentHTML('afterend','<button type="button" class="button deploy-website">PUBLISH</button><span id="editor-status"></span>');
+    toolbar_items.insertAdjacentHTML('afterend','<span id="editor-status"></span>');
     
     /* Put Last Update date in editor status element */
     document.querySelector("#editor-status").textContent = last_update;
 
     /* Listen for request to show MEDIA  */
-    toolbar_items.querySelector(".show-media").addEventListener("click", () => {
-        show_media("copy");
-    });
-
-    /* Listen for DEPLOY requests */
-    const toolbar = document.querySelector(".ck-toolbar");
-    toolbar.querySelector(".deploy-website").addEventListener("click", () => {
-        dropdown_details.querySelector("button.publish-website").click();
-    });
+    // toolbar_items.querySelector(".show-media").addEventListener("click", () => {
+        // show_media("copy");
+    // });
 
     /* Hide all other elements in <main> when in Editor mode */
     document.querySelectorAll("main > *:not(.ck)").forEach ((ele) => {
@@ -233,11 +214,11 @@ export const show_media = async (request) => {
     callAPI("upload-media/:ID/:PAGE","GET","?request="+request)
         .then( (data) => {
             output_dialog.querySelector("header>h4").textContent = data.heading;
-            const heading = info_dialog.querySelector("header>:first-child");
-            const media = info_dialog.querySelector("article");
-            media.replaceChildren();
-            media.insertAdjacentHTML('afterbegin',data.thumbnails);
-            info_dialog.showModal();
+            const heading = output_dialog.querySelector("header>:first-child");
+            const article = output_dialog.querySelector("article");
+            article.replaceChildren();
+            article.insertAdjacentHTML('afterbegin',data.thumbnails);
+            output_dialog.showModal();
 
             switch (request) {
                 case "copy":
