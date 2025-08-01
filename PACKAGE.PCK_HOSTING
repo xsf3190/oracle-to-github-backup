@@ -306,6 +306,60 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
     END;
 
     /*
+    ** GET ALL DNS ZONE SERVERS REGISTERED FOR A CUSTOM DOMAIN
+    ** IF NOT REGISTERED RETURN INPUT ELEMENT AND BUTTON TO CREATE CUSTOM DOMAIN SITE
+    */
+    PROCEDURE getDNS(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_clob CLOB;
+        l_netlify_site_id_custom website.netlify_site_id_custom%type;
+        l_html VARCHAR2(500);
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        SELECT netlify_site_id_custom INTO l_netlify_site_id_custom  FROM website WHERE id=pWebsiteId;
+
+        apex_json.open_object; 
+        
+        IF (l_netlify_site_id_custom IS NULL) THEN
+            apex_json.write('header', '<h4>Link to custom Domain</h4>');
+            apex_json.write('article', '<label for="domain_name_custom">Enter Registered Domain Name</label><input type="text" id="domain_name_custom" name="domain_name_custom" required><div class="result"></div>');
+            apex_json.write('footer', '<button type="button" class="button create-dns">GET NAMESERVERS</button><div class="loader visually-hidden"></div>');
+        ELSE
+            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/' || l_netlify_site_id_custom || '/dns', pMethod=>'GET', pData=>l_clob);
+            FOR C IN (SELECT dns_server  FROM JSON_TABLE(l_clob, '$' COLUMNS (NESTED PATH '$.dns_servers[*]' COLUMNS (dns_server PATH '$'))) ) 
+            LOOP
+                l_html:=l_html || '<li>' || C.dns_server || '</li>';
+            END LOOP;
+            apex_json.write('header', '<h4>Domain Name Servers</h4>');
+            apex_json.write('article', '<ul>' || l_html || '</ul>');
+            apex_json.write('footer', '<p>Update your domain''s nameservers</p>');
+        END IF;
+
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+        EXCEPTION WHEN OTHERS THEN
+            pck_core.log_error(pStatus);
+    END;
+
+    /*
+    ** DELETE DNS ZONE REGISTERED FOR A CUSTOM DOMAIN - CALLED AS PART OF WEBSITE DELETE PROCESS
+    */
+    PROCEDURE deleteDNS(pWebsiteId IN website.id%type) IS
+        l_clob CLOB;
+    BEGIN
+        FOR C IN (
+            SELECT netlify_dns_zone_id, user_id FROM website WHERE id=pWebsiteId AND netlify_dns_zone_id IS NOT NULL
+        )
+        LOOP
+            pck_api.callNetlifyAPI(pUserId=>C.user_id, pEndpoint=>'dns_zones/' || C.netlify_dns_zone_id, pMethod=>'DELETE', pData=>l_clob);
+        END LOOP;
+    END;
+
+    /*
     ** LINK EDITOR WEBSITE TO CUSTOM DOMAIN
     */
     PROCEDURE linkDNS(pWebsiteId IN website.id%type, pBodytext IN CLOB, pStatus OUT NUMBER) IS
@@ -437,57 +491,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_HOSTING" is
         SELECT job_name INTO l_job_name FROM user_scheduler_running_jobs WHERE session_id = sys_context('USERENV', 'SID');
         dbms_scheduler.drop_job(l_job_name,defer=>true);
 
-    END;
-
-    /*
-    ** GET ALL DNS ZONE SERVERS REGISTERED FOR A CUSTOM DOMAIN
-    ** IF NOT REGISTERED RETURN INPUT ELEMENT AND BUTTON TO CREATE
-    */
-    PROCEDURE getDNS(pWebsiteId IN website.id%type, pStatus OUT NUMBER) IS
-        l_session_data pck_sec.t_session_data;
-        l_clob CLOB;
-        l_netlify_site_id_custom website.netlify_site_id_custom%type;
-        l_html VARCHAR2(500);
-    BEGIN
-        l_session_data:=pck_sec.getSessionData(pWebsiteId);
-
-        SELECT netlify_site_id_custom INTO l_netlify_site_id_custom  FROM website WHERE id=pWebsiteId;
-
-        apex_json.open_object; 
-        IF (l_netlify_site_id_custom IS NULL) THEN
-            apex_json.write('article', '<label for="domain">Enter Domain Name</label><input type="text" name="domain_name_custom" required><span class="result"></span>');
-            apex_json.write('footer', '<button type="button" class="button create-dns">GET NAMESERVERS</button><div class="loader visually-hidden"></div>');
-        ELSE
-            pck_api.callNetlifyAPI(pUserId=>l_session_data.user_id, pEndpoint=>'sites/' || l_netlify_site_id_custom || '/dns', pMethod=>'GET', pData=>l_clob);
-            FOR C IN (SELECT dns_server  FROM JSON_TABLE(l_clob, '$' COLUMNS (NESTED PATH '$.dns_servers[*]' COLUMNS (dns_server PATH '$'))) ) 
-            LOOP
-                l_html:=l_html || '<li>' || C.dns_server || '</li>';
-            END LOOP;
-            apex_json.write('article', '<ul>' || l_html || '</ul>');
-            apex_json.write('footer', '<p>Update your domain''s nameservers</p>');
-        END IF;
-
-        apex_json.write('success', TRUE);
-        apex_json.close_object;
-
-        pStatus:=200;
-
-        EXCEPTION WHEN OTHERS THEN
-            pck_core.log_error(pStatus);
-    END;
-
-    /*
-    ** DELETE DNS ZONE REGISTERED FOR A CUSTOM DOMAIN - CALLED AS PART OF WEBSITE DELETE PROCESS
-    */
-    PROCEDURE deleteDNS(pWebsiteId IN website.id%type) IS
-        l_clob CLOB;
-    BEGIN
-        FOR C IN (
-            SELECT netlify_dns_zone_id, user_id FROM website WHERE id=pWebsiteId AND netlify_dns_zone_id IS NOT NULL
-        )
-        LOOP
-            pck_api.callNetlifyAPI(pUserId=>C.user_id, pEndpoint=>'dns_zones/' || C.netlify_dns_zone_id, pMethod=>'DELETE', pData=>l_clob);
-        END LOOP;
     END;
 
 end;
