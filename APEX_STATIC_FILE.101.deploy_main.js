@@ -9,7 +9,7 @@ const email = dropdown.querySelector(".email");
 const vitalsQueue = new Set();
 
 const addToVitalsQueue = ({name,value,rating}) => {
-    const valueRnd = name==="CLS" ? value.toFixed(2) : (value/1000).toFixed(2);
+    const valueRnd = name==="CLS" ? value.toFixed(1) : (value/1000).toFixed(1);
     const metric = {name:name,value:value,rating:rating};
     console.log(name,valueRnd);
     vitalsQueue.add(metric);
@@ -114,7 +114,6 @@ const getPerfEntries = () => {
 
     navigation.forEach((entry) => {
         if (entry.transferSize>0) {
-            console.log(entry.name,entry.transferSize)
             page_weight += entry.transferSize;
             total_requests++;
         }
@@ -122,7 +121,6 @@ const getPerfEntries = () => {
 
     resources.forEach((entry) => {
         if (entry.transferSize>0) {
-            console.log(entry.name,entry.transferSize)
             page_weight += entry.transferSize;
             total_requests++;
         }
@@ -217,7 +215,7 @@ if ('onpagehide' in self) {
 */
 const observer = new PerformanceObserver((list) => {
   list.getEntries().forEach((entry) => {
-    console.log(entry.transferSize, entry.name, entry.startTime, entry.duration);
+    console.log(entry.transferSize, entry.contentType, entry.name, entry.initiatorType/*, entry.startTime, entry.duration*/);
   });
 });
 
