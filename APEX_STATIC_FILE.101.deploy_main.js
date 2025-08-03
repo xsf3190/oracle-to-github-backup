@@ -102,42 +102,38 @@ if (!website_loaded) {
 let page_loaded = Date.now(),
     page_visit = 0;
 
-/*
-** REPORT TOTAL PAGE WEIGHT AND REQUESTS
-*/
-const getPerfEntries = () => {
-    const navigation = performance.getEntriesByType('navigation');
-    const resources = performance.getEntriesByType('resource');
+const metrics = [];
+let metricsUniq = [];
 
-    let page_weight = 0;
-    let total_requests = 0;
+const getMetrics = () => {
+  const metrics_observed = new Set;
+  
+  metricsUniq = metrics.filter(el => {
+    const duplicate = metrics_observed.has(el.name);
+    metrics_observed.add(el.name);
+    return !duplicate;
+  });
+  
+}
 
-    navigation.forEach((entry) => {
-        if (entry.transferSize>0) {
-            page_weight += entry.transferSize;
-            total_requests++;
-        }
-    });
+const page_weight = () => {
+    getMetrics();
+  let wgt  = 0;
+  metricsUniq.forEach((item) => {
+    wgt+=item.transferSize;
+  })
+  return wgt;
+}
 
-    resources.forEach((entry) => {
-        if (entry.transferSize>0) {
-            page_weight += entry.transferSize;
-            total_requests++;
-        }
-    });
-
-    return {
-        page_weight: page_weight,
-        total_requests: total_requests
-    }
+const total_requests = () => {
+    return metricsUniq.length;
 }
 
 dropdown_details.addEventListener("toggle", (e) => {
     if (dropdown_details.open) {
-        const {page_weight,total_requests} = getPerfEntries();
         const k = 1024;
-        const i = Math.floor(Math.log(page_weight) / Math.log(k));
-        dropdown.querySelector(".page-weight").textContent =`${parseFloat((page_weight / Math.pow(k, i)).toFixed(0))}KB`;
+        const i = Math.floor(Math.log(page_weight()) / Math.log(k));
+        dropdown.querySelector(".page-weight").textContent =`${parseFloat((page_weight() / Math.pow(k, i)).toFixed(0))}KB`;
     }
 })
 /*
@@ -176,9 +172,8 @@ const flushQueues = () => {
         json["url"] = window.location.hostname;
         json["referrer"] = document.referrer;
 
-        const {page_weight,total_requests} = getPerfEntries();
-        vitalsQueue.add({name:"page_weight",value:page_weight});
-        vitalsQueue.add({name:"total_requests",value:total_requests});
+        vitalsQueue.add({name:"page_weight",value:page_weight()});
+        vitalsQueue.add({name:"total_requests",value:total_requests()});
     }
 
     if (vitalsQueue.size > 0) {
@@ -215,10 +210,10 @@ if ('onpagehide' in self) {
 */
 const observer = new PerformanceObserver((list) => {
   list.getEntries().forEach((entry) => {
-    console.log(entry.transferSize, entry.contentType, entry.name, entry.initiatorType/*, entry.startTime, entry.duration*/);
-  });
+    const metric = {entryType: entry.entryType, name:entry.name, transferSize:entry.transferSize};
+    metrics.push(metric);
+  })
 });
 
 observer.observe({ type: "resource", buffered: true });
 observer.observe({ type: "navigation", buffered: true });
-
