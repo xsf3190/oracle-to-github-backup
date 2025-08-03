@@ -240,7 +240,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                   '</summary>' ||
                   '<ul class="dropdown-content" role="list">' ||
                     '<li class="align-center"><small class="email"></small></li>' ||
-                    '<li class="align-center"><table><thead><tr><th>LCP</th><th>CLS</th><th>INP</th><th>WGT</th></tr></thead><tbody><tr><td class="LCP"></td><td class="CLS"></td><td class="INP"></td><td class="page-weight"></td></tr></tbody></table></li>' ||
+                    '<li class="align-center">' ||
+                        '<table>' ||
+                            '<thead><tr><th>TTFB</th><th>FCP</th><th>LCP</th><th>CLS</th><th>INP</th><th>WGT</th></tr></thead>' || 
+                            '<tbody><tr><td class="TTFB"></td><td class="FCP"></td><td class="LCP"></td><td class="CLS"></td><td class="INP"></td><td class="page-weight"></td></tr></tbody>' ||
+                        '</table></li>' ||
                     '<li><button type="button" class="button login-btn" data-endpoint="' || l_uri_template || '">Log In</button></li>' ||
                   '</ul>' ||
                 '</details>' ||
