@@ -103,30 +103,16 @@ let page_loaded = Date.now(),
     page_visit = 0;
 
 const metrics = [];
-let metricsUniq = [];
-
-const getMetrics = () => {
-  const metrics_observed = new Set;
-  
-  metricsUniq = metrics.filter(el => {
-    const duplicate = metrics_observed.has(el.name);
-    metrics_observed.add(el.name);
-    return !duplicate;
-  });
-  
-}
 
 const page_weight = () => {
-    getMetrics();
-  let wgt  = 0;
-  metricsUniq.forEach((item) => {
-    wgt+=item.transferSize;
-  })
-  return wgt;
+  const total = metrics.reduce((accumulator,currentValue) => {
+    return accumulator + currentValue.transferSize;
+  },0);
+  return total;
 }
 
 const total_requests = () => {
-    return metricsUniq.length;
+    return metrics.length;
 }
 
 dropdown_details.addEventListener("toggle", (e) => {
@@ -209,11 +195,26 @@ if ('onpagehide' in self) {
 ** PERFORMANCE OBSERVER FOR LOADED RESOURCE TRANSFER SIZE
 */
 const observer = new PerformanceObserver((list) => {
-  list.getEntries().forEach((entry) => {
-    const metric = {entryType: entry.entryType, name:entry.name, transferSize:entry.transferSize};
-    metrics.push(metric);
-  })
+    list.getEntries().forEach((entry) => {
+        if (!metrics.some( ({name}) => name===entry.name)) {
+            metrics.push({entryType: entry.entryType, name:entry.name, transferSize:entry.transferSize, contentType: entry.contentType});
+            if (entry.entryType==="navigation") {
+                console.log("myTTFB", (entry.responseStart/1000).toFixed(2));
+            }
+        }
+    })
 });
+
+new PerformanceObserver((list) => {
+  const fcp = list.getEntries().find(({name}) => name==="first-contentful-paint");
+  console.log("myFCP:", (fcp.startTime/1000).toFixed(2));
+}).observe({ type: "paint", buffered: true });
+
+new PerformanceObserver((list) => {
+  const entries = list.getEntries();
+  const lastEntry = entries[entries.length - 1];
+  console.log("myLCP:", (lastEntry.startTime/1000).toFixed(2),lastEntry.url || lastEntry.element);
+}).observe({ type: "largest-contentful-paint", buffered: true });
 
 observer.observe({ type: "resource", buffered: true });
 observer.observe({ type: "navigation", buffered: true });
