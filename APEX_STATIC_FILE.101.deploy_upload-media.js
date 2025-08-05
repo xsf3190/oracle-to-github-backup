@@ -5,9 +5,9 @@
 import { bodydata } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
-let widget, endpoint;
+let widget;
 
-const createWidget = () => {
+const createWidget = async () => {
     const arrayToken = localStorage.getItem("refresh").split(".");
     const parsedToken = JSON.parse(atob(arrayToken[1]));
     const cloudName = parsedToken.cld_cloud_name;
@@ -36,15 +36,22 @@ const createWidget = () => {
                 "article_id": result.info.tags[0]
             });
             callAPI(endpoint,"PUT",metadata)
-                .then( (data) => {
+                .then( () => {
                     console.log("Uploaded MEDIA metadata successfully");
+                    
                 })
                 .catch((error) => {
                     handleError(error);
                 });
         }
+    });
+    try {
+        await navigator.clipboard.writeText("x");
     }
-)};
+    catch(error) {
+        handleError(error);
+    };
+};
 
 const loadScript = async (url) => {
     return new Promise((resolve, reject) => {
@@ -69,9 +76,7 @@ const loadScript = async (url) => {
   });
 }
 
-export const init = (element) => {
-    endpoint = element.dataset.endpoint;
-    
+export const init = () => {
     loadScript("https://upload-widget.cloudinary.com/latest/global/all.js")
         .then((result) => {
             console.log(result);
