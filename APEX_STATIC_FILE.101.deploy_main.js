@@ -1,32 +1,8 @@
-import {onLCP, onINP, onCLS, onFCP, onTTFB} from '../javascript/deploy_web_vitals5.min.js';
-
 const bodydata = document.body.dataset;
 const dropdown_details = document.querySelector(".dropdown details");
 const dropdown = document.querySelector(".dropdown-content");
 const login_btn = dropdown.querySelector(".login-btn");
 const email = dropdown.querySelector(".email");
-
-const vitalsQueue = new Set();
-
-const addToVitalsQueue = ({name,value,rating}) => {
-    const valueRnd = name==="CLS" ? value.toFixed(1) : (value/1000).toFixed(1);
-    const metric = {name:name,value:value,rating:rating};
-    console.log(name,valueRnd);
-    vitalsQueue.add(metric);
-    
-    const el = dropdown.querySelector("."+name);
-    if (el) {
-        const units = name==="CLS" ? "" : "s";
-        el.textContent = valueRnd + units;
-        el.classList.add(rating);
-    }
-};
-
-onTTFB(addToVitalsQueue);
-onFCP(addToVitalsQueue);
-onLCP(addToVitalsQueue);
-onCLS(addToVitalsQueue);
-onINP(addToVitalsQueue);
 
 /*
 ** NEW WEBSITE URL INCLUDES OWNER'S JWT TOKENS - SAVE THESE IN STORAGE AND REMOVE FROM URL
@@ -104,6 +80,16 @@ let page_loaded = Date.now(),
 
 const metrics = [];
 
+let myTTFB = 0;
+let myFCP = 0;
+let myLCP = 0; 
+let myCLS = 0;
+let myINP = 0;
+
+let myLCPattr = "";
+let myCLSattr = "";
+let myINPattr = "";
+
 const page_weight = () => {
   const total = metrics.reduce((accumulator,currentValue) => {
     return accumulator + currentValue.transferSize;
@@ -115,11 +101,54 @@ const total_requests = () => {
     return metrics.length;
 }
 
+/* UPDATE UI TABLE FOR MMETRICS */
+const setCWV = (cwv, value, good, improve, json) => {
+    console.log(cwv,value);
+
+    if (json===undefined) {
+        const el = dropdown.querySelector("." + cwv);
+        if (cwv!=="CLS") {
+            el.textContent = (value/1000).toFixed(2) + "s";
+        } else {
+            el.textContent = value.toFixed(2);
+        }
+        
+        if (value<=good) {
+            el.classList.add("good");
+        } else if (value<=improve) {
+            el.classList.add("needs-improvement");
+        } else {
+            el.classList.add("poor");
+        }
+        return;
+    }
+
+    json[cwv] = value;
+    if (value<=good) {
+        json[cwv + "_rating"] = "good";
+    } else if (value<=improve) {
+        json[cwv + "_rating"] = "needs-improvement";
+    } else {
+        json[cwv + "_rating"] = "poor";
+    }
+    
+}
+
 dropdown_details.addEventListener("toggle", (e) => {
     if (dropdown_details.open) {
         const k = 1024;
         const i = Math.floor(Math.log(page_weight()) / Math.log(k));
         dropdown.querySelector(".page-weight").textContent =`${parseFloat((page_weight() / Math.pow(k, i)).toFixed(0))}KB`;
+
+        setCWV("TTFB", myTTFB, 800, 1800);
+        setCWV("FCP", myFCP, 900, 3000);
+        setCWV("LCP", myLCP, 2500, 4000);
+        setCWV("CLS", myCLS, .1, .25);
+        setCWV("INP", myINP, 200, 500);
+
+        console.log("myLCPattr",myLCPattr);
+        console.log("myINPattr",myINPattr);
+        if (myCLS>0) debugCLS();
     }
 })
 /*
@@ -129,7 +158,7 @@ const flushQueues = () => {
     //const aud = getJWTClaim("aud");
     //if (aud === "admin" || aud === "owner") return;
 
-    if (vitalsQueue.size === 0 && page_loaded === 0) return;
+    if (page_loaded === 0) return;
 
     // const website_loaded = Number(sessionStorage.getItem("website_loaded"));
     /* This would happen if user manually clears sessionStorage for example */
@@ -158,17 +187,15 @@ const flushQueues = () => {
         json["url"] = window.location.hostname;
         json["referrer"] = document.referrer;
 
-        vitalsQueue.add({name:"page_weight",value:page_weight()});
-        vitalsQueue.add({name:"total_requests",value:total_requests()});
+        json["page_weight"] = page_weight();
+        json["total_requests"] = total_requests();
     }
 
-    if (vitalsQueue.size > 0) {
-        for (const item of vitalsQueue.values()) {
-            json[item.name] = item.value;
-            json[item.name+"_rating"] = item.rating;
-        }
-        vitalsQueue.clear();
-    }
+    setCWV("TTFB", myTTFB, 800, 1800, json);
+    setCWV("FCP", myFCP, 900, 3000, json);
+    setCWV("LCP", myLCP, 2500, 4000, json);
+    setCWV("CLS", myCLS, .1, .25, json);
+    setCWV("INP", myINP, 200, 500, json);
 
     const body = JSON.stringify(json);
     page_visit++;
@@ -192,29 +219,73 @@ if ('onpagehide' in self) {
 }
 
 /*
-** PERFORMANCE OBSERVER FOR LOADED RESOURCE TRANSFER SIZE
+** PERFORMANCE OBSERVERS
 */
+
+/* TRANSFER SIZE AND TTFB */
 const observer = new PerformanceObserver((list) => {
     list.getEntries().forEach((entry) => {
         if (!metrics.some( ({name}) => name===entry.name)) {
             metrics.push({entryType: entry.entryType, name:entry.name, transferSize:entry.transferSize, contentType: entry.contentType});
             if (entry.entryType==="navigation") {
-                console.log("myTTFB", (entry.responseStart/1000).toFixed(2));
+                myTTFB = entry.responseStart;
             }
         }
     })
 });
-
-new PerformanceObserver((list) => {
-  const fcp = list.getEntries().find(({name}) => name==="first-contentful-paint");
-  console.log("myFCP:", (fcp.startTime/1000).toFixed(2));
-}).observe({ type: "paint", buffered: true });
-
-new PerformanceObserver((list) => {
-  const entries = list.getEntries();
-  const lastEntry = entries[entries.length - 1];
-  console.log("myLCP:", (lastEntry.startTime/1000).toFixed(2),lastEntry.url || lastEntry.element);
-}).observe({ type: "largest-contentful-paint", buffered: true });
-
 observer.observe({ type: "resource", buffered: true });
 observer.observe({ type: "navigation", buffered: true });
+
+/* FCP */
+new PerformanceObserver((list) => {
+    const fcp = list.getEntries().find(({name}) => name==="first-contentful-paint");
+    myFCP = fcp.startTime;
+}).observe({ type: "paint", buffered: true });
+
+/* LCP */
+new PerformanceObserver((list) => {
+    const entries = list.getEntries();
+    const lastEntry = entries[entries.length - 1];
+    myLCP = lastEntry.startTime;
+    myLCPattr = lastEntry.url; // lastEntry.id  FIX THIS
+}).observe({ type: "largest-contentful-paint", buffered: true });
+
+/* CLS */
+// const pageCLS = [];
+const CLSobserver = new PerformanceObserver((list) => {
+    const entries = list.getEntries();
+    entries.forEach((entry) => {
+        if (!entry.hadRecentInput) {
+            myCLS+=entry.value;
+            // pageCLS.push(entry);
+        };
+    });
+});
+CLSobserver.observe({ type: "layout-shift", buffered: true });
+
+const debugCLS = () => {
+    const largestCLS = CLSobserver.takeRecords().reduce((a, b) => {
+        return a && a.value > b.value ? a : b;
+    });
+
+    if (largestCLS && largestCLS.sources && largestCLS.sources.length) {
+        const largestSource = largestCLS.sources.reduce((a, b) => {
+            return a.node && a.previousRect.width * a.previousRect.height >
+                b.previousRect.width * b.previousRect.height ? a : b;
+        });
+        if (largestSource) {
+            myCLSattr = largestSource.node;
+        }
+    }
+}
+
+/* INP */
+new PerformanceObserver((list) => {
+    const entries = list.getEntries();
+    entries.forEach((entry) => {
+        if (entry.duration > myINP) {
+            myINP = entry.duration;
+            myINPattr = entry.target;
+        }
+    });
+}).observe({ type: "event", buffered: true });
