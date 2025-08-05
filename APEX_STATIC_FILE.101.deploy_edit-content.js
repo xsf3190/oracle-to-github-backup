@@ -65,8 +65,14 @@ export const init = async (element) => {
                     withText: false
                 } );
                 button.on('execute', (_) => {
-                    console.log('upload image clicked');
-                    show_media("copy");
+                    import("deploy_upload-media")
+                    .then((module) => {
+                        module.init();
+                    })
+                    .catch((error) => {
+                        console.error(error);
+                        console.error("Failed to load module deploy_upload-media");
+                    });
                 });
                 return button;
             } );
