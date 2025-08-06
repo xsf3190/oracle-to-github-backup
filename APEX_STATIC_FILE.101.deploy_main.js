@@ -266,7 +266,7 @@ CLSobserver.observe({ type: "layout-shift", buffered: true });
 const debugCLS = () => {
     const largestCLS = CLSobserver.takeRecords().reduce((a, b) => {
         return a && a.value > b.value ? a : b;
-    });
+    },0);
 
     if (largestCLS && largestCLS.sources && largestCLS.sources.length) {
         const largestSource = largestCLS.sources.reduce((a, b) => {
