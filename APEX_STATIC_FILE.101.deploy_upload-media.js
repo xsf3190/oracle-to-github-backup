@@ -7,7 +7,7 @@ import { callAPI, handleError } from "deploy_callAPI";
 
 let widget;
 
-const createWidget = async () => {
+const createWidget =  () => {
     const arrayToken = localStorage.getItem("refresh").split(".");
     const parsedToken = JSON.parse(atob(arrayToken[1]));
     const cloudName = parsedToken.cld_cloud_name;
@@ -17,7 +17,12 @@ const createWidget = async () => {
     widget=cloudinary.createUploadWidget(
     { 
         uploadPreset: uploadPreset,
-        cloudName: cloudName
+        cloudName: cloudName,
+        multiple: false,
+        cropping: true,
+        singleUploadAutoClose: false,
+        clientAllowedFormats: 'image',
+        maxFiles: 1
     },
     (error, result) => {
         if (!error && result && result.event === "success") { 
@@ -35,22 +40,15 @@ const createWidget = async () => {
                 "cld_cloud_name": result.info.url.split("/")[3],
                 "article_id": result.info.tags[0]
             });
-            callAPI(endpoint,"PUT",metadata)
+            callAPI("upload-media/:ID/:PAGE","PUT",metadata)
                 .then( () => {
                     console.log("Uploaded MEDIA metadata successfully");
-                    
                 })
                 .catch((error) => {
                     handleError(error);
                 });
         }
     });
-    try {
-        await navigator.clipboard.writeText("x");
-    }
-    catch(error) {
-        handleError(error);
-    };
 };
 
 const loadScript = async (url) => {
