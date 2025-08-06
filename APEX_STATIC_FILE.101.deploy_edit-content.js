@@ -3,7 +3,7 @@
 ** INCLUDE DEPLOY BUTTON IN CKEDITOR TOOLBAR
 */
 
-import { dropdown_details, output_dialog, header } from "deploy_elements";
+import { dropdown_details, output_dialog } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 const CK_CSS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css";
@@ -52,7 +52,7 @@ export const init = async (element) => {
                 return;
             })
 
-    /* Add MEDIA button to CKEDITOR toolbar */
+    /* Add "Upload Image" button to toolbar */
     class UploadImage extends Plugin {
         init() {
             const editor = this.editor;
@@ -79,6 +79,51 @@ export const init = async (element) => {
         }
     }
     
+    /* Add "List Images" button to toolbar */
+    class ListImages extends Plugin {
+        init() {
+            const editor = this.editor;
+            editor.ui.componentFactory.add( 'listImages', () => {
+                const button = new ButtonView();
+                button.set( {
+                    label: 'List Image URLs',
+                    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="0" y="0" width="100" height="100" fill="white" stroke="black" stroke-width="20"/><text x="10" y="70" fill="red" font-size="40" font-weight="900" font-family="system-ui">URL</text>',
+                    tooltip: 'List Image URLs',
+                    withText: false
+                } );
+                button.on('execute', (_) => {
+                    callAPI("upload-media/:ID/:PAGE","GET","?request=image")
+                    .then( (data) => {
+                        const heading = output_dialog.querySelector("header>:first-child");
+                        heading.textContent = data.heading;
+                        const article = output_dialog.querySelector("article");
+                        article.replaceChildren();
+                        article.insertAdjacentHTML('afterbegin',data.thumbnails);
+                        output_dialog.showModal();
+
+                        article.querySelectorAll("button").forEach( (button) => {
+                            button.addEventListener("click", async (e) => {
+                                article.querySelectorAll(".copied").forEach( (copied) => {
+                                    copied.classList.toggle("copied");
+                                });
+                                e.target.closest("li").classList.toggle("copied");
+                                try {
+                                    await navigator.clipboard.writeText(e.target.src);
+                                } catch (error) {
+                                    handleError(error);
+                                }
+                            });
+                        });
+                    })
+                    .catch((error) => {
+                        handleError(error);
+                    });
+                });
+                return button;
+            } );
+        }
+    }
+
     /* Configure CKEDITOR */
     let editor;
 
@@ -86,11 +131,11 @@ export const init = async (element) => {
         plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock,  
                     FontColor, GeneralHtmlSupport, Heading, HorizontalLine, 
                     Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, 
-                    Italic, Link, List, UploadImage, Paragraph, 
+                    Italic, Link, List, ListImages, Paragraph, 
                     SelectAll, ShowBlocks, SourceEditing, Underline, UploadImage, WordCount ],
         toolbar: [ 'heading', '|', 'undo', 'redo',  '|', 'bold', 'italic',
                     'link', 
-                    'bulletedList', 'numberedList', '|', 'uploadImage', 'insertImage'],
+                    'bulletedList', 'numberedList', '|', 'uploadImage', 'listImages', 'insertImage'],
         menuBar: {
             isVisible: true
         },
@@ -219,7 +264,6 @@ const saveData = async ( data, endpoint ) => {
 export const show_media = async (request) => {
     callAPI("upload-media/:ID/:PAGE","GET","?request="+request)
         .then( (data) => {
-            output_dialog.querySelector("header>h4").textContent = data.heading;
             const heading = output_dialog.querySelector("header>:first-child");
             const article = output_dialog.querySelector("article");
             article.replaceChildren();
@@ -228,7 +272,7 @@ export const show_media = async (request) => {
 
             switch (request) {
                 case "copy":
-                    media.querySelectorAll(".copy-url").forEach( (button) => {
+                    article.querySelectorAll(".copy-url").forEach( (button) => {
                         button.addEventListener("click", async (e) => {
                             const src = e.target.closest("li").querySelector("img").src;
                             try {
