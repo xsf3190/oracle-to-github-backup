@@ -28,33 +28,49 @@ document.querySelectorAll("dialog button.close").forEach((button) => {
 /*
 ** SET DROPDOWN ELEMENTS IF LOGGED IN
 */
-// setTimeout(() => {
-    const jwt = localStorage.getItem("refresh");
-    if (jwt) {
-        console.log("Refresh token exists. User is logged in");
-        dropdown.insertAdjacentHTML('beforeend',localStorage.getItem("menulist"));
-        login_btn.textContent = "Log Out";
-        const array = jwt.split(".");
-        const parse = JSON.parse(atob(array[1]));
-        email.textContent = parse.sub;
-    }
-// },0)
+let aud = "";
+const jwt = localStorage.getItem("refresh");
+if (jwt) {
+    console.log("Refresh token exists. User is logged in");
+    dropdown.insertAdjacentHTML('beforeend',localStorage.getItem("menulist"));
+    login_btn.textContent = "Log Out";
+    const array = jwt.split(".");
+    const parse = JSON.parse(atob(array[1]));
+    email.textContent = parse.sub;
+    aud = parse.aud;
+}
 
 /*
-** CLICK HANDLER FOR ALL BUTTONS IN DYNAMIC DROPDOWN MENULIST
+** INJECT IMPORTMAP IF USER WANTS TO PERFORM AUTHENTICATED ACTION
+*/
+const importmap = async () => {
+    console.log("Create importmap");
+    const response = await fetch("/javascript/importmap.json");
+    const data = await response.json();
+    const im = document.createElement('script');
+    im.type = 'importmap';
+    im.textContent = JSON.stringify(data);
+    document.head.appendChild(im);
+}
+
+/*
+** CLICK HANDLER FOR ALL BUTTONS IN DROPDOWN MENULIST
 */
 dropdown.addEventListener("click", async (e) => {
     let module_name = e.target.dataset.endpoint;
     if (!module_name) return;
+
+    if (!document.querySelector("head > [type='importmap']")) {
+        await importmap();
+    }
+    
     module_name = "deploy_" + module_name.substring(0,module_name.indexOf("/"));
-    import(module_name)
-        .then((module) => {
-            module.init(e.target);
-        })
-        .catch((error) => {
-            console.error(error);
-            console.error("Failed to load " + module_name);
-        });
+    const module = await import(module_name)
+    .catch((error) => {
+        console.error(error);
+        console.error("Failed to load " + module_name);
+    });
+    module.init(e.target);
 })
 
 /*
@@ -170,6 +186,7 @@ const flushQueues = () => {
     json["website_loaded"] = website_loaded;
     json["seq"] = page_visit;
     json["webdriver"] = navigator.webdriver;
+    json["aud"] = aud;
     if (page_loaded !== 0) {
         json["duration_visible"] =  Math.round((Date.now() - page_loaded)/1000);
         page_loaded = 0;
@@ -199,6 +216,9 @@ const flushQueues = () => {
 
     const body = JSON.stringify(json);
     page_visit++;
+
+    if (navigator.webdriver) return;
+
     (navigator.sendBeacon && navigator.sendBeacon(bodydata.resturl+"page-visit", body)) || fetch(visit_url, {body, method: 'POST', keepalive: true});
 }
 
