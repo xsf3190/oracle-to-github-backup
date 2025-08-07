@@ -6,7 +6,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_MEDIA" IS
     --
     FUNCTION getImageSrcset(pAssetId IN asset.id%type, pSizes IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION getThumbnails(pArticleId IN article.id%type) RETURN CLOB;
+    FUNCTION getThumbnails(pArticleId IN article.id%type, pRequest IN VARCHAR2) RETURN CLOB;
     --
     PROCEDURE getThumbnails(pArticleId IN article.id%type, pDeploy IN BOOLEAN DEFAULT FALSE, pHTML IN OUT NOCOPY CLOB);
     --
@@ -50,19 +50,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             apex_json.write('googleApiKey', l_google_api_key);
             apex_json.close_object;
         ELSE
-            l_thumbnails:=pck_media.getThumbnails(pArticleId);
-            IF (SUBSTR(l_thumbnails,1,3)='<ul') THEN
-                IF (pRequest='copy') THEN 
-                    l_heading:='Article images';
-                ELSIF (pRequest='hero') THEN
-                    l_heading:='Background header images';
-                END IF;
-            END IF;
+            l_thumbnails:=pck_media.getThumbnails(pArticleId, pRequest);
 
             APEX_JSON.open_object; 
             APEX_JSON.write('success', TRUE);
             APEX_JSON.write('thumbnails', l_thumbnails);
-            APEX_JSON.write('heading',l_heading);
+            APEX_JSON.write('heading','Click Image to copy URL');
             APEX_JSON.close_object;
         END IF;
 
@@ -471,10 +464,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
     /*
      **  Build list of thumbnail images for a given article
      */
-    FUNCTION getThumbnails(pArticleId IN article.id%type) RETURN CLOB
+    FUNCTION getThumbnails(pArticleId IN article.id%type, pRequest IN VARCHAR2) RETURN CLOB
     IS
         l_clob CLOB;
-        l_url_image VARCHAR2(300);
     BEGIN
         l_clob:='<ul role="list" class="carousel">';
 
@@ -483,31 +475,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
               FROM asset
              WHERE article_id=pArticleId
                AND NVL(format,'N/A')<>'clt'
-             ORDER BY display_order )
+               AND resource_type=pRequest
+             ORDER BY created_date DESC )
         LOOP
             l_clob:=l_clob ||
-                '<li data-id="' || C.id || '">' ||
-                    '<figure>' ||
-                        '<figcaption class="flex-items space-between">' ||
-                            '<button type="button" class="icon-with-text button copy-url">' || 
-                                '<svg class="icon" aria-hidden="true" focusable="false"><use href="#copy"></use></svg>' ||
-                                '<span>URL</span>' ||
-                            '</button>' ||
-                            '<button type="button" class="icon-with-text button delete-asset">' || 
-                                '<svg class="icon" aria-hidden="true" focusable="false"><use href="#delete"></use></svg>' ||
-                                '<span>DELETE</span>' ||
-                            '</button>' ||
-                        '</figcaption>';
-
-            l_url_image:=
-                '<img draggable="false" src="https://res.cloudinary.com/' || C.cld_cloud_name || '/' ||
-                    CASE C.resource_type
-                        WHEN 'image' THEN 'w_200/' || C.public_id
-                        WHEN 'video' THEN 'video/upload/q_auto,f_auto,w_200/' || C.public_id || '.avif'
-                        WHEN 'audio' THEN 'video/upload/q_auto,f_auto,w_200/fl_waveform/' || C.public_id || '.png'
-                    END ||
-                '">';
-
+                '<li>' ||
+                    '<button type="button" class="button">' ||
+                        '<img draggable="false" src="https://res.cloudinary.com/' || C.cld_cloud_name || '/w_200/' || C.public_id || '">' ||
+                    '</button>' ||
+                '</li>';
+            /*
             IF (C.resource_type='image') THEN
                 l_clob:=l_clob || l_url_image;
             ELSIF (C.resource_type='video') THEN
@@ -526,10 +503,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
                     '<source src="' || REPLACE(l_url_image,'.png','.wav') || '" type="audio/wav"></source>' ||
                 '</audio>';
             END IF;
-
-            l_clob:=l_clob ||
-                '</figure>' ||
-            '</li>';
+                */
+                
         END LOOP;
 
         l_clob:=l_clob || 
