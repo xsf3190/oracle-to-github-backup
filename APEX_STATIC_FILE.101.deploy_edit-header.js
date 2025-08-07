@@ -3,7 +3,6 @@
 */
 import { header, dropdown_details, set_alert, selectColorFromScreen } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
-import { show_media } from  "deploy_edit-content";
 
 const editor = header.previousElementSibling;
 
@@ -156,9 +155,11 @@ editor.addEventListener("click", async (e) => {
 
     }
 
+    /*
     if (e.target.matches(".background-image")) {
         show_media("hero");
     }
+    */
 
     if (e.target.matches(".delete-image")) {
         const img = header.querySelector("img");
