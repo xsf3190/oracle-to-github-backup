@@ -9,9 +9,7 @@ import { callAPI, handleError } from "deploy_callAPI";
 const CK_CSS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css";
 const CK_JS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js";
 
-const info_dialog = document.querySelector("dialog.info");
-
-let endpoint, intervalId;
+let endpoint;
 
 export const init = async (element) => {
     if (document.querySelector("head > link[href='" + CK_CSS + "']")) {
@@ -96,9 +94,15 @@ export const init = async (element) => {
                     .then( (data) => {
                         const heading = output_dialog.querySelector("header>:first-child");
                         heading.textContent = data.heading;
+
                         const article = output_dialog.querySelector("article");
                         article.replaceChildren();
                         article.insertAdjacentHTML('afterbegin',data.thumbnails);
+                        
+                        const footer = output_dialog.querySelector("footer");
+                        footer.replaceChildren();
+                        footer.insertAdjacentHTML('afterbegin',"<span>" + article.querySelector(".carousel").childElementCount + " images</span>");
+
                         output_dialog.showModal();
 
                         article.querySelectorAll("button").forEach( (button) => {
@@ -256,60 +260,4 @@ const saveData = async ( data, endpoint ) => {
         .catch((error) => {
             handleError(error);
         })
-}
-
-/*
-** USER CLICKS MEDIA BUTTON. SHOW LIST OF MEDIA. ALLOW USER TO COPY URL
-*/
-export const show_media = async (request) => {
-    callAPI("upload-media/:ID/:PAGE","GET","?request="+request)
-        .then( (data) => {
-            const heading = output_dialog.querySelector("header>:first-child");
-            const article = output_dialog.querySelector("article");
-            article.replaceChildren();
-            article.insertAdjacentHTML('afterbegin',data.thumbnails);
-            output_dialog.showModal();
-
-            switch (request) {
-                case "copy":
-                    article.querySelectorAll(".copy-url").forEach( (button) => {
-                        button.addEventListener("click", async (e) => {
-                            const src = e.target.closest("li").querySelector("img").src;
-                            try {
-                                await navigator.clipboard.writeText(src);
-                                media.querySelectorAll(".copied").forEach((copied) => {
-                                    copied.style.fill = "initial";
-                                    copied.style.backgroundColor = "white";
-                                    copied.classList.toggle("copied");
-                                });
-                                e.target.style.fill = "green";
-                                e.target.style.backgroundColor = "white";
-                                e.target.classList.toggle("copied");
-                                heading.textContent = "Image URL copied";
-                            } catch (error) {
-                                handleError(error);
-                            }
-                        });
-                    });
-                    break;
-                case "hero":
-                    media.querySelectorAll(".copy-url").forEach( (button) => {
-                        button.addEventListener("click", async (e) => {
-                            const hero_asset_id = e.target.closest("li").dataset.id;
-                            callAPI("edit-header/:ID","POST",{hero_asset_id: hero_asset_id})
-                                .then( (data) => {
-                                    header.querySelector("img")?.remove();
-                                    header.querySelector("div").insertAdjacentHTML('afterbegin',data.img);
-                                })
-                                .catch((error) => {
-                                    handleError(error);
-                                })
-                        });
-                    });
-                    break;
-                }
-        })
-        .catch((error) => {
-            handleError(error);
-        });
 }
