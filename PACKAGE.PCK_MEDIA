@@ -55,7 +55,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             APEX_JSON.open_object; 
             APEX_JSON.write('success', TRUE);
             APEX_JSON.write('thumbnails', l_thumbnails);
-            APEX_JSON.write('heading','Click Image to copy URL');
+            APEX_JSON.write('heading','Uploaded images - click to copy URL');
             APEX_JSON.close_object;
         END IF;
 
@@ -467,6 +467,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
     FUNCTION getThumbnails(pArticleId IN article.id%type, pRequest IN VARCHAR2) RETURN CLOB
     IS
         l_clob CLOB;
+        n PLS_INTEGER:=0;
     BEGIN
         l_clob:='<ul role="list" class="carousel">';
 
@@ -478,10 +479,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
                AND resource_type=pRequest
              ORDER BY created_date DESC )
         LOOP
+            n:=n+1;
             l_clob:=l_clob ||
                 '<li>' ||
                     '<button type="button" class="button">' ||
-                        '<img draggable="false" src="https://res.cloudinary.com/' || C.cld_cloud_name || '/w_200/' || C.public_id || '">' ||
+                        '<img draggable="false" src="https://res.cloudinary.com/' || C.cld_cloud_name || '/w_200/' || C.public_id || '" loading="' || CASE WHEN n<=4 THEN 'eager' ELSE 'lazy' END || '">' ||
                     '</button>' ||
                 '</li>';
             /*
