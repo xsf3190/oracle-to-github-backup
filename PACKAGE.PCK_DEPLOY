@@ -706,6 +706,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         ** BUILD IMPORT MAP OF JAVASCRIPT MODULES (BARE MODULE NAMES ONLY) AND CSS STYLESHEETS
         ** DEPLOY "test" MODULES IF THE DOMAIN NAME MATCHES ADMIN USER'S EMAIL
         */
+        /*
         l_importmap:='"imports":{';
         l_importmap_integrity:='"integrity":{';
         l_deploy_env:=CASE WHEN pEnv='TEST' THEN 1 WHEN pEnv='LIVE' THEN 3 END;
@@ -725,8 +726,26 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_importmap:=RTRIM(l_importmap,',') || '}';
         l_importmap_integrity:=RTRIM(l_importmap_integrity,',') || '}';
 
-        /* Assemble complete inline importmap JSON script */
         l_importmap:='{' || l_importmap || ',' || l_importmap_integrity || '}';
+        */
+        l_deploy_env:=CASE WHEN pEnv='TEST' THEN 1 WHEN pEnv='LIVE' THEN 3 END;
+        WITH data AS
+        (
+            SELECT 
+                SUBSTR(module_name,1,INSTR(module_name,'.')-1) module_name, 
+                CASE WHEN pEsmLibrary='live' THEN host_name ELSE REPLACE(host_name,'/live/','/test/') END host_name,
+                CASE WHEN pEsmLibrary='live' THEN sha256_live ELSE sha256_test END sha256
+            FROM es_modules
+            WHERE BITAND(deploy_envs,l_deploy_env)=l_deploy_env
+        )
+        SELECT json_object(
+            'imports' VALUE json_objectagg(module_name VALUE host_name),
+            'integrity' VALUE json_objectagg(host_name VALUE sha256)
+            returning clob) 
+        INTO l_importmap 
+        FROM data;
+
+        addDeploy('javascript/importmap.json', l_importmap);
 
         l_importmap_sha256:=getSha256(l_importmap);
         l_script_sha256:=l_script_sha256 || ' ''' || l_importmap_sha256 || '''';
@@ -739,7 +758,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             SELECT file_name, apex_util.blob_to_clob(file_content) file_content 
               FROM apex_application_static_files 
              WHERE application_id=101
-               AND file_name IN ( 'deploy_web_vitals5.min.js','deploy_main.min.js')
+               AND file_name IN ('deploy_main.min.js')
         ) LOOP
             addDeploy('javascript/' || C.file_name, C.file_content);
             IF (C.file_name='deploy_main.min.js') THEN
@@ -748,7 +767,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     'document.addEventListener(''DOMContentLoaded'',()=>{' || 
                         'const script = document.createElement(''script'');' ||
                         'script.src = "/javascript/' || C.file_name || '";' ||
-                        'script.type = "module";' ||
                         'document.body.appendChild(script);' ||
                     '})';
                 l_script_sha256:=l_script_sha256 || ' ''' || getSha256(l_script_src) || '''';
@@ -775,7 +793,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[ script-src 'strict-dynamic' ]' || l_script_sha256 || q'[;]' ||
             q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
             q'[ frame-ancestors 'none';]' ||
-            q'[ connect-src ]' || pRestUrl || ';' || chr(10) ||
+            q'[ connect-src 'self' ]' || pRestUrl || ';' || chr(10) ||
             q'[X-Content-Type-Options: nosniff]' || chr(10) ||
             q'[X-Frame-Options: SAMEORIGIN]' || chr(10) ||
             q'[Referrer-Policy: no-referrer-when-downgrade]' || chr(10) ||
@@ -815,7 +833,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     CASE WHEN l_labels(i).img_count>0 THEN
                     '<link rel="preconnect" href="https://res.cloudinary.com">'
                     END ||
-                    '<script type="importmap" integrity="' || l_importmap_sha256 || '">' || l_importmap || '</script>' ||
+                    --'<script type="importmap" integrity="' || l_importmap_sha256 || '">' || l_importmap || '</script>' ||
                     l_font_preload ||
                     '<link rel="stylesheet" href="/css/styles.min.css">' ||
                     '<script>' || l_script_src || '</script>' ||
