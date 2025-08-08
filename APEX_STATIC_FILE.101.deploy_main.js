@@ -123,10 +123,10 @@ const setCWV = (cwv, value, good, improve, json) => {
 
     if (json===undefined) {
         const el = dropdown.querySelector("." + cwv);
-        if (cwv!=="CLS") {
-            el.textContent = (value/1000).toFixed(2) + "s";
-        } else {
+        if (cwv==="CLS") {
             el.textContent = value.toFixed(2);
+        } else {
+            el.textContent = (value/1000).toFixed(2) + "s";
         }
         
         if (value<=good) {
@@ -158,9 +158,11 @@ dropdown_details.addEventListener("toggle", (e) => {
 
         setCWV("TTFB", myTTFB, 800, 1800);
         setCWV("FCP", myFCP, 900, 3000);
-        setCWV("LCP", myLCP, 2500, 4000);
-        setCWV("CLS", myCLS, .1, .25);
-        setCWV("INP", myINP, 200, 500);
+        if (myLCP>0) {
+            setCWV("LCP", myLCP, 2500, 4000);
+            setCWV("CLS", myCLS, .1, .25);
+            setCWV("INP", myINP, 200, 500);
+        }
 
         console.log("myLCPattr",myLCPattr);
         console.log("myINPattr",myINPattr);
