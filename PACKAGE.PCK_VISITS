@@ -386,6 +386,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                  WHERE w.id=pWebsiteId
                    AND p.website_id=w.id
                    AND p.url=pUrl
+                   AND NVL(p.aud,'visitor') <>'admin'
                  GROUP BY p.website_id, p.ip_address, p.visit_date
                  ORDER BY p.visit_date DESC
                  OFFSET pOffset ROWS
@@ -400,7 +401,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     TO_CHAR(ROUND(wh.ttfb/1000,2),'fm90.99') || NVL2(wh.ttfb,'s',null) ttfb, 
                     TO_CHAR(ROUND(wh.fcp/1000,2),'fm90.99') || NVL2(wh.fcp,'s',null) fcp, 
                     TO_CHAR(ROUND(wh.lcp/1000,2),'fm90.99') || NVL2(wh.lcp,'s',null) lcp, 
-                    cls, 
+                    ROUND(cls,2) cls, 
                     TO_CHAR(ROUND(wh.inp/1000,2),'fm90.99') || NVL2(wh.inp,'s',null) inp,
                     wh.page_weight,
                     wh.total_requests
