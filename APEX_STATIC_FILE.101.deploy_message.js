@@ -1,7 +1,7 @@
 /*
 **  LEAVE A MESSAGE (MUST BE AUTHENTICATED)
 */
-import { dropdown_details, output_dialog } from "deploy_elements";
+import { output_dialog } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 const header = output_dialog.querySelector("header");
@@ -14,7 +14,6 @@ let endpoint;
 
 export const init = (element) => {
     endpoint = element.dataset.endpoint;
-    dropdown_details.removeAttribute("open");
 
     callAPI(endpoint, "GET")
     .then((data) => {
