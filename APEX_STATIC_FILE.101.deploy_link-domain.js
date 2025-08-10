@@ -1,7 +1,7 @@
 /*
 ** CREATE NETLIFY DNS ZONE FOR WEBSITE OR GET DNS SERVER NAMES TO BE CHANGED IN WEBSITE'S DOMAIN REGISTRAR
 */
-import { dropdown_details, output_dialog } from "deploy_elements";
+import { output_dialog } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 let endpoint;
@@ -13,8 +13,6 @@ const footer = form.querySelector("footer");
 
 export const init = (element) => {
     endpoint = element.dataset.endpoint;
-    
-    dropdown_details.removeAttribute("open");
 
     form.reset();
     
