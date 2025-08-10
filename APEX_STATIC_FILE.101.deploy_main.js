@@ -1,6 +1,5 @@
 const bodydata = document.body.dataset;
-const dropdown_details = document.querySelector(".dropdown details");
-const dropdown = document.querySelector(".dropdown-content");
+const dropdown = document.querySelector("#menulist");
 const login_btn = dropdown.querySelector(".login-btn");
 const email = dropdown.querySelector(".email");
 
@@ -150,8 +149,8 @@ const setCWV = (cwv, value, good, improve, json) => {
     
 }
 
-dropdown_details.addEventListener("toggle", (e) => {
-    if (dropdown_details.open) {
+dropdown.addEventListener("toggle", (e) => {
+    if (e.newState==="open") {
         const k = 1024;
         const i = Math.floor(Math.log(page_weight()) / Math.log(k));
         dropdown.querySelector(".page-weight").textContent =`${parseFloat((page_weight() / Math.pow(k, i)).toFixed(0))}KB`;
