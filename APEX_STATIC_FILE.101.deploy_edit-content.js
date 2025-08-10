@@ -3,7 +3,7 @@
 ** INCLUDE DEPLOY BUTTON IN CKEDITOR TOOLBAR
 */
 
-import { dropdown_details, output_dialog } from "deploy_elements";
+import { output_dialog } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 const CK_CSS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css";
@@ -238,8 +238,6 @@ export const init = async (element) => {
     document.querySelectorAll("main > *:not(.ck)").forEach ((ele) => {
         ele.style.display = "none";
     })
-    
-    dropdown_details.removeAttribute("open");
 
     document.querySelector("#editor").scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
