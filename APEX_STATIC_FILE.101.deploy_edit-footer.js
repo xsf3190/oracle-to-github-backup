@@ -1,7 +1,7 @@
 /*
 **  EDIT WEBSITE FOOTER
 */
-import { footer, dropdown_details, set_alert, selectColorFromScreen } from "deploy_elements";
+import { footer, dropdown, set_alert, selectColorFromScreen } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 const editor = footer.previousElementSibling;
@@ -17,7 +17,6 @@ export const init = (element) => {
     callAPI(endpoint,'GET',query)
         .then((data) => {
             editor.insertAdjacentHTML('afterbegin',data.html);
-            dropdown_details.removeAttribute("open");
             editor.scrollIntoView({ behavior: 'smooth', block: 'end' });
             footer.replaceChildren();
             footer.insertAdjacentHTML('afterbegin',data.footer);
@@ -119,7 +118,7 @@ editor.addEventListener("click", async (e) => {
         const formObj = Object.fromEntries(formData);
         await callAPI(endpoint,'PUT', formObj)
             .then(() => {
-                dropdown_details.querySelector("button.publish-website").click();
+                dropdown.querySelector("button.publish-website").click();
             })
             .catch((error) => {
                 handleError(error);
