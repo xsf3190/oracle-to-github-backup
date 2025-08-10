@@ -14,6 +14,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_MEDIA" IS
     --
     PROCEDURE getCldDetails(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pRequest IN VARCHAR2, pStatus OUT NUMBER);
     --
+    PROCEDURE setImageBreakpoints(pAssetId IN asset.id%type);
+    --
     PROCEDURE updateCldAsset(pWebsiteId IN website.id%type, pArticleId IN article.id%type DEFAULT NULL);
     --
     PROCEDURE uploadCldMetadata(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
@@ -262,17 +264,34 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             pck_core.log_error;
     END;
 
+    PROCEDURE setImageBreakpoints(pAssetId IN asset.id%type) IS
+        l_cld_cloud_name asset.cld_cloud_name%type;
+        l_public_id asset.public_id%type;
+        l_url VARCHAR2(200);
+        l_response CLOB;
+        l_breakpoints asset.breakpoints%type;
+    BEGIN
+        SELECT cld_cloud_name, public_id 
+          INTO l_cld_cloud_name, l_public_id
+          FROM asset 
+         WHERE id=pAssetId;
+
+        l_url:='https://res.cloudinary.com/' || l_cld_cloud_name || '/w_auto:breakpoints_200_1200_5_10:json/' || l_public_id;
+        l_response:=apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'GET');
+        l_breakpoints:=LTRIM(RTRIM(SUBSTR(l_response,INSTR(l_response,':')+1),']}'),'[');
+        
+        UPDATE asset SET breakpoints=l_breakpoints WHERE id=pAssetId;
+    END;
+
     /*
      **  RELEVANT METADATA OF ALL UPLOADED MEDIA INSERTED INTO ASSETS TABLE
      */       
     PROCEDURE uploadCldMetadata(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
         l_session_data pck_sec.t_session_data;
         l_bodytext CLOB:=pBodyText;
-        l_url VARCHAR2(200);
-        l_response CLOB;
-        l_breakpoints asset.breakpoints%type;
         l_article_id asset.article_id%type;
         l_favicon_asset_id website.favicon_asset_id%type;
+        l_job_name VARCHAR2(30);
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
 
@@ -280,21 +299,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             SELECT seq, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format
               FROM JSON_TABLE(l_bodytext, '$.images[*]' COLUMNS (seq FOR ORDINALITY, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes,  format))
         ) LOOP
-            IF (C.resource_type='image') THEN
-                -- breakpoints [min_width]_[max_width]_[bytes_step_in_KBs]_[max_images]
-                l_url:='https://res.cloudinary.com/' || C.cld_cloud_name || '/w_auto:breakpoints_200_1200_5_10:json/' || C.public_id;
-                l_response:=apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'GET');
-                l_breakpoints:=LTRIM(RTRIM(SUBSTR(l_response,INSTR(l_response,':')+1),']}'),'[');
-            END IF;
-        
-            INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, breakpoints, display_order, created_date, user_id)
-            VALUES (seq_asset.nextval, C.article_id, C.cld_cloud_name, C.resource_type, C.public_id, C.width, C.height, C.bytes, C.format, l_breakpoints, C.seq, current_timestamp, l_session_data.user_id);
+            INSERT INTO asset(id, article_id, cld_cloud_name, resource_type, public_id, width, height, bytes, format, display_order, created_date, user_id)
+            VALUES (seq_asset.nextval, C.article_id, C.cld_cloud_name, C.resource_type, C.public_id, C.width, C.height, C.bytes, C.format,  C.seq, current_timestamp, l_session_data.user_id);
 
-            /*
-            UPDATE article 
-               SET (cover_asset_id, nb_assets) = (SELECT  MIN(id), COUNT(*) FROM asset WHERE article_id=pArticleId)
-             WHERE id=pArticleId;
-            */
+            l_job_name:=dbms_scheduler.generate_job_name('IMAGE_BREAKPOINTS_');
+            dbms_scheduler.create_job(
+                job_name   => l_job_name,
+                job_type   =>'STORED_PROCEDURE',
+                job_action =>'pck_media.setImageBreakpoints',
+                number_of_arguments=>1,
+                start_date=>systimestamp
+            );
+            dbms_scheduler.set_job_argument_value(
+                job_name => l_job_name,
+                argument_position => 1,
+                argument_value => seq_asset.currval
+            );
+            dbms_scheduler.enable(l_job_name);
         END LOOP;
 
         /* 
