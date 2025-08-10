@@ -3,7 +3,7 @@
 */
 
 import { callAPI, handleError } from "deploy_callAPI";
-import { dropdown_details, output_dialog } from "deploy_elements";
+import { output_dialog } from "deploy_elements";
 
 const header = output_dialog.querySelector("header");
 const content = output_dialog.querySelector("article");
@@ -13,9 +13,6 @@ let endpoint;
 let intervalId;
 
 export const init = (element) => {
-    if (dropdown_details.open) {
-        dropdown_details.removeAttribute("open");
-    }
     
     endpoint = element.dataset.endpoint;
 
