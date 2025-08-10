@@ -586,11 +586,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
         l_jwt_enc_key user_ords_clients.client_secret%type;
         l_issuer VARCHAR2(15);
         l_scope VARCHAR2(7);
+        l_cld_cloud_name users.cld_cloud_name%type:=pCldCloudName;
+        l_cld_upload_preset users.cld_upload_preset%type:=pCldUploadPreset;
     BEGIN
         SELECT client_secret 
           INTO l_jwt_enc_key
           FROM user_ords_clients
          WHERE name=pEmail;
+
+        IF (l_cld_cloud_name IS NULL) THEN
+            SELECT u.cld_cloud_name, u.cld_upload_preset
+              INTO l_cld_cloud_name, l_cld_upload_preset
+              FROM users u, apex_workspace_apex_users w
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+             ORDER BY date_created
+             FETCH FIRST ROW ONLY;
+        END IF;
 
         l_issuer:='ORDS.'||pWebsiteId;
         l_scope:=getScope(pWebsiteId,pEmail);
@@ -602,7 +614,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
             p_jti       => pUserId,
             p_iat_ts    => current_timestamp,
             p_exp_sec   => REFRESH_TOKEN_EXP,
-            p_other_claims => '"cld_cloud_name":' || apex_json.stringify(pCldCloudName) || ',"cld_upload_preset":' || apex_json.stringify(pCldUploadPreset),
+            p_other_claims => '"cld_cloud_name":' || apex_json.stringify(l_cld_cloud_name) || ',"cld_upload_preset":' || apex_json.stringify(l_cld_upload_preset),
             p_signature_key => UTL_RAW.cast_to_raw (l_jwt_enc_key)
         );
 
@@ -677,17 +689,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                 RETURN;
             END IF;
         END LOOP;
-
-        IF (l_cld_cloud_name IS NULL OR l_cld_upload_preset IS NULL) THEN
-            SELECT u.cld_cloud_name, u.cld_upload_preset
-              INTO l_cld_cloud_name, l_cld_upload_preset
-              FROM users u, apex_workspace_apex_users w
-             WHERE w.email=u.email
-               AND w.is_admin='Yes'
-             ORDER BY date_created
-             FETCH FIRST ROW ONLY;
-        END IF;
-
         
         CASE pRequestType
             /* 
