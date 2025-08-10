@@ -264,8 +264,7 @@ body>footer>a {
 
 nav {
   font-family: var(--font-family-ui);
-  font-variant: all-small-caps;
-  font-stretch: 120%;
+  font-size: var(--step--2);
 }
 
 nav > ul:before {
@@ -920,11 +919,6 @@ summary {
 
 /* DROPDOWN STYLES */
 
-.dropdown {
-  display: inline-block;
-  position: relative;
-}
-
 /* Replace The disclosure widget
 ** Ensure icon is clickable on narrow viewports
  */
@@ -945,23 +939,11 @@ summary {
   display: none; 
 }
 
-/* Detaching details content */
-.dropdown .dropdown-content {
-  position: absolute;
-  min-inline-size: max-content;
-  background-color: white;
-  color: var(--color-text);
-  border: 1px solid #9b7aba;
-  border-radius: 0.5em;
-  right: 0;
-  top: 2em;
-  z-index: 1;
-  list-style: none;
-  margin: 0;
-  padding: 0.25em 0.5em;
-}
+/*
+** MENULIST
+*/
 
-.dropdown .button {
+#menulist .button {
   display: block;
   color: var(--color-text);
   background-color: transparent;
@@ -974,50 +956,68 @@ summary {
   min-height: 44px;
 }
 
-.dropdown .button:hover, .dropdown .button:focus {
+/* MENULIST POPOVER BUTTON */
+button[popovertarget='menulist'] {
+    --icon-size: 32;
+    --icon-bar-size: 6;
+    --icon-translation-size: calc((var(--icon-size) - var(--icon-bar-size)) / 2);
+    anchor-name: --menulist-button;
+    background-color: transparent;
+    border: none;
+}
+
+button[popovertarget='menulist']:has(+ *:popover-open) rect {
+    transition: all 0.5s ease-in-out;
+}
+
+button[popovertarget='menulist']:has(+ *:popover-open) .top,
+button[popovertarget='menulist']:has(+ *:popover-open) .bottom {
+    transform-origin: center;
+}
+
+button[popovertarget='menulist']:has(+ *:popover-open) .top {
+    transform: rotate(45deg) translate(0, calc(var(--icon-translation-size) * 1px));
+}
+button[popovertarget='menulist']:has(+ *:popover-open) .middle {
+    opacity: 0;
+}
+button[popovertarget='menulist']:has(+ *:popover-open) .bottom {
+    transform: rotate(-45deg) translate(0, calc(var(--icon-translation-size) * -1px));
+}
+
+#menulist {
+    position-anchor: --menulist-button;
+    /* prevent interference of popover default styles */
+    inset:auto;
+    /* absolutely position the positioned element */
+    position: absolute;
+    /* position the right of the positioned element at the right edge of the anchor */
+    right: anchor(right);
+    /* position the bottom of the positioned element at the top edge of the anchor */
+    top: anchor(bottom);
+}
+
+#menulist .button:hover, #menulist .button:focus {
   background-color: var(--color-text);
   color: var(--color-background);
 }
 
-.dropdown button:disabled {
+#menulist button:disabled {
   color: var(--color-primary-lighter);
   background-color: transparent;
   cursor: not-allowed;
 }
 
-/* Closing the detail content on clicking anywhere else */
-.dropdown details[open] summary::before {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  content: "";
-}
-
-.dropdown details summary rect {
-  transition: transform 0.5s ease, opacity 0.5s ease;
-}
-.dropdown details[open] summary .top {
-  transform: rotate(45deg) translate(7px, -3px);
-}
-.dropdown details[open] summary .middle {
-  opacity: 0;
-}
-.dropdown details[open] summary .bottom {
-  transform: rotate(-45deg) translate(-16px, -6px);
-}
-
-.dropdown-content {
+#menulist {
     max-height: calc(100dvh - 2lh);
     overflow: auto;
 }
 
-.dropdown-content li + li {
+#menulist li + li {
   border-block-start: solid 1px black;
 }
 
-.dropdown-content table {
+#menulist table {
     font-size: 50%;
 }
 
@@ -1075,12 +1075,12 @@ caption {
   padding: 0.5em;
 }
 thead {
-  background-color: var(--color-primary);
+  background-color: rebeccapurple;;
   color: white;
   font-weight: 600;
 }
 th, td {
-  border: 1px solid var(--color-primary);
+  border: 1px solid var(--color-text);
   padding: var(--space-3xs);
 }
 td > button {
