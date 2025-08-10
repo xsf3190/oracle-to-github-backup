@@ -1,7 +1,7 @@
 /*
 **  ADD / CHANGE / DELETE PAGES
 */
-import { nav, dropdown_details } from "deploy_elements";
+import { nav } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 const nav_items = nav.querySelector("nav>ul");
@@ -14,7 +14,6 @@ export const init = (element) => {
     callAPI(endpoint,'GET')
         .then((data) => {
             editor.insertAdjacentHTML('afterbegin',data.html);
-            dropdown_details.removeAttribute("open");
             editor.scrollIntoView({ behavior: 'smooth', block: 'end' });
             const edit = editor.querySelector("input[name='navigation_label']");
             const current = nav_items.querySelector("[aria-current='page']")
@@ -150,6 +149,6 @@ editor.addEventListener("click", async (e) => {
                 handleError(error);
             });
 
-        dropdown_details.querySelector("button.publish-website").click();
+        dropdown.querySelector("button.publish-website").click();
     }
 })
