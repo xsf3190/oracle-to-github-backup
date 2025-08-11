@@ -243,8 +243,14 @@ export const init = async (element) => {
 }
 
 /*
-** SAVE CHANGED DATA TO SERVER
+** SAVE CHANGED DATA TO SERVER. TRACK EDITED PAGES IN ORDER TO INITIALIZE EDITOR ON SESSION VISITS.
 */
+
+const pages_edited = JSON.parse(sessionStorage.getItem("pages_edited"));
+const pages_set = new Set(pages_edited);
+const page_id = Number(document.body.dataset.articleid);
+
+
 const saveData = async ( data, endpoint ) => {
     const word_count = document.querySelector(".ck-word-count__words").textContent;
     const editor_status = document.querySelector("#editor-status");
@@ -254,6 +260,10 @@ const saveData = async ( data, endpoint ) => {
     callAPI(endpoint,'PUT', {body_html: data, word_count: word_count})
         .then((data) => {
             editor_status.textContent = data.message;
+            if (!pages_set.has(page_id)) {
+                pages_set.add(page_id);
+                sessionStorage.setItem("pages_edited",JSON.stringify(Array.from(pages_set)));
+            }
         })
         .catch((error) => {
             handleError(error);
