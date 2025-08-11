@@ -6,7 +6,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_MEDIA" IS
     --
     FUNCTION getImageSrcset(pAssetId IN asset.id%type, pSizes IN VARCHAR2 DEFAULT NULL) RETURN VARCHAR2;
     --
-    FUNCTION getThumbnails(pArticleId IN article.id%type, pRequest IN VARCHAR2) RETURN CLOB;
+    FUNCTION getThumbnails(pArticleId IN article.id%type, pRequest IN VARCHAR2, pNbImages IN OUT NUMBER) RETURN CLOB;
     --
     PROCEDURE getThumbnails(pArticleId IN article.id%type, pDeploy IN BOOLEAN DEFAULT FALSE, pHTML IN OUT NOCOPY CLOB);
     --
@@ -37,6 +37,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
         l_video_max_size INTEGER;
         l_google_api_key users.google_api_key%type;
         l_thumbnails CLOB;
+        l_nb_images NUMBER;
         l_heading VARCHAR2(50);
     BEGIN
         l_session_data:=pck_sec.getSessionData(pWebsiteId);
@@ -52,12 +53,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
             apex_json.write('googleApiKey', l_google_api_key);
             apex_json.close_object;
         ELSE
-            l_thumbnails:=pck_media.getThumbnails(pArticleId, pRequest);
+            l_thumbnails:=pck_media.getThumbnails(pArticleId, pRequest, l_nb_images);
 
             APEX_JSON.open_object; 
             APEX_JSON.write('success', TRUE);
             APEX_JSON.write('thumbnails', l_thumbnails);
-            APEX_JSON.write('heading','Uploaded images - click to copy URL');
+            APEX_JSON.write('heading',CASE WHEN l_nb_images=0 THEN 'Hint: "Upload image" first' ELSE 'Click image to copy URL' END);
             APEX_JSON.close_object;
         END IF;
 
@@ -485,7 +486,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
     /*
      **  Build list of thumbnail images for a given article
      */
-    FUNCTION getThumbnails(pArticleId IN article.id%type, pRequest IN VARCHAR2) RETURN CLOB
+    FUNCTION getThumbnails(pArticleId IN article.id%type, pRequest IN VARCHAR2, pNbImages IN OUT NUMBER) RETURN CLOB
     IS
         l_clob CLOB;
         n PLS_INTEGER:=0;
@@ -532,6 +533,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
 
         l_clob:=l_clob || 
         '</ul>';
+
+        pNbImages:=n;
 
         RETURN (l_clob);
     END;
