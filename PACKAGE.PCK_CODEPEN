@@ -228,28 +228,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
            AND a.template_id=o.template_id;
         
         l_html:=
-            '<aside class="login align-end">' ||
-              '<section class="dropdown">' ||
-                '<details>' ||
-                  '<summary aria-label="Dropdown menu of actions">' ||
-                    '<svg height="1em" viewBox="0 0 32 32" preserveAspectRatio="none">' ||
-                      '<rect class="top" x="0" y="0" width="32" height="6" fill="currentColor" />' ||
-                      '<rect class="middle" x="0" y="13" width="32" height="6" fill="currentColor" />' ||
-                      '<rect class="bottom" x="0" y="26" width="32" height="6" fill="currentColor" />' ||
-                    '</svg>' ||
-                  '</summary>' ||
-                  '<ul class="dropdown-content" role="list">' ||
-                    '<li class="align-center"><small class="email"></small></li>' ||
-                    '<li class="align-center">' ||
-                        '<table>' ||
-                            '<thead><tr><th>TTFB</th><th>FCP</th><th>LCP</th><th>CLS</th><th>INP</th><th>WGT</th></tr></thead>' || 
-                            '<tbody><tr><td class="TTFB"></td><td class="FCP"></td><td class="LCP"></td><td class="CLS"></td><td class="INP"></td><td class="page-weight"></td></tr></tbody>' ||
-                        '</table></li>' ||
-                    '<li><button type="button" class="button login-btn" data-endpoint="' || l_uri_template || '">Log In</button></li>' ||
-                  '</ul>' ||
-                '</details>' ||
-              '</section>' ||
-            '</aside>';
+            '<button type="button" popovertarget="menulist">' ||
+                '<svg height="1rem" viewBox="0 0 32 32" preserveAspectRatio="none">' ||
+                  '<rect class="top" x="0" y="0" width="32" height="6" fill="currentColor" />' ||
+                  '<rect class="middle" x="0" y="13" width="32" height="6" fill="currentColor" />' ||
+                  '<rect class="bottom" x="0" y="26" width="32" height="6" fill="currentColor" />' ||
+                '</svg>' ||
+            '</button>' ||
+            '<ul popover id="menulist" class="dropdown" role="list">' ||
+                '<li class="align-center"><small class="email"></small></li>' ||
+                '<li class="align-center">' ||
+                    '<table>' ||
+                        '<thead><tr><th>TTFB</th><th>FCP</th><th>LCP</th><th>CLS</th><th>INP</th><th>WGT</th></tr></thead>' || 
+                        '<tbody><tr><td class="TTFB"></td><td class="FCP"></td><td class="LCP"></td><td class="CLS"></td><td class="INP"></td><td class="page-weight"></td></tr></tbody>' ||
+                    '</table></li>' ||
+                '<li><button type="button" class="button login-btn" data-endpoint="' || l_uri_template || '">Log In</button></li>' ||
+            '</ul>';
         RETURN(l_html);
     END;
 
