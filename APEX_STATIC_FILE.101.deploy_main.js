@@ -15,6 +15,15 @@ if (url.searchParams.has("refresh")) {
     history.replaceState(history.state, '', url.href);
 }
 
+/* 
+** TRACK PAGES VISITED IN SESSION 
+*/
+let pages_visited = JSON.parse(sessionStorage.getItem("pages_visited"));
+const page_id = Number(document.body.dataset.articleid);
+const pages_set = new Set(pages_visited);
+pages_set.add(page_id);
+sessionStorage.setItem("pages_visited",JSON.stringify(Array.from(pages_set)));
+
 /*
 ** DIALOG CLOSE BUTTON HANDLERS
 */
@@ -137,8 +146,11 @@ const setCWV = (cwv, value, good, improve, json) => {
         }
         return;
     }
-
+    
     json[cwv] = value;
+    
+    if (!value) return;
+    
     if (value<=good) {
         json[cwv + "_rating"] = "good";
     } else if (value<=improve) {
@@ -207,8 +219,13 @@ const flushQueues = () => {
 
         json["page_weight"] = page_weight();
         json["total_requests"] = total_requests();
+        json['pages_visited'] = Array.from(pages_set).toString();
     }
 
+    /* LCP=0 means visitor's browser not supporting core web vitals - e.g. Safari */
+    if (myLCP===0) {
+        myLCP=null; myCLS=null; myINP=null;
+    }
     setCWV("TTFB", myTTFB, 800, 1800, json);
     setCWV("FCP", myFCP, 900, 3000, json);
     setCWV("LCP", myLCP, 2500, 4000, json);
@@ -224,7 +241,9 @@ const flushQueues = () => {
 }
 
 
-
+/*
+** REPORT GATHERED PAGE STATISTICS WHEN PAGE VISIBILITY CHANGES
+*/
 addEventListener('visibilitychange', () => {
     if (document.visibilityState === "hidden") {
         flushQueues();
@@ -240,7 +259,17 @@ if ('onpagehide' in self) {
 }
 
 /*
-** PERFORMANCE OBSERVERS
+** INITIALIZE EDITOR IF PAGE PREVIOUSLY EDITED IN THE SESSION
+*/
+const pages_edited = JSON.parse(sessionStorage.getItem("pages_edited"));
+const pages_edited_set = new Set(pages_edited);
+if (pages_edited_set.has(Number(document.body.dataset.articleid))) {
+    dropdown.querySelector(".edit-content").click();
+}
+
+
+/*
+** SET UP PERFORMANCE OBSERVERS
 */
 
 /* TRANSFER SIZE AND TTFB */
