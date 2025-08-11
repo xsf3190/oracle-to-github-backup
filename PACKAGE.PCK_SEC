@@ -359,7 +359,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_SEC" AS
                AND r.name=pScope
                AND a.template_id=o.template_id
                AND INSTR(o.uri_template,'authenticate')=0
-             ORDER BY DECODE(o.label,'Publish Website',1,'Website Analytics',2,'Upload Media',3,'Edit Header',4,'Edit Content',5,'Edit Footer',6,'Edit Pages',7,8)
+             ORDER BY DECODE(o.label,'Publish Website',1,'Website Analytics',2,'Edit Header',3,'Edit Content',4,'Edit Footer',5,'Edit Pages',6,7)
         )
         LOOP
             l_reports:=NULL;
