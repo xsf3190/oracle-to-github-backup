@@ -943,6 +943,10 @@ summary {
 ** MENULIST
 */
 
+#menulist > li:has(button) {
+    padding-inline: 0.5rem;
+}
+
 #menulist .button {
   display: block;
   color: var(--color-text);
