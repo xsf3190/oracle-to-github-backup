@@ -1,0 +1,97 @@
+CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_FONTS" as
+    --
+    PROCEDURE loadGoogleFonts;
+    --
+end "PCK_FONTS";
+/
+CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
+    /*
+    **  load Google font definitions into google_font table. wolf3 format only. Websites deployed with optimized foont.r 
+    */
+    PROCEDURE loadGoogleFonts IS 
+        l_clob CLOB;
+        l_nb_fonts PLS_INTEGER;
+        l_lastModified google_font.lastModified%type;
+    BEGIN
+        
+        /* STATIC FONTS */
+        execute immediate('truncate table google_font_static');
+
+        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts?capability=WOFF2',pData=>l_clob);
+        
+        INSERT INTO google_font_static(family, category, lastModified, wght_start, wght_end, wght_start_italic, wght_end_italic, subsets) 
+        WITH data AS
+        (       
+        SELECT family, category, lastModified,
+            TO_NUMBER(
+            CASE 
+                WHEN variant='regular' THEN '400'
+                WHEN variant='italic' THEN '-400'
+                WHEN INSTR(variant,'italic')>0 THEN '-' || SUBSTR(variant,1,INSTR(variant,'italic')-1)
+                ELSE variant
+            END
+            ) variant,
+            subset
+          FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, lastModified, NESTED PATH '$.variants[*]' COLUMNS (variant VARCHAR2(50) PATH '$'),  NESTED PATH '$.subsets[*]' COLUMNS (subset VARCHAR2(50) PATH '$')))
+        )
+        SELECT family, category, TO_DATE(lastModified,'YYYY-MM-DD'), MIN(DECODE(SIGN(variant),1,variant)), MAX(DECODE(SIGN(variant),1,variant)),MIN(DECODE(SIGN(variant),-1,variant*-1)), MAX(DECODE(SIGN(variant),-1,variant*-1)),
+            LISTAGG(subset,'|') WITHIN GROUP (ORDER BY subset)
+        FROM data
+        GROUP BY family, category, lastModified;
+
+        
+        execute immediate('truncate table google_font_variable');
+
+        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts?capability=VF',pData=>l_clob);
+        INSERT INTO google_font_variable(family, category, lastModified, 
+            ital_start,ital_end,
+            wght_start,wght_end,
+            wdth_start,wdth_end,
+            opsz_start,opsz_end,
+            slnt_start,slnt_end)
+        WITH 
+        data AS (
+            SELECT family, category, lastModified, CASE WHEN tag='italic' THEN 0 END ital_start, CASE WHEN tag='italic' THEN 1 END ital_end, tag,"start" as tag_start, "end" as tag_end
+              FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, lastModified, NESTED '$.variants[*]' COLUMNS (variant PATH '$'), NESTED '$.axes[*]' COLUMNS(tag varchar2(4) PATH '$.tag', "start" number PATH '$.start', "end" number PATH '$.end')))
+        ),
+        data2 AS (
+            SELECT family, category, lastModified, tag, tag_start, tag_end, 
+                NVL2(ital_start,0,NULL) ital_start, NVL2(ital_end,1,NULL) ital_end
+            FROM data
+        )
+        SELECT family,category,TO_DATE(lastModified,'YYYY-MM-DD'),
+            max(ital_start), max(ital_end),
+            max(decode(tag,'wght',tag_start)) as wght_start, max(decode(tag,'wght',tag_end)) as wght_end, 
+            max(decode(tag,'wdth',tag_start)) as wdth_start, max(decode(tag,'wdth',tag_end)) as wdth_end, 
+            max(decode(tag,'opsz',tag_start)) as opsz_start, max(decode(tag,'opsz',tag_end)) as opsz_end, 
+            max(decode(tag,'slnt',tag_start)) as slnt_start, max(decode(tag,'slnt',tag_end)) as slnt_end
+        FROM data2
+        WHERE tag IS NOT NULL
+        GROUP BY family,category,lastModified;
+        
+
+        SELECT COUNT(*), MAX(lastModified) INTO l_nb_fonts, l_lastModified FROM google_font_static;
+        pck_core.log('Successfully loaded '|| l_nb_fonts || ' Google fonts  - last modified is ' || TO_CHAR(l_lastModified,'DD-MM-YYYY'));
+
+        /* Update font table from staging table */
+        MERGE INTO font t
+        USING
+        (
+            SELECT family, category, wght_start, wght_end, NVL2(wght_start_italic,0,NULL) ital_start, NVL2(wght_end_italic,1,NULL) ital_end
+            FROM google_font_static
+        ) s
+        ON (t.family=s.family)
+        WHEN MATCHED THEN UPDATE SET
+            t.category=s.category,
+            t.wght_start=s.wght_start,
+            t.wght_end=s.wght_end,
+            t.ital_start=s.ital_start,
+            t.ital_end=s.ital_end,
+            t.variable=0,
+            t.updated_date=current_timestamp
+        WHEN NOT MATCHED THEN 
+            INSERT (id, family, category, wght_start, wght_end, ital_start, ital_end, variable, created_date) 
+            VALUES (seq_font.nextval, s.family, s.category, s.wght_start, s.wght_end, s.ital_start, s.ital_end, 0, current_timestamp);
+    END;
+end "PCK_FONTS";
+/
