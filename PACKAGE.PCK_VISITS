@@ -22,12 +22,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
     BEGIN
         INSERT INTO website_article_cwv (
             website_id, article_id, seq, referrer, ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fcp, fcp_rating, ttfb, ttfb_rating,
-            user_agent, mobile, connection, url, website_loaded, duration_visible, page_weight, total_requests, aud)
+            user_agent, mobile, connection, url, website_loaded, duration_visible, page_weight, total_requests, aud, pages_visited)
         SELECT website_id, article_id, seq, referrer, l_ip_address, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fcp, fcp_rating, ttfb, ttfb_rating,
-                l_user_agent, mobile, connection, url, website_loaded, duration_visible, page_weight, total_requests, aud
+                l_user_agent, mobile, connection, url, website_loaded, duration_visible, page_weight, total_requests, aud, SUBSTR(pages_visited,1,100) pages_visited
           FROM JSON_TABLE(l_bodytext FORMAT JSON, '$' 
             COLUMNS (website_id, article_id, seq, referrer, LCP, LCP_rating, CLS, CLS_rating, INP, INP_rating, FCP, FCP_rating, TTFB, TTFB_rating,
-                    mobile, connection, url, website_loaded, duration_visible, page_weight, total_requests, webdriver, aud))
+                    mobile, connection, url, website_loaded, duration_visible, page_weight, total_requests, webdriver, aud, pages_visited))
           WHERE NVL(webdriver,'false')='false';  
 
         EXCEPTION
@@ -102,7 +102,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
         USING (
             SElECT 
                 website_id, article_id, website_loaded, ip_address, apex_string_util.get_domain(referrer) referrer, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fcp, fcp_rating, ttfb, ttfb_rating, NVL(duration_visible,0) duration_visible, NVL(browser,user_agent) browser, connection, url, mobile,
-                to_timestamp('1970-01-01','yyyy-mm-dd') + numtodsinterval(website_loaded,'second') visit_date, page_weight, total_requests, aud
+                to_timestamp('1970-01-01','yyyy-mm-dd') + numtodsinterval(website_loaded,'second') visit_date, page_weight, total_requests, aud, pages_visited
             FROM
             (
                 SELECT 
@@ -110,7 +110,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                     MAX(CASE WHEN INSTR(referrer,url)=0 THEN referrer END) referrer, 
                     MAX(lcp) lcp, MAX(lcp_rating) lcp_rating, MAX(cls) cls, MAX(cls_rating) cls_rating, MAX(inp) inp, MAX(inp_rating) inp_rating, MAX(fcp) fcp, MAX(fcp_rating) fcp_rating, MAX(ttfb) ttfb, MAX(ttfb_rating) ttfb_rating, 
                     SUM(duration_visible) duration_visible, MAX(website_article_cwv.user_agent) user_agent, MAX(browser_lookup.browser) browser, MAX(connection) connection, MAX(url) url, MAX(mobile) mobile, MAX(page_weight) page_weight, MAX(total_requests) total_requests,
-                    MAX(aud) aud
+                    MAX(aud) aud, MAX(pages_visited) pages_visited
                 FROM website_article_cwv, browser_lookup
                 WHERE website_id=pWebsiteId
                 AND INSTR(website_article_cwv.user_agent,'Headless')=0
@@ -123,8 +123,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             t.ip_address=s.ip_address AND 
             t.website_loaded=s.website_loaded)
         WHEN NOT MATCHED THEN
-            INSERT (website_id, article_id, ip_address, website_loaded, visit_date, referrer, duration_visible, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fcp, fcp_rating, ttfb, ttfb_rating, browser, connection, url, mobile, page_weight, total_requests, aud)    
-            VALUES (s.website_id, s.article_id, s.ip_address, s.website_loaded, s.visit_date, s.referrer, s.duration_visible, s.lcp, s.lcp_rating, s.cls, s.cls_rating, s.inp, s.inp_rating, s.fcp, s.fcp_rating, s.ttfb, s.ttfb_rating, s.browser, s.connection, s.url, s.mobile, s.page_weight, s.total_requests, s.aud)
+            INSERT (website_id, article_id, ip_address, website_loaded, visit_date, referrer, duration_visible, lcp, lcp_rating, cls, cls_rating, inp, inp_rating, fcp, fcp_rating, ttfb, ttfb_rating, browser, connection, url, mobile, page_weight, total_requests, aud, pages_visited)    
+            VALUES (s.website_id, s.article_id, s.ip_address, s.website_loaded, s.visit_date, s.referrer, s.duration_visible, s.lcp, s.lcp_rating, s.cls, s.cls_rating, s.inp, s.inp_rating, s.fcp, s.fcp_rating, s.ttfb, s.ttfb_rating, s.browser, s.connection, s.url, s.mobile, s.page_weight, s.total_requests, s.aud, s.pages_visited)
         WHEN MATCHED THEN
             UPDATE SET t.updated_date=current_timestamp,
                 t.duration_visible=t.duration_visible+s.duration_visible,
