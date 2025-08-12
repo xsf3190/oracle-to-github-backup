@@ -348,7 +348,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_BACKUP" is
         DELETE log WHERE log_date<SYSDATE-1;
         
         IF (n>0) THEN
-            pck_core.loadGoogleFonts;
+            pck_fonts.loadGoogleFonts;
         END IF;
 
         EXCEPTION
