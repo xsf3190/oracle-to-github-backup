@@ -2,6 +2,30 @@ const bodydata = document.body.dataset;
 const dropdown = document.querySelector("#menulist");
 const login_btn = dropdown.querySelector(".login-btn");
 const email = dropdown.querySelector(".email");
+const vitalsQueue = new Set();
+const smallvw = window.matchMedia("(width <= 600px)");
+
+console.log("smallvw",smallvw);
+
+if (smallvw.matches) {
+    const nav = document.querySelector("nav");
+    menulist.prepend(nav);
+}
+
+/*
+** ADD CWV METRIC TO QUEUE WHEN EMITTED
+*/
+const addToVitalsQueue = ({name,value,rating}) => {
+    console.log(name,value);
+    
+    vitalsQueue.add({name:name,value:value,rating:rating});
+    
+    const el = dropdown.querySelector("."+name);  
+    const valueRnd = name==="CLS" ? value.toFixed(2) : (value/1000).toFixed(2);
+    const units = name==="CLS" ? "" : "s";
+    el.textContent = valueRnd + units;
+    el.classList.add(rating);
+};
 
 /*
 ** NEW WEBSITE URL INCLUDES OWNER'S JWT TOKENS - SAVE THESE IN STORAGE AND REMOVE FROM URL
@@ -104,16 +128,6 @@ let page_loaded = Date.now(),
 
 const metrics = [];
 
-let myTTFB = 0;
-let myFCP = 0;
-let myLCP = 0; 
-let myCLS = 0;
-let myINP = 0;
-
-let myLCPattr = "";
-let myCLSattr = "";
-let myINPattr = "";
-
 const page_weight = () => {
   const total = metrics.reduce((accumulator,currentValue) => {
     return accumulator + currentValue.transferSize;
@@ -125,59 +139,14 @@ const total_requests = () => {
     return metrics.length;
 }
 
-/* UPDATE UI TABLE FOR MMETRICS */
-const setCWV = (cwv, value, good, improve, json) => {
-    console.log(cwv,value);
-
-    if (json===undefined) {
-        const el = dropdown.querySelector("." + cwv);
-        if (cwv==="CLS") {
-            el.textContent = value.toFixed(2);
-        } else {
-            el.textContent = (value/1000).toFixed(2) + "s";
-        }
-        
-        if (value<=good) {
-            el.classList.add("good");
-        } else if (value<=improve) {
-            el.classList.add("needs-improvement");
-        } else {
-            el.classList.add("poor");
-        }
-        return;
-    }
-    
-    json[cwv] = value;
-    
-    if (!value) return;
-    
-    if (value<=good) {
-        json[cwv + "_rating"] = "good";
-    } else if (value<=improve) {
-        json[cwv + "_rating"] = "needs-improvement";
-    } else {
-        json[cwv + "_rating"] = "poor";
-    }
-    
-}
-
+/*
+** UPDATE METRICS IN DROPDOWN WHEN USER OPENS POPUP
+*/
 dropdown.addEventListener("toggle", (e) => {
     if (e.newState==="open") {
         const k = 1024;
         const i = Math.floor(Math.log(page_weight()) / Math.log(k));
         dropdown.querySelector(".page-weight").textContent =`${parseFloat((page_weight() / Math.pow(k, i)).toFixed(0))}KB`;
-
-        setCWV("TTFB", myTTFB, 800, 1800);
-        setCWV("FCP", myFCP, 900, 3000);
-        if (myLCP>0) {
-            setCWV("LCP", myLCP, 2500, 4000);
-            setCWV("CLS", myCLS, .1, .25);
-            setCWV("INP", myINP, 200, 500);
-        }
-
-        console.log("myLCPattr",myLCPattr);
-        console.log("myINPattr",myINPattr);
-        if (myCLS>0) debugCLS();
     }
 })
 /*
@@ -220,17 +189,18 @@ const flushQueues = () => {
         json["page_weight"] = page_weight();
         json["total_requests"] = total_requests();
         json['pages_visited'] = Array.from(pages_set).toString();
+
+        vitalsQueue.add({name:"page_weight",value:page_weight()});
+        vitalsQueue.add({name:"total_requests",value:total_requests()});
     }
 
-    /* LCP=0 means visitor's browser not supporting core web vitals - e.g. Safari */
-    if (myLCP===0) {
-        myLCP=null; myCLS=null; myINP=null;
+    if (vitalsQueue.size > 0) {
+        for (const item of vitalsQueue.values()) {
+            json[item.name] = item.value;
+            json[item.name+"_rating"] = item.rating;
+        }
+        vitalsQueue.clear();
     }
-    setCWV("TTFB", myTTFB, 800, 1800, json);
-    setCWV("FCP", myFCP, 900, 3000, json);
-    setCWV("LCP", myLCP, 2500, 4000, json);
-    setCWV("CLS", myCLS, .1, .25, json);
-    setCWV("INP", myINP, 200, 500, json);
 
     const body = JSON.stringify(json);
     page_visit++;
@@ -269,73 +239,24 @@ if (pages_edited_set.has(Number(document.body.dataset.articleid))) {
 
 
 /*
-** SET UP PERFORMANCE OBSERVERS
+** TRACK RESOURCE TRANSFER SIZE  
 */
-
-/* TRANSFER SIZE AND TTFB */
 const observer = new PerformanceObserver((list) => {
     list.getEntries().forEach((entry) => {
         if (!metrics.some( ({name}) => name===entry.name)) {
             metrics.push({entryType: entry.entryType, name:entry.name, transferSize:entry.transferSize, contentType: entry.contentType});
-            if (entry.entryType==="navigation") {
-                myTTFB = entry.responseStart;
-            }
         }
     })
 });
 observer.observe({ type: "resource", buffered: true });
 observer.observe({ type: "navigation", buffered: true });
 
-/* FCP */
-new PerformanceObserver((list) => {
-    const fcp = list.getEntries().find(({name}) => name==="first-contentful-paint");
-    myFCP = fcp.startTime;
-}).observe({ type: "paint", buffered: true });
-
-/* LCP */
-new PerformanceObserver((list) => {
-    const entries = list.getEntries();
-    const lastEntry = entries[entries.length - 1];
-    myLCP = lastEntry.startTime;
-    myLCPattr = lastEntry.url; // lastEntry.id  FIX THIS
-}).observe({ type: "largest-contentful-paint", buffered: true });
-
-/* CLS */
-// const pageCLS = [];
-const CLSobserver = new PerformanceObserver((list) => {
-    const entries = list.getEntries();
-    entries.forEach((entry) => {
-        if (!entry.hadRecentInput) {
-            myCLS+=entry.value;
-            // pageCLS.push(entry);
-        };
-    });
-});
-CLSobserver.observe({ type: "layout-shift", buffered: true });
-
-const debugCLS = () => {
-    const largestCLS = CLSobserver.takeRecords().reduce((a, b) => {
-        return a && a.value > b.value ? a : b;
-    },0);
-
-    if (largestCLS && largestCLS.sources && largestCLS.sources.length) {
-        const largestSource = largestCLS.sources.reduce((a, b) => {
-            return a.node && a.previousRect.width * a.previousRect.height >
-                b.previousRect.width * b.previousRect.height ? a : b;
-        });
-        if (largestSource) {
-            myCLSattr = largestSource.node;
-        }
-    }
-}
-
-/* INP */
-new PerformanceObserver((list) => {
-    const entries = list.getEntries();
-    entries.forEach((entry) => {
-        if (entry.duration > myINP) {
-            myINP = entry.duration;
-            myINPattr = entry.target;
-        }
-    });
-}).observe({ type: "event", buffered: true });
+/*
+** START CORE WEB VITALS COLLECTION
+*/
+import { onTTFB, onFCP, onLCP, onCLS, onINP } from "/javascript/deploy_web_vitals5.min.js";
+onTTFB(addToVitalsQueue);
+onFCP(addToVitalsQueue);
+onLCP(addToVitalsQueue);
+onCLS(addToVitalsQueue);
+onINP(addToVitalsQueue);
