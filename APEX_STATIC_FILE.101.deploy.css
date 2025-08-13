@@ -254,7 +254,7 @@ body>footer>a {
   top: 0;
   color: var(--color-text);
   background-color: var(--color-background);
-  --flex-wrap: nowrap;
+  --flex-wrap: wrap;
   --flex-gap: 0;
 }
 
@@ -939,10 +939,19 @@ summary {
   display: none; 
 }
 
+/* METRICS POPOVER BUTTON */
+[popovertarget] {
+    cursor: pointer;
+}
+
+button[popovertarget='metrics'] {
+    background-color: transparent;
+    border: none;
+}
+
 /*
 ** MENULIST
 */
-
 #menulist > li:has(button) {
     padding-inline: 0.5rem;
 }
@@ -965,7 +974,6 @@ button[popovertarget='menulist'] {
     --icon-size: 32;
     --icon-bar-size: 6;
     --icon-translation-size: calc((var(--icon-size) - var(--icon-bar-size)) / 2);
-    anchor-name: --menulist-button;
     background-color: transparent;
     border: none;
 }
@@ -987,18 +995,6 @@ button[popovertarget='menulist']:has(+ *:popover-open) .middle {
 }
 button[popovertarget='menulist']:has(+ *:popover-open) .bottom {
     transform: rotate(-45deg) translate(0, calc(var(--icon-translation-size) * -1px));
-}
-
-#menulist {
-    position-anchor: --menulist-button;
-    /* prevent interference of popover default styles */
-    inset:auto;
-    /* absolutely position the positioned element */
-    position: absolute;
-    /* position the right of the positioned element at the right edge of the anchor */
-    right: anchor(right);
-    /* position the bottom of the positioned element at the top edge of the anchor */
-    top: anchor(bottom);
 }
 
 #menulist .button:hover, #menulist .button:focus {
@@ -1025,40 +1021,27 @@ button[popovertarget='menulist']:has(+ *:popover-open) .bottom {
     font-size: 50%;
 }
 
-/* POPOVER AND ANCHOR STYLES */
-
-.settings-popover {
-  background: ghostwhite;
-  position: relative;
-  padding: 1rem;
-  max-width:100%;
-  box-shadow: 0 0 25px dimgray;
-  text-align: initial;
-  font-weight: initial;
-  inset: auto;
+/* DEFAULT POPOVER POSITIONED BENEATH ANCHOR */
+[popover] {
+    /* prevent agent styles interfering */
+    inset:auto;
+    /* absolutely position the positioned element */
+    position: absolute;
+    /* position the right of the positioned element at the right edge of the anchor */
+    right: anchor(right);
+    /* position the bottom of the positioned element at the top edge of the anchor */
+    top: anchor(bottom);
 }
 
-.settings-popover::after {
-  content: "";
-  position: absolute;
-  left: 10px;
-  bottom: -0.9rem;
-  width: 0; 
-  height: 0; 
-  /* border-left: 10px solid transparent; */
-  /* border-right: 10px solid transparent; */
-  /* border-top: 16px solid ghostwhite; */
-} 
-
-[popover] {
-  overflow: unset;
-  bottom: calc(anchor(top) + 1rem);
-  left: anchor(left);
-  position-try-fallbacks: flip-block;
+.popover-right {
+    overflow: unset;
+    bottom: anchor(top);
+    left: anchor(right);
+    position-try-fallbacks: flip-block;
 }
 
 :popover-open {
-  max-width:50ch;
+  max-width:90vw;
 }
 
 /* TABLE STYLES, E.G. WEBSITE ANALYTICS */
