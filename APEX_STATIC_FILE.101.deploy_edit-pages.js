@@ -1,7 +1,7 @@
 /*
 **  ADD / CHANGE / DELETE PAGES
 */
-import { nav } from "deploy_elements";
+import { nav, dropdown } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 const nav_items = nav.querySelector("nav>ul");
