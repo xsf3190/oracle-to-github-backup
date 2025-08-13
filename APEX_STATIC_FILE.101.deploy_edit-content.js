@@ -128,6 +128,26 @@ export const init = async (element) => {
         }
     }
 
+    /* Add "List Images" button to toolbar */
+    class SelectFonts extends Plugin {
+        init() {
+            const editor = this.editor;
+            editor.ui.componentFactory.add( 'selectFonts', () => {
+                const button = new ButtonView();
+                button.set( {
+                    label: 'Select Fonts',
+                    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M11.03 3h6.149a.75.75 0 1 1 0 1.5h-5.514zm1.27 3h4.879a.75.75 0 1 1 0 1.5h-4.244zm1.27 3h3.609a.75.75 0 1 1 0 1.5h-2.973zm-2.754 2.5L8.038 4.785 5.261 11.5zm.62 1.5H4.641l-1.666 4.028H1.312l5.789-14h1.875l5.789 14h-1.663z"/></svg>',
+                    tooltip: 'Select Fonts',
+                    withText: false
+                } );
+                button.on('execute', (_) => {
+                    console.log("button clicked");
+                });
+                return button;
+            } );
+        }
+    }
+
     /* Configure CKEDITOR */
     let editor;
 
@@ -136,10 +156,10 @@ export const init = async (element) => {
                     FontColor, GeneralHtmlSupport, Heading, HorizontalLine, 
                     Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, 
                     Italic, Link, List, ListImages, Paragraph, 
-                    SelectAll, ShowBlocks, SourceEditing, Underline, UploadImage, WordCount ],
-        toolbar: [ 'heading', '|', 'undo', 'redo',  '|', 'bold', 'italic',
-                    'link', 
-                    'bulletedList', 'numberedList', '|', 'uploadImage', 'listImages', 'insertImage'],
+                    SelectAll, SelectFonts, ShowBlocks, SourceEditing, Underline, UploadImage, WordCount ],
+        toolbar: [ 'heading', '|', 'undo', 'redo',  '|', 'selectFonts', 'bold', 'italic',
+                    '|', 'link', 
+                    '|', 'uploadImage', 'listImages', 'insertImage'],
         menuBar: {
             isVisible: true
         },
