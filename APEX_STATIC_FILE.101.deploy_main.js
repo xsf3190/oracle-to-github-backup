@@ -3,29 +3,18 @@ const dropdown = document.querySelector("#menulist");
 const login_btn = dropdown.querySelector(".login-btn");
 const email = dropdown.querySelector(".email");
 const vitalsQueue = new Set();
-const smallvw = window.matchMedia("(width <= 600px)");
+const narrow_viewport = window.matchMedia("(width <= 600px)");
 
-console.log("smallvw",smallvw);
-
-if (smallvw.matches) {
+if (narrow_viewport.matches) {
     const nav = document.querySelector("nav");
-    menulist.prepend(nav);
+    if (nav.classList.contains("can-shrink")) {
+        const ul = nav.querySelector("ul");
+        menulist.prepend(nav);
+        ul.style.flexDirection="column";
+        ul.style.alignItems="start";
+        ul.style.paddingBlockEnd="1rem";
+    }
 }
-
-/*
-** ADD CWV METRIC TO QUEUE WHEN EMITTED
-*/
-const addToVitalsQueue = ({name,value,rating}) => {
-    console.log(name,value);
-    
-    vitalsQueue.add({name:name,value:value,rating:rating});
-    
-    const el = dropdown.querySelector("."+name);  
-    const valueRnd = name==="CLS" ? value.toFixed(2) : (value/1000).toFixed(2);
-    const units = name==="CLS" ? "" : "s";
-    el.textContent = valueRnd + units;
-    el.classList.add(rating);
-};
 
 /*
 ** NEW WEBSITE URL INCLUDES OWNER'S JWT TOKENS - SAVE THESE IN STORAGE AND REMOVE FROM URL
@@ -135,6 +124,12 @@ const page_weight = () => {
   return total;
 }
 
+const page_weight_kb = () => {
+    const k = 1024;
+    const i = Math.floor(Math.log(page_weight()) / Math.log(k));
+    return `${parseFloat((page_weight() / Math.pow(k, i)).toFixed(0))}KB`;
+}
+
 const total_requests = () => {
     return metrics.length;
 }
@@ -144,9 +139,7 @@ const total_requests = () => {
 */
 dropdown.addEventListener("toggle", (e) => {
     if (e.newState==="open") {
-        const k = 1024;
-        const i = Math.floor(Math.log(page_weight()) / Math.log(k));
-        dropdown.querySelector(".page-weight").textContent =`${parseFloat((page_weight() / Math.pow(k, i)).toFixed(0))}KB`;
+        dropdown.querySelector(".page-weight").textContent = page_weight_kb();
     }
 })
 /*
@@ -241,15 +234,55 @@ if (pages_edited_set.has(Number(document.body.dataset.articleid))) {
 /*
 ** TRACK RESOURCE TRANSFER SIZE  
 */
+let metric_count = 0;
+const metrics_popover_anchor = document.querySelector("[popovertarget='metrics']");
+const metrics_popover_wgt = document.querySelector("#metrics-wgt"); 
+const metrics_details = document.querySelector("#metrics tbody");
 const observer = new PerformanceObserver((list) => {
     list.getEntries().forEach((entry) => {
         if (!metrics.some( ({name}) => name===entry.name)) {
             metrics.push({entryType: entry.entryType, name:entry.name, transferSize:entry.transferSize, contentType: entry.contentType});
+            let type;
+            if (entry.entryType === "navigation") {
+                type = "HTML";
+            } else if (entry.contentType === "text/css") {
+                type = "CSS";
+            } else if (entry.contentType === "text/javascript") {
+                type = "JAVASCRIPT";
+            } else if (entry.initiatorType === "link") {
+                type = "FONT";
+            } else if (entry.initiatorType === "img") {
+                type = "IMAGE";
+            } else {
+                type = entry.initiatorType.toUpperCase();
+            }
+            metric_count++;
+            let button = '<button type="button" popovertarget="metric-popover-' + metric_count + '" style="anchor-name: --metric-' + metric_count + '">' + type + '</button>';
+            const popover = '<div id="metric-popover-' + metric_count + '" popover class="popover-right" style="position-anchor: --metric-' + metric_count + '">' + entry.name + '</div>';
+            const tr = "<tr><td>" + button + popover + "</td><td>" + entry.startTime.toFixed(0) + "</td><td>" + entry.responseEnd.toFixed(0) + "</td><td>" + (entry.responseEnd - entry.startTime).toFixed(0) + "</td><td>" + entry.transferSize + "</td></tr>";
+            metrics_details.insertAdjacentHTML("beforeend",tr);
         }
+        metrics_popover_anchor.textContent = page_weight_kb();
+        metrics_popover_wgt.textContent = page_weight_kb();
+        
     })
 });
 observer.observe({ type: "resource", buffered: true });
 observer.observe({ type: "navigation", buffered: true });
+
+/*
+** ADD CWV METRIC TO QUEUE WHEN EMITTED
+*/
+const addToVitalsQueue = ({name,value,rating}) => {
+    console.log(name,value);
+    vitalsQueue.add({name:name,value:value,rating:rating});
+    
+    const el = dropdown.querySelector("."+name);  
+    const valueRnd = name==="CLS" ? value.toFixed(2) : (value/1000).toFixed(2);
+    const units = name==="CLS" ? "" : "s";
+    el.textContent = valueRnd + units;
+    el.classList.add(rating);
+};
 
 /*
 ** START CORE WEB VITALS COLLECTION
@@ -260,3 +293,8 @@ onFCP(addToVitalsQueue);
 onLCP(addToVitalsQueue);
 onCLS(addToVitalsQueue);
 onINP(addToVitalsQueue);
+
+/*
+** GET WEB-vitAls TO EMIT
+*/
+document.body.click();
