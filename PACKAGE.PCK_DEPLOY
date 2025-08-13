@@ -758,25 +758,23 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             SELECT file_name, apex_util.blob_to_clob(file_content) file_content 
               FROM apex_application_static_files 
              WHERE application_id=101
-               AND file_name IN ('deploy_main.min.js')
+               AND file_name IN ('deploy_main.min.js', 'deploy_web_vitals5.min.js')
         ) LOOP
             addDeploy('javascript/' || C.file_name, C.file_content);
-            IF (C.file_name='deploy_main.min.js') THEN
-                l_script_sha256:=l_script_sha256 || ' ''' || getSha256(C.file_content) || '''';
-                l_script_src:=
-                    'document.addEventListener(''DOMContentLoaded'',()=>{' || 
-                        'const script = document.createElement(''script'');' ||
-                        'script.src = "/javascript/' || C.file_name || '";' ||
-                        'document.body.appendChild(script);' ||
-                    '})';
-                l_script_sha256:=l_script_sha256 || ' ''' || getSha256(l_script_src) || '''';
-            END IF;
+            l_script_sha256:=l_script_sha256 || ' ''' || getSha256(C.file_content) || '''';
         END LOOP;
+        l_script_src:=
+        'document.addEventListener(''DOMContentLoaded'',()=>{' || 
+            'const script = document.createElement(''script'');' ||
+            'script.src = "/javascript/deploy_main.min.js";' ||
+            'script.type = "module";' ||
+            'document.body.appendChild(script);' ||
+        '})';
+        l_script_sha256:=l_script_sha256 || ' ''' || getSha256(l_script_src) || '''';
 
         /*
-        **  script-src 'strict-dynamic' - allows modules to dynamically create scripts, eg. cloudinary upload widget, CJEditor
+        **  script-src 'strict-dynamic' - allows modules to dynamically create scripts, eg. cloudinary upload widget, CKEditor
         */
-
         l_headers:=
         '/*' || chr(10) || 
             q'[Content-Security-Policy: default-src 'none';]' ||
