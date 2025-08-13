@@ -386,7 +386,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
                  WHERE w.id=pWebsiteId
                    AND p.website_id=w.id
                    AND p.url=pUrl
-                   AND NVL(p.aud,'visitor') <>'admin'
                  GROUP BY p.website_id, p.ip_address, p.visit_date
                  ORDER BY p.visit_date DESC
                  OFFSET pOffset ROWS
