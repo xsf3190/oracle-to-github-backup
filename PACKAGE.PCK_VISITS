@@ -431,7 +431,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_VISITS" AS
             IF (l_rating IS NOT NULL) THEN
                 l_rating_popover:=
                 '<button type="button" class="button cwv ' || l_rating ||  '" popovertarget="popover_' || n || '" style="anchor-name: --info-btn-' || n || '">' || UPPER(l_rating) || '</button>' ||
-                '<table id="popover_' || n || '" class="settings-popover" popover style="position-anchor: --info-btn-' || n || '">' || 
+                '<table id="popover_' || n || '" class="popover-right" popover style="position-anchor: --info-btn-' || n || '">' || 
                     '<tr><td>Browser</td><td>' || C.browser || '</td></tr>' || 
                     CASE WHEN C.connection IS NOT NULL THEN 
                     '<tr><td>Connection</td><td>' || C.connection || '</td></tr>'
