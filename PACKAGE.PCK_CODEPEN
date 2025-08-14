@@ -226,24 +226,38 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
            AND r.name='visitor'
            AND o.label='Log In'
            AND a.template_id=o.template_id;
-        
+
         l_html:=
-            '<button type="button" popovertarget="menulist">' ||
-                '<svg height="1rem" viewBox="0 0 32 32" preserveAspectRatio="none">' ||
-                  '<rect class="top" x="0" y="0" width="32" height="6" fill="currentColor" />' ||
-                  '<rect class="middle" x="0" y="13" width="32" height="6" fill="currentColor" />' ||
-                  '<rect class="bottom" x="0" y="26" width="32" height="6" fill="currentColor" />' ||
-                '</svg>' ||
-            '</button>' ||
-            '<ul popover id="menulist" class="dropdown" role="list">' ||
-                '<li class="align-center"><small class="email"></small></li>' ||
-                '<li class="align-center">' ||
+            '<div>' ||
+                '<button type="button" popovertarget="metrics" style="anchor-name: --metrics-btn">' ||
+                '</button>' ||
+                '<section popover id="metrics" style="position-anchor: --metrics-btn">' ||
+                    '<p>You downloaded <span id="metrics-wgt" style="color:green"></span> to view this page.</p>' ||
+                    '<p>At the 50th percentile internet web pages weigh <span style="color:tomato">2MB</span> </p>' ||
                     '<table>' ||
-                        '<thead><tr><th>TTFB</th><th>FCP</th><th>LCP</th><th>CLS</th><th>INP</th><th>WGT</th></tr></thead>' || 
-                        '<tbody><tr><td class="TTFB"></td><td class="FCP"></td><td class="LCP"></td><td class="CLS"></td><td class="INP"></td><td class="page-weight"></td></tr></tbody>' ||
-                    '</table></li>' ||
-                '<li><button type="button" class="button login-btn" data-endpoint="' || l_uri_template || '">Log In</button></li>' ||
-            '</ul>';
+                        '<thead><tr><th>Resource</th><th>Start</th><th>End</th><th>Duration</th><th>Weight</th></tr></thead>' ||
+                        '<tbody></tbody>' ||
+                    '</table>' ||
+                '</section>' ||
+
+                '<button type="button" popovertarget="menulist" style="anchor-name: --menulist-btn">' ||
+                    '<svg height="1rem" viewBox="0 0 32 32" preserveAspectRatio="none">' ||
+                      '<rect class="top" x="0" y="0" width="32" height="6" fill="currentColor" />' ||
+                      '<rect class="middle" x="0" y="13" width="32" height="6" fill="currentColor" />' ||
+                      '<rect class="bottom" x="0" y="26" width="32" height="6" fill="currentColor" />' ||
+                    '</svg>' ||
+                '</button>' ||
+                '<ul popover id="menulist" class="dropdown" role="list"  style="position-anchor: --menulist-btn">' ||
+                    '<li class="align-center"><small class="email"></small></li>' ||
+                    '<li class="align-center">' ||
+                        '<table>' ||
+                            '<thead><tr><th>TTFB</th><th>FCP</th><th>LCP</th><th>CLS</th><th>INP</th><th>WGT</th></tr></thead>' || 
+                            '<tbody><tr><td class="TTFB"></td><td class="FCP"></td><td class="LCP"></td><td class="CLS"></td><td class="INP"></td><td class="page-weight"></td></tr></tbody>' ||
+                        '</table></li>' ||
+                    '<li><button type="button" class="button login-btn" data-endpoint="' || l_uri_template || '">Log In</button></li>' ||
+                '</ul>' ||
+            '</div>';
+            
         RETURN(l_html);
     END;
 
@@ -251,6 +265,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
     FUNCTION buildNavLabels(pWebsiteId IN website.id%type, pArticleId IN article.id%type) RETURN VARCHAR2 IS
         l_nav_labels LONG;
+        l_nav_length PLS_INTEGER:=0;
         l_article_id article.id%type;
     BEGIN
         /* IF pArticleId is a child article set aria-current-page on owner */
@@ -258,6 +273,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             IF (g_nav_labels(i).article_id=pArticleId) THEN
                 l_article_id:=pArticleId;
             END IF;
+            /* Calculate length of nav labels to guide client in case visitor using narrow device */
+            l_nav_length:=l_nav_length+LENGTH(g_nav_labels(i).navigation_label)+1;
         END LOOP;
         IF (l_article_id IS NULL) THEN
             SELECT parent_id INTO l_article_id FROM article WHERE id=pArticleId;
@@ -266,8 +283,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
         l_nav_labels:=
         '<div class="topnav flex-items space-between">' ||
             '<span class="logo"></span>' ||
-            '<nav aria-label="Main Navigation">' ||
-                '<ul role="list" class="flex-items" style="--flex-gap:.5em">';
+            '<nav aria-label="Main Navigation"'|| CASE WHEN l_nav_length>40 THEN ' class="can-shrink"' END || '>' ||
+                '<ul role="list" class="flex-items" style="--flex-gap:.5rem">';
         FOR i IN 1..g_nav_labels.COUNT LOOP
             l_nav_labels:=l_nav_labels || 
                 '<li' || CASE WHEN g_nav_labels(i).article_id=l_article_id THEN ' class="active"' END || '><a href="/' || CASE WHEN i>1 THEN apex_string_util.get_slug(g_nav_labels(i).navigation_label) END || '"' ||
