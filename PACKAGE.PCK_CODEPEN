@@ -448,9 +448,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 END IF;
 
                 CASE C.context
-                    WHEN 'TITLE' THEN
+                    WHEN 'headings' THEN
                         g_font_styles_title:=l_font_styles;
-                    WHEN 'SUBTITLE' THEN
+                    WHEN 'text' THEN
                         g_font_styles_subtitle:=l_font_styles;
                 END CASE;
 
