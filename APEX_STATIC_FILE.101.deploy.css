@@ -35,7 +35,7 @@ form {
 }
 
 main {
-  font-family: var(--font-family-subtitle);
+  font-family: var(--font-family-text);
   padding-inline: 1rem;
   container-type: inline-size;
 }
@@ -216,14 +216,14 @@ body>header img {
   place-self: start center;
   line-height: 1;
   text-align: center;
-  font-family: var(--font-family-title);
+  font-family: var(--font-family-headings);
 }
 
 .subtitle {
   grid-area: container;
   line-height: 1;
   text-align: center;
-  font-family: var(--font-family-subtitle);
+  font-family: var(--font-family-text);
   margin-block-start: 3vmin;
   place-self:end center;
 }
@@ -235,7 +235,7 @@ body>header img {
 /* FOOTER STYLES */
 body>footer {
   margin-block-start: 1rem;
-  font-family: var(--font-family-subtitle);
+  font-family: var(--font-family-text);
   font-size: var(--step--1);
   background-color: var(--footer-background-color);
   color: var(--footer-color);
@@ -353,7 +353,7 @@ main h2,
 main h3,
 main h4 {
   text-wrap: pretty;
-  font-family: var(--font-family-title);
+  font-family: var(--font-family-headings);
 }
 
 
