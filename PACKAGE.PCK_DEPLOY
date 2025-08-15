@@ -426,6 +426,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_src_url_regex varchar2(30):='url\(([^)]*)\';
 
          TYPE tt_fonts IS RECORD (
+            font_id font.id%type,
             family font.family%type,
             wght_bold font.wght_end%type,
             wght_normal font.wght_end%type,
@@ -550,16 +551,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             /* For each context collect distinct set of italic and normal characters in order to optimise font */
             l_body_html:=l_labels(i).body_html;
 
-            /* Remove <code> elements which are rendered in local monospace font */
+            /* Remove <code> elements which are always rendered in local monospace font */
             l_body_html:=REGEXP_REPLACE(l_body_html,l_code_regex,null);
 
             IF (i=1) THEN
                 FOR C IN (
                     SELECT 
+                        f.id font_id,
                         f.family,
                         CASE WHEN f.wght_end<700 THEN f.wght_end ELSE 700 END wght_bold,
                         CASE WHEN f.wght_start>400 THEN f.wght_start ELSE 400 END wght_normal,
-                        DECODE(wf.context,'TITLE','headings','text') context,
+                        wf.context,
                         COUNT(DISTINCT wf.font_id) OVER () nb_fonts,
                         CASE 
                             WHEN wf.context='TITLE' THEN 
@@ -577,6 +579,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                        AND wf.font_id=f.id
                 ) 
                 LOOP
+                    l_fonts(C.context).font_id:=C.font_id;
                     l_fonts(C.context).family:=C.family;
                     l_fonts(C.context).wght_bold:=C.wght_bold;
                     l_fonts(C.context).wght_normal:=C.wght_normal;
@@ -656,6 +659,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_normal || 'italic', l_fonts(l_context).chars_italic);
                     l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, l_fonts(l_context).wght_normal, l_fonts(l_context).chars_normal);
             END CASE;
+            UPDATE website_font 
+               SET chars_normal=l_fonts(l_context).chars_normal,
+                   chars_italic=l_fonts(l_context).chars_italic,
+                   chars_bold_normal=l_fonts(l_context).chars_bold_normal,
+                   chars_bold_italic=l_fonts(l_context).chars_bold_italic
+             WHERE website_id=pWebsiteid
+               AND font_id=l_fonts(l_context).font_id
+               AND context=l_context;
             l_context:=l_fonts.NEXT(l_context);
         END LOOP;
         
@@ -702,32 +713,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_robots:='User-agent: *' || chr(10) || 'Allow: /' || chr(10) || chr(10) || 'Sitemap: ' || l_ssl_url || '/sitemap.xml';
 
-        /* 
-        ** BUILD IMPORT MAP OF JAVASCRIPT MODULES (BARE MODULE NAMES ONLY) AND CSS STYLESHEETS
-        ** DEPLOY "test" MODULES IF THE DOMAIN NAME MATCHES ADMIN USER'S EMAIL
-        */
-        /*
-        l_importmap:='"imports":{';
-        l_importmap_integrity:='"integrity":{';
-        l_deploy_env:=CASE WHEN pEnv='TEST' THEN 1 WHEN pEnv='LIVE' THEN 3 END;
-
-        FOR C IN (
-            SELECT module_name, 
-                    CASE WHEN pEsmLibrary='live' THEN host_name ELSE REPLACE(host_name,'/live/','/test/') END host_name, 
-                    CASE WHEN pEsmLibrary='live' THEN sha256_live ELSE sha256_test END sha256
-              FROM es_modules 
-             WHERE BITAND(deploy_envs,l_deploy_env)=l_deploy_env
-             ORDER BY 1
-        ) LOOP
-            l_importmap:=l_importmap || '"' || SUBSTR(C.module_name,1,INSTR(C.module_name,'.')-1) || '":"' || C.host_name || '",';
-            l_importmap_integrity:=l_importmap_integrity || '"' || C.host_name || '":"' || C.sha256 || '",';
-        END LOOP;
-        
-        l_importmap:=RTRIM(l_importmap,',') || '}';
-        l_importmap_integrity:=RTRIM(l_importmap_integrity,',') || '}';
-
-        l_importmap:='{' || l_importmap || ',' || l_importmap_integrity || '}';
-        */
         l_deploy_env:=CASE WHEN pEnv='TEST' THEN 1 WHEN pEnv='LIVE' THEN 3 END;
         WITH data AS
         (
