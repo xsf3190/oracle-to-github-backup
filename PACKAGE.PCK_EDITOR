@@ -18,8 +18,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_EDITOR" is
     --
     PROCEDURE getPages(pWebsiteId IN website.id%type, pStatus OUT NUMBER);
     --
-    PROCEDURE initWebsiteFonts(pWebsiteId IN website.id%type, pTitleFont IN font.family%type, pSubTitleFont IN font.family%type DEFAULT NULL);
-    --
     PROCEDURE updateEditorContent(pWebsiteId IN website.id%type, pArticleId IN article.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
     --
     PROCEDURE updateFooter(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
@@ -212,6 +210,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
                 l_deployment_complete:=TRUE;
             END IF;
         END LOOP;
+
+        IF (l_deployment_complete) THEN
+            update article 
+            set deployed_date=case when l_env='TEST' THEN current_timestamp ELSE deployed_date end,
+                deployed_date_custom=case when l_env='LIVE' THEN current_timestamp ELSE deployed_date_custom end
+            where id in
+            (
+            select id from article
+            connect by prior id=parent_id
+            start with id in (select article_id from website_article where website_id=pWebsiteid)
+            );
+        END IF;
 
         apex_json.open_object; 
         apex_json.write('success', TRUE);
@@ -450,41 +460,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_EDITOR" is
     EXCEPTION WHEN OTHERS THEN
         pck_core.log_error(pStatus);
 
-    END;
-
-    /* 
-    **  INITIALIZE WEBSITE FONTS
-    */
-    PROCEDURE initWebsiteFonts(pWebsiteId IN website.id%type, pTitleFont IN font.family%type, pSubTitleFont IN font.family%type DEFAULT NULL) IS
-    BEGIN
-        DELETE website_font WHERE website_id=pWebsiteId;
-        INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, font_size, underline, margin)
-        SELECT pWebsiteId, id, 'TITLE', 
-                NVL2(ital_start,0,NULL), 
-                CASE WHEN wght_start IS NOT NULL THEN 400 END, 
-                CASE WHEN wdth_start IS NOT NULL THEN 100 END, 
-                CASE WHEN opsz_start IS NOT NULL THEN 14 END, 
-                CASE WHEN slnt_start IS NOT NULL THEN 0 END,
-                6,
-                0,
-                0
-          FROM font
-         WHERE family=pTitleFont;
-        
-        IF (pSubTitleFont IS NOT NULL) THEN
-            INSERT INTO website_font(website_id, font_id, context, ital, wght, wdth, opsz, slnt, font_size, underline, margin)
-            SELECT pWebsiteId, id, 'SUBTITLE', 
-                    NVL2(ital_start,0,NULL), 
-                    CASE WHEN wght_start IS NOT NULL THEN 400 END, 
-                    CASE WHEN wdth_start IS NOT NULL THEN 100 END, 
-                    CASE WHEN opsz_start IS NOT NULL THEN 14 END, 
-                    CASE WHEN slnt_start IS NOT NULL THEN 0 END,
-                    6,
-                    0,
-                    0
-              FROM font
-             WHERE family=pSubTitleFont;
-        END IF;
     END;
 
     /* 
