@@ -28,9 +28,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
     --
     PROCEDURE callIpdataAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pData IN OUT NOCOPY CLOB);
     --
+    PROCEDURE callMinifyCss(pFileContent IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB);
+    --
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB);
     --
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB);
+    --
+    PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY BLOB, pData IN OUT NOCOPY CLOB);
     --
     PROCEDURE callStripeAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pParmNames IN apex_application_global.vc_arr2, pParmValues IN apex_application_global.vc_arr2, pData IN OUT NOCOPY CLOB);
     --
@@ -216,29 +220,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         COMMIT;
     END;
 
-    /*
-    FUNCTION getNetlifyIntallationId(pUserId IN users.id%type) RETURN VARCHAR2 IS
-        l_netlify_installation_id users.netlify_installation_id%type;
-    BEGIN
-        -- Get user's github token and account name (repository owner)
-        FOR C IN (SELECT netlify_installation_id FROM users WHERE id=pUserId) LOOP 
-            l_netlify_installation_id:=C.netlify_installation_id;
-        END LOOP;
-
-        -- Get Administrator value if user has not registered github repository
-        IF (l_netlify_installation_id IS NULL) THEN
-            SELECT u.netlify_installation_id
-              INTO l_netlify_installation_id
-              FROM apex_workspace_apex_users w, users u 
-             WHERE w.email=u.email
-               AND w.is_admin='Yes'
-               FETCH FIRST ROW ONLY;
-        END IF;
-
-        RETURN (l_netlify_installation_id);
-    END;
-    */
-
     PROCEDURE getCloudinaryData(pUserId IN users.id%type, pCloudName IN OUT users.cld_cloud_name%type, pCldApiKey IN OUT users.cld_api_key%type, pCldImageMaxSize IN OUT INTEGER, pCldVideoMaxSize IN OUT INTEGER, pGoogleApiKey IN OUT VARCHAR2) IS
         l_cld_cloud_name users.cld_cloud_name%type;
         l_cld_api_key users.cld_api_key%type;
@@ -361,8 +342,66 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
     END;
 
     /*
-    **  NETLIFY API - pBody is VARCHAR2
+    ** MINIFY CSS FILE USING TOPTAL UTILITY API.
+    ** TODO: REPLACE WITH CSS LIGHTNING
     */
+    PROCEDURE callMinifyCss(pFileContent IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB) IS
+        l_url VARCHAR2(200):='https://www.toptal.com/developers/cssminifier/api/raw';
+        l_clob clob;
+        l_parm_names   apex_application_global.VC_ARR2; 
+        l_parm_values  apex_application_global.VC_ARR2;
+        l_error_message LONG;
+    BEGIN
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name  := 'Content-Type';
+        apex_web_service.g_request_headers(1).value := 'application/x-www-form-urlencoded';
+
+        l_parm_names(1):='input';
+        l_parm_values(1):=pFileContent;
+
+        pData:=apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'POST', p_parm_name=>l_parm_names, p_parm_value=>l_parm_values);
+
+        pck_core.log(apex_web_service.g_status_code || ' : ' || 'GET' || ' - ' || l_url);
+
+        IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
+            RETURN;
+        END IF;
+
+        FOR C IN (SELECT status,title,detail FROM JSON_TABLE(pData,'$.errors[0]' COLUMNS (status,title,detail))) LOOP
+            l_error_message:='status: ' || C.status || ' title: ' || C.title || ' detail: ' || C.detail;
+        END LOOP;
+        RAISE_APPLICATION_ERROR(-20030,l_error_message);
+    END;
+
+    /*
+    **  NETLIFY API - handles CLOB, BLOB and VARCHAR2 requests
+    */
+    PROCEDURE setNetlifyHeaders(pUserid IN users.id%type, pContentType IN VARCHAR2, pAccountSlug IN OUT users.netlify_account_slug%type) IS
+        l_netlify_token users.netlify_token%type;
+    BEGIN
+        /* Get user's netlify token */
+        FOR C IN (SELECT netlify_token, netlify_account_slug FROM users WHERE id=pUserId) LOOP 
+            l_netlify_token:=C.netlify_token;
+            pAccountSlug:=C.netlify_account_slug;
+        END LOOP;
+
+        /* Use Administrator's token if user does not have token */
+        IF (l_netlify_token IS NULL) THEN
+            SELECT u.netlify_token, u.netlify_account_slug
+              INTO l_netlify_token, pAccountSlug
+              FROM apex_workspace_apex_users w, users u 
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+               FETCH FIRST ROW ONLY;
+        END IF;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'Authorization';
+        apex_web_service.g_request_headers(1).value := 'Bearer ' || l_netlify_token;   
+        apex_web_service.g_request_headers(2).name := 'Content-Type';
+        apex_web_service.g_request_headers(2).value := pContentType;
+    END;
+
     FUNCTION getNetlifyResponse RETURN VARCHAR2 IS
         l_response_message VARCHAR2(500);
     BEGIN
@@ -374,33 +413,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
         RETURN (' | ' || RTRIM(l_response_message,','));
     END;
 
-    PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
-        l_netlify_token users.netlify_token%type;
-        l_netlify_account_slug users.netlify_account_slug%type;
-        l_netlify_url VARCHAR2(200):='https://api.netlify.com/api/v1/';
+    PROCEDURE processNetlifyError(pMethod IN VARCHAR2, pUrl IN VARCHAR2, pData IN CLOB) IS
         l_error_message LONG;
     BEGIN
-        /* Get user's netlify token */
-        FOR C IN (SELECT netlify_token, netlify_account_slug FROM users WHERE id=pUserId) LOOP 
-            l_netlify_token:=C.netlify_token;
-            l_netlify_account_slug:=C.netlify_account_slug;
+        l_error_message:=pMethod || ' ' || pUrl || ' https status:' || apex_web_service.g_status_code;
+        FOR C IN (SELECT error_message FROM JSON_TABLE(pData,'$' COLUMNS (error_message)) WHERE error_message IS NOT NULL) LOOP
+            l_error_message:=l_error_message || chr(10) || 'API message: ' || C.error_message;
         END LOOP;
+        RAISE_APPLICATION_ERROR(-20030,l_error_message);
+    END;
 
-        /* Use Administrator's token if user does not have token */
-        IF (l_netlify_token IS NULL) THEN
-            SELECT u.netlify_token, u.netlify_account_slug
-              INTO l_netlify_token, l_netlify_account_slug
-              FROM apex_workspace_apex_users w, users u 
-             WHERE w.email=u.email
-               AND w.is_admin='Yes'
-               FETCH FIRST ROW ONLY;
-        END IF;
-
-        apex_web_service.clear_request_headers;
-        apex_web_service.g_request_headers(1).name := 'Authorization';
-        apex_web_service.g_request_headers(1).value := 'Bearer ' || l_netlify_token;   
-        apex_web_service.g_request_headers(2).name := 'Content-Type';
-        apex_web_service.g_request_headers(2).value := 'application/json';
+    /*
+    **  NETLIFY API - pBody is JSON, E.G. GET REQUEST FOR SITE ID, DEPLOYMENT STATUS ETC.
+    */
+    PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN VARCHAR2 DEFAULT NULL, pStatusAllowed IN INTEGER DEFAULT NULL, pData IN OUT NOCOPY CLOB) IS
+        l_netlify_account_slug users.netlify_account_slug%type;
+        l_netlify_url VARCHAR2(200):='https://api.netlify.com/api/v1/';
+    BEGIN
+        setNetlifyHeaders(pUserId=>pUserId, pContentType=>'application/json', pAccountSlug=>l_netlify_account_slug);
 
         l_netlify_url:=l_netlify_url || pEndpoint;
 
@@ -414,63 +444,53 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS
             pData := apex_web_service.make_rest_request(p_url=>l_netlify_url, p_http_method=>pMethod, p_body=>pBody);
         END IF;
 
-        pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_netlify_url || getNetlifyResponse());
-
         IF (apex_web_service.g_status_code BETWEEN 200 AND 299) OR (apex_web_service.g_status_code=pStatusAllowed) THEN
-            RETURN;
+            pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_netlify_url || getNetlifyResponse());
+        ELSE
+            processNetlifyError(pMethod, l_netlify_url, pData);
         END IF;
-
-        l_error_message:=pMethod || ' ' || l_netlify_url || ' https status:' || apex_web_service.g_status_code;
-        FOR C IN (SELECT error_message FROM JSON_TABLE(pData,'$' COLUMNS (error_message)) WHERE error_message IS NOT NULL) LOOP
-            l_error_message:=l_error_message || chr(10) || 'API message: ' || C.error_message;
-        END LOOP;
-        RAISE_APPLICATION_ERROR(-20030,l_error_message);
     END;
 
     /*
-    **  NETLIFY API - pBody is BLOB
+    **  NETLIFY API - pBody is CLOB - E.G. UPLOAD CSS AND HTML FILES
     */
     PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pData IN OUT NOCOPY CLOB) IS
-        l_netlify_token users.netlify_token%type;
+        l_netlify_account_slug users.netlify_account_slug%type;
         l_netlify_url VARCHAR2(200):='https://api.netlify.com/api/v1/';
         l_error_message LONG;
     BEGIN
-        /* Get user's netlify token */
-        FOR C IN (SELECT netlify_token FROM users WHERE id=pUserId) LOOP 
-            l_netlify_token:=C.netlify_token;
-        END LOOP;
-
-        /* Use Administrator's token if user does not have token */
-        IF (l_netlify_token IS NULL) THEN
-            SELECT u.netlify_token 
-              INTO l_netlify_token 
-              FROM apex_workspace_apex_users w, users u 
-             WHERE w.email=u.email
-               AND w.is_admin='Yes'
-               FETCH FIRST ROW ONLY;
-        END IF;
-
-        apex_web_service.clear_request_headers;
-        apex_web_service.g_request_headers(1).name := 'Authorization';
-        apex_web_service.g_request_headers(1).value := 'Bearer ' || l_netlify_token;   
-        apex_web_service.g_request_headers(2).name := 'Content-Type';
-        apex_web_service.g_request_headers(2).value := 'application/octet-stream';
+        setNetlifyHeaders(pUserId=>pUserId, pContentType=>'application/octet-stream', pAccountSlug=>l_netlify_account_slug);
 
         l_netlify_url:=l_netlify_url || pEndpoint;
 
         pData := apex_web_service.make_rest_request(p_url=>l_netlify_url, p_http_method=>pMethod, p_body=>pBody);
 
-        pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_netlify_url);
+        IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
+            pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_netlify_url || getNetlifyResponse());
+        ELSE
+            processNetlifyError(pData, pMethod, l_netlify_url);
+        END IF;
+    END;
+
+    /*
+    **  NETLIFY API - pBody is BLOB - E.G. UPLOAD FONT FILES
+    */
+    PROCEDURE callNetlifyAPI(pUserId IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY BLOB, pData IN OUT NOCOPY CLOB) IS
+        l_netlify_account_slug users.netlify_account_slug%type;
+        l_netlify_url VARCHAR2(200):='https://api.netlify.com/api/v1/';
+        l_return BLOB;
+    BEGIN
+        setNetlifyHeaders(pUserId=>pUserId, pContentType=>'application/octet-stream', pAccountSlug=>l_netlify_account_slug);
+
+        l_netlify_url:=l_netlify_url || pEndpoint;
+
+        l_return:=apex_web_service.make_rest_request_b(p_url=>l_netlify_url, p_http_method=>pMethod, p_body_blob=>pBody);
 
         IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
-            RETURN;
+            pck_core.log(apex_web_service.g_status_code || ' : ' || pMethod || ' - ' || l_netlify_url || getNetlifyResponse());
+        ELSE
+            processNetlifyError(pData, pMethod, l_netlify_url);
         END IF;
-
-        l_error_message:=pMethod || ' ' || l_netlify_url || ' https status:' || apex_web_service.g_status_code;
-        FOR C IN (SELECT error_message FROM JSON_TABLE(pData,'$' COLUMNS (error_message)) WHERE error_message IS NOT NULL) LOOP
-            l_error_message:=l_error_message || chr(10) || 'API message: ' || C.error_message;
-        END LOOP;
-        RAISE_APPLICATION_ERROR(-20030,l_error_message);
     END;
 
     /*
