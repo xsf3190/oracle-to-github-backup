@@ -249,7 +249,9 @@ const observer = new PerformanceObserver((list) => {
                 type = "CSS";
             } else if (entry.contentType === "text/javascript") {
                 type = "JAVASCRIPT";
-            } else if (entry.initiatorType === "link") {
+            } else if (entry.contentType === "text/json") {
+                type = "JSON";
+            } else if (entry.name.split(".").pop() === "woff2") {
                 type = "FONT";
             } else if (entry.initiatorType === "img") {
                 type = "IMAGE";
