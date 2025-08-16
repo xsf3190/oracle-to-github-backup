@@ -16,6 +16,8 @@ export const init = (element) => {
     
     endpoint = element.dataset.endpoint;
 
+    sessionStorage.removeItem("pages_edited");
+
     callAPI(endpoint,"POST",{})
         .then( (data) => {
             content.replaceChildren();
