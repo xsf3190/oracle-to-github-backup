@@ -1,5 +1,7 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS 
     --
+    PROCEDURE callDogfaceAPI(pUserid IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pBodyBlob IN OUT NOCOPY BLOB, pData IN OUT NOCOPY CLOB);
+    --
     FUNCTION getGithubReposOwner(pUserId IN users.id%type) RETURN VARCHAR2;
     --
     --FUNCTION getNetlifyIntallationId(pUserId IN users.id%type) RETURN VARCHAR2;
@@ -43,6 +45,97 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_API" IS
 END;
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_API" IS 
+
+    /*
+    **  DOGFACE API CALLS
+    */
+    FUNCTION getDogfaceAPIToken(pUserid IN users.id%type) RETURN VARCHAR2 IS
+        l_dogface_api_key users.dogface_api_key%type;
+        l_dogface_api_secret users.dogface_api_secret%type;
+        l_parm_names   apex_application_global.VC_ARR2; 
+        l_parm_values  apex_application_global.VC_ARR2;
+        l_url VARCHAR2(200);
+        l_return CLOB;
+        l_access_token VARCHAR2(2000);
+    BEGIN
+        FOR C IN (
+            SELECT u.dogface_api_key, u.dogface_api_secret
+              FROM users u
+             WHERE id=pUserid
+        ) LOOP
+            l_dogface_api_key:=C.dogface_api_key;
+            l_dogface_api_secret:=C.dogface_api_secret;
+        END LOOP;
+        IF (l_dogface_api_key IS NULL) THEN
+            SELECT u.dogface_api_key, u.dogface_api_secret
+              INTO l_dogface_api_key, l_dogface_api_secret
+              FROM users u, apex_workspace_apex_users w
+             WHERE w.email=u.email
+               AND w.is_admin='Yes'
+             ORDER BY date_created
+             FETCH FIRST ROW ONLY;
+        END IF;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name  := 'Content-Type';
+        apex_web_service.g_request_headers(1).value := 'application/x-www-form-urlencoded';
+
+        l_parm_names(1):='grant_type';
+        l_parm_values(1):='client_credentials';
+        l_parm_names(2):='client_id';
+        l_parm_values(2):=l_dogface_api_key;
+        l_parm_names(3):='client_secret';
+        l_parm_values(3):=l_dogface_api_secret;
+
+        /* GET JWT TOKEN */
+        l_url:='https://b15.florentmeijer.com/login/protocol/openid-connect/token';
+        l_return:=apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>'POST', p_parm_name=>l_parm_names, p_parm_value=>l_parm_values);
+
+        IF NOT (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
+            RAISE_APPLICATION_ERROR(-20070,'Error in callDogfaceAPI - get token');
+        END IF;
+        
+        SELECT access_token INTO l_access_token FROM JSON_TABLE(l_return,'$' COLUMNS (access_token));
+        RETURN (l_access_token);
+    END;
+
+    PROCEDURE callDogfaceAPI(pUserid IN users.id%type, pEndpoint IN VARCHAR2, pMethod IN VARCHAR2, pBody IN OUT NOCOPY CLOB, pBodyBlob IN OUT NOCOPY BLOB, pData IN OUT NOCOPY CLOB) IS
+        l_url VARCHAR2(200);
+        l_return CLOB;
+        l_access_token VARCHAR2(2000);
+        l_content_type VARCHAR2(30);
+        l_requested CLOB;
+    BEGIN
+        l_access_token:=getDogfaceAPIToken(pUserid);
+
+        l_content_type:=CASE WHEN pMethod='POST' THEN 'application/json' ELSE 'application/octet-stream' END;
+
+        l_url:='https://api.b15.florentmeijer.com/serve-static-content/files/' || pEndpoint;
+
+        apex_web_service.clear_request_headers;
+        apex_web_service.g_request_headers(1).name := 'Authorization';
+        apex_web_service.g_request_headers(1).value := 'Bearer ' || l_access_token;
+        apex_web_service.g_request_headers(2).name  := 'Content-Type';
+        apex_web_service.g_request_headers(2).value := l_content_type;
+        IF (pMethod='PUT') THEN
+            apex_web_service.g_request_headers(3).name  := 'Content-Length';
+            apex_web_service.g_request_headers(3).value := dbms_lob.getlength(pBody);
+        END IF;
+
+        IF (pBody IS NOT NULL) THEN
+            pData:=apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>pMethod, p_body=>pBody);
+        ELSIF (pBodyBlob IS NOT NULL) THEN
+            pData:=apex_web_service.make_rest_request(p_url=>l_url, p_http_method=>pMethod, p_body_blob=>pBodyBlob);
+        ELSE
+            RAISE_APPLICATION_ERROR(-20070, 'Error: neither clob nor blob is set ' || l_url);
+        END IF;
+        
+        IF (apex_web_service.g_status_code BETWEEN 200 AND 299) THEN
+            RETURN;
+        END IF;
+
+        RAISE_APPLICATION_ERROR(-20070, 'Error:' || apex_web_service.g_status_code || ' - ' || l_url);
+    END;
 
     /*
     **  WHATISMYBROWSER API
