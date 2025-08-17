@@ -409,7 +409,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         TYPE tt_files IS RECORD (
             file_name VARCHAR2(200),
             file_content CLOB,
-            file_content_b BLOB
+            file_content_b BLOB,
+            md5 VARCHAR2(32),
+            content_length NUMBER
         );
         TYPE t_files IS TABLE OF tt_files INDEX BY VARCHAR2(40);
         l_deploy_files t_files;
@@ -466,6 +468,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_url VARCHAR2(200);
         n PLS_INTEGER;
 
+        l_dogface_requested CLOB;
+        l_dogface_required CLOB;
+        l_dogface_endpoint VARCHAR2(200);
+        l_dogface_empty_clob CLOB:=EMPTY_CLOB();
+        l_dogface_empty_blob BLOB:=EMPTY_BLOB();
+
         /* CLOB SIGNATURE */
         PROCEDURE addDeploy(pFilename IN VARCHAR2, pFileContent IN OUT NOCOPY CLOB) IS
         BEGIN
@@ -473,6 +481,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_deploy_files(l_sha1).file_name:=pFilename;
             l_deploy_files(l_sha1).file_content:=pFileContent;
             l_files.put(pFilename, l_sha1);
+            IF (pEsmLibrary='test') THEN
+                l_deploy_files(l_sha1).md5:=LOWER(dbms_crypto.hash(src => pFileContent, typ => dbms_crypto.hash_md5));
+                l_deploy_files(l_sha1).content_length:=dbms_lob.getlength(pFileContent);
+            END IF;
         END;
 
         /* BLOB SIGNATURE */
@@ -482,6 +494,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_deploy_files(l_sha1).file_name:=pFilename;
             l_deploy_files(l_sha1).file_content_b:=pFileContent;
             l_files.put(pFilename, l_sha1);
+            IF (pEsmLibrary='test') THEN
+                l_deploy_files(l_sha1).md5:=LOWER(dbms_crypto.hash(src => pFileContent, typ => dbms_crypto.hash_md5));
+                l_deploy_files(l_sha1).content_length:=dbms_lob.getlength(pFileContent);
+            END IF;
         END;
 
         FUNCTION getFontFilename(pFamily IN VARCHAR2, pItal IN VARCHAR2, pWght IN VARCHAR2) RETURN VARCHAR2 IS
@@ -508,17 +524,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             pck_api.callGoogleAPI(l_api_url,l_font_face);
 
             /* GET THE GOOGLE FONT URL FROM THE FONT FACE TO DOWNLOAD THE FONT */
+            l_font_filename:=getFontFilename(pFamily, pItal, pWght);
+            logDeployment(pWebsiteId, pSiteId, 'Download Google - '||l_font_filename || '(' || LENGTH(pChars) || ' chars)');
             l_font_url:=REGEXP_SUBSTR(l_font_face, l_url_regex, 1, 1, NULL, 1);
             l_font_download:=apex_web_service.make_rest_request_b(p_url=>l_font_url, p_http_method=>'GET');
 
-            l_font_filename:=getFontFilename(pFamily, pItal, pWght);
-
-            logDeployment(pWebsiteId, pSiteId, 'Downloading Google font '||l_font_filename);
             addDeploy(pFilename=>l_font_filename, pFileContent=>l_font_download);
 
-            l_font_filename:='("/' || l_font_filename || '")';
+            l_font_preload:=l_font_preload || '<link rel="preload" href="/' || l_font_filename || '" as="font" type="font/woff2" />';
 
             /* REPLACE GOOGLE FONT URL WITH SELF-HOSTED URL */
+            l_font_filename:='("/' || l_font_filename || '")';
             l_font_face:=REGEXP_REPLACE(l_font_face,l_url_regex,l_font_filename,1,1);
             RETURN (l_font_face);
         END;
@@ -528,11 +544,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         */
         FUNCTION buildFontface(pFamily IN VARCHAR2, pItal IN VARCHAR2, pWght IN VARCHAR2) RETURN VARCHAR2 IS
             l_font_face LONG;
-            l_font_file_name website_files.file_name%type;
+            l_font_filename website_files.file_name%type;
             l_sha1 website_files.sha1%type;
         BEGIN
-            l_font_file_name:=getFontFilename(pFamily, pItal, pWght);
-            pck_core.log(l_font_file_name);
+            l_font_filename:=getFontFilename(pFamily, pItal, pWght);
 
             l_font_face:=
             '@font-face {' ||
@@ -541,11 +556,13 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 'font-weight:' || pWght || ';' ||
                 'font-stretch:100%;' ||
                 'font-display:swap;' ||
-                'src: url("/' || l_font_file_name || '") format("woff2");' ||
+                'src: url("/' || l_font_filename || '") format("woff2");' ||
             '}';
 
-            SELECT sha1 INTO l_sha1 FRom website_files WHERE website_id=pWebsiteId AND file_name=l_font_file_name;
-            l_files.put(l_font_file_name, l_sha1);
+            SELECT sha1 INTO l_sha1 FRom website_files WHERE website_id=pWebsiteId AND file_name=l_font_filename;
+            l_files.put(l_font_filename, l_sha1);
+
+            l_font_preload:=l_font_preload || '<link rel="preload" href="/' || l_font_filename || '" as="font" type="font/woff2" />';
 
             RETURN (l_font_face);
         END;
@@ -746,16 +763,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                AND context=l_context;
             l_context:=l_fonts.NEXT(l_context);
         END LOOP;
-        /*
-        n:=REGEXP_COUNT(l_fontfaces,l_src_url_regex);
-        IF (n>0) THEN
-            FOR j IN 1..n 
-            LOOP
-                l_font_preload:=l_font_preload || 
-                '<link rel="preload" href="' || REGEXP_SUBSTR(l_fontfaces,l_src_url_regex,1,j,null,1) || '" as="font" type="font/woff2" crossorigin>';
-            END LOOP;
-        END IF;
-        */
 
         /*
         ** Assemble complete css file.
@@ -904,8 +911,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     CASE WHEN l_labels(i).img_count>0 THEN
                     '<link rel="preconnect" href="https://res.cloudinary.com">'
                     END ||
-                    --'<script type="importmap" integrity="' || l_importmap_sha256 || '">' || l_importmap || '</script>' ||
-                    --l_font_preload ||
+                    l_font_preload ||
                     '<link rel="stylesheet" href="/css/styles.min.css">' ||
                     '<script>' || l_script_src || '</script>' ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
@@ -931,13 +937,14 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /*
         ** DEPLOYMENT TO NETLIFY
         ** 1) SEND SHA1 OF ALL FILES IN WEBSITE
-        ** 2) RESPONSE IS ARRAY OF SHA1 REQUIRED TO BE UPLOADED
+        ** 2) NETLIFY RESPONSE INCLUDES ARRAY OF SHA1 REQUIRED TO BE UPLOADED
         ** 3) UPLOAD THE REQUIRED FILES
         */
         l_json.put('files',l_files);
 
         pck_api.callNetlifyAPI(pUserId=>pUserId, pEndpoint=>'sites/' || pSiteId || '/deploys', pMethod=>'POST', pBody=>l_json.stringify, pData=>l_clob);
 
+        /* NEED THIS FOR ASYNC DEPLOYMENT STATUS MONITORING */
         UPDATE website SET netlify_deploy_id=(SELECT id FROM JSON_TABLE(l_clob, '$' COLUMNS (id))) WHERE id=pWebsiteId;
         COMMIT;
 
@@ -964,15 +971,18 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                  WHERE website_id=pWebsiteId 
                    AND file_name=l_deploy_files(l_sha1).file_name;
                 EXCEPTION WHEN NO_DATA_FOUND THEN
-                    INSERT INTO website_files(website_id, file_name, sha1)
-                    VALUES (pWebsiteId, l_deploy_files(l_sha1).file_name, l_sha1);
+                    INSERT INTO website_files(website_id, file_name, sha1, md5, content_length)
+                    VALUES (pWebsiteId, l_deploy_files(l_sha1).file_name, l_sha1, l_deploy_files(l_sha1).md5, l_deploy_files(l_sha1).content_length);
                     n:=0;
             END;
 
             IF (n=1) THEN
                 IF (l_sha1<>l_sha1_prev) THEN
                     UPDATE website_files
-                       SET sha1=l_sha1, sha1_updated=l_current_timestamp
+                       SET sha1=l_sha1, 
+                           md5=l_deploy_files(l_sha1).md5,
+                           content_length=l_deploy_files(l_sha1).content_length,
+                           sha1_updated=l_current_timestamp
                      WHERE website_id=pWebsiteId 
                        AND file_name=l_deploy_files(l_sha1).file_name;
                 END IF;
@@ -980,6 +990,36 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             l_sha1:=l_deploy_files.NEXT(l_sha1);
         END LOOP;
+
+        IF (pEsmLibrary='test') THEN
+            SELECT json_arrayagg(
+                    json_object(KEY 'path' VALUE '/henk.florentmeijer.com/' || file_name, KEY 'hash' VALUE md5)
+                returning clob) 
+            INTO l_dogface_requested
+            FROM website_files
+            WHERE website_id=pWebsiteid;
+
+            pck_api.callDogfaceAPI(pUserId=>pUserId, pEndpoint=>'need-for-upload', pMethod=>'POST', pBody=>l_dogface_requested, pBodyBlob=>l_dogface_empty_blob, pData=>l_dogface_required);
+
+            FOR C IN (
+                SELECT df.md5, wf.sha1, wf.file_name 
+                  FROM website_files wf, 
+                        JSON_TABLE(l_dogface_required, '$[*]' 
+                        COLUMNS (md5 varchar2 path '$')) df
+                 WHERE df.md5=wf.md5
+                   AND instr(wf.file_name,'font')=0
+            ) LOOP
+                --IF (C.file_name<>'_headers') THEN
+                    l_dogface_endpoint:=C.md5 || '/henk.florentmeijer.com/' || C.file_name;
+                    IF (l_deploy_files(C.sha1).file_content IS NOT NULL) THEN
+                        pck_api.callDogfaceAPI(pUserId=>pUserId, pMethod=>'PUT', pEndpoint=>l_dogface_endpoint, pBody=>l_deploy_files(C.sha1).file_content, pBodyBlob=>l_dogface_empty_blob, pData=>l_clob);
+                    ELSE
+                        pck_api.callDogfaceAPI(pUserId=>pUserId, pMethod=>'PUT', pEndpoint=>l_dogface_endpoint, pBody=>l_dogface_empty_clob, pBodyBlob=>l_deploy_files(C.sha1).file_content_b, pData=>l_clob);
+                    END IF;
+                    pck_core.log(l_clob);
+                --END IF;
+            END LOOP;
+        END IF;
 
         -- DELETE website_files WHERE website_id=pWebsiteId AND (sha1_updated<l_current_timestamp OR sha1_reused<l_current_timestamp);
 
