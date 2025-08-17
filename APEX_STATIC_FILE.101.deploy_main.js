@@ -236,7 +236,6 @@ if (pages_edited_set.has(Number(document.body.dataset.articleid))) {
 */
 let metric_count = 0;
 const metrics_popover_anchor = document.querySelector("[popovertarget='metrics']");
-const metrics_popover_wgt = document.querySelector("#metrics-wgt"); 
 const metrics_details = document.querySelector("#metrics tbody");
 const observer = new PerformanceObserver((list) => {
     list.getEntries().forEach((entry) => {
@@ -260,12 +259,11 @@ const observer = new PerformanceObserver((list) => {
             }
             metric_count++;
             let button = '<button type="button" popovertarget="metric-popover-' + metric_count + '" style="anchor-name: --metric-' + metric_count + '">' + type + '</button>';
-            const popover = '<div id="metric-popover-' + metric_count + '" popover class="popover-right" style="position-anchor: --metric-' + metric_count + '">' + entry.name + '</div>';
+            const popover = '<div id="metric-popover-' + metric_count + '" popover class="popover-right" style="font-size:70%;white-space:nowrap;position-anchor: --metric-' + metric_count + '">' + entry.name + '</div>';
             const tr = "<tr><td>" + button + popover + "</td><td>" + entry.startTime.toFixed(0) + "</td><td>" + entry.responseEnd.toFixed(0) + "</td><td>" + (entry.responseEnd - entry.startTime).toFixed(0) + "</td><td>" + entry.transferSize + "</td></tr>";
             metrics_details.insertAdjacentHTML("beforeend",tr);
         }
         metrics_popover_anchor.textContent = page_weight_kb();
-        metrics_popover_wgt.textContent = page_weight_kb();
         
     })
 });
