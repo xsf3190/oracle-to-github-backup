@@ -30,7 +30,8 @@ h3,
 h4,
 p,
 menu,
-form {
+form,
+[popover] {
   margin: 0;
 }
 
@@ -939,12 +940,9 @@ summary {
   display: none; 
 }
 
-/* METRICS POPOVER BUTTON */
+/* POPOVER BUTTONS */
 [popovertarget] {
     cursor: pointer;
-}
-
-button[popovertarget='metrics'] {
     background-color: transparent;
     border: none;
 }
@@ -970,19 +968,17 @@ button[popovertarget='metrics'] {
 }
 
 /* MENULIST POPOVER BUTTON */
-button[popovertarget='menulist'] {
+button[popovertarget=menulist] {
     --icon-size: 32;
     --icon-bar-size: 6;
     --icon-translation-size: calc((var(--icon-size) - var(--icon-bar-size)) / 2);
-    background-color: transparent;
-    border: none;
 }
 
-button[popovertarget='menulist']:has(+ *:popover-open) rect {
+button[popovertarget=menulist]:has(+ *:popover-open) rect {
     transition: all 0.5s ease-in-out;
 }
 
-button[popovertarget='menulist']:has(+ *:popover-open) .top,
+button[popovertarget=menulist]:has(+ *:popover-open) .top,
 button[popovertarget='menulist']:has(+ *:popover-open) .bottom {
     transform-origin: center;
 }
@@ -1041,7 +1037,15 @@ button[popovertarget='menulist']:has(+ *:popover-open) .bottom {
 }
 
 :popover-open {
-  max-width:90vw;
+  max-width: 90vw;
+  max-height: 80dvh;
+  overflow-x: auto;
+}
+
+@supports not (position-anchor: --anchor) {
+  [popover]:popover-open {
+    inset: 2rem;
+  }
 }
 
 /* TABLE STYLES, E.G. WEBSITE ANALYTICS */
