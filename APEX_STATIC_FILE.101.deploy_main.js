@@ -230,7 +230,9 @@ if (pages_edited_set.has(Number(document.body.dataset.articleid))) {
     dropdown.querySelector(".edit-content").click();
 }
 
+const formatTime = () => {
 
+}
 /*
 ** TRACK RESOURCE TRANSFER SIZE  
 */
@@ -239,10 +241,24 @@ const metrics_popover_anchor = document.querySelector("[popovertarget='metrics']
 const metrics_details = document.querySelector("#metrics tbody");
 const observer = new PerformanceObserver((list) => {
     list.getEntries().forEach((entry) => {
-        if (!metrics.some( ({name}) => name===entry.name)) {
+        // if (!metrics.some( ({name}) => name===entry.name)) {
             metrics.push({entryType: entry.entryType, name:entry.name, transferSize:entry.transferSize, contentType: entry.contentType});
             let type;
-            if (entry.entryType === "navigation") {
+            let start = entry.startTime.toFixed() + ' ms';
+            let end = entry.responseEnd.toFixed() + " ms";
+            let redirect = (entry.redirectEnd - entry.redirectStart).toFixed() + " ms";
+            let cache = entry.deliveryType;
+            let dns = (entry.domainLookupEnd - entry.domainLookupStart).toFixed() + " ms";
+            let tcp = (entry.connectEnd - entry.connectStart).toFixed() + " ms";
+            let request = (entry.responseStart - entry.requestStart).toFixed() + " ms";
+            let response = (entry.responseEnd - entry.responseStart).toFixed() + " ms";
+            // let end = entry.responseEnd.toFixed() + ' ms';
+            let duration = entry.duration.toFixed() + ' ms';
+
+
+                // let tcp = (entry.connectEnd - entry.connectStart).toFixed();
+
+            if (entry.contentType === "text/html") {
                 type = "HTML";
             } else if (entry.contentType === "text/css") {
                 type = "CSS";
@@ -259,13 +275,22 @@ const observer = new PerformanceObserver((list) => {
             }
             metric_count++;
             let button = '<button type="button" popovertarget="metric-popover-' + metric_count + '" style="anchor-name: --metric-' + metric_count + '">' + type + '</button>';
-            const popover = '<div id="metric-popover-' + metric_count + '" popover class="popover-right" style="font-size:70%;white-space:nowrap;position-anchor: --metric-' + metric_count + '">' + entry.name + '</div>';
-            const tr = "<tr><td>" + button + popover + "</td><td>" + entry.startTime.toFixed(0) + "</td><td>" + entry.responseEnd.toFixed(0) + "</td><td>" + (entry.responseEnd - entry.startTime).toFixed(0) + "</td><td>" + entry.transferSize + "</td></tr>";
+            const popover = '<div id="metric-popover-' + metric_count + '" popover class="popover-right" style="font-size:80%;white-space:nowrap;position-anchor: --metric-' + metric_count + '">' + entry.name + '</div>';
+            const tr = "<tr><td>" + button + popover + "</td><td>" 
+                + start + "</td><td>" 
+                + end + "</td><td>" 
+                + redirect + "</td><td>" 
+                + cache + "</td><td>" 
+                + dns + "</td><td>" 
+                + tcp + "</td><td>" 
+                + request + "</td><td>" 
+                + response + "</td><td>" 
+                + duration + "</td><td>" 
+                + entry.transferSize + "</td></tr>";
             metrics_details.insertAdjacentHTML("beforeend",tr);
-        }
-        metrics_popover_anchor.textContent = page_weight_kb();
-        
+        // }
     })
+    metrics_popover_anchor.textContent = page_weight_kb();
 });
 observer.observe({ type: "resource", buffered: true });
 observer.observe({ type: "navigation", buffered: true });
