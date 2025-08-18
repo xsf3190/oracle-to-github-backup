@@ -231,15 +231,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
             '<div>' ||
                 '<button type="button" popovertarget="metrics" style="anchor-name: --metrics-btn" aria-label="Page weight details">' ||
                 '</button>' ||
-                '<section popover id="metrics" style="position-anchor: --metrics-btn">' ||
-                    '<p>You downloaded <span id="metrics-wgt" style="color:green"></span> to view this page.</p>' ||
-                    '<p>At the 50th percentile internet web pages weigh <span style="color:tomato">2MB</span> </p>' ||
-                    '<table>' ||
-                        '<thead><tr><th>Resource</th><th>Start</th><th>End</th><th>Duration</th><th>Weight</th></tr></thead>' ||
-                        '<tbody></tbody>' ||
-                    '</table>' ||
-                '</section>' ||
-
+                '<table popover id="metrics" style="position-anchor: --metrics-btn">' ||
+                    '<thead><tr><th>Resource</th><th>Start</th><th>End</th><th>Duration</th><th>Weight</th></tr></thead>' ||
+                    '<tbody></tbody>' ||
+                '</table>' ||
                 '<button type="button" popovertarget="menulist" style="anchor-name: --menulist-btn" aria-label="Actions Menu">' ||
                     '<svg height="1rem" viewBox="0 0 32 32" preserveAspectRatio="none">' ||
                       '<rect class="top" x="0" y="0" width="32" height="6" fill="currentColor" />' ||
