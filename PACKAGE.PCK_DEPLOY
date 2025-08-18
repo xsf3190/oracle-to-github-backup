@@ -214,7 +214,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
     /* Return distict characters sorted */
     FUNCTION chars_used (pCharacters IN VARCHAR2) RETURN VARCHAR2 IS
-        l_chars VARCHAR2(500);
+        l_chars website_font.chars_normal%type;
     BEGIN
         SELECT LISTAGG(DISTINCT SUBSTR(pCharacters, LEVEL, 1), NULL) WITHIN GROUP (
                   ORDER BY SUBSTR(pCharacters, LEVEL, 1))
@@ -375,7 +375,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_content CLOB;
         l_text VARCHAR2(4000);
         l_char VARCHAR2(4);
-        l_deploy_css CLOB;
+        l_css_updated_date website.updated_date%type;
+        l_css_prev_updated_date website.updated_date%type;
+        l_css_root website.css_root%type;
+        l_css_root_prev website.css_root%type;
         l_file_name VARCHAR2(200);
         l_sha1 website_files.sha1%type;
         l_sha1_prev website_files.sha1%type;
@@ -456,7 +459,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_script_sha256 VARCHAR2(500);
         l_css CLOB;
         l_css_minified CLOB;
-        l_css_root VARCHAR2(4000);
         l_fontfaces CLOB;
         l_font_preload VARCHAR2(4000);
         l_styles_edit CLOB;
@@ -531,7 +533,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             addDeploy(pFilename=>l_font_filename, pFileContent=>l_font_download);
 
-            l_font_preload:=l_font_preload || '<link rel="preload" href="/' || l_font_filename || '" as="font" type="font/woff2" />';
+            l_font_preload:=l_font_preload || '<link rel="preload" href="/' || l_font_filename || '" as="font" type="font/woff2" />'; 
 
             /* REPLACE GOOGLE FONT URL WITH SELF-HOSTED URL */
             l_font_filename:='("/' || l_font_filename || '")';
@@ -540,7 +542,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
         /*
-        ** BUILD SELF-HOSTED FONT FACE RULE FROM PREVIOUS DEPLOYMENT
+        ** BUILD SELF-HOSTED FONT FACE RULE FROM A PREVIOUS DEPLOYMENT
         */
         FUNCTION buildFontface(pFamily IN VARCHAR2, pItal IN VARCHAR2, pWght IN VARCHAR2) RETURN VARCHAR2 IS
             l_font_face LONG;
@@ -559,16 +561,16 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 'src: url("/' || l_font_filename || '") format("woff2");' ||
             '}';
 
-            SELECT sha1 INTO l_sha1 FRom website_files WHERE website_id=pWebsiteId AND file_name=l_font_filename;
+            SELECT sha1 INTO l_sha1 FROM website_files WHERE website_id=pWebsiteId AND file_name=l_font_filename;
             l_files.put(l_font_filename, l_sha1);
 
-            l_font_preload:=l_font_preload || '<link rel="preload" href="/' || l_font_filename || '" as="font" type="font/woff2" />';
+            l_font_preload:=l_font_preload || '<link rel="preload" href="/' || l_font_filename || '" as="font" type="font/woff2" />'; 
 
             RETURN (l_font_face);
         END;
 
     BEGIN
-        /* For logging when running in scheduler */
+        /* For logging when called by scheduler */
         pck_sec.g_session_user_id:=pUserId;
         pck_sec.g_website_id:=pWebsiteId;
 
@@ -714,13 +716,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_fonts('text').chars_bold_normal:=l_fonts('text').chars_bold_normal || l_fonts('headings').chars_normal;
             l_fonts.DELETE('headings');
         END IF;
-
+        
         l_context:=l_fonts.FIRST;
         WHILE l_context IS NOT NULL LOOP
+            n:=0;
             IF (l_fonts(l_context).chars_normal IS NOT NULL) THEN
                 l_fonts(l_context).chars_normal:=chars_used(l_fonts(l_context).chars_normal);
                 IF (l_fonts(l_context).chars_normal<>l_fonts(l_context).prev_chars_normal OR l_fonts(l_context).prev_chars_normal IS NULL) THEN
                     l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, '0', l_fonts(l_context).wght_normal, l_fonts(l_context).chars_normal);
+                    n:=n+1;
                 ELSE
                     l_fontfaces:=l_fontfaces || buildFontface(l_fonts(l_context).family, '0', l_fonts(l_context).wght_normal);
                 END IF;
@@ -730,6 +734,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_fonts(l_context).chars_italic:=chars_used(l_fonts(l_context).chars_italic);
                 IF (l_fonts(l_context).chars_italic<>l_fonts(l_context).prev_chars_italic OR l_fonts(l_context).prev_chars_italic IS NULL) THEN
                     l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, '1', l_fonts(l_context).wght_normal, l_fonts(l_context).chars_italic);
+                    n:=n+1;
                 ELSE
                     l_fontfaces:=l_fontfaces || buildFontface(l_fonts(l_context).family, '1', l_fonts(l_context).wght_normal);
                 END IF;
@@ -739,6 +744,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_fonts(l_context).chars_bold_normal:=chars_used(l_fonts(l_context).chars_bold_normal);
                 IF (l_fonts(l_context).chars_bold_normal<>l_fonts(l_context).prev_chars_bold_normal OR l_fonts(l_context).prev_chars_bold_normal IS NULL) THEN
                     l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, '0', l_fonts(l_context).wght_bold, l_fonts(l_context).chars_bold_normal);
+                    n:=n+1;
                 ELSE
                     l_fontfaces:=l_fontfaces || buildFontface(l_fonts(l_context).family, '0', l_fonts(l_context).wght_bold);
                 END IF;
@@ -748,49 +754,108 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 l_fonts(l_context).chars_bold_italic:=chars_used(l_fonts(l_context).chars_bold_italic);
                 IF (l_fonts(l_context).chars_bold_italic<>l_fonts(l_context).prev_chars_bold_italic OR l_fonts(l_context).prev_chars_bold_italic IS NULL) THEN
                     l_fontfaces:=l_fontfaces || getFontface(l_fonts(l_context).family, '1', l_fonts(l_context).wght_bold, l_fonts(l_context).chars_bold_italic);
+                    n:=n+1;
                 ELSE
                     l_fontfaces:=l_fontfaces || buildFontface(l_fonts(l_context).family, '1', l_fonts(l_context).wght_bold);
                 END IF;
             END IF;
 
-            UPDATE website_font 
-               SET chars_normal=l_fonts(l_context).chars_normal,
-                   chars_italic=l_fonts(l_context).chars_italic,
-                   chars_bold_normal=l_fonts(l_context).chars_bold_normal,
-                   chars_bold_italic=l_fonts(l_context).chars_bold_italic
-             WHERE website_id=pWebsiteid
-               AND font_id=l_fonts(l_context).font_id
-               AND context=l_context;
+            IF (n>0) THEN
+                UPDATE website_font 
+                   SET chars_normal=l_fonts(l_context).chars_normal,
+                       chars_italic=l_fonts(l_context).chars_italic,
+                       chars_bold_normal=l_fonts(l_context).chars_bold_normal,
+                       chars_bold_italic=l_fonts(l_context).chars_bold_italic,
+                       updated_date=current_timestamp
+                 WHERE website_id=pWebsiteid
+                   AND font_id=l_fonts(l_context).font_id
+                   AND context=l_context;
+            END IF;
+
             l_context:=l_fonts.NEXT(l_context);
         END LOOP;
 
         /*
-        ** Assemble complete css file.
+        ** Assemble complete css file from
+        ** 1. deploy.css in Apex editor
+        ** 2. font face rules
+        ** 3. root css
+        ** 
         ** Nb. Font-face rules will not exist if website using system-ui
+        ** Nb. toptal minifier only accepts form-url-encoded which forces us to restrict content size to <32K
+        ** ==> NEED TO OPTIMISE THIS PROCESS
         */
+        n:=0;
+
+        /* DETERMINE IF MAIN CSS FILE CHANGED SINCE LAST DEPLOYMENT */
+        SELECT CAST(last_updated_on AS TIMESTAMP WITH TIME ZONE)
+          INTO l_css_updated_date
+          FROM apex_application_static_files
+         WHERE application_id=101
+           AND file_name='deploy.css';
+
+        SELECT MAX(NVL(sha1_updated,created_date)), MAX(sha1)
+          INTO l_css_prev_updated_date, l_sha1
+          FROM website_files
+         WHERE file_name='css/styles.min.css';
+
+        IF (l_css_updated_date>l_css_prev_updated_date OR l_css_prev_updated_date IS NULL) THEN
+            n:=n+1;
+        END IF;
+        pck_core.log('n:'||n);
+
+        /* DETERMINE IF ROOT CSS CHANGED SINCE LAST DEPLOYMENT */
+        SELECT css_root 
+          INTO l_css_root_prev
+          FROM website
+         WHERE id=pWebsiteid;
+
+        l_css_root:=pck_codepen.buildCssRoot(pWebsiteid);
+
+        IF (l_css_root_prev<>l_css_root OR l_css_root_prev IS NULL) THEN
+            n:=n+1;
+            UPDATE website SET css_root=l_css_root WHERE id=pWebsiteid;
+        END IF;
+        pck_core.log('n:'||n);
+
+        /* DETERMINE IF FONT FACES CHANGED SINCE LAST DEPLOYMENT */
         FOR C IN (
-            SELECT apex_util.blob_to_clob(file_content) file_content 
-              FROM apex_application_static_files 
-             WHERE application_id=101
-               AND file_name='deploy.css'
+            SELECT MAX(updated_date) fonts_updated_date FROM website_font WHERE website_id=pWebsiteid
         ) LOOP
-            logDeployment(pWebsiteId, pSiteId, 'Assembling CSS');
-            dbms_lob.createtemporary(l_css,true);
-            IF (l_fontfaces IS NOT NULL) THEN
-                pck_api.callMinifyCss(l_fontfaces, l_css_minified);
-                dbms_lob.append(l_css,l_css_minified);
+            IF (NVL(C.fonts_updated_date,current_timestamp)>NVL(l_css_prev_updated_date,current_timestamp)) THEN
+                n:=n+1;
             END IF;
-
-            l_css_root:=pck_codepen.buildCssRoot(pWebsiteid);
-            pck_api.callMinifyCss(l_css_root, l_css_minified);
-            dbms_lob.append(l_css,l_css_minified);
-            
-            pck_api.callMinifyCss(C.file_content, l_css_minified);
-            dbms_lob.append(l_css,l_css_minified);
-
-            addDeploy('css/styles.min.css', l_css);
-            dbms_lob.freetemporary(l_css);
         END LOOP;
+        pck_core.log('n:'||n);
+
+        /* n>0 MEANS DEPLOY CSS */
+        IF (n>0) THEN
+            logDeployment(pWebsiteId, pSiteId, 'Creating CSS');
+            FOR C IN (
+                SELECT apex_util.blob_to_clob(file_content) file_content 
+                  FROM apex_application_static_files
+                 WHERE application_id=101
+                   AND file_name='deploy.css'
+            ) LOOP
+                dbms_lob.createtemporary(l_css,true);
+                IF (l_fontfaces IS NOT NULL) THEN
+                    pck_api.callMinifyCss(l_fontfaces, l_css_minified);
+                    dbms_lob.append(l_css,l_css_minified);
+                END IF;
+
+                pck_api.callMinifyCss(l_css_root, l_css_minified);
+                dbms_lob.append(l_css,l_css_minified);
+                
+                pck_api.callMinifyCss(C.file_content, l_css_minified);
+                dbms_lob.append(l_css,l_css_minified);
+
+                addDeploy('css/styles.min.css', l_css);
+                dbms_lob.freetemporary(l_css);
+            END LOOP;
+        ELSE
+            /* NO CHANGE, USE LAST SHA1 */
+            l_files.put('css/styles.min.css',l_sha1);
+        END IF;
 
         /* 
         ** The site favicon is an SVG format image file uploaded through the CMS to the Asset table.
@@ -991,7 +1056,11 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_sha1:=l_deploy_files.NEXT(l_sha1);
         END LOOP;
 
-        IF (pEsmLibrary='test') THEN
+        /*
+        **  DOGFACE DEPLOYMENT IF USER HAS DOGFACE API KEY AND ESMLIBRARY = 'TEST'
+        */
+        SELECT COUNT(*) INTO n FROM dual WHERE EXISTS (SELECT null FROM users WHERE id=pUserid AND dogface_api_key IS NOT NULL);
+        IF (n=1 AND pEsmLibrary='test') THEN
             SELECT json_arrayagg(
                     json_object(KEY 'path' VALUE '/henk.florentmeijer.com/' || file_name, KEY 'hash' VALUE md5)
                 returning clob) 
@@ -1016,7 +1085,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     ELSE
                         pck_api.callDogfaceAPI(pUserId=>pUserId, pMethod=>'PUT', pEndpoint=>l_dogface_endpoint, pBody=>l_dogface_empty_clob, pBodyBlob=>l_deploy_files(C.sha1).file_content_b, pData=>l_clob);
                     END IF;
-                    pck_core.log(l_clob);
                 --END IF;
             END LOOP;
         END IF;
