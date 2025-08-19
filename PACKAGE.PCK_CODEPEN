@@ -229,14 +229,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
 
         l_html:=
             '<div>' ||
-                '<button type="button" popovertarget="metrics" style="anchor-name: --metrics-btn" aria-label="Page weight details">' ||
+                '<button type="button" popovertarget="metrics" style="anchor-name:--metrics-btn" aria-label="Page loading details">' ||
+                '00KB' ||
                 '</button>' ||
-                '<table popover id="metrics" style="position-anchor: --metrics-btn">' ||
-                    '<thead><tr><th>Resource</th><th>Start</th><th>End</th><th>Duration</th><th>Weight</th></tr></thead>' ||
+                '<table popover id="metrics" style="position-anchor:--metrics-btn">' ||
+                    '<thead><tr><th>Resource</th><th>Start</th><th>End</th><th>Redirect</th><th>Cache</th><th>DNS</th><th>TCP/TLS</th><th>Request</th><th>Response</th><th>Duration</th><th>Weight</th></tr></thead>' ||
                     '<tbody></tbody>' ||
                 '</table>' ||
-                '<button type="button" popovertarget="menulist" style="anchor-name: --menulist-btn" aria-label="Actions Menu">' ||
-                    '<svg height="1rem" viewBox="0 0 32 32" preserveAspectRatio="none">' ||
+                '<button type="button" popovertarget="menulist" style="anchor-name: --menulist-btn" aria-label="dropdown menu">' ||
+                    '<svg height="1rem" viewBox="0 0 32 32" preserveAspectRatio="none" aria-hidden="true" focusable="false">' ||
                       '<rect class="top" x="0" y="0" width="32" height="6" fill="currentColor" />' ||
                       '<rect class="middle" x="0" y="13" width="32" height="6" fill="currentColor" />' ||
                       '<rect class="bottom" x="0" y="26" width="32" height="6" fill="currentColor" />' ||
