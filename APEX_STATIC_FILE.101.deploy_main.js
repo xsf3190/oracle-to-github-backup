@@ -237,8 +237,8 @@ const formatTime = () => {
 ** TRACK RESOURCE TRANSFER SIZE  
 */
 let metric_count = 0;
-const metrics_popover_anchor = document.querySelector("[popovertarget='metrics']");
-const metrics_details = document.querySelector("#metrics tbody");
+const metrics_popover_anchor = document.querySelector("[id='metrics-btn']");
+const metrics_details = document.querySelector("[id='metrics'] tbody");
 const observer = new PerformanceObserver((list) => {
     list.getEntries().forEach((entry) => {
         // if (!metrics.some( ({name}) => name===entry.name)) {
