@@ -227,7 +227,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     /* 
     ** EXTRACT DISTINCT ITALIC / NORMAL / BOLD CHARACTERS IN TEXT
     */
-    PROCEDURE extract_styles(pText IN VARCHAR2, pBoldItalic IN OUT VARCHAR2, pBoldNormal IN OUT VARCHAR2, pItalic IN OUT VARCHAR2, pNormal IN OUT VARCHAR2) IS
+    PROCEDURE extract_styles(pText IN VARCHAR2, pBoldItalic IN OUT VARCHAR2, pBoldNormal IN OUT VARCHAR2, pItalic IN OUT VARCHAR2, pNormal IN OUT VARCHAR2,
+        pBoldItalicPage IN OUT PLS_INTEGER, pBoldNormalPage IN OUT PLS_INTEGER, pItalicPage IN OUT PLS_INTEGER, pNormalPage IN OUT PLS_INTEGER) IS
         l_text LONG:=pText;
         l_italics_regex varchar2(12):='<i>(.+?)</i>';
         l_italics_substr LONG;
@@ -247,6 +248,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_italics_bold_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_italics_bold_regex,1,i)));
             len:=LENGTH(l_italics_bold_substr);
             IF (len>0) THEN
+                pBoldItalicPage:=pBoldItalicPage+1;
                 FOR k IN 1..len LOOP
                     l_char:=SUBSTR(l_italics_bold_substr,k,1);
                     IF (pBoldItalic IS NULL OR INSTR(pBoldItalic,l_char)=0) THEN
@@ -263,6 +265,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_italics_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_italics_regex,1,i)));
             len:=LENGTH(l_italics_substr);
             IF (len>0) THEN
+                pItalicPage:=pItalicPage+1;
                 FOR k IN 1..len LOOP
                     l_char:=SUBSTR(l_italics_substr,k,1);
                     IF (pItalic IS NULL OR INSTR(pItalic,l_char)=0) THEN
@@ -279,6 +282,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_bold_substr:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_text,l_bold_regex,1,i)));
             len:=LENGTH(l_bold_substr);
             IF (len>0) THEN
+                pBoldNormalPage:=pBoldNormalPage+1;
                 FOR k IN 1..len LOOP
                     l_char:=SUBSTR(l_bold_substr,k,1);
                     IF (pBoldNormal IS NULL OR INSTR(pBoldNormal,l_char)=0) THEN
@@ -294,6 +298,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         len:=LENGTH(l_text);
         
         IF (len>0) THEN
+            pNormalPage:=pNormalPage+1;
             FOR i IN 1..len LOOP
                 l_char:=SUBSTR(l_text,i,1);
                 IF (pNormal IS NULL OR INSTR(pNormal,l_char)=0) THEN
@@ -401,7 +406,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             chars_normal VARCHAR2(500),
             chars_italic VARCHAR2(500),
             chars_bold_normal VARCHAR2(500),
-            chars_bold_italic VARCHAR2(500)
+            chars_bold_italic VARCHAR2(500),
+            chars_normal_page PLS_INTEGER,
+            chars_italic_page PLS_INTEGER,
+            chars_bold_normal_page PLS_INTEGER,
+            chars_bold_italic_page PLS_INTEGER
+
         );
         TYPE t_fonts IS TABLE OF tt_fonts INDEX BY VARCHAR2(40);
         l_fonts t_fonts;
@@ -440,6 +450,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             instagram_name website.instagram_name%type,
             promotion website.promotion%type,
             img_count PLS_INTEGER,
+            font_preload VARCHAR2(1000),
             body_html article.body_html%type
         );
         TYPE t_labels IS TABLE OF tt_labels INDEX BY PLS_INTEGER;
@@ -460,7 +471,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_css CLOB;
         l_css_minified CLOB;
         l_fontfaces CLOB;
-        l_font_preload VARCHAR2(4000);
+        l_font_preload VARCHAR2(1000);
         l_styles_edit CLOB;
         
         l_sitemap CLOB;
@@ -533,8 +544,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
             addDeploy(pFilename=>l_font_filename, pFileContent=>l_font_download);
 
-            l_font_preload:=l_font_preload || '<link rel="preload" href="/' || l_font_filename || '" as="font" type="font/woff2" />'; 
-
             /* REPLACE GOOGLE FONT URL WITH SELF-HOSTED URL */
             l_font_filename:='("/' || l_font_filename || '")';
             l_font_face:=REGEXP_REPLACE(l_font_face,l_url_regex,l_font_filename,1,1);
@@ -564,8 +573,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             SELECT sha1 INTO l_sha1 FROM website_files WHERE website_id=pWebsiteId AND file_name=l_font_filename;
             l_files.put(l_font_filename, l_sha1);
 
-            l_font_preload:=l_font_preload || '<link rel="preload" href="/' || l_font_filename || '" as="font" type="font/woff2" />'; 
-
             RETURN (l_font_face);
         END;
 
@@ -584,7 +591,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         /*
         ** Get all website content into collection
         */
-        SELECT parent_article_id, article_id, path_name, collection_type, page_title, page_description, lastmod, word_count, title, subtitle, header_effect, hero_asset_id, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, promotion, 0, body_html
+        SELECT parent_article_id, article_id, path_name, collection_type, page_title, page_description, lastmod, word_count, title, subtitle, header_effect, hero_asset_id, contact_email, telephone_number, mobile_number, linkedin_name, instagram_name, promotion, 0, NULL, body_html
           BULK COLLECT INTO l_labels
           FROM
           (
@@ -610,7 +617,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         
         FOR i IN 1..l_labels.COUNT LOOP
 
-            /* For each context collect distinct set of italic and normal characters in order to optimise font */
+            /* For each context collect distinct set of characters styles used in order to optimise font */
             l_body_html:=l_labels(i).body_html;
 
             /* Remove <code> elements which are always rendered in local monospace font */
@@ -658,6 +665,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 END LOOP;
             END IF;
 
+            l_fonts('headings').chars_normal_page:=0;
+            l_fonts('headings').chars_italic_page:=0;
+            l_fonts('headings').chars_bold_normal_page:=0;
+            l_fonts('headings').chars_bold_italic_page:=0;
+            l_fonts('text').chars_normal_page:=0;
+            l_fonts('text').chars_italic_page:=0;
+            l_fonts('text').chars_bold_normal_page:=0;
+            l_fonts('text').chars_bold_italic_page:=0;
+
             n:=REGEXP_COUNT(l_body_html,l_headings_regex);
             IF (n>0) THEN
                 FOR j IN 1..n 
@@ -665,12 +681,49 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     IF (j=1) THEN
                         l_labels(i).page_title:=utl_i18n.unescape_reference(apex_escape.striphtml(REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j)));
                     END IF;
-                    extract_styles(REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j), l_fonts('headings').chars_bold_italic, l_fonts('headings').chars_bold_normal, l_fonts('headings').chars_italic, l_fonts('headings').chars_normal);
+                    extract_styles(REGEXP_SUBSTR(l_body_html,l_headings_regex,1,j), l_fonts('headings').chars_bold_italic, l_fonts('headings').chars_bold_normal, l_fonts('headings').chars_italic, l_fonts('headings').chars_normal, 
+                        l_fonts('headings').chars_bold_italic_page, l_fonts('headings').chars_bold_normal_page, l_fonts('headings').chars_italic_page, l_fonts('headings').chars_normal_page);
                 END LOOP;
                 l_body_html:=REGEXP_REPLACE(l_body_html,l_headings_regex,null);
             END IF;
-            extract_styles(l_body_html, l_fonts('text').chars_bold_italic, l_fonts('text').chars_bold_normal, l_fonts('text').chars_italic, l_fonts('text').chars_normal);                    
+            extract_styles(l_body_html, l_fonts('text').chars_bold_italic, l_fonts('text').chars_bold_normal, l_fonts('text').chars_italic, l_fonts('text').chars_normal,
+                l_fonts('text').chars_bold_italic_page, l_fonts('text').chars_bold_normal_page, l_fonts('text').chars_italic_page, l_fonts('text').chars_normal_page);                    
             
+            /*
+            ** MAKE PRELOAD LINKS FOR ALL FONTS USED IN PAGE
+            */
+            l_context:=l_fonts.FIRST;
+            l_font_preload:=NULL;
+            WHILE l_context IS NOT NULL LOOP
+                IF (l_fonts(l_context).chars_normal_page>0) THEN
+                    l_font_preload:=l_font_preload || 
+                        '<link rel="preload" href="/' || 
+                        getFontFilename(l_fonts(l_context).family, '0', l_fonts(l_context).wght_normal) 
+                        || '" as="font" type="font/woff2" />'; 
+                END IF;
+                IF (l_fonts(l_context).chars_italic_page>0) THEN
+                    l_font_preload:=l_font_preload || 
+                        '<link rel="preload" href="/' || 
+                        getFontFilename(l_fonts(l_context).family, '1', l_fonts(l_context).wght_normal) 
+                        || '" as="font" type="font/woff2" />'; 
+                END IF;
+                IF (l_fonts(l_context).chars_bold_normal_page>0) THEN
+                    l_font_preload:=l_font_preload || 
+                        '<link rel="preload" href="/' || 
+                        getFontFilename(l_fonts(l_context).family, '0', l_fonts(l_context).wght_bold) 
+                        || '" as="font" type="font/woff2" />'; 
+                END IF;
+                IF (l_fonts(l_context).chars_bold_italic_page>0) THEN
+                    l_font_preload:=l_font_preload || 
+                        '<link rel="preload" href="/' || 
+                        getFontFilename(l_fonts(l_context).family, '1', l_fonts(l_context).wght_bold) 
+                        || '" as="font" type="font/woff2" />'; 
+                END IF;
+
+                l_context:=l_fonts.NEXT(l_context);
+            END LOOP;
+            l_labels(i).font_preload:=l_font_preload;
+
             /*
             ** SET IMAGE SRCSET FOR ANY IMAGES INCLUDED IN BODY_HTML
             */
@@ -976,7 +1029,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                     CASE WHEN l_labels(i).img_count>0 THEN
                     '<link rel="preconnect" href="https://res.cloudinary.com">'
                     END ||
-                    l_font_preload ||
+                    l_labels(i).font_preload ||
                     '<link rel="stylesheet" href="/css/styles.min.css">' ||
                     '<script>' || l_script_src || '</script>' ||
                     '<link rel="icon" type="image/svg+xml" sizes="any" href="' || l_favicon_url || '">' ||
