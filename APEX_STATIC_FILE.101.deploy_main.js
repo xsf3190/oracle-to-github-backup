@@ -230,65 +230,78 @@ if (pages_edited_set.has(Number(document.body.dataset.articleid))) {
     dropdown.querySelector(".edit-content").click();
 }
 
-const formatTime = () => {
+const secondsToHms = (d) => {
+    d = Number(d);
+    const h = Math.floor(d / 3600);
+    const m = Math.floor(d % 3600 / 60);
+    const s = Math.floor(d % 3600 % 60);
 
+    const hDisplay = h > 0 ? h + (h == 1 ? " hour, " : " hours, ") : "";
+    const mDisplay = m > 0 ? m + (m == 1 ? " minute, " : " minutes, ") : "";
+    const sDisplay = s > 0 ? s + (s == 1 ? " second" : " seconds") : "";
+    return hDisplay + mDisplay + sDisplay; 
 }
 /*
-** TRACK RESOURCE TRANSFER SIZE  
+** TRACK RESOURCE TRANSFER SIZE ETC.
 */
 let metric_count = 0;
 const metrics_popover_anchor = document.querySelector("[id='metrics-btn']");
 const metrics_details = document.querySelector("[id='metrics'] tbody");
 const observer = new PerformanceObserver((list) => {
     list.getEntries().forEach((entry) => {
-        // if (!metrics.some( ({name}) => name===entry.name)) {
-            metrics.push({entryType: entry.entryType, name:entry.name, transferSize:entry.transferSize, contentType: entry.contentType});
-            let type;
-            let start = entry.startTime.toFixed() + ' ms';
-            let end = entry.responseEnd.toFixed() + " ms";
-            let redirect = (entry.redirectEnd - entry.redirectStart).toFixed() + " ms";
-            let cache = entry.deliveryType;
-            let dns = (entry.domainLookupEnd - entry.domainLookupStart).toFixed() + " ms";
-            let tcp = (entry.connectEnd - entry.connectStart).toFixed() + " ms";
-            let request = (entry.responseStart - entry.requestStart).toFixed() + " ms";
-            let response = (entry.responseEnd - entry.responseStart).toFixed() + " ms";
-            // let end = entry.responseEnd.toFixed() + ' ms';
-            let duration = entry.duration.toFixed() + ' ms';
+        // if (metrics.some( ({name}) => name===entry.name)) return;
 
+        metrics.push({entryType: entry.entryType, name:entry.name, transferSize:entry.transferSize, contentType: entry.contentType});
+        let type = entry.name.split(".").pop().toUpperCase();
+        let start = entry.startTime.toFixed() + ' ms';
+        let end = entry.responseEnd.toFixed() + " ms";
+        let redirect = (entry.redirectEnd - entry.redirectStart).toFixed() + " ms";
+        let cache = entry.deliveryType;
+        let dns = (entry.domainLookupEnd - entry.domainLookupStart).toFixed() + " ms";
+        let tcp = (entry.connectEnd - entry.connectStart).toFixed() + " ms";
+        let request = (entry.responseStart - entry.requestStart).toFixed() + " ms";
+        let response = (entry.responseEnd - entry.responseStart).toFixed() + " ms";
+        let duration = entry.duration.toFixed() + ' ms';
 
-                // let tcp = (entry.connectEnd - entry.connectStart).toFixed();
+        if (type==="WOFF2") type="FONT";
+        if (!cache) cache = "";
 
-            if (entry.contentType === "text/html") {
+        if (!["FONT","CSS","JS","JSON"].includes(type)) {
+            if (entry.contentType === "text/html" || entry.entryType.toUpperCase()==="NAVIGATION") {
                 type = "HTML";
-            } else if (entry.contentType === "text/css") {
-                type = "CSS";
-            } else if (entry.contentType === "text/javascript") {
-                type = "JAVASCRIPT";
-            } else if (entry.contentType === "text/json") {
-                type = "JSON";
-            } else if (entry.name.split(".").pop() === "woff2") {
-                type = "FONT";
             } else if (entry.initiatorType === "img") {
                 type = "IMAGE";
             } else {
                 type = entry.initiatorType.toUpperCase();
             }
-            metric_count++;
-            let button = '<button type="button" popovertarget="metric-popover-' + metric_count + '" style="anchor-name: --metric-' + metric_count + '">' + type + '</button>';
-            const popover = '<div id="metric-popover-' + metric_count + '" popover class="popover-right" style="font-size:80%;white-space:nowrap;position-anchor: --metric-' + metric_count + '">' + entry.name + '</div>';
-            const tr = "<tr><td>" + button + popover + "</td><td>" 
-                + start + "</td><td>" 
-                + end + "</td><td>" 
-                + redirect + "</td><td>" 
-                + cache + "</td><td>" 
-                + dns + "</td><td>" 
-                + tcp + "</td><td>" 
-                + request + "</td><td>" 
-                + response + "</td><td>" 
-                + duration + "</td><td>" 
-                + entry.transferSize + "</td></tr>";
-            metrics_details.insertAdjacentHTML("beforeend",tr);
-        // }
+        }
+
+        if (entry.startTime > 2000) {
+            start = secondsToHms(entry.startTime / 1000);
+            end = "";
+            response = "";
+        }
+
+        if (type==="BEACON") {
+            redirect = ""; cache = ""; dns = ""; tcp = ""; request = ""; response = "";
+        }
+
+        metric_count++;
+        let button = '<button type="button" popovertarget="metric-popover-' + metric_count + '" style="anchor-name: --metric-' + metric_count + '">' + type + '</button>';
+        const popover = '<div id="metric-popover-' + metric_count + '" popover class="popover-right" style="font-size:80%;white-space:nowrap;position-anchor: --metric-' + metric_count + '">' + entry.name + '</div>';
+        const tr = "<tr><td>" + button + popover + "</td><td>" 
+            + start + "</td><td>" 
+            + end + "</td><td>" 
+            + redirect + "</td><td>" 
+            + cache + "</td><td>" 
+            + dns + "</td><td>" 
+            + tcp + "</td><td>" 
+            + request + "</td><td>" 
+            + response + "</td><td>" 
+            + duration + "</td><td>" 
+            + entry.transferSize + "</td></tr>";
+        metrics_details.insertAdjacentHTML("beforeend",tr);
+        
     })
     metrics_popover_anchor.textContent = page_weight_kb();
 });
