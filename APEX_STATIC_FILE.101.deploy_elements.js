@@ -6,6 +6,9 @@ export const expires = dropdown.querySelector(".expires");
 export const login_btn = dropdown.querySelector(".login-btn");
 export const login_dialog = document.querySelector("dialog.login-email");
 export const output_dialog = document.querySelector("dialog.output");
+export const dialog_header = output_dialog.querySelector("header>:first-child");
+export const dialog_article = output_dialog.querySelector("article");
+export const dialog_footer = output_dialog.querySelector("footer");
 
 export const nav = document.querySelector(".topnav");
 export const header = document.querySelector("body>header");
