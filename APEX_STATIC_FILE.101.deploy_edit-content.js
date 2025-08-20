@@ -3,13 +3,23 @@
 ** INCLUDE DEPLOY BUTTON IN CKEDITOR TOOLBAR
 */
 
-import { output_dialog } from "deploy_elements";
+import { output_dialog, dialog_header, dialog_article, dialog_footer } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 const CK_CSS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.css";
 const CK_JS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js";
 
 let endpoint;
+
+const loadForm = (data) => {
+    dialog_header.textContent = data.header;
+    dialog_article.replaceChildren();
+    dialog_article.insertAdjacentHTML('afterbegin',data.article);
+    dialog_footer.replaceChildren();
+    dialog_footer.insertAdjacentHTML('afterbegin',data.footer);
+
+    output_dialog.showModal();
+}
 
 export const init = async (element) => {
     if (document.querySelector("head > link[href='" + CK_CSS + "']")) {
@@ -92,22 +102,11 @@ export const init = async (element) => {
                 button.on('execute', (_) => {
                     callAPI("upload-media/:ID/:PAGE","GET","?request=image")
                     .then( (data) => {
-                        const heading = output_dialog.querySelector("header>:first-child");
-                        heading.textContent = data.heading;
+                        loadForm(data);
 
-                        const article = output_dialog.querySelector("article");
-                        article.replaceChildren();
-                        article.insertAdjacentHTML('afterbegin',data.thumbnails);
-                        
-                        const footer = output_dialog.querySelector("footer");
-                        footer.replaceChildren();
-                        footer.insertAdjacentHTML('afterbegin',"<span>" + article.querySelector(".carousel").childElementCount + " images</span>");
-
-                        output_dialog.showModal();
-
-                        article.querySelectorAll("button").forEach( (button) => {
+                        dialog_article.querySelectorAll("button").forEach( (button) => {
                             button.addEventListener("click", async (e) => {
-                                article.querySelectorAll(".copied").forEach( (copied) => {
+                                dialog_article.querySelectorAll(".copied").forEach( (copied) => {
                                     copied.classList.toggle("copied");
                                 });
                                 e.target.closest("li").classList.toggle("copied");
@@ -141,7 +140,13 @@ export const init = async (element) => {
                     withText: false
                 } );
                 button.on('execute', (_) => {
-                    console.log("button clicked");
+                    callAPI("fonts/:ID","GET", "?category=ALL&font=0&context=HTML")
+                    .then( (data) => {
+                        loadForm(data);
+                    })
+                    .catch((error) => {
+                        handleError(error);
+                    });
                 });
                 return button;
             } );
