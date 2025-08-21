@@ -143,6 +143,14 @@ export const init = async (element) => {
                     callAPI("fonts/:ID","GET", "?category=ALL&font=0&context=HTML")
                     .then( (data) => {
                         loadForm(data);
+                        import("deploy_fonts")
+                        .then((module) => {
+                            module.init();
+                        })
+                        .catch((error) => {
+                            console.error(error);
+                            console.error("Failed to load module deploy_fonts");
+                        });
                     })
                     .catch((error) => {
                         handleError(error);
