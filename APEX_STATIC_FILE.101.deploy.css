@@ -1104,16 +1104,6 @@ ol.deploy span + span {
     margin-inline-start: 1em;
 }
 
-
-
-/* Override MEDIA button styles in CKEDITOR toolbar */ 
-.show-media {
-    background-color: var(--color-primary-light) !important;
-    color: white !important;
-    margin-inline-start: calc (var(--ck-spacing-unit) * 4)) !important;
-    cursor: pointer !important;
-}
-
 .deploy-website {
     background-color: rebeccapurple !important;
     color: white !important;
@@ -1196,7 +1186,9 @@ ol.deploy span + span {
 /* SPINNER ELEMENT WHILE WAITING FOR WEBSITE TO BE DEPLOYED */
 
 .loader {
-  width: 10rem;
+  inline-size: 1.5em;
+  opacity: 0;
+  border: none;
   aspect-ratio: 1;
   display: grid;
   -webkit-mask: conic-gradient(from 22deg, #0003,#000);
