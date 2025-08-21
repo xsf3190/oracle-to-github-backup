@@ -57,8 +57,9 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_MEDIA" IS
 
             APEX_JSON.open_object; 
             APEX_JSON.write('success', TRUE);
-            APEX_JSON.write('thumbnails', l_thumbnails);
-            APEX_JSON.write('heading',CASE WHEN l_nb_images=0 THEN 'Hint: "Upload image" first' ELSE 'Click image to copy URL' END);
+            APEX_JSON.write('header',CASE WHEN l_nb_images=0 THEN 'Hint: "Upload image" first' ELSE 'Click image to copy URL' END);
+            APEX_JSON.write('article', l_thumbnails);
+            APEX_JSON.write('footer', l_nb_images || ' image' || CASE WHEN l_nb_images>1 THEN 's' END);
             APEX_JSON.close_object;
         END IF;
 
