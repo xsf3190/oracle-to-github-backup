@@ -234,7 +234,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_CODEPEN" is
                 '</button>' ||
                 '<div popover id="metrics" style="position-anchor:--metrics-btn">' ||
                     '<table>' ||
-                        '<thead><tr><th>Resource</th><th>Start</th><th>End</th><th>Redirect</th><th>Cache</th><th>DNS</th><th>TCP/TLS</th><th>Request</th><th>Response</th><th>Duration</th><th>Weight</th></tr></thead>' ||
+                        '<thead><tr><th>Resource</th><th>Start</th><th>End</th><th>Redirect</th><th>Cache</th><th>DNS</th><th>TCP</th><th>Request</th><th>Response</th><th>Duration</th><th>Transfer</th></tr></thead>' ||
                         '<tbody></tbody>' ||
                     '</table>' ||
                 '</div>' ||
