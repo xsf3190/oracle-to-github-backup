@@ -1,10 +1,225 @@
 CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_FONTS" as
     --
+    PROCEDURE getFonts(pWebsiteId IN website.id%type, pCategory IN font.category%type, pFontId IN font.id%type, pContext IN website_font.context%type, pStatus OUT NUMBER);
+    --
     PROCEDURE loadGoogleFonts;
     --
 end "PCK_FONTS";
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
+
+    /* 
+    **  BUILD HTML FORM TO SELECT WEBSITE FONTS
+    */
+    PROCEDURE getHTML(pWebsiteId IN website.id%type) IS
+        l_selected_category font.category%type;
+        l_header LONG;
+        l_article CLOB;
+        l_footer LONG;
+    BEGIN
+       l_header:='Select fonts for headings and text';
+
+        l_article:='<div class="flex-items">';
+        FOR C IN (
+            SELECT font_id, context 
+              FROM website_font
+             WHERE website_id=pWebsiteId 
+             ORDER BY context
+        ) LOOP
+            SELECT category INTO l_selected_category FROM font WHERE id=C.font_id;
+            l_article:=l_article ||
+            '<fieldset>' ||
+                '<legend>' || INITCAP(C.context) || '</legend>' ||
+                '<label for="' || C.context || '-font-category">Category</label>' ||
+                '<select id="' || C.context || '-font-category" name="' || C.context || '_font_category" style="min-width:10em">' ||
+                    '<button>' ||
+                      '<selectedcontent></selectedcontent>' ||
+                      '<span class="arrow"></span>' ||
+                    '</button>';
+            FOR C1 IN (SELECT DISTINCT category FROM font ORDER BY 1)
+            LOOP
+                l_article:=l_article || 
+                    '<option value="' || C1.category || '"' || CASE WHEN C1.category=l_selected_category THEN ' selected' END || '>' ||
+                        C1.category ||
+                    '</option>';
+            END LOOP;
+            l_article:=l_article || 
+                '</select>';
+
+            /* Fonts in category */
+            l_article:=l_article || 
+            '<label for="' || C.context || '-font-family" style="margin-block-start:1rem">Family</label>' ||
+            '<select id="' || C.context || '-font-family" name="' || C.context || '_font_family">' ||
+                '<button>' ||
+                  '<selectedcontent></selectedcontent>' ||
+                  '<span class="arrow"></span>' ||
+                '</button>';
+            CASE C.context
+                WHEN 'headings' THEN
+                    FOR C1 IN (SELECT id, family FROM font WHERE category=l_selected_category ORDER BY 2)
+                    LOOP
+                        l_article:=l_article || 
+                        '<option value="' || TO_CHAR(C1.id) || '"'|| CASE WHEN C1.id=C.font_id THEN ' selected' END || '>' ||
+                            C1.family ||
+                        '</option>';
+                    END LOOP;
+                WHEN 'text' THEN
+                    FOR C1 IN (
+                        SELECT id, family 
+                          FROM font 
+                         WHERE category=l_selected_category 
+                           AND ital_start IS NOT NULL 
+                           AND 400 BETWEEN wght_start AND wght_end
+                           AND 700 BETWEEN wght_start AND wght_end ORDER BY 2)
+                    LOOP
+                        l_article:=l_article || 
+                        '<option value="' || TO_CHAR(C1.id) || '"'|| CASE WHEN C1.id=C.font_id THEN ' selected' END || '>' ||
+                            C1.family ||
+                        '</option>';
+                    END LOOP;
+            END CASE;
+            l_article:=l_article || 
+                '</select>' ||
+            '</fieldset>';
+        END LOOP;
+        l_article:=l_article || 
+        '</div>';
+
+        l_footer:='Fonts give your web pages personality';
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE); 
+        apex_json.write('header', l_header);
+        apex_json.write('article', l_article);
+        apex_json.write('footer', l_footer);
+        apex_json.close_object;
+
+    END;
+    
+    /* 
+    **  RETURN GOOGLE FONTS URL FOR USER-SELECTED FONT
+    */
+    FUNCTION getFontURL(pFontid IN font.id%type) RETURN VARCHAR2 IS
+        l_api_url VARCHAR2(250);
+        l_url VARCHAR2(500);
+        l_url_regex VARCHAR2(50):='url.*;';
+        l_font_css CLOB;
+        n PLS_INTEGER;
+    BEGIN
+        FOR C IN (
+                SELECT f.family, f.variable,
+                    LTRIM(NVL2(f.ital_start,'ital',NULL) || NVL2(f.opsz_start,',opsz',NULL) || NVL2(f.slnt_start,',slnt',NULL) || 
+                        NVL2(f.wdth_start,',wdth',NULL) || NVL2(f.wght_start,',wght',NULL),',') axes,
+                    LTRIM(NVL2(f.opsz_start,f.opsz_start||'..'||f.opsz_end,NULL) || NVL2(f.slnt_start,','||f.slnt_start||'..'||f.slnt_end,NULL) || 
+                        NVL2(f.wdth_start,','||f.wdth_start||'..'||f.wdth_end,NULL) || NVL2(f.wght_start,','||f.wght_start||'..'||f.wght_end,NULL),',') ranges
+                FROM font f
+                WHERE f.id=pFontid) 
+        LOOP
+            IF (C.variable=0) THEN
+                l_api_url:='https://fonts.googleapis.com/css?family=' || REPLACE(C.family,' ','+');
+            ELSE
+                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.family,' ','+');
+                IF (C.axes IS NOT NULL) THEN
+                    l_api_url:=l_api_url || ':' || C.axes || '@';
+                    IF (INSTR(C.axes,'ital')>0) THEN
+                        l_api_url:=l_api_url || '0,' || C.ranges || ';1,' || C.ranges;
+                    ELSE
+                        l_api_url:=l_api_url || C.ranges;
+                    END IF;
+                END IF;
+            END IF;
+            pck_api.callGoogleAPI(l_api_url,pData=>l_font_css);
+
+            /* Get url for Latin charcters ... but desperate but so far seems to be in last font-face */
+            n:=regexp_count(l_font_css,l_url_regex);
+            l_url:=regexp_substr(l_font_css,l_url_regex,1,n);
+        END LOOP;
+
+        RETURN(RTRIM(l_url,';'));
+    END;
+
+    PROCEDURE getFontsInCategory(pCategory IN font.category%type, pContext IN website_font.context%type) IS
+        l_html CLOB;
+    BEGIN
+        APEX_JSON.open_object; 
+        l_html:='<option value="">--Choose a Font--</option>';
+        CASE pContext
+            WHEN 'headings' THEN
+                FOR C IN (
+                    SELECT id, family 
+                    FROM font 
+                    WHERE category=pCategory ORDER BY 2
+                )
+                LOOP
+                    l_html:=l_html || '<option value="' || C.id || '">' || C.family || '</option>';
+                END LOOP;
+            WHEN 'text' THEN
+                FOR C IN (
+                    SELECT id, family 
+                    FROM font 
+                    WHERE category=pCategory
+                      AND ital_start IS NOT NULL 
+                      AND 400 BETWEEN wght_start AND wght_end
+                      AND 700 BETWEEN wght_start AND wght_end
+                    ORDER BY 2
+                )
+                LOOP
+                    l_html:=l_html || '<option value="' || C.id || '">' || C.family || '</option>';
+                END LOOP;
+        END CASE;
+        APEX_JSON.write('content', l_html);
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.close_object;
+    END;
+
+    PROCEDURE getSelectedFontURL(pFontid IN font.id%type) IS
+    BEGIN
+        APEX_JSON.open_object; 
+        FOR C IN (
+            SELECT f.family, f.variable, f.ital_start, f.ital_end
+             FROM font f
+            WHERE f.id=pFontid
+        ) 
+        LOOP
+            apex_json.write('url',getFontUrl(pFontid));
+
+            apex_json.open_array('axes');
+
+            apex_json.open_object;
+            apex_json.write('name','ital');
+            apex_json.write('min', C.ital_start);
+            apex_json.write('max', C.ital_end);
+            apex_json.close_object;
+            
+            apex_json.close_array;
+        END LOOP;
+        APEX_JSON.write('success', TRUE);
+        APEX_JSON.close_object;
+    END;
+
+    /* 
+    **  BUILD SELECT LIST OF FONT FAMILIES FOR GIVEN CATEGORY (if font_id=0) ELSE GET FONT SETTINGS FOR A SPECIFIC FONT
+    */
+    PROCEDURE getFonts(pWebsiteId IN website.id%type, pCategory IN font.category%type, pFontId IN font.id%type, pContext IN website_font.context%type, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_html CLOB;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+
+        IF (pContext='HTML') THEN
+            getHTML(pWebsiteId);
+        ELSIF (pFontId=0) THEN
+            getFontsInCategory(pCategory, pContext);
+        ELSE
+            getSelectedFontURL(pFontid);
+        END IF;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+    END;
+
     /*
     **  load Google font definitions into google_font table. wolf3 format only. Websites deployed with optimized foont.r 
     */
