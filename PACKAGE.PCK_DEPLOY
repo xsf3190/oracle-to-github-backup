@@ -855,7 +855,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         IF (l_css_updated_date>l_css_prev_updated_date OR l_css_prev_updated_date IS NULL) THEN
             n:=n+1;
         END IF;
-        pck_core.log('n:'||n);
 
         /* DETERMINE IF ROOT CSS CHANGED SINCE LAST DEPLOYMENT */
         SELECT css_root 
@@ -869,7 +868,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             n:=n+1;
             UPDATE website SET css_root=l_css_root WHERE id=pWebsiteid;
         END IF;
-        pck_core.log('n:'||n);
 
         /* DETERMINE IF FONT FACES CHANGED SINCE LAST DEPLOYMENT */
         FOR C IN (
@@ -879,7 +877,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 n:=n+1;
             END IF;
         END LOOP;
-        pck_core.log('n:'||n);
 
         /* n>0 MEANS DEPLOY CSS */
         IF (n>0) THEN
