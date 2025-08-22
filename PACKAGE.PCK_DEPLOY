@@ -89,21 +89,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             l_sha1_test:=LOWER(dbms_crypto.hash(src=>C.file_content, typ=>dbms_crypto.hash_sh1));
             l_sha256_test:=getSha256(C.file_content);
 
-            IF (C.sha1_test IS NULL) THEN 
-                INSERT INTO es_modules (
-                    host_name, module_name, updated_source, sha1_test, sha256_test, updated_test, sha1_live, sha256_live, updated_live, live_change_ind) 
-                VALUES (
-                    l_ssl_url || '/live/' || C.file_path || C.file_name, 
-                    C.file_name, 
-                    C.updated_source, 
-                    l_sha1_test, 
-                    l_sha256_test, 
-                    current_timestamp, 
-                    l_sha1_test, 
-                    l_sha256_test, 
-                    current_timestamp,
-                    0);
-            ELSIF(l_sha1_test<>C.sha1_test) THEN 
+            IF(l_sha1_test<>C.sha1_test) THEN
                 UPDATE es_modules
                    SET updated_source=C.updated_source,
                        sha1_test=l_sha1_test, 
