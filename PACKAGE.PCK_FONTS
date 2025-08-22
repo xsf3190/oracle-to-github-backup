@@ -4,6 +4,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_FONTS" as
     --
     PROCEDURE loadGoogleFonts;
     --
+    PROCEDURE updateFonts(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER);
+    --
 end "PCK_FONTS";
 /
 CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
@@ -19,7 +21,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
     BEGIN
        l_header:='Select fonts for headings and text';
 
-        l_article:='<div class="flex-items">';
+        l_article:='<div class="flex-items" style="--flex-gap:.5em">';
         FOR C IN (
             SELECT font_id, context 
               FROM website_font
@@ -36,7 +38,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
                       '<selectedcontent></selectedcontent>' ||
                       '<span class="arrow"></span>' ||
                     '</button>';
-            FOR C1 IN (SELECT DISTINCT category FROM font ORDER BY 1)
+            FOR C1 IN (SELECT category FROM font_category ORDER BY 1)
             LOOP
                 l_article:=l_article || 
                     '<option value="' || C1.category || '"' || CASE WHEN C1.category=l_selected_category THEN ' selected' END || '>' ||
@@ -81,11 +83,17 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
             l_article:=l_article || 
                 '</select>' ||
             '</fieldset>';
+            IF (C.context='headings') THEN
+                l_article:=l_article || 
+                '<div class="loader" style="align-self:flex-end;margin-block-end:1em;"></div>';
+            END IF;
         END LOOP;
         l_article:=l_article || 
         '</div>';
 
-        l_footer:='Fonts give your web pages personality';
+        l_footer:=
+        '<span>Fonts give your site personality</span>' ||
+        '<button type="button" class="button suggest">SUGGEST</button>';
 
         apex_json.open_object;
         apex_json.write('success', TRUE); 
@@ -130,7 +138,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
             END IF;
             pck_api.callGoogleAPI(l_api_url,pData=>l_font_css);
 
-            /* Get url for Latin charcters ... but desperate but so far seems to be in last font-face */
+            /* Get url for Latin glyphs ... bit desperate but so far seems to be in last font-face */
             n:=regexp_count(l_font_css,l_url_regex);
             l_url:=regexp_substr(l_font_css,l_url_regex,1,n);
         END LOOP;
@@ -220,6 +228,43 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
         pck_core.log_error(pStatus);
     END;
 
+    /* 
+    **  UPDATE WEBSITE HEADER FIELDS
+    */
+    PROCEDURE updateFonts(pWebsiteId IN website.id%type, pBodyText IN CLOB, pStatus OUT NUMBER) IS
+        l_session_data pck_sec.t_session_data;
+        l_bodytext CLOB:=pBodyText;
+    BEGIN
+        l_session_data:=pck_sec.getSessionData(pWebsiteId);
+        
+        FOR C IN (
+            SELECT headings_font_family, text_font_family
+              FROM JSON_TABLE(l_bodytext, '$' COLUMNS(headings_font_family,text_font_family))
+        ) LOOP
+            UPDATE website_font
+               SET font_id=C.headings_font_family,
+                   updated_date=current_timestamp
+             WHERE website_id=pWebsiteId
+               AND context='headings';
+
+            UPDATE website_font
+               SET font_id=C.text_font_family,
+                   updated_date=current_timestamp
+             WHERE website_id=pWebsiteId
+               AND context='text';
+        END LOOP;
+
+        apex_json.open_object;
+        apex_json.write('success', TRUE);
+        apex_json.close_object;
+
+        pStatus:=200;
+
+    EXCEPTION WHEN OTHERS THEN
+        pck_core.log_error(pStatus);
+
+    END;
+
     /*
     **  load Google font definitions into google_font table. wolf3 format only. Websites deployed with optimized foont.r 
     */
@@ -287,6 +332,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
 
         SELECT COUNT(*), MAX(lastModified) INTO l_nb_fonts, l_lastModified FROM google_font_static;
         pck_core.log('Successfully loaded '|| l_nb_fonts || ' Google fonts  - last modified is ' || TO_CHAR(l_lastModified,'DD-MM-YYYY'));
+
+        /* Update font category table from staging table */
+        MERGE INTO font_category t
+        USING
+        (
+            SELECT category, COUNT(*) nb_fonts FROM google_font_static GROUP BY category
+        ) s
+        ON (t.category=s.category)
+        WHEN MATCHED THEN UPDATE SET
+            t.nb_fonts=s.nb_fonts,
+            t.updated_date=current_timestamp
+        WHEN NOT MATCHED THEN 
+            INSERT (category, nb_fonts)
+            VALUES (s.category, s.nb_fonts);
 
         /* Update font table from staging table */
         MERGE INTO font t
