@@ -1,17 +1,26 @@
-import { dialog_article, dialog_footer } from "deploy_elements";
+import { dialog_header, dialog_article } from "deploy_elements";
 import { callAPI, handleError } from "deploy_callAPI";
 
 export const init = () => {
+    dialog_header.addEventListener("click", async (e) => {
+        if (e.target.matches(".variable")) {
+            const svg = e.target.querySelector("svg");
+            svg.classList.toggle("visually-hidden");
+        }
+    });
+
     dialog_article.addEventListener("change", (e) => {
-    
         const name = e.target.getAttribute("name");
         const context = name.split("_")[0];
+        const loader = e.target.closest("fieldset").querySelector(".loader");
+        const icon = e.target.querySelector(".variable>.icon");
+        const variable = icon.classList.contains("visually-hidden") ? 0 : 1;
 
         /* 
         ** USER SELECTS FONT CATEGORY - UPDATE ADJACENT SELECT WITH NEW FAMILY OPTIONS 
         */
         if (name.includes("font_category")) {
-            const query = "?category=" + e.target.value + "&font=0&context=" + context;
+            const query = "?category=" + e.target.value + "&font=0&context=" + context + "&variable=" + variable;
             callAPI('fonts/:ID','GET', query)
                 .then((data) => {
                     const family = e.target.parentElement.querySelector("select:last-of-type");
@@ -31,9 +40,9 @@ export const init = () => {
             if (!e.target.value) {
                 return;
             }
-            const loader = dialog_article.querySelector(".loader");
+
             loader.style.opacity=1;
-            const query = "?category=&font=" + e.target.value;
+            const query = "?category=&font=" + e.target.value + "&variable=" + variable;
             callAPI('fonts/:ID','GET', query)
                 .then((data) => {
                     /*
@@ -68,20 +77,5 @@ export const init = () => {
                 });
         }
 
-    });
-
-    dialog_footer.addEventListener("click", async (e) => {
-        if (e.target.contains("confirm")) {
-            console.log("confirm");
-            const formData = new FormData(dialog_article);
-            const formObj = Object.fromEntries(formData);
-            await callAPI("fonts/:ID",'PUT', formObj)
-                .then(() => {
-                    set_alert(editor.querySelector("[role='alert']"));
-                })
-                .catch((error) => {
-                    handleError(error);
-                });
-        }
     });
 }
