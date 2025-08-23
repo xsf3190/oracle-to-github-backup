@@ -12,7 +12,8 @@ const CK_JS = "https://cdn.ckeditor.com/ckeditor5/43.2.0/ckeditor5.js";
 let endpoint;
 
 const loadForm = (data) => {
-    dialog_header.textContent = data.header;
+    dialog_header.replaceChildren();
+    dialog_header.insertAdjacentHTML('afterbegin',data.header);
     dialog_article.replaceChildren();
     dialog_article.insertAdjacentHTML('afterbegin',data.article);
     dialog_footer.replaceChildren();
@@ -51,7 +52,9 @@ export const init = async (element) => {
         });
     
     /* Get apprpriate set of plugins from CKEDITOR CDN */
-    const { ClassicEditor, Essentials, Alignment, Autosave, BlockQuote, Bold, ButtonView, Clipboard, Code, CodeBlock, FontColor, GeneralHtmlSupport, Heading, HorizontalLine,
+    const { ClassicEditor, Essentials, Alignment, Autosave, BlockQuote, Bold, ButtonView, Clipboard, Code, CodeBlock, 
+            FontSize, FontColor, FontBackgroundColor,
+            GeneralHtmlSupport, Heading, HorizontalLine,
             Image, ImageCaption, ImageResize, ImageStyle, ImageToolbar, ImageInsert, ImageInsertViaUrl,
             Italic, Link, List, MenuBarMenuListItemButtonView, Paragraph, Plugin, SelectAll, ShowBlocks, SourceEditing, Underline, WordCount
             } = await import(CK_JS)
@@ -166,11 +169,12 @@ export const init = async (element) => {
 
     editor = await ClassicEditor.create( document.querySelector( '#editor' ), {
         plugins: [ Essentials,  Alignment, Autosave, BlockQuote, Bold, Clipboard, Code, CodeBlock,  
-                    FontColor, GeneralHtmlSupport, Heading, HorizontalLine, 
+                    FontSize, FontColor, FontBackgroundColor,
+                    GeneralHtmlSupport, Heading, HorizontalLine, 
                     Image, ImageToolbar, ImageCaption, ImageStyle, ImageResize, ImageInsert, ImageInsertViaUrl, 
                     Italic, Link, List, ListImages, Paragraph, 
                     SelectAll, SelectFonts, ShowBlocks, SourceEditing, Underline, UploadImage, WordCount ],
-        toolbar: [ 'heading', '|', 'undo', 'redo',  '|', 'selectFonts', 'bold', 'italic',
+        toolbar: [ 'heading', '|', 'undo', 'redo',  '|', 'selectFonts', 'bold', 'italic', 'fontSize', 'fontColor', 'fontBackgroundColor',
                     '|', 'link', 
                     '|', 'uploadImage', 'listImages', 'insertImage'],
         menuBar: {
