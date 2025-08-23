@@ -18,8 +18,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
         l_header LONG;
         l_article CLOB;
         l_footer LONG;
+        n PLS_INTEGER;
     BEGIN
-       l_header:='Select fonts for headings and text';
+        SELECT COUNT(*) INTO n FROM font;
+       l_header:='<p>Select from ' || n || ' Google fonts</p><input type="checkbox>Variable</p>';
 
         l_article:='<div class="flex-items" style="--flex-gap:.5em">';
         FOR C IN (
@@ -274,7 +276,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
         l_lastModified google_font.lastModified%type;
     BEGIN
         
-        /* STATIC FONTS */
+        /*
         execute immediate('truncate table google_font_static');
 
         pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts?capability=WOFF2',pData=>l_clob);
@@ -332,12 +334,66 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
 
         SELECT COUNT(*), MAX(lastModified) INTO l_nb_fonts, l_lastModified FROM google_font_static;
         pck_core.log('Successfully loaded '|| l_nb_fonts || ' Google fonts  - last modified is ' || TO_CHAR(l_lastModified,'DD-MM-YYYY'));
+        */
+
+        pck_api.callGoogleAPI('https://www.googleapis.com/webfonts/v1/webfonts?capability=WOFF2&capability=VF',pData=>l_clob);
+
+        INSERT INTO google_font(
+            family, category,
+            ital_start,ital_end,
+            wdth_start,wdth_end,
+            wght_start,wght_end,
+            opsz_start,opsz_end,
+            slnt_start,slnt_end,
+            subset, vf, lastModified
+        )
+        WITH 
+        data AS
+        (
+            SELECT family, category, lastModified,
+                TO_NUMBER(
+                CASE 
+                    WHEN variant='regular' THEN '400'
+                    WHEN variant='italic' THEN '-400'
+                    WHEN INSTR(variant,'italic')>0 THEN '-' || SUBSTR(variant,1,INSTR(variant,'italic')-1)
+                    ELSE variant
+                END
+                ) variant,
+                tag,"start" as tag_start, "end" as tag_end, subset
+            FROM JSON_TABLE(l_clob, '$.items[*]' COLUMNS(family, category, lastModified, NESTED PATH '$.variants[*]' COLUMNS (variant VARCHAR2(50) PATH '$'),  
+                NESTED '$.axes[*]' COLUMNS(tag varchar2(4) PATH '$.tag', "start" number PATH '$.start', "end" number PATH '$.end'),
+                NESTED PATH '$.subsets[*]' COLUMNS (subset VARCHAR2(50) PATH '$')))
+        ), 
+        data2 as
+        (
+            SELECT family, category, TO_DATE(lastModified,'YYYY-MM-DD') lastModified, 
+                MIN(DECODE(SIGN(variant),1,variant)) wght_start_static, MAX(DECODE(SIGN(variant),1,variant)) wght_end_static,
+                MIN(DECODE(SIGN(variant),-1,0)) ital_start, MAX(DECODE(SIGN(variant),-1,1)) ital_end,
+                MAX(DECODE(tag,'wdth',tag_start)) as wdth_start, MAX(DECODE(tag,'wdth',tag_end)) as wdth_end, 
+                MAX(DECODE(tag,'wght',tag_start)) as wght_start, MAX(DECODE(tag,'wght',tag_end)) as wght_end, 
+                MAX(DECODE(tag,'opsz',tag_start)) as opsz_start, MAX(DECODE(tag,'opsz',tag_end)) as opsz_end, 
+                MAX(DECODE(tag,'slnt',tag_start)) as slnt_start, MAX(DECODE(tag,'slnt',tag_end)) as slnt_end,
+                LISTAGG(subset,'|') WITHIN GROUP (ORDER BY subset) subset
+            FROM data
+            GROUP BY family, category, lastModified
+        )
+        SELECT family, category, 
+            ital_start, ital_end, 
+            wdth_start, wdth_end,
+            NVL(wght_start,wght_start_static), NVL(wght_end,wght_end_static),
+            opsz_start, opsz_end,
+            slnt_start, slnt_end,
+            subset,
+            DECODE(COALESCE(wdth_start,wght_start,opsz_start,slnt_start),NULL,0,1),
+            TO_CHAR(l_lastModified,'DD-MM-YYYY')
+        FROM data2;
+
 
         /* Update font category table from staging table */
         MERGE INTO font_category t
         USING
         (
-            SELECT category, COUNT(*) nb_fonts FROM google_font_static GROUP BY category
+            SELECT category, COUNT(*) nb_fonts FROM google_font GROUP BY category
         ) s
         ON (t.category=s.category)
         WHEN MATCHED THEN UPDATE SET
@@ -351,21 +407,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
         MERGE INTO font t
         USING
         (
-            SELECT family, category, wght_start, wght_end, NVL2(wght_start_italic,0,NULL) ital_start, NVL2(wght_end_italic,1,NULL) ital_end
-            FROM google_font_static
+            SELECT family, category, ital_start, ital_end, wdth_start, wdth_end, wght_start, wght_end, opsz_start, opsz_end, slnt_start, slnt_end, vf
+            FROM google_font
         ) s
         ON (t.family=s.family)
         WHEN MATCHED THEN UPDATE SET
             t.category=s.category,
-            t.wght_start=s.wght_start,
-            t.wght_end=s.wght_end,
-            t.ital_start=s.ital_start,
-            t.ital_end=s.ital_end,
-            t.variable=0,
+            t.ital_start=s.ital_start, t.ital_end=s.ital_end,
+            t.wdth_start=s.wdth_start, t.wdth_end=s.wdth_end, 
+            t.wght_start=s.wght_start, t.wght_end=s.wght_end,
+            t.opsz_start=s.opsz_start, t.opsz_end=s.opsz_end,
+            t.slnt_start=s.slnt_start, t.slnt_end=s.slnt_end,
+            t.variable=s.vf,
             t.updated_date=current_timestamp
         WHEN NOT MATCHED THEN 
-            INSERT (id, family, category, wght_start, wght_end, ital_start, ital_end, variable, created_date) 
-            VALUES (seq_font.nextval, s.family, s.category, s.wght_start, s.wght_end, s.ital_start, s.ital_end, 0, current_timestamp);
+            INSERT (id, family, category, ital_start, ital_end, wdth_start, wdth_end, wght_start, wght_end, opsz_start, opsz_end, slnt_start, slnt_end, variable, created_date) 
+            VALUES (seq_font.nextval, s.family, s.category, s.ital_start, s.ital_end, s.wdth_start, s.wdth_end, s.wght_start, s.wght_end, s.opsz_start, s.opsz_end, s.slnt_start, s.slnt_end,  s.vf, current_timestamp);
     END;
 end "PCK_FONTS";
 /
