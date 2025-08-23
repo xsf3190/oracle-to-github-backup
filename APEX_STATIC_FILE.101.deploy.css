@@ -1326,16 +1326,18 @@ li:has([role='alert']) {
   display: none;
 }
 
-/* EYEDROPPER STYLE - SAD EFFORT TO EMULATE INPUT COLOR TYPE*/
-
-.eyedropper {
-  width: 50px;
-  block-size: 27px;
-  background-color: rebeccapurple;
-  border-width:5px;
-  border-color:pink;
+/* 
+** CKEDITOR FONTSIZE PLUGIN SETS THESE CLASSES WHICH WE ASSIGN TO OUR FLUID TYPES
+*/
+.text-tiny:not(.ck-button) {
+  font-size: var(--step--2);
 }
-
-.eyedropper:hover {
-  border-color:red;
+.text-small:not(.ck-button) {
+  font-size: var(--step--1);
+}
+.text-big:not(.ck-button) {
+  font-size: var(--step-3);
+}
+.text-huge:not(.ck-button) {
+  font-size: var(--step-6);
 }
