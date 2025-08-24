@@ -26,6 +26,9 @@ export const init = async (element) => {
     if (document.querySelector("head > link[href='" + CK_CSS + "']")) {
         return;
     }
+
+    /* Close menulist popup */
+    document.getElementById("menulist").hidePopover();
     
     endpoint = element.dataset.endpoint;
     
@@ -148,7 +151,7 @@ export const init = async (element) => {
                         loadForm(data);
                         import("deploy_fonts")
                         .then((module) => {
-                            module.init();
+                            module.init(data.fonts);
                         })
                         .catch((error) => {
                             console.error(error);
