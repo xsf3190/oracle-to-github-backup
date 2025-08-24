@@ -1230,6 +1230,10 @@ select,
 ::picker(select) {
     appearance: base-select;
 }
+/* style the picker dropdown */
+::picker(select) {
+  border-radius: 1rem;
+}
 
 
 /* EDITOR STYLES */
