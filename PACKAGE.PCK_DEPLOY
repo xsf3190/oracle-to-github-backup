@@ -30,6 +30,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     ** "TEST" - FOR TESTING BY ADMIN USERS OF ADMIN-oWNED WEBSITES
     ** "LIVE" - ALL DEPLOYED WEBSITES LINK TO THESE
     */
+
     PROCEDURE buildESModules(pEsmLibrary IN VARCHAR2) IS 
         TYPE tt_files IS RECORD (
             file_name apex_application_static_files.file_name%type,
@@ -56,14 +57,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_job_name VARCHAR2(30);
         l_netlify_deploy_id website.netlify_deploy_id%type;
 
-        TYPE tt_websites IS RECORD (
-            id website.id%type,
-            user_id website.user_id%type,
-            netlify_site_id website.netlify_site_id%type,
-            netlify_site_id_custom website.netlify_site_id_custom%type
-        );
-        TYPE t_websites IS TABLE OF tt_websites INDEX BY PLS_INTEGER;
-        l_websites t_websites;
+        l_api_url VARCHAR2(600);
+        l_font_face LONG;
+        l_url_regex VARCHAR2(9):='\((.+?)\)';
+        l_font_url VARCHAR2(500);
+        l_font_download BLOB;
+        l_font_filename VARCHAR2(100);
 
     BEGIN
         IF (pEsmLibrary NOT IN ('test','live')) THEN
@@ -78,6 +77,37 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
 
         l_json:= new JSON_OBJECT_T;
         l_files:= new JSON_OBJECT_T;
+
+        /*
+        ** GET FONTS FOR SHOWING FONT CATEGORY NAMES
+        */
+        FOR C IN (
+            SELECT category, category_font_family, font_file_name, sha1 FROM font_category
+        ) LOOP
+            IF (C.sha1 IS NULL) THEN
+                l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.category_font_family,' ','+') || ':ital,wght@0,400'
+                    || '&display=swap'
+                    || '&capability=WOFF2' 
+                    || '&text=' || utl_url.escape(C.category,TRUE,'UTF-8');
+                pck_api.callGoogleAPI(l_api_url,l_font_face);
+
+                /* GET THE GOOGLE FONT URL FROM THE FONT FACE TO DOWNLOAD THE FONT */
+                l_font_filename:=C.category || '.woff2';
+                l_font_url:=REGEXP_SUBSTR(l_font_face, l_url_regex, 1, 1, NULL, 1);
+                l_font_download:=apex_web_service.make_rest_request_b(p_url=>l_font_url, p_http_method=>'GET');
+
+                l_sha1_test:=LOWER(dbms_crypto.hash(src=>l_font_download, typ=>dbms_crypto.hash_sh1));
+            
+                l_deploy_files(l_sha1_test).file_name:=l_font_filename;
+                l_deploy_files(l_sha1_test).file_content:=l_font_download;
+                l_files.put('fonts/' || l_font_filename, l_sha1_test);
+
+                /* REPLACE GOOGLE FONT URL WITH SELF-HOSTED URL */
+                l_font_filename:='("/' || l_font_filename || '")';
+                l_font_face:=l_font_face || REGEXP_REPLACE(l_font_face,l_url_regex,l_font_filename,1,1);
+            END IF;
+        END LOOP;
+
 
         FOR C IN (
             SELECT s.file_name, SUBSTR(s.mime_type,INSTR(s.mime_type,'/')+1) || '/' file_path, CAST(s.last_updated_on AS TIMESTAMP WITH TIME ZONE) updated_source, apex_util.blob_to_clob(s.file_content) file_content, e.sha1_test, e.sha1_live
@@ -500,8 +530,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         END;
 
         FUNCTION getFontFilename(pFamily IN VARCHAR2, pItal IN VARCHAR2, pWght IN VARCHAR2) RETURN VARCHAR2 IS
+            l_family VARCHAR2(50);
         BEGIN
-            RETURN('fonts/' || REPLACE(pFamily,' ','-') || '.' || pItal || '.' || pWght || '.woff2');
+            l_family:=REPLACE(pFamily,' ','-');
+            RETURN('fonts/' || l_family || '.' || pItal || '.' || pWght || '.woff2');
         END;
 
         /*
