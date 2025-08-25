@@ -18,6 +18,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
         l_header LONG;
         l_article CLOB;
         l_footer LONG;
+        l_fontfaces LONG;
     BEGIN
         l_header:=
         '<button type="button" class="button variable">Variable Fonts' ||
@@ -46,7 +47,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
             FOR C1 IN (SELECT category FROM font_category ORDER BY 1)
             LOOP
                 l_article:=l_article || 
-                    '<option value="' || C1.category || '"' || CASE WHEN C1.category=l_selected_category THEN ' selected' END || '>' ||
+                    '<option style="font-family:' || C1.category || '" value="' || C1.category || '"' || CASE WHEN C1.category=l_selected_category THEN ' selected' END || '>' ||
                         C1.category ||
                     '</option>';
             END LOOP;
@@ -102,7 +103,22 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
             '<small>Updated ' || TO_CHAR(C.last_modified, 'dd Mon yyyy') || '</small>';
         END LOOP;
 
+        /*
+        ** BUILD FONTFACE CSS FOR FONT CATEGORY SELECT ELEMENT
+        */
         apex_json.open_object;
+        apex_json.open_array('fonts');
+        for c in (
+            select category,fontface_url from font_category) 
+        loop
+            apex_json.open_object;
+            apex_json.write('family',C.category);
+            apex_json.write('url', C.fontface_url);
+            apex_json.close_object;
+        end loop;
+        apex_json.close_array;
+
+        
         apex_json.write('success', TRUE); 
         apex_json.write('header', l_header);
         apex_json.write('article', l_article);
@@ -149,6 +165,10 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
         RETURN(RTRIM(l_url,';'));
     END;
 
+    /*
+    ** pVariable = 1  => ONLY FETCH VARiABLE FONTS
+    ** pVariable = 0  => FETCH ALL FONTS
+    */
     PROCEDURE getFontsInCategory(pCategory IN font.category%type, pContext IN website_font.context%type, pVariable IN font.variable%type) IS
         l_html CLOB;
     BEGIN
@@ -160,7 +180,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_FONTS" as
                     SELECT id, family 
                     FROM font 
                     WHERE category=pCategory 
-                    AND variable=pVariable
+                    AND variable=CASE WHEN pVariable=1 THEN 1 ELSE variable END
                     ORDER BY 2
                 )
                 LOOP
