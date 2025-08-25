@@ -18,7 +18,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE "PCK_HOSTING" is
     --
     FUNCTION urlExists(pUrl IN VARCHAR2) RETURN BOOLEAN;
     --
-    PROCEDURE waitDeployment(pWebsiteId IN website.id%type, pUserid IN users.id%type, pWaitSeconds IN NUMBER DEFAULT 5);
+    PROCEDURE waitDeployment(pWebsiteId IN website.id%type, pUserid IN users.id%type, pWaitSeconds IN NUMBER DEFAULT 10);
     --
     PROCEDURE createURLExistsJob(pUrl IN VARCHAR2, pUserid IN website.user_id%type);
 
