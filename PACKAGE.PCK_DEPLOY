@@ -34,7 +34,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
     PROCEDURE buildESModules(pEsmLibrary IN VARCHAR2) IS 
         TYPE tt_files IS RECORD (
             file_name apex_application_static_files.file_name%type,
-            file_content CLOB
+            file_content CLOB,
+            file_content_b BLOB
         );
         TYPE t_files IS TABLE OF tt_files INDEX BY VARCHAR2(40);
         l_deploy_files t_files;
@@ -82,7 +83,8 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         ** GET FONTS FOR SHOWING FONT CATEGORY NAMES
         */
         FOR C IN (
-            SELECT category, category_font_family, font_file_name, sha1 FROM font_category
+            SELECT category, category_font_family, font_file_name, sha1 
+              FROM font_category
         ) LOOP
             IF (C.sha1 IS NULL) THEN
                 l_api_url:='https://fonts.googleapis.com/css2?family=' || REPLACE(C.category_font_family,' ','+') || ':ital,wght@0,400'
@@ -92,19 +94,24 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
                 pck_api.callGoogleAPI(l_api_url,l_font_face);
 
                 /* GET THE GOOGLE FONT URL FROM THE FONT FACE TO DOWNLOAD THE FONT */
-                l_font_filename:=C.category || '.woff2';
+                l_font_filename:=REPLACE(C.category,'-','_') || '.woff2';
                 l_font_url:=REGEXP_SUBSTR(l_font_face, l_url_regex, 1, 1, NULL, 1);
                 l_font_download:=apex_web_service.make_rest_request_b(p_url=>l_font_url, p_http_method=>'GET');
 
                 l_sha1_test:=LOWER(dbms_crypto.hash(src=>l_font_download, typ=>dbms_crypto.hash_sh1));
             
                 l_deploy_files(l_sha1_test).file_name:=l_font_filename;
-                l_deploy_files(l_sha1_test).file_content:=l_font_download;
+                l_deploy_files(l_sha1_test).file_content_b:=l_font_download;
                 l_files.put('fonts/' || l_font_filename, l_sha1_test);
 
                 /* REPLACE GOOGLE FONT URL WITH SELF-HOSTED URL */
-                l_font_filename:='("/' || l_font_filename || '")';
-                l_font_face:=l_font_face || REGEXP_REPLACE(l_font_face,l_url_regex,l_font_filename,1,1);
+                l_font_url:='url("' || l_ssl_url || '/fonts/' || l_font_filename || '")';
+
+                UPDATE font_category 
+                   SET sha1=l_sha1_test, fontface_url=l_font_url,  font_file_name=l_font_filename 
+                 WHERE category=C.category;
+            ELSE
+                l_files.put('fonts/' || C.font_file_name, C.sha1);
             END IF;
         END LOOP;
 
@@ -174,7 +181,6 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         l_deploy_files(l_sha1_test).file_content:=l_page;
         l_files.put('index.html', l_sha1_test);
 
-
         l_json.put('files',l_files);
 
         /*
@@ -190,16 +196,20 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
         FOR C IN (SELECT id, sha1 FROM JSON_TABLE(l_clob, '$' COLUMNS (id, NESTED '$.required[*]' COLUMNS (sha1 PATH '$'))) WHERE sha1 IS NOT NULL) LOOP
             l_netlify_deploy_id:=C.id;
             pck_core.log('... uploading ESM ' || l_deploy_files(C.sha1).file_name);
-            pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', 
-                pBody=>l_deploy_files(C.sha1).file_content,
-                pData=>l_clob
-            );
+
+            IF (l_deploy_files(C.sha1).file_content IS NOT NULL) THEN
+                pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', pBody=>l_deploy_files(C.sha1).file_content,pData=>l_clob);
+            ELSIF (l_deploy_files(C.sha1).file_content_b IS NOT NULL) THEN
+                pck_api.callNetlifyAPI(pUserId=>null, pEndpoint=>'deploys/' || C.id || '/files/' || l_deploy_files(C.sha1).file_name, pMethod=>'PUT', pBody=>l_deploy_files(C.sha1).file_content_b,pData=>l_clob);
+            ELSE
+                RAISE_APPLICATION_ERROR(-20090,'Logic error - file_content clob and blob both null');
+            END IF;
         END LOOP;
 
         UPDATE website SET netlify_deploy_id=l_netlify_deploy_id WHERE id=l_website_id;
 
         /*
-        ** DELETE ANY MODULES For WHICH SOURCE NO LONGER EXISTS
+        ** DELETE ANY MODULES FOR WHICH SOURCE NO LONGER EXISTS
         */
         DELETE es_modules WHERE module_name NOT IN (SELECT file_name FROM apex_application_static_files WHERE application_id=101);
         COMMIT;
@@ -1000,7 +1010,7 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PCK_DEPLOY" as
             q'[ img-src 'self' res.cloudinary.com data:;]'
             END ||
             q'[ media-src res.cloudinary.com;]' ||
-            q'[ font-src 'self' fonts.gstatic.com;]' ||
+            q'[ font-src 'self' es-modules.netlify.app;]' ||
             q'[ style-src 'self' 'unsafe-inline' cdn.ckeditor.com;]' ||
             q'[ script-src 'strict-dynamic' ]' || l_script_sha256 || q'[;]' ||
             q'[ frame-src upload-widget.cloudinary.com  www.youtube.com;]' ||
